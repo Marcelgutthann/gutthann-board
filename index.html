@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gutthann Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#E8E8E6;color:#1C1C1A;font-family:'Hanken Grotesk',sans-serif;height:100vh;overflow:hidden}
+input,button,textarea,select{font-family:'Hanken Grotesk',sans-serif;font-size:13px;color:#1C1C1A}
+button{cursor:pointer;background:none;border:none}
+*{scrollbar-width:thin;scrollbar-color:rgba(28,28,26,.25) transparent}
+@keyframes agentAura{0%,100%{box-shadow:0 0 0 0 rgba(163,213,66,0)}50%{box-shadow:0 0 0 5px rgba(163,213,66,.28)}}
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.75)}}
+@keyframes badgeBlink{0%,100%{box-shadow:0 0 0 0 rgba(226,154,46,.45)}50%{box-shadow:0 0 0 4px rgba(226,154,46,0)}}
+#app{display:flex;height:100vh;overflow:hidden}
+
+.sidebar{width:252px;flex:none;background:#F2F2EF;border-right:1px solid rgba(28,28,26,.10);display:flex;flex-direction:column;overflow-y:auto}
+.brand{padding:18px 16px 14px;border-bottom:1px solid rgba(28,28,26,.08)}
+.brand h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700}
+.brand .sub{font-size:11.5px;color:#75756E;margin-top:3px;display:flex;align-items:center;gap:6px}
+.brand .sub .dot{width:7px;height:7px;border-radius:50%;background:#7CA928;animation:dotPulse 1.8s ease-in-out infinite}
+.sect{padding:14px 10px 4px}
+.sect .lbl{font-size:10.5px;letter-spacing:.09em;color:#8A8A83;font-weight:600;padding:0 8px 6px;text-transform:uppercase}
+.row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:#33332F;user-select:none}
+.row:hover{background:rgba(28,28,26,.05)}
+.row.active{background:#E8DFC5;font-weight:600;color:#1C1C1A}
+.row .pdot{width:8px;height:8px;border-radius:3px;flex:none}
+.row .badge{margin-left:auto;background:#E29A2E;color:#231602;font-size:10.5px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px;animation:badgeBlink 2s ease-in-out infinite}
+.row .pin{margin-left:auto;color:#9A9A93;font-size:12px;visibility:hidden;background:none}
+.row:hover .pin{visibility:visible}
+.row.addrow{color:#75756E}
+.row.addrow:hover{color:#1C1C1A}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{padding:16px 22px 10px;display:flex;align-items:center;gap:12px;flex:none}
+.topbar h2{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700}
+.topbar .scope{font-size:12px;color:#75756E}
+.alertbtn{margin-left:auto;background:#E29A2E;color:#231602;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:18px;display:flex;align-items:center;gap:7px;animation:badgeBlink 2s ease-in-out infinite}
+.boardwrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:6px 22px 18px;display:flex;gap:14px;align-items:flex-start}
+.col{width:296px;flex:none;display:flex;flex-direction:column;background:#DFDFDB;border:1px solid rgba(28,28,26,.10);border-radius:12px;max-height:100%}
+.col.dragover{outline:2px solid #A3D542}
+.colhead{padding:12px 10px 8px 14px;display:flex;align-items:center;gap:7px;flex:none}
+.colhead .name{font-size:13px;font-weight:600}
+.colhead .cnt{font-size:12px;color:#8A8A83}
+.colhead .roledot{width:7px;height:7px;border-radius:50%;background:#A3D542}
+.colhead .menu{margin-left:auto;color:#8A8A83;padding:2px 6px;border-radius:5px}
+.colhead .menu:hover{background:rgba(28,28,26,.07)}
+.cards{overflow-y:auto;padding:4px 8px;display:flex;flex-direction:column;gap:8px;min-height:30px}
+.card{background:#FCFCFB;border:1px solid rgba(28,28,26,.09);border-radius:10px;padding:10px 12px;cursor:pointer}
+.card:hover{border-color:rgba(28,28,26,.25)}
+.card.aura{animation:agentAura 2.2s ease-in-out infinite}
+.card.rf{background:#FBF3E2;border-color:#E29A2E}
+.card .chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;margin-bottom:6px}
+.card .chip .cdot{width:6px;height:6px;border-radius:50%}
+.card .t{font-size:13.5px;font-weight:600;line-height:1.35}
+.card .meta{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11.5px;color:#75756E;flex-wrap:wrap}
+.card .meta .due.urgent{color:#A66A12;font-weight:600}
+.card .meta .proj{margin-left:auto;color:#8A8A83}
+.card .avs{display:flex;margin-left:2px}
+.card .av{width:17px;height:17px;border-radius:50%;color:#fff;font-size:8.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-left:-4px;border:1.5px solid #FCFCFB}
+.addcard{padding:8px 12px;color:#75756E;font-size:12.5px;text-align:left;border-radius:8px;margin:0 8px 8px}
+.addcard:hover{background:rgba(28,28,26,.05);color:#1C1C1A}
+.addcol{width:220px;flex:none;border:1.5px dashed rgba(28,28,26,.22);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#75756E;font-size:13px;padding:14px;cursor:pointer;background:none}
+.addcol:hover{color:#1C1C1A;border-color:rgba(28,28,26,.4)}
+.newinput{margin:0 8px 8px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;width:calc(100% - 16px)}
+
+.overlay{position:fixed;inset:0;background:rgba(28,28,26,.32);display:flex;justify-content:flex-end;z-index:50}
+.drawer{width:520px;max-width:94vw;background:#F7F7F5;height:100%;overflow-y:auto;box-shadow:-8px 0 32px rgba(28,28,26,.18)}
+.dsec{padding:16px 22px;border-bottom:1px solid rgba(28,28,26,.09)}
+.dsec .slbl{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin-bottom:9px}
+.dhead .t{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;line-height:1.3;margin:8px 0 6px}
+.dhead .meta{font-size:12px;color:#75756E;display:flex;gap:12px;flex-wrap:wrap}
+.rfsec{background:#FBF3E2}
+.rfsec .slbl{color:#8A5606}
+.rfsec .frage{font-size:13px;color:#231602;margin:10px 0 6px;line-height:1.45}
+.rfsec input{width:100%;padding:8px 10px;border:1px solid rgba(138,86,6,.35);border-radius:8px;background:#fff}
+.rfsec .beantwortet{font-size:12px;color:#5A6E1E;margin:4px 0 0}
+.btn{background:#1C1C1A;color:#F7F7F5;font-weight:600;font-size:12.5px;padding:8px 15px;border-radius:8px}
+.btn:hover{background:#33332F}
+.btn.lime{background:#D3F462;color:#1C1C1A}
+.btn.ghost{background:none;border:1px solid rgba(28,28,26,.25);color:#33332F}
+.btn.warn{background:#E29A2E;color:#231602}
+.pre{white-space:pre-wrap;font-size:13px;line-height:1.55;color:#33332F}
+.sub{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.sub input[type=checkbox]{accent-color:#5A6E1E}
+.sub .del{margin-left:auto;color:#9A9A93;visibility:hidden}
+.sub:hover .del{visibility:visible}
+.pill{display:inline-flex;align-items:center;gap:5px;background:rgba(28,28,26,.07);border-radius:12px;padding:3px 10px;font-size:12px;margin:0 6px 6px 0}
+.kom{margin-bottom:10px}
+.kom .von{font-size:11.5px;color:#75756E;margin-bottom:2px}
+.kom .txt{font-size:13px;background:#fff;border:1px solid rgba(28,28,26,.08);border-radius:8px;padding:7px 10px}
+.vrow{display:flex;gap:10px;font-size:12.5px;color:#75756E;padding:3px 0}
+.inline-add{display:flex;gap:7px;margin-top:8px}
+.inline-add input{flex:1;padding:7px 10px;border:1px solid rgba(28,28,26,.18);border-radius:8px;background:#fff}
+.ctx{position:fixed;background:#fff;border:1px solid rgba(28,28,26,.14);border-radius:10px;box-shadow:0 8px 28px rgba(28,28,26,.16);z-index:99;min-width:210px;padding:5px}
+.ctx button{display:block;width:100%;text-align:left;padding:8px 12px;border-radius:7px;font-size:13px}
+.ctx button:hover{background:rgba(28,28,26,.06)}
+.ctx button.danger{color:#B4432E}
+.ctx .note{padding:6px 12px;font-size:11.5px;color:#9A9A93}
+
+#login{position:fixed;inset:0;background:#E8E8E6;display:flex;align-items:center;justify-content:center;z-index:100}
+.logincard{background:#FCFCFB;border:1px solid rgba(28,28,26,.12);border-radius:14px;padding:34px 36px;width:360px}
+.logincard h1{font-family:'Space Grotesk',sans-serif;font-size:19px;margin-bottom:4px}
+.logincard .s{font-size:12.5px;color:#75756E;margin-bottom:20px}
+.logincard input{width:100%;padding:10px 12px;border:1px solid rgba(28,28,26,.2);border-radius:9px;background:#fff;margin-bottom:10px;font-size:14px}
+.logincard .err{color:#B4432E;font-size:12.5px;margin:4px 0 8px;min-height:16px}
+.logincard .btn{width:100%;padding:11px;font-size:14px}
+.hidden{display:none!important}
+.empty{color:#8A8A83;font-size:12.5px}
+</style>
+</head>
+<body>
+<div id="login" class="hidden">
+  <div class="logincard">
+    <h1>Gutthann Board</h1>
+    <div class="s">Digitaler Mitarbeiter · Anmeldung mit deinem Büro-Account</div>
+    <input id="li-mail" type="email" placeholder="vorname.name@gutthann-hiw-architekten.de" autocomplete="username">
+    <input id="li-pw" type="password" placeholder="Passwort" autocomplete="current-password">
+    <div class="err" id="li-err"></div>
+    <button class="btn" id="li-btn">Anmelden</button>
+  </div>
+</div>
+<div id="app" class="hidden">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main">
+    <div class="topbar" id="topbar"></div>
+    <div class="boardwrap" id="board"></div>
+  </div>
+</div>
+<div id="drawer-root"></div>
+<div id="ctx-root"></div>
+<script src="app.js"></script>
+</body>
+</html>
