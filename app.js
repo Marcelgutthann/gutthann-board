@@ -222,8 +222,9 @@ function renderBoard() {
   const spalten = b.spalten || [];
   const erste = spalten[0]?.id;
   for (const sp of spalten) {
+    const bekannt = (id) => spalten.some((s2) => s2.id === id);
     const inSpalte = (b.todos || []).filter((t) =>
-      (t.spalte_id === sp.id || (!t.spalte_id && sp.id === erste && !t.spiegel)) &&
+      (t.spalte_id === sp.id || (sp.id === erste && !t.spiegel && (!t.spalte_id || !bekannt(t.spalte_id)))) &&
       (sp.ist_erledigt ? t.status === 'erledigt' : t.status !== 'erledigt'));
     const colEl = el('div', {
       class: 'col',
