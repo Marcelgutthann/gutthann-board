@@ -343,15 +343,33 @@ function renderDrawer() {
   if (chip) chipRow.append(el('span', { class: 'chip', style: `display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${chip.bg};color:${chip.fg}` }, chip.txt));
   chipRow.append(el('span', { style: 'font-size:12px;color:#75756E' }, (d.quelle === 'voice' ? '📞 per Anruf erstellt' : '⌨ in der App erstellt')));
   chipRow.append(el('button', { style: 'margin-left:auto;font-size:16px;color:#75756E', onclick: closeDrawer }, '✕'));
-  head.append(chipRow, el('div', { class: 't' }, d.titel));
+  const titelZeile = el('div', { class: 't', style: 'display:flex;gap:8px;align-items:baseline' }, d.titel,
+    el('button', { title: 'Titel bearbeiten', style: 'font-size:13px;color:#9A9A93', onclick: async () => {
+      const t2 = prompt('Titel bearbeiten:', d.titel);
+      if (t2 !== null && t2.trim() && t2.trim() !== d.titel) { await lotse('todo_update', { todo_id: d.id, titel: t2.trim() }); await openCard(d.id); await ladeBoard(); }
+    } }, '✎'));
+  head.append(chipRow, titelZeile);
   const meta = el('div', { class: 'meta' });
   if (d.projekt) meta.append(el('span', {}, '⌖ ' + d.projekt.name));
   if (d.faellig) meta.append(el('span', {}, 'fällig ' + new Date(d.faellig).toLocaleDateString('de-DE')));
   meta.append(el('span', {}, 'Besitzer: ' + d.besitzer));
   head.append(meta); dr.append(head);
 
-  // Auftrag
-  if (d.notiz) dr.append(el('div', { class: 'dsec' }, el('div', { class: 'slbl' }, 'Auftrag'), el('div', { class: 'pre' }, d.notiz)));
+  // Auftrag (editierbar — auch KI-formulierte Texte)
+  {
+    const sec = el('div', { class: 'dsec' });
+    const kopf = el('div', { class: 'slbl', style: 'display:flex;gap:10px;align-items:center' }, 'Auftrag');
+    const inhalt = el('div', { class: 'pre' }, d.notiz || '');
+    kopf.append(el('button', { style: 'font-size:11px;color:#75756E', onclick: () => {
+      const ta = el('textarea', { style: 'width:100%;min-height:110px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px' });
+      ta.value = d.notiz || '';
+      const speichern = el('button', { class: 'btn', style: 'margin-top:8px', onclick: async () => {
+        await lotse('todo_update', { todo_id: d.id, notiz: ta.value }); await openCard(d.id);
+      } }, 'Speichern');
+      inhalt.replaceWith(el('div', {}, ta, speichern));
+    } }, 'Bearbeiten'));
+    sec.append(kopf, inhalt); dr.append(sec);
+  }
 
   // Rueckfragen
   const offene = (d.rueckfragen || []).filter((f) => f.status === 'offen');
