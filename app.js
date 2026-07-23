@@ -6,7 +6,7 @@ const SUPA = 'https://lzrfyxejlejxfpvqpket.supabase.co';
 const ANON = 'sb_publishable_adwNO1cSP6M2OmOV-8t_1g_lmGuj40V';
 const LOTSE = SUPA + '/functions/v1/lotse';
 
-const PROJ_DOTS = ['#B9A88F', '#8FA3B9', '#A3B98F', '#B98F9C', '#9C8FB9', '#6E8F8A', '#7C9464'];
+const PROJ_DOTS = ['#D08427', '#3D78C2', '#5FA132', '#D24A7E', '#7C4FD0', '#1FA095', '#C2543D'];
 const AV_COLORS = ['#1C1C1A', '#8FA3B9', '#7C9464', '#B98F9C', '#9C8FB9', '#A66A12', '#6E8F8A'];
 const CHIPS = {
   rueckfrage: { txt: 'Rückfrage an dich', bg: '#E29A2E', fg: '#231602', dot: '#231602', anim: false },
@@ -310,7 +310,7 @@ function renderCard(t) {
     for (const p of t.zugewiesen.slice(0, 3)) avs.append(el('span', { class: 'av', style: 'background:' + avColor(p), title: p }, initialen(p)));
     meta.append(avs);
   }
-  if (t.projekt_name) meta.append(el('span', { class: 'proj' }, t.projekt_name.replace(/^\d+\s*/, '')));
+  if (t.projekt_name) meta.append(el('span', { class: 'proj', style: 'color:' + projDot(t.projekt_name) }, t.projekt_name.replace(/^\d+\s*/, '')));
   c.append(meta);
   return c;
 }
