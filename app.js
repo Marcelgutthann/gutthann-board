@@ -48,11 +48,18 @@ async function authRefresh() {
 }
 
 async function lotse(action, body = {}, retried = false) {
-  const r = await fetch(LOTSE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
-    body: JSON.stringify({ action, ...body }),
-  });
+  let r;
+  try {
+    r = await fetch(LOTSE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
+      body: JSON.stringify({ action, ...body }),
+    });
+  } catch (e) {
+    // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen
+    if (!retried) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
+    throw e;
+  }
   const j = await r.json().catch(() => ({}));
   if (j && j.error && /Anmeldung erforderlich/.test(j.error)) {
     if (!retried && await authRefresh()) return lotse(action, body, true);
@@ -310,8 +317,10 @@ function renderCard(t) {
 
 // ---------- Drawer ----------
 async function openCard(id) {
-  S.detail = await lotse('todo_detail', { todo_id: id });
-  renderDrawer();
+  try {
+    S.detail = await lotse('todo_detail', { todo_id: id });
+    renderDrawer();
+  } catch (e) { console.error('openCard:', e); }
 }
 function closeDrawer() { S.detail = null; document.getElementById('drawer-root').innerHTML = ''; }
 
@@ -476,7 +485,15 @@ function showLogin() {
 async function start() {
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  await ladeAlles();
+  try { await ladeAlles(); }
+  catch (e) {
+    console.error('start:', e);
+    await new Promise((s2) => setTimeout(s2, 1200));
+    try { await ladeAlles(); } catch (e2) {
+      document.getElementById('board').innerHTML = '<div class="empty" style="padding:20px">Verbindung fehlgeschlagen — bitte neu laden.</div>';
+      throw e2;
+    }
+  }
   clearInterval(S.poll);
   S.poll = setInterval(async () => { if (!S.detail) { try { await ladeBoard(); } catch {} } }, 60000);
 }
@@ -489,6 +506,7 @@ async function doLogin() {
     await start();
   } catch (e) { err.textContent = e.message; }
 }
+addEventListener('unhandledrejection', (e) => console.error('unhandled:', e.reason));
 loadSession();
 if (S.session?.access_token) start().catch(() => showLogin());
 else showLogin();
