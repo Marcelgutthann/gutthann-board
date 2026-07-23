@@ -364,10 +364,10 @@ function renderDrawer() {
       sec.append(el('div', { class: 'frage' }, `${i + 1}. ${f.frage}`));
       const inp = el('input', { placeholder: 'Deine Antwort…' });
       inputs.push({ f, inp }); sec.append(inp);
-      sec.append(el('button', { style: 'font-size:11.5px;color:#8A5606;margin:4px 0 8px', onclick: async () => { await lotse('rueckfrage_antworten', { frage: f.frage, antwort: 'ueberspringen' }); await openCard(d.id); await ladeBoard(); } }, 'Überspringen'));
+      sec.append(el('button', { style: 'font-size:11.5px;color:#8A5606;margin:4px 0 8px', onclick: async () => { await lotse('rueckfrage_antworten', { rueckfrage_id: f.id, antwort: 'ueberspringen' }); await openCard(d.id); await ladeBoard(); } }, 'Überspringen'));
     });
     sec.append(el('button', { class: 'btn warn', style: 'margin-top:8px', onclick: async () => {
-      for (const { f, inp } of inputs) if (inp.value.trim()) await lotse('rueckfrage_antworten', { frage: f.frage, antwort: inp.value.trim() });
+      for (const { f, inp } of inputs) if (inp.value.trim()) await lotse('rueckfrage_antworten', { rueckfrage_id: f.id, antwort: inp.value.trim() });
       await openCard(d.id); await ladeBoard();
     } }, 'Antworten senden – Agent arbeitet weiter'));
     dr.append(sec);
