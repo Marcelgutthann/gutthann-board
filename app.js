@@ -240,6 +240,8 @@ function renderBoard() {
     });
     colEl.append(el('div', { class: 'colhead' },
       sp.ist_agent ? el('span', { class: 'roledot', title: 'Agenten-Spalte' }) : '',
+      sp.auto_status === 'rueckfrage' ? el('span', { class: 'roledot', style: 'background:#E29A2E', title: 'Rückfragen wandern automatisch her' }) : '',
+      sp.auto_status === 'fertig' ? el('span', { class: 'roledot', style: 'background:#4F7A4B', title: 'Fertige Agenten-Ergebnisse landen hier' }) : '',
       el('span', { class: 'name' }, sp.name),
       el('span', { class: 'cnt' }, String(inSpalte.length)),
       sp.ist_erledigt ? el('span', { class: 'cnt' }, '✓') : '',
@@ -279,8 +281,11 @@ function renderBoard() {
 
 function spaltenMenu(e, sp, nSpalten) {
   const items = [];
-  if (!sp.ist_erledigt) items.push({ txt: sp.ist_agent ? 'Agenten-Rolle entfernen' : 'Als Agenten-Spalte', do: async () => { await lotse('spalte_rolle', { spalte_id: sp.id, rolle: sp.ist_agent ? 'keine' : 'agent' }); await ladeBoard(); } });
-  if (!sp.ist_erledigt) items.push({ txt: 'Als Erledigt-Spalte', do: async () => { await lotse('spalte_rolle', { spalte_id: sp.id, rolle: 'erledigt' }); await ladeBoard(); } });
+  const rolle = async (r) => { await lotse('spalte_rolle', { spalte_id: sp.id, rolle: r }); await ladeBoard(); };
+  if (!sp.ist_erledigt) items.push({ txt: sp.ist_agent ? 'Agenten-Rolle entfernen' : 'Als Agenten-Spalte (Karte rein = erledigen lassen)', do: () => rolle(sp.ist_agent ? 'keine' : 'agent') });
+  if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'rueckfrage' ? 'Rückfrage-Rolle entfernen' : 'Als Rückfrage-Spalte (Karten wandern automatisch her)', do: () => rolle(sp.auto_status === 'rueckfrage' ? 'keine' : 'rueckfrage') });
+  if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'fertig' ? 'Fertig-prüfen-Rolle entfernen' : 'Als Fertig-prüfen-Spalte (Agenten-Ergebnisse landen hier)', do: () => rolle(sp.auto_status === 'fertig' ? 'keine' : 'fertig_pruefen') });
+  if (!sp.ist_erledigt) items.push({ txt: 'Als Erledigt-Spalte', do: () => rolle('erledigt') });
   if (sp.ist_erledigt) items.push({ note: 'Erledigt-Spalte – Rolle über andere Spalte ändern' });
   if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Löschen – Karten wandern in erste Spalte', danger: true, do: async () => { const r = await lotse('spalte_loeschen', { spalte_id: sp.id }); if (r.fehler) alert(r.fehler); await ladeBoard(); } });
   ctxMenu(e.clientX, e.clientY, items);
