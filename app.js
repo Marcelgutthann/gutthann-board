@@ -105,6 +105,19 @@ function fmtDatum(iso) {
   if (diff < 0) return { txt: d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' überfällig', urgent: true };
   return { txt: d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }), urgent: false };
 }
+// Abgabefrist einer VgV-Karte ('JJJJ-MM-TT HH:MM' oder ISO) -> Kachel-Text + Dringlichkeit
+function vgvRest(frist) {
+  if (!frist) return null;
+  const d = new Date(String(frist).replace(' ', 'T'));
+  if (isNaN(d)) return null;
+  const heute = new Date(); heute.setHours(0, 0, 0, 0);
+  const d0 = new Date(d); d0.setHours(0, 0, 0, 0);
+  const tage = Math.round((d0 - heute) / 86400000);
+  const dat = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  if (tage < 0) return { txt: `Abgabe ${dat} vorbei`, tage, knapp: true };
+  if (tage === 0) return { txt: 'Abgabe HEUTE', tage, knapp: true };
+  return { txt: `Abgabe ${dat} · ${tage} Tg`, tage, knapp: tage <= 7 };
+}
 function ctxMenu(x, y, items) {
   closeCtx();
   const m = el('div', { class: 'ctx' });
@@ -366,6 +379,17 @@ function renderCard(t) {
     el('span', { class: 'cdot', style: `background:${chip.dot};${chip.anim ? 'animation:dotPulse 1.8s ease-in-out infinite' : ''}` }),
     chip.txt, st === 'fertig' && t.anhaenge_n ? ' 📎' : ''));
   c.append(el('div', { class: 't' }, t.titel));
+  // VgV-Karte: Empfehlung + Abgabefrist direkt auf der Kachel (Radar-Board)
+  if (t.vgv_empfehlung || t.vgv_frist) {
+    const rest = vgvRest(t.vgv_frist);
+    const f = t.vgv_empfehlung === 'BEWERBEN' ? { bg: '#E8F5C4', fg: '#3C5D1E' }
+      : t.vgv_empfehlung === 'PRUEFEN' ? { bg: '#FBEFDA', fg: '#8A5606' }
+      : { bg: '#ECECE8', fg: '#75756E' };
+    const row = el('div', { class: 'vgvrow' });
+    if (t.vgv_empfehlung) row.append(el('span', { class: 'vchip', style: `background:${f.bg};color:${f.fg}` }, t.vgv_empfehlung));
+    if (rest) row.append(el('span', { class: 'vfrist' + (rest.knapp ? ' urgent' : '') }, rest.txt));
+    c.append(row);
+  }
   const meta = el('div', { class: 'meta' });
   meta.append(el('span', {}, t.quelle === 'voice' ? '📞' : '⌨'));
   if (due) meta.append(el('span', { class: 'due' + (due.urgent ? ' urgent' : '') }, due.txt));
@@ -429,6 +453,70 @@ function renderDrawer() {
       inhalt.replaceWith(el('div', {}, ta, speichern));
     } }, 'Bearbeiten'));
     sec.append(kopf, inhalt); dr.append(sec);
+  }
+
+  // VgV-Verfahren (Radar-Pipeline, Migration 45)
+  if (d.vgv && typeof d.vgv === 'object') {
+    const v = d.vgv;
+    const sec = el('div', { class: 'dsec' });
+    sec.append(el('div', { class: 'slbl' }, 'VgV-Verfahren'));
+    if (v.empfehlung) {
+      const f = v.empfehlung === 'BEWERBEN' ? { bg: '#E8F5C4', fg: '#3C5D1E' }
+        : v.empfehlung === 'PRUEFEN' ? { bg: '#FBEFDA', fg: '#8A5606' }
+        : { bg: '#ECECE8', fg: '#55554F' };
+      const ban = el('div', { class: 'vgvban', style: `background:${f.bg};color:${f.fg}` });
+      ban.append(el('div', { style: 'font-weight:700;font-size:13px' }, 'Erst-Empfehlung: ' + v.empfehlung));
+      if (v.empfehlung_grund) ban.append(el('div', { style: 'font-size:12.5px;margin-top:3px' }, v.empfehlung_grund));
+      sec.append(ban);
+    }
+    const kv = el('div', { class: 'vgvkv' });
+    const rest = vgvRest(v.frist);
+    const paare = [
+      ['Auftraggeber', v.auftraggeber], ['Ort', v.ort],
+      ['Abgabefrist', v.frist ? v.frist + (rest ? ` (${rest.txt.replace('Abgabe ', '')})` : '') : null],
+      ['Bieterfragen bis', v.frist_bieterfragen], ['Verfahrensart', v.verfahrensart],
+      ['Volumen', v.volumen], ['Leistung', v.leistung],
+      ['Konstellation', v.konstellation ? String(v.konstellation).toUpperCase() : null],
+      ['Scout-Score', v.score != null ? v.score + '/100' : null],
+    ];
+    for (const [k2, w] of paare) if (w) kv.append(el('div', { class: 'k' }, k2), el('div', { class: 'w' }, String(w)));
+    sec.append(kv);
+    if (Array.isArray(v.referenzen) && v.referenzen.length) {
+      sec.append(el('div', { class: 'slbl', style: 'margin-top:10px' }, 'Referenz-Anker'));
+      for (const r of v.referenzen) sec.append(el('div', { style: 'font-size:12.5px;margin-bottom:2px' },
+        el('b', {}, r.id || ''), r.grund ? ' — ' + r.grund : ''));
+      if (v.luecke) sec.append(el('div', { style: 'font-size:12px;color:#8A5606;margin-top:3px' }, 'Lücke: ' + v.luecke));
+    }
+    const links = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px' });
+    if (v.ted_link) links.append(el('a', { class: 'btn ghost vgvlnk', href: v.ted_link, target: '_blank' }, 'TED-Bekanntmachung ↗'));
+    if (v.portal_link) links.append(el('a', { class: 'btn ghost vgvlnk', href: v.portal_link, target: '_blank' }, (v.portal || 'Portal') + ' / Unterlagen ↗'));
+    if (links.childNodes.length) sec.append(links);
+    if (v.ordner) sec.append(el('div', { style: 'display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:#75756E' },
+      el('span', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, v.ordner),
+      el('button', { class: 'btn ghost', style: 'font-size:11px;padding:3px 9px;flex:none', onclick: () => navigator.clipboard.writeText(v.ordner) }, 'Pfad kopieren')));
+    // Heruntergeladene Portal-Dateien + Vollstaendigkeit
+    const dat = Array.isArray(v.dateien) ? v.dateien : [];
+    const kopf = el('div', { class: 'slbl', style: 'margin-top:12px;display:flex;gap:8px;align-items:center' },
+      `Unterlagen aus dem Portal (${dat.length})`,
+      v.vollstaendig ? el('span', { style: 'color:#3C5D1E;font-weight:700;font-size:11px' }, '✓ vollständig')
+        : el('span', { style: 'color:#B4540A;font-weight:700;font-size:11px' }, '⚠ unvollständig'));
+    sec.append(kopf);
+    if (!v.vollstaendig && v.fehlend) sec.append(el('div', { style: 'font-size:12px;color:#B4540A;margin-bottom:5px' }, 'Fehlt: ' + v.fehlend));
+    if (dat.length) {
+      const box = el('div', { class: 'vgvdat' });
+      for (const f2 of dat) box.append(el('div', {}, '📄 ' + (f2.name || f2) + (f2.kb ? ` (${f2.kb} KB)` : '')));
+      sec.append(box);
+    }
+    // Analyse-Dateien (Agent-Anhaenge) direkt oeffnen
+    const ana = (d.anhaenge || []).filter((a2) => /(^|\d_)(VGV_?Analyse|Referenz_?Analyse|TERMINE)/i.test(a2.name));
+    if (ana.length) {
+      const row2 = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px' });
+      for (const a2 of ana.slice(0, 3)) row2.append(el('button', { class: 'btn', onclick: () => oeffneAnhaenge([a2]) },
+        /TERMINE/i.test(a2.name) ? 'Termine' : /Referenz/i.test(a2.name) ? 'Referenzen' : 'Analyse'));
+      if (ana.length > 1) row2.append(el('button', { class: 'btn lime', onclick: () => oeffneAnhaenge(ana.slice(0, 3)) }, `Alle ${Math.min(ana.length, 3)} öffnen`));
+      sec.append(row2);
+    }
+    dr.append(sec);
   }
 
   // Rueckfragen
@@ -549,6 +637,25 @@ function renderDrawer() {
   dr.append(sf);
 
   ov.append(dr); root.append(ov);
+}
+
+// HTML-Anhaenge im neuen Tab ANZEIGEN statt herunterladen (VgV-Analyse-Dateien). Fenster
+// synchron im Klick oeffnen (Popup-Blocker), Inhalt nach dem Fetch als Blob-URL setzen.
+async function oeffneAnhaenge(liste) {
+  const wins = liste.map(() => window.open('about:blank'));
+  for (let i = 0; i < liste.length; i++) {
+    const a = liste[i];
+    try {
+      const r = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${a.pfad}`, {
+        headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token } });
+      if (!r.ok) throw new Error(r.status);
+      const buf = await r.arrayBuffer();
+      const typ = a.name.toLowerCase().endsWith('.html') ? 'text/html' : (r.headers.get('content-type') || 'application/octet-stream');
+      const u = URL.createObjectURL(new Blob([buf], { type: typ }));
+      if (wins[i] && !wins[i].closed) wins[i].location = u; else window.open(u);
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    } catch (e) { if (wins[i] && !wins[i].closed) wins[i].close(); alert('Öffnen fehlgeschlagen: ' + a.name); }
+  }
 }
 
 async function downloadAnhang(a) {
