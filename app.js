@@ -519,23 +519,42 @@ function renderDrawer() {
     dr.append(sec);
   }
 
-  // Rueckfragen
-  const offene = (d.rueckfragen || []).filter((f) => f.status === 'offen');
-  const beantwortete = (d.rueckfragen || []).filter((f) => f.status !== 'offen');
+  // Rueckfragen — Sammel-Modus (Marcels Wunsch 24.07.): Antworten zwischenspeichern
+  // ('entwurf', Agent wartet weiter), Dateien in Ruhe anhaengen, erst "Losschicken" laesst
+  // den Agenten weiterarbeiten. Telefon-Antworten bleiben sofort final.
+  const offene = (d.rueckfragen || []).filter((f) => f.status === 'offen' || f.status === 'entwurf');
+  const beantwortete = (d.rueckfragen || []).filter((f) => f.status === 'beantwortet' || f.status === 'uebersprungen');
   if (offene.length) {
     const sec = el('div', { class: 'dsec rfsec' });
-    sec.append(el('div', { class: 'slbl' }, `${offene.length} Frage${offene.length > 1 ? 'n' : ''} — danach arbeitet der Agent weiter`));
+    sec.append(el('div', { class: 'slbl' }, `${offene.length} Frage${offene.length > 1 ? 'n' : ''} — Antworten sammeln, dann losschicken`));
     const inputs = [];
     offene.forEach((f, i) => {
-      sec.append(el('div', { class: 'frage' }, `${i + 1}. ${f.frage}`));
+      sec.append(el('div', { class: 'frage' }, `${i + 1}. ${f.frage}`,
+        f.status === 'entwurf' ? el('span', { style: 'font-size:11px;color:#5A6E1E;font-weight:700' }, ' 💾 zwischengespeichert') : ''));
       const inp = el('input', { placeholder: 'Deine Antwort…' });
+      inp.value = f.antwort || '';
       inputs.push({ f, inp }); sec.append(inp);
-      sec.append(el('button', { style: 'font-size:11.5px;color:#8A5606;margin:4px 0 8px', onclick: async () => { await lotse('rueckfrage_antworten', { rueckfrage_id: f.id, antwort: 'ueberspringen' }); await openCard(d.id); await ladeBoard(); } }, 'Überspringen'));
+      if (f.status === 'offen') sec.append(el('button', { style: 'font-size:11.5px;color:#8A5606;margin:4px 0 8px', onclick: async () => { await lotse('rueckfrage_antworten', { rueckfrage_id: f.id, antwort: 'ueberspringen' }); await openCard(d.id); await ladeBoard(); } }, 'Überspringen'));
     });
-    sec.append(el('button', { class: 'btn warn', style: 'margin-top:8px', onclick: async () => {
-      for (const { f, inp } of inputs) if (inp.value.trim()) await lotse('rueckfrage_antworten', { rueckfrage_id: f.id, antwort: inp.value.trim() });
+    const speichereEntwuerfe = async () => {
+      for (const { f, inp } of inputs) if (inp.value.trim() && inp.value.trim() !== (f.antwort || '')) {
+        const r = await lotse('rueckfrage_entwurf', { rueckfrage_id: f.id, antwort: inp.value.trim() });
+        if (r.fehler) alert(r.fehler);
+      }
+    };
+    const rowB = el('div', { style: 'display:flex;gap:9px;margin-top:10px;flex-wrap:wrap' });
+    rowB.append(el('button', { class: 'btn warn', onclick: async () => {
+      await speichereEntwuerfe();
+      const r = await lotse('rueckfragen_absenden', { todo_id: d.id });
+      if (r.fehler) alert(r.fehler);
       await openCard(d.id); await ladeBoard();
-    } }, 'Antworten senden – Agent arbeitet weiter'));
+    } }, 'Losschicken – Agent arbeitet weiter'));
+    rowB.append(el('button', { class: 'btn ghost', onclick: async () => {
+      await speichereEntwuerfe();
+      await openCard(d.id); await ladeBoard();
+    } }, 'Zwischenspeichern'));
+    sec.append(rowB);
+    sec.append(el('div', { style: 'font-size:11.5px;color:#8A5606;margin-top:8px' }, 'Zwischengespeichert = der Agent wartet noch. Häng unten in Ruhe Dateien an – er bekommt sie beim Weiterarbeiten mit. Erst „Losschicken" lässt ihn weitermachen.'));
     dr.append(sec);
   }
   if (beantwortete.length) {
