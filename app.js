@@ -87,7 +87,9 @@ function initialen(name) {
 function avColor(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
 function projDot(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PROJ_DOTS[h % PROJ_DOTS.length]; }
 function statusVon(t) {
-  if (!t.delegiert || !t.agent_status) return null;
+  // agent_status traegt sowohl den Delegations-Fluss (delegiert=true) als auch die
+  // Spalten-Automatik (delegiert=false, Karte in programmierter Spalte).
+  if (!t.agent_status) return null;
   if (t.agent_status === 'wartet_info') return 'rueckfrage';
   if (t.agent_status === 'laeuft' || t.agent_status === 'wartet') return 'arbeitet';
   if (t.agent_status === 'fertig') return 'fertig';
@@ -244,6 +246,10 @@ function renderBoard() {
       sp.auto_status === 'rueckfrage' ? el('span', { class: 'roledot', style: 'background:#E29A2E', title: 'Rückfragen wandern automatisch her' }) : '',
       sp.auto_status === 'fertig' ? el('span', { class: 'roledot', style: 'background:#4F7A4B', title: 'Fertige Agenten-Ergebnisse landen hier' }) : '',
       el('span', { class: 'name' }, sp.name),
+      sp.automatik ? el('span', {
+        class: 'autochip', title: 'Automatik: ' + (sp.automatik.auftrag || '').slice(0, 200),
+        onclick: (e) => { e.stopPropagation(); spalteAutomatikDialog(sp); },
+      }, '⚙ Auto') : '',
       el('span', { class: 'cnt' }, String(inSpalte.length)),
       sp.ist_erledigt ? el('span', { class: 'cnt' }, '✓') : '',
       el('button', { class: 'menu', onclick: (e) => { e.stopPropagation(); spaltenMenu(e, sp, spalten.length); } }, '···')));
@@ -283,6 +289,7 @@ function renderBoard() {
 function spaltenMenu(e, sp, nSpalten) {
   const items = [];
   const rolle = async (r) => { await lotse('spalte_rolle', { spalte_id: sp.id, rolle: r }); await ladeBoard(); };
+  if (!sp.ist_erledigt && !sp.ist_agent) items.push({ txt: sp.automatik ? 'Automatik bearbeiten…' : 'Automatisieren (Agent verarbeitet jede Karte hier)…', do: () => spalteAutomatikDialog(sp) });
   if (!sp.ist_erledigt) items.push({ txt: sp.ist_agent ? 'Agenten-Rolle entfernen' : 'Als Agenten-Spalte (Karte rein = erledigen lassen)', do: () => rolle(sp.ist_agent ? 'keine' : 'agent') });
   if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'rueckfrage' ? 'Rückfrage-Rolle entfernen' : 'Als Rückfrage-Spalte (Karten wandern automatisch her)', do: () => rolle(sp.auto_status === 'rueckfrage' ? 'keine' : 'rueckfrage') });
   if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'fertig' ? 'Fertig-prüfen-Rolle entfernen' : 'Als Fertig-prüfen-Spalte (Agenten-Ergebnisse landen hier)', do: () => rolle(sp.auto_status === 'fertig' ? 'keine' : 'fertig_pruefen') });
@@ -290,6 +297,59 @@ function spaltenMenu(e, sp, nSpalten) {
   if (sp.ist_erledigt) items.push({ note: 'Erledigt-Spalte – Rolle über andere Spalte ändern' });
   if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Löschen – Karten wandern in erste Spalte', danger: true, do: async () => { const r = await lotse('spalte_loeschen', { spalte_id: sp.id }); if (r.fehler) alert(r.fehler); await ladeBoard(); } });
   ctxMenu(e.clientX, e.clientY, items);
+}
+
+function spalteAutomatikDialog(sp) {
+  // "Spalte programmieren": Auftrag + Quellen + Ziel. Loest NUR bei Hand-Moves aus
+  // (Entscheidung Marcel 24.07.); Agenten-Moves koennen keine Automatik starten.
+  const root = document.getElementById('drawer-root'); root.innerHTML = '';
+  const a = sp.automatik || {};
+  const zu = () => { root.innerHTML = ''; };
+  const ov = el('div', { class: 'overlay', style: 'justify-content:center;align-items:center', onclick: (e) => { if (e.target === ov) zu(); } });
+  const box = el('div', { class: 'modalbox' });
+  box.append(el('div', { style: 'font-size:15px;font-weight:700;margin-bottom:2px' }, 'Spalte automatisieren — „' + sp.name + '“'));
+  box.append(el('div', { style: 'font-size:12px;color:#75756E;margin-bottom:12px' }, 'Jede Karte, die du von Hand in diese Spalte ziehst, verarbeitet der Agent mit diesem Auftrag. Das Ergebnis landet an der Karte.'));
+  box.append(el('div', { class: 'slbl' }, 'Auftrag'));
+  const ta = el('textarea', { class: 'autota', placeholder: 'Was soll mit jeder Karte passieren? Z. B.: „Prüfe die Ausschreibung gegen unsere Referenzen und erstelle eine Ersteinschätzung."' });
+  ta.value = a.auftrag || '';
+  box.append(ta);
+  box.append(el('div', { class: 'slbl', style: 'margin-top:12px' }, 'Quellen'));
+  const QU = [['projekt', 'Projektdaten (Ordner + Wissen des Karten-Projekts)'], ['internet', 'Internet-Recherche'], ['arbeitsstand', 'Marcels Arbeitsstand']];
+  // Neu angelegte Automatik in einem Projekt-Board: Projektdaten sind der Normalfall -> vorangekreuzt.
+  const vorQuellen = a.auftrag ? (a.quellen || []) : (S.active?.typ === 'projekt' ? ['projekt'] : []);
+  const checks = {};
+  for (const [k, label] of QU) {
+    const cb = el('input', { type: 'checkbox', ...(vorQuellen.includes(k) ? { checked: '' } : {}) });
+    checks[k] = cb;
+    box.append(el('label', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0;cursor:pointer' }, cb, label));
+  }
+  box.append(el('div', { class: 'slbl', style: 'margin-top:12px' }, 'Wenn der Agent fertig ist'));
+  const sel = el('select', { class: 'autosel' });
+  sel.append(el('option', { value: '' }, 'Karte bleibt in dieser Spalte'));
+  for (const s2 of (S.board?.spalten || [])) {
+    if (s2.id === sp.id || s2.ist_erledigt || s2.ist_agent) continue;
+    const o = el('option', { value: s2.id }, 'Karte wandert nach „' + s2.name + '“');
+    if (a.ziel_spalte_id === s2.id) o.selected = true;
+    sel.append(o);
+  }
+  box.append(sel);
+  box.append(el('div', { style: 'font-size:11.5px;color:#8A8A83;margin-top:8px' }, 'Braucht der Agent etwas von dir, wandert die Karte in die Rückfrage-Spalte — antworten kannst du hier oder am Telefon. Nochmal ausführen: Karte kurz raus- und wieder reinziehen.'));
+  const row = el('div', { style: 'display:flex;gap:9px;margin-top:16px;flex-wrap:wrap' });
+  row.append(el('button', { class: 'btn lime', onclick: async () => {
+    if (!ta.value.trim()) { alert('Bitte einen Auftrag eingeben — oder „Automatik entfernen".'); return; }
+    const quellen = QU.map(([k]) => k).filter((k) => checks[k].checked);
+    const r = await lotse('spalte_automatik', { spalte_id: sp.id, auftrag: ta.value.trim(), quellen, ziel_spalte_id: sel.value || null });
+    if (r.fehler) { alert(r.fehler); return; }
+    zu(); await ladeBoard();
+  } }, 'Speichern'));
+  if (a.auftrag) row.append(el('button', { class: 'btn warn', onclick: async () => {
+    const r = await lotse('spalte_automatik', { spalte_id: sp.id, auftrag: null });
+    if (r.fehler) { alert(r.fehler); return; }
+    zu(); await ladeBoard();
+  } }, 'Automatik entfernen'));
+  row.append(el('button', { class: 'btn ghost', onclick: zu }, 'Abbrechen'));
+  box.append(row);
+  ov.append(box); root.append(ov);
 }
 
 function renderCard(t) {
