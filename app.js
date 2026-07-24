@@ -223,6 +223,15 @@ function renderTopbar() {
   const scope = S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
+  // "Ruf mich an" (24.07.): Assistent ruft die eigene hinterlegte Nummer an —
+  // kostenlos telefonieren, solange die deutsche Nummer noch in der Twilio-Freigabe haengt.
+  const rufBtn = el('button', { class: 'callbtn', title: 'Der Assistent ruft dich auf deiner hinterlegten Nummer an', onclick: async () => {
+    rufBtn.disabled = true; const alt = rufBtn.textContent; rufBtn.textContent = '📞 Anruf kommt…';
+    const r = await lotse('ruf_mich_an').catch(() => ({ fehler: 'Netzwerkfehler' }));
+    if (r.fehler) { alert(r.fehler); rufBtn.textContent = alt; rufBtn.disabled = false; }
+    else setTimeout(() => { rufBtn.textContent = alt; rufBtn.disabled = false; }, 20000);
+  } }, '📞 Ruf mich an');
+  tb.append(rufBtn);
   const rf = (S.board?.todos || []).filter((t) => statusVon(t) === 'rueckfrage');
   if (rf.length) tb.append(el('button', {
     class: 'alertbtn', onclick: () => openCard(rf[0].id),
