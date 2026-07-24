@@ -431,60 +431,78 @@ function dashLane(titel, eintraege, leerText) {
 
 function renderVgvDashboard(box, d) {
   box.innerHTML = '';
-  const kopf = el('div', { style: 'display:flex;align-items:baseline;gap:12px;margin-bottom:14px' },
-    el('h2', { style: "font-family:'Space Grotesk',sans-serif;font-size:19px" }, 'VgV-Dashboard'),
-    el('span', { class: 'scope' }, 'Fristen + Markt im größeren Radius'),
-    el('button', { style: 'margin-left:auto;font-size:17px;color:#75756E', onclick: closeDrawer }, '✕'));
-  box.append(kopf);
-
-  // --- Fristen: Phase 1 (Teilnahmeunterlagen) / Phase 2 (Praesentation) ---
   const karten = (d.karten || []).filter((k) => k.status !== 'erledigt' && k.vgv);
   const p1 = karten.filter((k) => k.vgv.frist).map((k) => ({
     name: k.titel, datum: k.vgv.frist,
     sub: [k.spalte, k.vgv.frist_bieterfragen ? 'Bieterfragen bis ' + String(k.vgv.frist_bieterfragen).slice(0, 10) : null].filter(Boolean).join(' · '),
   }));
   const p2 = karten.filter((k) => k.vgv.termin_phase2).map((k) => ({ name: k.titel, datum: k.vgv.termin_phase2, sub: k.spalte }));
-  box.append(dashLane('Phase 1 — Abgabe Teilnahmeunterlagen', p1, 'Keine Verfahren mit Abgabefrist auf dem Board.'));
-  box.append(dashLane('Phase 2 — Präsentation', p2,
-    'Noch keine Phase-2-Termine bekannt — sie erscheinen hier automatisch, sobald die VgV-Analyse sie aus den Unterlagen zieht.'));
+  const kandidaten = d.kandidaten || [];
 
-  // --- Weitwinkel-Kandidaten mit Go / No-Go ---
-  const sek = el('div', { class: 'dlane' });
-  const st = d.weitwinkel_stand ? ' · Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
-  sek.append(el('div', { class: 'slbl' }, `Markt im größeren Radius — was noch passen würde (${(d.kandidaten || []).length})${st}`));
-  if (!(d.kandidaten || []).length) {
-    sek.append(el('div', { class: 'dleer' }, 'Noch keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — sie prüft alle Themengebiete mit Referenzlage im erweiterten Radius um Donaustauf und Bogen.'));
+  // Kopfzeile
+  const st = d.weitwinkel_stand ? 'Weitwinkel-Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
+  box.append(el('div', { class: 'dkopf' },
+    el('h2', {}, 'VgV-Dashboard'),
+    el('span', { class: 'scope' }, st),
+    el('button', { class: 'dclose', onclick: closeDrawer }, '✕')));
+
+  const grid = el('div', { class: 'dgrid' });
+
+  // ---- Linke Spalte: Kennzahlen + Fristen (Phase 1 / Phase 2) ----
+  const links = el('div', { class: 'dcol' });
+  const naechste = [...p1].map((x) => vgvRest(x.datum) ? { ...x, rest: vgvRest(x.datum) } : null)
+    .filter((x) => x && x.rest.tage >= 0).sort((a, b2) => a.rest.tage - b2.rest.tage)[0];
+  const kpi = (wert, lbl, sub, cls = '') => el('div', { class: 'kpi ' + cls },
+    el('div', { class: 'w' }, String(wert)), el('div', { class: 'l' }, lbl),
+    sub ? el('div', { class: 's' }, sub) : '');
+  links.append(el('div', { class: 'kpis' },
+    kpi(naechste ? naechste.rest.tage + ' Tg' : '—', 'Nächste Abgabe',
+      naechste ? naechste.name.slice(0, 26) : 'keine Frist offen', naechste && naechste.rest.tage <= 7 ? 'warn' : ''),
+    kpi(kandidaten.length, 'Kandidaten offen', 'warten auf Go / No-Go'),
+    kpi(karten.length, 'Auf dem Board', 'laufende Verfahren'),
+    kpi(`${(d.entschieden || {}).go || 0} / ${(d.entschieden || {}).nogo || 0}`, 'Go / No-Go', 'letzte 14 Tage')));
+  links.append(dashLane('Phase 1 — Abgabe Teilnahmeunterlagen', p1, 'Keine Verfahren mit Abgabefrist auf dem Board.'));
+  links.append(dashLane('Phase 2 — Präsentation', p2,
+    'Noch keine Phase-2-Termine bekannt — sie erscheinen automatisch, sobald die VgV-Analyse sie aus den Unterlagen zieht.'));
+  grid.append(links);
+
+  // ---- Rechte Spalte: Kandidaten kompakt, eigener Scrollbereich ----
+  const rechts = el('div', { class: 'dcol' });
+  rechts.append(el('div', { class: 'slbl' }, `Markt im größeren Radius — was noch passen würde (${kandidaten.length})`));
+  if (!kandidaten.length) {
+    rechts.append(el('div', { class: 'dleer' }, 'Keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — alle Themengebiete mit Referenzlage, bis 250 km um Donaustauf und Bogen.'));
   }
-  for (const k of (d.kandidaten || [])) {
-    const zeile = el('div', { class: 'kand' });
-    zeile.append(el('div', { class: 'kt' }, k.titel,
-      k.score != null ? el('span', { class: 'kscore' }, k.score + '/100') : ''));
-    zeile.append(el('div', { class: 'km2' }, [
-      k.ort, k.km != null ? Math.round(k.km) + ' km' : null, k.kategorie,
-      k.frist ? 'Abgabe ' + String(k.frist).slice(0, 10) : null, k.volumen,
-      k.konstellation ? String(k.konstellation).toUpperCase() : null,
-    ].filter(Boolean).join(' · ')));
-    if (k.referenzlage) zeile.append(el('div', { class: 'kref' }, 'Referenzlage: ' + k.referenzlage));
-    if (k.begruendung) zeile.append(el('div', { class: 'kbeg' }, k.begruendung));
-    const btns = el('div', { style: 'display:flex;gap:8px;margin-top:8px' });
-    const entscheide = async (was) => {
+  const liste = el('div', { class: 'klist' });
+  for (const k of kandidaten) {
+    const zeile = el('div', { class: 'kand2' });
+    const det = el('div', { class: 'kdet', style: 'display:none' });
+    if (k.referenzlage) det.append(el('div', { class: 'kref' }, 'Referenzlage: ' + k.referenzlage));
+    if (k.begruendung) det.append(el('div', { class: 'kbeg' }, k.begruendung));
+    const entscheide = async (was, ev) => {
+      ev.stopPropagation();
       const r = await lotse('vgv_entscheiden', { kandidat_id: k.id, entscheidung: was }).catch(() => ({ fehler: 'Netzwerkfehler' }));
       if (r.fehler) { alert(r.fehler); return; }
       zeile.replaceWith(el('div', { class: 'kandhin' + (was === 'go' ? ' go' : '') },
         (was === 'go' ? '✓ GO — ' : '✕ No-Go — ') + (r.hinweis || '')));
       if (was === 'go') await ladeBoard();
     };
-    btns.append(el('button', { class: 'btn lime', onclick: () => entscheide('go') }, 'Go — auf das Board'));
-    btns.append(el('button', { class: 'btn ghost', onclick: () => entscheide('nogo') }, 'No-Go'));
-    zeile.append(btns);
-    sek.append(zeile);
+    zeile.append(el('div', { class: 'krow' },
+      k.score != null ? el('span', { class: 'kscore' }, k.score) : el('span', { class: 'kscore leer' }, '–'),
+      el('span', { class: 'kt2', title: k.titel }, k.titel),
+      el('button', { class: 'kbtn go', title: 'Go — Karte in „Neu", Aufnahme startet automatisch', onclick: (ev) => entscheide('go', ev) }, '✓ Go'),
+      el('button', { class: 'kbtn nogo', title: 'No-Go — wird nie wieder vorgelegt', onclick: (ev) => entscheide('nogo', ev) }, '✕')));
+    zeile.append(el('div', { class: 'km2' }, [
+      k.ort, k.km != null ? Math.round(k.km) + ' km' : null, k.kategorie,
+      k.frist ? 'Abgabe ' + String(k.frist).slice(8, 10) + '.' + String(k.frist).slice(5, 7) + '.' : null,
+      k.volumen, k.konstellation ? String(k.konstellation).toUpperCase() : null,
+    ].filter(Boolean).join(' · ')));
+    zeile.append(det);
+    zeile.addEventListener('click', () => { det.style.display = det.style.display === 'none' ? 'block' : 'none'; });
+    liste.append(zeile);
   }
-  if (d.entschieden && (d.entschieden.go || d.entschieden.nogo)) {
-    sek.append(el('div', { class: 'dleer', style: 'margin-top:8px' },
-      `Letzte 14 Tage entschieden: ${d.entschieden.go || 0}× Go, ${d.entschieden.nogo || 0}× No-Go.`));
-  }
-  box.append(sek);
-  if (d.hinweis) box.append(el('div', { class: 'dleer' }, d.hinweis));
+  rechts.append(liste);
+  grid.append(rechts);
+  box.append(grid);
 }
 
 function renderCard(t) {
