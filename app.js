@@ -223,6 +223,10 @@ function renderTopbar() {
   const scope = S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
+  // Dashboard neben dem Boardnamen — vorerst nur fuer das VgV-Radar-Board (Marcels Auftrag 24.07.)
+  if (S.board?.ist_team && S.active.name === 'VgV-Radar') {
+    tb.append(el('button', { class: 'dashbtn', onclick: openVgvDashboard }, '▦ Dashboard'));
+  }
   // "Ruf mich an" (24.07.): Assistent ruft die eigene hinterlegte Nummer an —
   // kostenlos telefonieren, solange die deutsche Nummer noch in der Twilio-Freigabe haengt.
   const rufBtn = el('button', { class: 'callbtn', title: 'Der Assistent ruft dich auf deiner hinterlegten Nummer an', onclick: async () => {
@@ -310,6 +314,14 @@ function renderBoard() {
 
 function spaltenMenu(e, sp, nSpalten) {
   const items = [];
+  items.push({ txt: 'Umbenennen', do: async () => {
+    const n = prompt('Neuer Spaltenname:', sp.name);
+    if (n?.trim() && n.trim() !== sp.name) {
+      const r = await lotse('spalte_umbenennen', { spalte_id: sp.id, name: n.trim() });
+      if (r.fehler) alert(r.fehler);
+      await ladeBoard();
+    }
+  } });
   const rolle = async (r) => { await lotse('spalte_rolle', { spalte_id: sp.id, rolle: r }); await ladeBoard(); };
   if (!sp.ist_erledigt && !sp.ist_agent) items.push({ txt: sp.automatik ? 'Automatik bearbeiten…' : 'Automatisieren (Agent verarbeitet jede Karte hier)…', do: () => spalteAutomatikDialog(sp) });
   if (!sp.ist_erledigt) items.push({ txt: sp.ist_agent ? 'Agenten-Rolle entfernen' : 'Als Agenten-Spalte (Karte rein = erledigen lassen)', do: () => rolle(sp.ist_agent ? 'keine' : 'agent') });
@@ -372,6 +384,107 @@ function spalteAutomatikDialog(sp) {
   row.append(el('button', { class: 'btn ghost', onclick: zu }, 'Abbrechen'));
   box.append(row);
   ov.append(box); root.append(ov);
+}
+
+// ---------- VgV-Dashboard (Marcels Auftrag 24.07.: Fristen-Grafik + Weitwinkel-Kandidaten) ----------
+async function openVgvDashboard() {
+  const root = document.getElementById('drawer-root'); root.innerHTML = '';
+  const ov = el('div', { class: 'overlay', style: 'justify-content:center;align-items:center' });
+  const box = el('div', { class: 'dashbox' }, el('div', { class: 'dleer' }, 'Lade Dashboard…'));
+  ov.append(box); root.append(ov);
+  ov.addEventListener('click', (e) => { if (e.target === ov) closeDrawer(); });
+  const d = await lotse('vgv_dashboard').catch(() => ({ fehler: 'Netzwerkfehler' }));
+  if (d.fehler) { box.innerHTML = ''; box.append(el('div', { class: 'dleer' }, d.fehler)); return; }
+  renderVgvDashboard(box, d);
+}
+
+function dashLane(titel, eintraege, leerText) {
+  const TAGE = 49;
+  const lane = el('div', { class: 'dlane' });
+  lane.append(el('div', { class: 'slbl' }, titel));
+  if (!eintraege.length) { lane.append(el('div', { class: 'dleer' }, leerText)); return lane; }
+  const kopfTrack = el('div', { class: 'dtrack kopf' });
+  for (let w = 0; w <= 7; w++) {
+    const dt = new Date(); dt.setDate(dt.getDate() + w * 7);
+    kopfTrack.append(el('span', { class: 'dtick', style: `left:${(w * 7 / TAGE) * 100}%` },
+      dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })));
+  }
+  lane.append(el('div', { class: 'drow' }, el('div', { class: 'dlbl' }, ''), kopfTrack));
+  const sortiert = [...eintraege].sort((a, b2) => new Date(String(a.datum).replace(' ', 'T')) - new Date(String(b2.datum).replace(' ', 'T')));
+  for (const e2 of sortiert) {
+    const rest = vgvRest(e2.datum);
+    if (!rest) continue;
+    const pos = Math.max(0.5, Math.min(100, (rest.tage / TAGE) * 100));
+    const cls = rest.tage < 0 ? 'vorbei' : rest.tage <= 3 ? 'rot' : rest.tage <= 7 ? 'knapp' : '';
+    const lbl = el('div', { class: 'dlbl' }, el('b', {}, e2.name.slice(0, 44)),
+      e2.sub ? el('span', { class: 'dsub' }, e2.sub) : '');
+    const track = el('div', { class: 'dtrack' },
+      el('div', { class: 'dbar ' + cls, style: `width:${pos}%` }),
+      el('span', { class: 'ddot ' + cls, style: `left:${pos}%` }),
+      el('span', { class: 'dend ' + cls, style: pos > 62 ? `right:${100 - pos}%;transform:translateX(0)` : `left:${pos}%` },
+        rest.tage < 0 ? `${String(e2.datum).slice(8, 10)}.${String(e2.datum).slice(5, 7)}. vorbei`
+          : rest.tage === 0 ? 'HEUTE' : `${new Date(String(e2.datum).replace(' ', 'T')).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} · ${rest.tage} Tg`));
+    lane.append(el('div', { class: 'drow' }, lbl, track));
+  }
+  return lane;
+}
+
+function renderVgvDashboard(box, d) {
+  box.innerHTML = '';
+  const kopf = el('div', { style: 'display:flex;align-items:baseline;gap:12px;margin-bottom:14px' },
+    el('h2', { style: "font-family:'Space Grotesk',sans-serif;font-size:19px" }, 'VgV-Dashboard'),
+    el('span', { class: 'scope' }, 'Fristen + Markt im größeren Radius'),
+    el('button', { style: 'margin-left:auto;font-size:17px;color:#75756E', onclick: closeDrawer }, '✕'));
+  box.append(kopf);
+
+  // --- Fristen: Phase 1 (Teilnahmeunterlagen) / Phase 2 (Praesentation) ---
+  const karten = (d.karten || []).filter((k) => k.status !== 'erledigt' && k.vgv);
+  const p1 = karten.filter((k) => k.vgv.frist).map((k) => ({
+    name: k.titel, datum: k.vgv.frist,
+    sub: [k.spalte, k.vgv.frist_bieterfragen ? 'Bieterfragen bis ' + String(k.vgv.frist_bieterfragen).slice(0, 10) : null].filter(Boolean).join(' · '),
+  }));
+  const p2 = karten.filter((k) => k.vgv.termin_phase2).map((k) => ({ name: k.titel, datum: k.vgv.termin_phase2, sub: k.spalte }));
+  box.append(dashLane('Phase 1 — Abgabe Teilnahmeunterlagen', p1, 'Keine Verfahren mit Abgabefrist auf dem Board.'));
+  box.append(dashLane('Phase 2 — Präsentation', p2,
+    'Noch keine Phase-2-Termine bekannt — sie erscheinen hier automatisch, sobald die VgV-Analyse sie aus den Unterlagen zieht.'));
+
+  // --- Weitwinkel-Kandidaten mit Go / No-Go ---
+  const sek = el('div', { class: 'dlane' });
+  const st = d.weitwinkel_stand ? ' · Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
+  sek.append(el('div', { class: 'slbl' }, `Markt im größeren Radius — was noch passen würde (${(d.kandidaten || []).length})${st}`));
+  if (!(d.kandidaten || []).length) {
+    sek.append(el('div', { class: 'dleer' }, 'Noch keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — sie prüft alle Themengebiete mit Referenzlage im erweiterten Radius um Donaustauf und Bogen.'));
+  }
+  for (const k of (d.kandidaten || [])) {
+    const zeile = el('div', { class: 'kand' });
+    zeile.append(el('div', { class: 'kt' }, k.titel,
+      k.score != null ? el('span', { class: 'kscore' }, k.score + '/100') : ''));
+    zeile.append(el('div', { class: 'km2' }, [
+      k.ort, k.km != null ? Math.round(k.km) + ' km' : null, k.kategorie,
+      k.frist ? 'Abgabe ' + String(k.frist).slice(0, 10) : null, k.volumen,
+      k.konstellation ? String(k.konstellation).toUpperCase() : null,
+    ].filter(Boolean).join(' · ')));
+    if (k.referenzlage) zeile.append(el('div', { class: 'kref' }, 'Referenzlage: ' + k.referenzlage));
+    if (k.begruendung) zeile.append(el('div', { class: 'kbeg' }, k.begruendung));
+    const btns = el('div', { style: 'display:flex;gap:8px;margin-top:8px' });
+    const entscheide = async (was) => {
+      const r = await lotse('vgv_entscheiden', { kandidat_id: k.id, entscheidung: was }).catch(() => ({ fehler: 'Netzwerkfehler' }));
+      if (r.fehler) { alert(r.fehler); return; }
+      zeile.replaceWith(el('div', { class: 'kandhin' + (was === 'go' ? ' go' : '') },
+        (was === 'go' ? '✓ GO — ' : '✕ No-Go — ') + (r.hinweis || '')));
+      if (was === 'go') await ladeBoard();
+    };
+    btns.append(el('button', { class: 'btn lime', onclick: () => entscheide('go') }, 'Go — auf das Board'));
+    btns.append(el('button', { class: 'btn ghost', onclick: () => entscheide('nogo') }, 'No-Go'));
+    zeile.append(btns);
+    sek.append(zeile);
+  }
+  if (d.entschieden && (d.entschieden.go || d.entschieden.nogo)) {
+    sek.append(el('div', { class: 'dleer', style: 'margin-top:8px' },
+      `Letzte 14 Tage entschieden: ${d.entschieden.go || 0}× Go, ${d.entschieden.nogo || 0}× No-Go.`));
+  }
+  box.append(sek);
+  if (d.hinweis) box.append(el('div', { class: 'dleer' }, d.hinweis));
 }
 
 function renderCard(t) {
