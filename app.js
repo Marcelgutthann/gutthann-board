@@ -18,7 +18,7 @@ const CHIPS = {
 const S = {
   session: null, liste: null, projects: [],
   active: null, // {typ:'board'|'projekt', id, name}
-  board: null, detail: null, drag: null, newCardCol: null, poll: null,
+  board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
 };
 
 // ---------- API ----------
@@ -283,23 +283,34 @@ function renderBoard() {
     for (const t of inSpalte) cardsEl.append(renderCard(t));
     colEl.append(cardsEl);
     if (S.newCardCol === sp.id) {
+      // Getippter Text lebt in S.newCardText, damit ein Neu-Aufbau des Boards (Poll, Drag,
+      // Spaltenmenue) die halbfertige Eingabe nicht wegwirft — Marcels Befund 27.07.
       const inp = el('input', {
         class: 'newinput', placeholder: 'Titel der Aufgabe…',
+        oninput: () => { S.newCardText = inp.value; },
         onkeydown: async (e) => {
-          if (e.key === 'Escape') { S.newCardCol = null; renderBoard(); }
+          if (e.key === 'Escape') { S.newCardCol = null; S.newCardText = ''; renderBoard(); }
           if (e.key === 'Enter' && inp.value.trim()) {
-            const r = await lotse('todo_create', {
-              titel: inp.value.trim(),
-              projekt: S.active.typ === 'projekt' ? S.active.name : null,
-            });
-            if (r.todo_id && !sp.ist_erledigt) await lotse('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
-            S.newCardCol = null; await ladeBoard();
+            const titel = inp.value.trim();
+            inp.disabled = true;
+            let r;
+            try { r = await lotse('todo_create', { titel, projekt: S.active.typ === 'projekt' ? S.active.name : null }); }
+            catch (err) { r = { fehler: err.message }; }
+            if (!r || !r.todo_id) {
+              // Nicht gespeichert: Eingabe stehen lassen und sagen, was los ist.
+              inp.disabled = false; inp.focus();
+              alert('Nicht gespeichert: ' + ((r && (r.fehler || r.error)) || 'keine Antwort vom Server') + '\nDer Text bleibt stehen — bitte nochmal Enter.');
+              return;
+            }
+            if (!sp.ist_erledigt) await lotse('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
+            S.newCardCol = null; S.newCardText = ''; await ladeBoard();
           }
         },
       });
-      colEl.append(inp); setTimeout(() => inp.focus());
+      inp.value = S.newCardText;
+      colEl.append(inp); setTimeout(() => { inp.focus(); inp.selectionStart = inp.value.length; });
     } else {
-      colEl.append(el('button', { class: 'addcard', onclick: () => { S.newCardCol = sp.id; renderBoard(); } }, '+ Aufgabe'));
+      colEl.append(el('button', { class: 'addcard', onclick: () => { S.newCardCol = sp.id; S.newCardText = ''; renderBoard(); } }, '+ Aufgabe'));
     }
     bw.append(colEl);
   }
@@ -651,6 +662,10 @@ function renderCard(t) {
     for (const p of t.zugewiesen.slice(0, 3)) avs.append(el('span', { class: 'av', style: 'background:' + avColor(p), title: p }, initialen(p)));
     meta.append(avs);
   }
+  // Fremde Karte, die mir zugewiesen wurde: sichtbar machen, von wem sie kommt.
+  if (t.besitzer && S.board?.wer && t.besitzer !== S.board.wer && !S.board.ist_team && !S.board.projekt_id) {
+    meta.append(el('span', { style: 'color:#8A5606' }, 'von ' + t.besitzer));
+  }
   if (t.projekt_name) meta.append(el('span', { class: 'proj', style: 'color:' + projDot(t.projekt_name) }, t.projekt_name.replace(/^\d+\s*/, '')));
   c.append(meta);
   return c;
@@ -956,7 +971,13 @@ async function start() {
     }
   }
   clearInterval(S.poll);
-  S.poll = setInterval(async () => { if (!S.detail) { try { await ladeBoard(); } catch {} } }, 60000);
+  // Auto-Aktualisierung pausiert, solange jemand schreibt (Karte anlegen, Drawer offen,
+  // Cursor in einem Eingabefeld) — sonst raeumt der Neu-Aufbau die Eingabe weg.
+  S.poll = setInterval(async () => {
+    const tippt = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+    if (S.detail || S.newCardCol || S.drag || tippt) return;
+    try { await ladeBoard(); } catch {}
+  }, 60000);
 }
 document.getElementById('li-btn').addEventListener('click', doLogin);
 document.getElementById('li-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
