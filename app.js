@@ -85,6 +85,10 @@ function initialen(name) {
   return ((t[0]?.[0] || '') + (t[1]?.[0] || t[0]?.[1] || '')).toUpperCase();
 }
 function avColor(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
+// Personen kommen als {kurz, name} (Migration 53). Angezeigt wird der Klarname, gespeichert
+// bleibt die Kurzform. Farbe haengt an der Kurzform, damit sie sich nie aendert.
+function personListe() { return (S.liste?.personen || []).map((p) => (typeof p === 'string' ? { kurz: p, name: p } : p)); }
+function personName(kurz) { return personListe().find((p) => p.kurz === kurz)?.name || String(kurz).replace(/^user:/, ''); }
 function projDot(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PROJ_DOTS[h % PROJ_DOTS.length]; }
 function statusVon(t) {
   // agent_status traegt sowohl den Delegations-Fluss (delegiert=true) als auch die
@@ -659,12 +663,12 @@ function renderCard(t) {
   if (t.kommentare_n) meta.append(el('span', {}, `💬 ${t.kommentare_n}`));
   if ((t.zugewiesen || []).length) {
     const avs = el('span', { class: 'avs' });
-    for (const p of t.zugewiesen.slice(0, 3)) avs.append(el('span', { class: 'av', style: 'background:' + avColor(p), title: p }, initialen(p)));
+    for (const p of t.zugewiesen.slice(0, 3)) avs.append(el('span', { class: 'av', style: 'background:' + avColor(p), title: personName(p) }, initialen(personName(p))));
     meta.append(avs);
   }
   // Fremde Karte, die mir zugewiesen wurde: sichtbar machen, von wem sie kommt.
   if (t.besitzer && S.board?.wer && t.besitzer !== S.board.wer && !S.board.ist_team && !S.board.projekt_id) {
-    meta.append(el('span', { style: 'color:#8A5606' }, 'von ' + t.besitzer));
+    meta.append(el('span', { style: 'color:#8A5606' }, 'von ' + personName(t.besitzer)));
   }
   if (t.projekt_name) meta.append(el('span', { class: 'proj', style: 'color:' + projDot(t.projekt_name) }, t.projekt_name.replace(/^\d+\s*/, '')));
   c.append(meta);
@@ -702,7 +706,7 @@ function renderDrawer() {
   const meta = el('div', { class: 'meta' });
   if (d.projekt) meta.append(el('span', {}, '⌖ ' + d.projekt.name));
   if (d.faellig) meta.append(el('span', {}, 'fällig ' + new Date(d.faellig).toLocaleDateString('de-DE')));
-  meta.append(el('span', {}, 'Besitzer: ' + d.besitzer));
+  meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta); dr.append(head);
 
   // Auftrag (editierbar — auch KI-formulierte Texte)
@@ -859,12 +863,12 @@ function renderDrawer() {
   const sp2 = el('div', { class: 'dsec' });
   sp2.append(el('div', { class: 'slbl' }, 'Personen'));
   for (const p of d.zugewiesen) sp2.append(el('span', { class: 'pill' },
-    el('span', { class: 'av', style: 'width:16px;height:16px;border-radius:50%;color:#fff;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;background:' + avColor(p) }, initialen(p)),
-    p, el('button', { style: 'color:#9A9A93', onclick: async () => { await lotse('todo_zuweisen', { todo_id: d.id, person: p, an: false }); await openCard(d.id); await ladeBoard(); } }, '✕')));
+    el('span', { class: 'av', style: 'width:16px;height:16px;border-radius:50%;color:#fff;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;background:' + avColor(p) }, initialen(personName(p))),
+    personName(p), el('button', { style: 'color:#9A9A93', onclick: async () => { await lotse('todo_zuweisen', { todo_id: d.id, person: p, an: false }); await openCard(d.id); await ladeBoard(); } }, '✕')));
   sp2.append(el('button', { class: 'btn ghost', style: 'font-size:12px;padding:5px 11px', onclick: (e) => {
-    const kandidaten = (S.liste?.personen || []).filter((p) => !d.zugewiesen.includes(p));
+    const kandidaten = personListe().filter((p) => !d.zugewiesen.includes(p.kurz));
     if (!kandidaten.length) return;
-    ctxMenu(e.clientX, e.clientY, kandidaten.map((p) => ({ txt: p, do: async () => { await lotse('todo_zuweisen', { todo_id: d.id, person: p, an: true }); await openCard(d.id); await ladeBoard(); } })));
+    ctxMenu(e.clientX, e.clientY, kandidaten.map((p) => ({ txt: p.name, do: async () => { await lotse('todo_zuweisen', { todo_id: d.id, person: p.kurz, an: true }); await openCard(d.id); await ladeBoard(); } })));
   } }, '+ Person')); dr.append(sp2);
 
   // Anhaenge
