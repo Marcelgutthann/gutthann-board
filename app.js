@@ -429,44 +429,130 @@ function dashLane(titel, eintraege, leerText) {
   return lane;
 }
 
-function renderVgvDashboard(box, d) {
-  box.innerHTML = '';
-  const karten = (d.karten || []).filter((k) => k.status !== 'erledigt' && k.vgv);
-  const p1 = karten.filter((k) => k.vgv.frist).map((k) => ({
+// Umschalter-Merker (Marcels Auftrag 27.07.): das Dashboard zeigt entweder die laufenden
+// Verfahren oder die Empfehlungen — beides zusammen war zu voll. Trennlinie: eine Karte in
+// der Spalte "Neu" ist ein Vorschlag, ab der zweiten Spalte ist sie ein laufendes Verfahren.
+let dashTab = 'laufend';
+
+function dashKpi(wert, lbl, sub, cls = '') {
+  return el('div', { class: 'kpi ' + cls },
+    el('div', { class: 'w' }, String(wert)), el('div', { class: 'l' }, lbl),
+    sub ? el('div', { class: 's' }, sub) : '');
+}
+
+function dashNaechste(eintraege) {
+  return eintraege.map((x) => vgvRest(x.datum) ? { ...x, rest: vgvRest(x.datum) } : null)
+    .filter((x) => x && x.rest.tage >= 0).sort((a, b2) => a.rest.tage - b2.rest.tage)[0];
+}
+
+// Eine Verfahrenszeile (laufendes Verfahren bzw. Board-Vorschlag), aufklappbar wie die Kandidaten.
+function verfahrenZeile(k) {
+  const v = k.vgv || {};
+  const erl = k.status === 'erledigt';
+  const zeile = el('div', { class: 'kand2' + (erl ? ' erl' : '') });
+  const datum = v.termin_phase2 || v.frist;
+  const rest = vgvRest(datum);
+  const kopf = el('div', { class: 'krow' }, el('span', { class: 'kt2', title: k.titel }, k.titel));
+  if (v.empfehlung) {
+    const f = v.empfehlung === 'BEWERBEN' ? { bg: '#E8F5C4', fg: '#3C5D1E' }
+      : v.empfehlung === 'PRUEFEN' ? { bg: '#FBEFDA', fg: '#8A5606' } : { bg: '#ECECE8', fg: '#75756E' };
+    kopf.append(el('span', { class: 'vtag', style: `background:${f.bg};color:${f.fg}` }, v.empfehlung));
+  }
+  // Nur noch offene Termine bekommen einen Chip: bei einem abgegebenen Antrag ist die
+  // vergangene Phase-1-Frist kein Warnsignal, sondern der Normalfall.
+  if (rest && rest.tage >= 0 && !erl) {
+    const f = rest.tage <= 3 ? { bg: '#F7DDD6', fg: '#B4432E' }
+      : rest.tage <= 7 ? { bg: '#FBEFDA', fg: '#8A5606' } : { bg: '#EDF3E1', fg: '#3C5D1E' };
+    kopf.append(el('span', { class: 'vtag', style: `background:${f.bg};color:${f.fg}` },
+      rest.tage === 0 ? 'HEUTE' : rest.tage + ' Tg'));
+  }
+  if (k.agent_status === 'laeuft') kopf.append(el('span', { class: 'vtag', style: 'background:#E8F5C4;color:#3C5D1E' }, 'Agent läuft'));
+  zeile.append(kopf);
+  zeile.append(el('div', { class: 'vm2' }, [
+    v.ort, v.auftraggeber,
+    v.frist ? 'Abgabe ' + String(v.frist).slice(8, 10) + '.' + String(v.frist).slice(5, 7) + '.' : null,
+    v.termin_phase2 ? 'Phase 2 ' + String(v.termin_phase2).slice(8, 10) + '.' + String(v.termin_phase2).slice(5, 7) + '.' : null,
+    v.konstellation ? String(v.konstellation).toUpperCase() : null,
+  ].filter(Boolean).join(' · ')));
+  const det = el('div', { class: 'kdet vdet', style: 'display:none' });
+  if (v.stand_text) det.append(el('div', { class: 'vst' }, v.stand_text));
+  if (v.empfehlung_grund && !v.stand_text) det.append(el('div', { class: 'vst' }, v.empfehlung_grund));
+  if (v.ordner || v.ordner_laufend) det.append(el('div', { class: 'vpfad' }, v.ordner_laufend || v.ordner));
+  if (v.beleg) det.append(el('div', { class: 'vpfad' }, 'Beleg: ' + v.beleg));
+  if (det.childNodes.length) {
+    zeile.append(det);
+    zeile.addEventListener('click', () => { det.style.display = det.style.display === 'none' ? 'block' : 'none'; });
+  } else { zeile.style.cursor = 'default'; }
+  return zeile;
+}
+
+// Ansicht 1: laufende Verfahren — Termine links, Stand je Spalte rechts.
+function renderDashLaufend(grid, laufend) {
+  const offen = laufend.filter((k) => k.status !== 'erledigt');
+  const p1 = offen.filter((k) => k.vgv.frist && (vgvRest(k.vgv.frist) || {}).tage >= 0).map((k) => ({
     name: k.titel, datum: k.vgv.frist,
     sub: [k.spalte, k.vgv.frist_bieterfragen ? 'Bieterfragen bis ' + String(k.vgv.frist_bieterfragen).slice(0, 10) : null].filter(Boolean).join(' · '),
   }));
-  const p2 = karten.filter((k) => k.vgv.termin_phase2).map((k) => ({ name: k.titel, datum: k.vgv.termin_phase2, sub: k.spalte }));
-  const kandidaten = d.kandidaten || [];
+  const p2 = offen.filter((k) => k.vgv.termin_phase2).map((k) => ({ name: k.titel, datum: k.vgv.termin_phase2, sub: k.spalte }));
+  const naechste = dashNaechste(p1.concat(p2));
+  const wartend = offen.filter((k) => k.spalte === 'Beworben').length;
+  const inP2 = offen.filter((k) => String(k.spalte).startsWith('Phase 2')).length;
 
-  // Kopfzeile
-  const st = d.weitwinkel_stand ? 'Weitwinkel-Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
-  box.append(el('div', { class: 'dkopf' },
-    el('h2', {}, 'VgV-Dashboard'),
-    el('span', { class: 'scope' }, st),
-    el('button', { class: 'dclose', onclick: closeDrawer }, '✕')));
-
-  const grid = el('div', { class: 'dgrid' });
-
-  // ---- Linke Spalte: Kennzahlen + Fristen (Phase 1 / Phase 2) ----
   const links = el('div', { class: 'dcol' });
-  const naechste = [...p1].map((x) => vgvRest(x.datum) ? { ...x, rest: vgvRest(x.datum) } : null)
-    .filter((x) => x && x.rest.tage >= 0).sort((a, b2) => a.rest.tage - b2.rest.tage)[0];
-  const kpi = (wert, lbl, sub, cls = '') => el('div', { class: 'kpi ' + cls },
-    el('div', { class: 'w' }, String(wert)), el('div', { class: 'l' }, lbl),
-    sub ? el('div', { class: 's' }, sub) : '');
   links.append(el('div', { class: 'kpis' },
-    kpi(naechste ? naechste.rest.tage + ' Tg' : '—', 'Nächste Abgabe',
-      naechste ? naechste.name.slice(0, 26) : 'keine Frist offen', naechste && naechste.rest.tage <= 7 ? 'warn' : ''),
-    kpi(kandidaten.length, 'Kandidaten offen', 'warten auf Go / No-Go'),
-    kpi(karten.length, 'Auf dem Board', 'laufende Verfahren'),
-    kpi(`${(d.entschieden || {}).go || 0} / ${(d.entschieden || {}).nogo || 0}`, 'Go / No-Go', 'letzte 14 Tage')));
-  links.append(dashLane('Phase 1 — Abgabe Teilnahmeunterlagen', p1, 'Keine Verfahren mit Abgabefrist auf dem Board.'));
+    dashKpi(naechste ? (naechste.rest.tage === 0 ? 'HEUTE' : naechste.rest.tage + ' Tg') : '—', 'Nächster Termin',
+      naechste ? naechste.name.slice(0, 26) : 'kein Termin offen', naechste && naechste.rest.tage <= 7 ? 'warn' : ''),
+    dashKpi(offen.length, 'Laufende Verfahren', 'auf dem Board'),
+    dashKpi(wartend, 'Beworben', 'Rückmeldung offen'),
+    dashKpi(inP2, 'In Phase 2', 'Präsentation / Angebot')));
+  links.append(dashLane('Phase 1 — Abgabe Teilnahmeunterlagen', p1, 'Keine offene Abgabefrist.'));
   links.append(dashLane('Phase 2 — Präsentation', p2,
     'Noch keine Phase-2-Termine bekannt — sie erscheinen automatisch, sobald die VgV-Analyse sie aus den Unterlagen zieht.'));
   grid.append(links);
 
-  // ---- Rechte Spalte: Kandidaten kompakt, eigener Scrollbereich ----
+  const rechts = el('div', { class: 'dcol' });
+  rechts.append(el('div', { class: 'slbl' }, `Stand je Verfahren (${laufend.length})`));
+  if (!laufend.length) rechts.append(el('div', { class: 'dleer' }, 'Keine laufenden Verfahren auf dem Board.'));
+  const liste = el('div', { class: 'klist' });
+  let gruppe = null;
+  for (const k of laufend) {
+    if (k.spalte !== gruppe) {
+      gruppe = k.spalte;
+      const n = laufend.filter((x) => x.spalte === gruppe).length;
+      liste.append(el('div', { class: 'vgrp' }, `${gruppe} · ${n}`));
+    }
+    liste.append(verfahrenZeile(k));
+  }
+  rechts.append(liste);
+  grid.append(rechts);
+}
+
+// Ansicht 2: Empfehlungen — frische Board-Karten links, Weitwinkel-Markt rechts.
+function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
+  const p1 = vorschlaege.filter((k) => k.vgv.frist).map((k) => ({
+    name: k.titel, datum: k.vgv.frist,
+    sub: [k.spalte, k.vgv.frist_bieterfragen ? 'Bieterfragen bis ' + String(k.vgv.frist_bieterfragen).slice(0, 10) : null].filter(Boolean).join(' · '),
+  }));
+  const naechste = dashNaechste(p1);
+
+  const links = el('div', { class: 'dcol' });
+  links.append(el('div', { class: 'kpis' },
+    dashKpi(kandidaten.length, 'Kandidaten offen', 'warten auf Go / No-Go'),
+    dashKpi(vorschlaege.length, 'Neu auf dem Board', 'aufgenommen, nicht entschieden'),
+    dashKpi(naechste ? naechste.rest.tage + ' Tg' : '—', 'Nächste Abgabe',
+      naechste ? naechste.name.slice(0, 26) : 'keine Frist offen', naechste && naechste.rest.tage <= 7 ? 'warn' : ''),
+    dashKpi(`${(d.entschieden || {}).go || 0} / ${(d.entschieden || {}).nogo || 0}`, 'Go / No-Go', 'letzte 14 Tage')));
+  links.append(el('div', { class: 'slbl' }, `Aufgenommen, noch nicht entschieden (${vorschlaege.length})`));
+  if (!vorschlaege.length) {
+    links.append(el('div', { class: 'dleer' }, 'Nichts Neues in der ersten Spalte. Neue Funde legt der Radar dort automatisch ab.'));
+  }
+  const vliste = el('div', { class: 'klist' });
+  for (const k of vorschlaege) vliste.append(verfahrenZeile(k));
+  links.append(vliste);
+  links.append(el('div', { style: 'height:18px' }));
+  links.append(dashLane('Abgabefristen dieser Verfahren', p1, 'Keine Frist hinterlegt.'));
+  grid.append(links);
+
   const rechts = el('div', { class: 'dcol' });
   rechts.append(el('div', { class: 'slbl' }, `Markt im größeren Radius — was noch passen würde (${kandidaten.length})`));
   if (!kandidaten.length) {
@@ -502,6 +588,31 @@ function renderVgvDashboard(box, d) {
   }
   rechts.append(liste);
   grid.append(rechts);
+}
+
+function renderVgvDashboard(box, d) {
+  box.innerHTML = '';
+  const alle = (d.karten || []).filter((k) => k.vgv);
+  const vorschlaege = alle.filter((k) => (k.spalte_pos || 0) === 0 && k.status !== 'erledigt');
+  const laufend = alle.filter((k) => (k.spalte_pos || 0) > 0);
+  const kandidaten = d.kandidaten || [];
+
+  const st = d.weitwinkel_stand ? 'Weitwinkel-Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
+  const tabs = el('div', { class: 'dtabs' });
+  const tab = (id, lbl, n) => el('button', {
+    class: 'dtab' + (dashTab === id ? ' an' : ''),
+    onclick: () => { dashTab = id; renderVgvDashboard(box, d); },
+  }, lbl, el('span', { class: 'n' }, String(n)));
+  tabs.append(tab('laufend', 'Laufende Verfahren', laufend.filter((k) => k.status !== 'erledigt').length));
+  tabs.append(tab('empfehlung', 'Empfehlungen', vorschlaege.length + kandidaten.length));
+  box.append(el('div', { class: 'dkopf' },
+    el('h2', {}, 'VgV-Dashboard'), tabs,
+    el('span', { class: 'scope' }, st),
+    el('button', { class: 'dclose', onclick: closeDrawer }, '✕')));
+
+  const grid = el('div', { class: 'dgrid' });
+  if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d);
+  else renderDashLaufend(grid, laufend);
   box.append(grid);
 }
 
