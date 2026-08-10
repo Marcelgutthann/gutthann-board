@@ -15,23 +15,22 @@ body{background:#F3F3F1;color:#1C1C1A;font-family:'Hanken Grotesk',sans-serif;he
 input,button,textarea,select{font-family:'Hanken Grotesk',sans-serif;font-size:13px;color:#1C1C1A}
 button{cursor:pointer;background:none;border:none}
 *{scrollbar-width:thin;scrollbar-color:rgba(28,28,26,.25) transparent}
-@keyframes agentAura{0%,100%{box-shadow:0 0 0 0 rgba(163,213,66,0)}50%{box-shadow:0 0 0 5px rgba(163,213,66,.28)}}
-@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.75)}}
-@keyframes badgeBlink{0%,100%{box-shadow:0 0 0 0 rgba(226,154,46,.45)}50%{box-shadow:0 0 0 4px rgba(226,154,46,0)}}
+/* Redesign 10.08.: Dauer-Animationen (Blinken/Pulsieren) sind raus — Ruhe statt Unruhe.
+   Agent-Aktivitaet zeigt ein statischer Ring an der Karte. */
 #app{display:flex;height:100vh;overflow:hidden}
 
 .sidebar{width:252px;flex:none;background:#FBFBFA;border-right:1px solid rgba(28,28,26,.10);display:flex;flex-direction:column;overflow-y:auto}
 .brand{padding:18px 16px 14px;border-bottom:1px solid rgba(28,28,26,.08)}
 .brand h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700}
 .brand .sub{font-size:11.5px;color:#75756E;margin-top:3px;display:flex;align-items:center;gap:6px}
-.brand .sub .dot{width:7px;height:7px;border-radius:50%;background:#7CA928;animation:dotPulse 1.8s ease-in-out infinite}
+.brand .sub .dot{width:7px;height:7px;border-radius:50%;background:#7CA928}
 .sect{padding:14px 10px 4px}
 .sect .lbl{font-size:10.5px;letter-spacing:.09em;color:#8A8A83;font-weight:600;padding:0 8px 6px;text-transform:uppercase}
 .row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:#33332F;user-select:none}
 .row:hover{background:rgba(28,28,26,.05)}
 .row.active{background:#E8DFC5;font-weight:600;color:#1C1C1A}
 .row .pdot{width:10px;height:10px;border-radius:3px;flex:none}
-.row .badge{margin-left:auto;background:#E29A2E;color:#231602;font-size:10.5px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px;animation:badgeBlink 2s ease-in-out infinite}
+.row .badge{margin-left:auto;background:#E29A2E;color:#231602;font-size:10.5px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .row .pin{margin-left:auto;color:#9A9A93;font-size:12px;visibility:hidden;background:none}
 .row:hover .pin{visibility:visible}
 .row.addrow{color:#75756E}
@@ -41,32 +40,34 @@ button{cursor:pointer;background:none;border:none}
 .topbar{padding:16px 22px 10px;display:flex;align-items:center;gap:12px;flex:none}
 .topbar h2{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700}
 .topbar .scope{font-size:12px;color:#75756E}
-.alertbtn{background:#E29A2E;color:#231602;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:18px;display:flex;align-items:center;gap:7px;animation:badgeBlink 2s ease-in-out infinite}
+.alertbtn{background:#E29A2E;color:#231602;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:18px;display:flex;align-items:center;gap:7px}
 .callbtn{margin-left:auto;background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:18px;white-space:nowrap}
 .callbtn:hover{background:#33332F}.callbtn:disabled{opacity:.55;cursor:default}
-.boardwrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:6px 22px 18px;display:flex;gap:14px;align-items:flex-start}
-.col{width:296px;flex:none;display:flex;flex-direction:column;background:#EAEAE6;border:1px solid rgba(28,28,26,.08);border-radius:12px;max-height:100%}
-.col.dragover{outline:2px solid #A3D542}
-.colhead{padding:12px 10px 8px 14px;display:flex;align-items:center;gap:7px;flex:none}
-.colhead .name{font-size:13px;font-weight:600}
-.colhead .cnt{font-size:12px;color:#8A8A83}
+.boardwrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:12px 28px 24px;display:flex;gap:20px;align-items:flex-start}
+.col{width:352px;flex:none;display:flex;flex-direction:column;background:rgba(28,28,26,.035);border:none;border-radius:16px;max-height:100%}
+.col.dragover{outline:2px solid #A3D542;outline-offset:-2px}
+.colhead{padding:14px 14px 10px 16px;display:flex;align-items:center;gap:7px;flex:none}
+.colhead .name{font-size:13px;font-weight:600;letter-spacing:.01em}
+.colhead .cnt{font-size:11.5px;font-weight:600;color:#75756E;background:rgba(28,28,26,.06);border-radius:10px;padding:1px 8px}
 .colhead .roledot{width:7px;height:7px;border-radius:50%;background:#A3D542}
-.colhead .menu{margin-left:auto;color:#8A8A83;padding:2px 6px;border-radius:5px}
+.colhead .menu{margin-left:auto;color:#8A8A83;padding:2px 6px;border-radius:5px;opacity:0;transition:opacity .12s ease}
+.col:hover .colhead .menu{opacity:1}
 .colhead .menu:hover{background:rgba(28,28,26,.07)}
 .colhead .autochip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:#E8F5C4;color:#3E5312;cursor:pointer;white-space:nowrap}
 .colhead .autochip:hover{background:#DCEFA8}
-.cards{overflow-y:auto;padding:4px 8px;display:flex;flex-direction:column;gap:8px;min-height:30px}
-.card{background:#FFFFFF;border:1px solid rgba(28,28,26,.09);border-radius:10px;padding:10px 12px;cursor:pointer}
-.card:hover{border-color:rgba(28,28,26,.25)}
-.card.aura{animation:agentAura 2.2s ease-in-out infinite}
-.card.rf{background:#FBF3E2;border-color:#E29A2E}
+.cards{overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:10px;min-height:30px}
+.card{background:#FFFFFF;border:none;border-radius:12px;padding:12px 14px;cursor:pointer;box-shadow:0 1px 2px rgba(28,28,26,.06),0 2px 8px rgba(28,28,26,.05);transition:box-shadow .15s ease,transform .15s ease}
+.card:hover{box-shadow:0 4px 16px rgba(28,28,26,.10);transform:translateY(-1px)}
+.card.aura{box-shadow:0 0 0 2px rgba(163,213,66,.45),0 2px 8px rgba(28,28,26,.05)}
+.card.rf{background:#FBF3E2;box-shadow:0 0 0 1.5px #E29A2E,0 2px 8px rgba(28,28,26,.05)}
 .card .chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;margin-bottom:6px}
 .card .chip .cdot{width:6px;height:6px;border-radius:50%}
-.card .t{font-size:13.5px;font-weight:600;line-height:1.35}
-.card .meta{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11.5px;color:#75756E;flex-wrap:wrap}
+.card .t{font-size:15px;font-weight:600;line-height:1.35;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .meta{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#75756E;flex-wrap:nowrap;overflow:hidden;min-width:0}
+.card .meta>span{flex:none}
 .card .meta .due.urgent{color:#A66A12;font-weight:600}
-.card .meta .proj{margin-left:auto;font-weight:600}
-.card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap}
+.card .meta .proj{margin-left:auto;font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
 .card .vfrist{font-size:11.5px;color:#75756E}
 .card .vfrist.urgent{color:#A66A12;font-weight:700}
@@ -146,16 +147,23 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .addcol:hover{color:#1C1C1A;border-color:rgba(28,28,26,.4)}
 .newinput{margin:0 8px 8px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;width:calc(100% - 16px)}
 
-.overlay{position:fixed;inset:0;background:rgba(28,28,26,.32);display:flex;justify-content:flex-end;z-index:50}
-.drawer{width:520px;max-width:94vw;background:#FCFCFB;height:100%;overflow-y:auto;box-shadow:-8px 0 32px rgba(28,28,26,.18)}
+.overlay{position:fixed;inset:0;background:rgba(28,28,26,.32);display:flex;justify-content:center;align-items:center;padding:4vh 0;z-index:50}
+/* Karten-Detail: grosses zentriertes Sheet statt schmalem Rechts-Drawer (Redesign 10.08.). */
+.drawer{width:min(760px,94vw);max-height:88vh;background:#FCFCFB;height:auto;overflow-y:auto;border-radius:20px;box-shadow:0 24px 64px rgba(28,28,26,.25)}
 .modalbox{width:470px;max-width:92vw;background:#FCFCFB;border-radius:14px;box-shadow:0 18px 48px rgba(28,28,26,.28);padding:18px 20px;max-height:88vh;overflow-y:auto}
 .modalbox .slbl{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin-bottom:7px}
 .autota{width:100%;min-height:96px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;resize:vertical}
 .autosel{width:100%;padding:7px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px}
-.dsec{padding:16px 22px;border-bottom:1px solid rgba(28,28,26,.09)}
+.dsec{padding:14px 28px;border-bottom:none}
+.dsec:first-child{padding-top:22px}
+.dsec:last-child{padding-bottom:24px}
 .dsec .slbl{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin-bottom:9px}
-.dhead .t{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;line-height:1.3;margin:8px 0 6px}
-.dhead .meta{font-size:12px;color:#75756E;display:flex;gap:12px;flex-wrap:wrap}
+.dhead .t{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;line-height:1.3;margin:8px 0 8px;letter-spacing:-.01em}
+.dhead .meta{font-size:12px;color:#75756E;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.metabtn{font-size:12px;color:#75756E;padding:3px 10px;border:1px solid rgba(28,28,26,.14);border-radius:8px;background:#fff;cursor:pointer}
+.metabtn:hover{color:#1C1C1A;border-color:rgba(28,28,26,.3)}
+.btn.gefahr{color:#B4432E;border-color:rgba(180,67,46,.4)}
+.btn.gefahr:hover{background:#F9ECE9}
 .rfsec{background:#FBF3E2}
 .rfsec .slbl{color:#8A5606}
 .rfsec .frage{font-size:13px;color:#231602;margin:10px 0 6px;line-height:1.45}
@@ -178,7 +186,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .vrow{display:flex;gap:10px;font-size:12.5px;color:#75756E;padding:3px 0}
 .inline-add{display:flex;gap:7px;margin-top:8px}
 .inline-add input{flex:1;padding:7px 10px;border:1px solid rgba(28,28,26,.18);border-radius:8px;background:#fff}
-.ctx{position:fixed;background:#fff;border:1px solid rgba(28,28,26,.14);border-radius:10px;box-shadow:0 8px 28px rgba(28,28,26,.16);z-index:99;min-width:210px;padding:5px}
+.ctx{position:fixed;background:#fff;border:1px solid rgba(28,28,26,.14);border-radius:10px;box-shadow:0 8px 28px rgba(28,28,26,.16);z-index:99;min-width:210px;padding:5px;max-height:60vh;overflow-y:auto}
 .ctx button{display:block;width:100%;text-align:left;padding:8px 12px;border-radius:7px;font-size:13px}
 .ctx button:hover{background:rgba(28,28,26,.06)}
 .ctx button.danger{color:#B4432E}
@@ -193,6 +201,18 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .logincard .btn{width:100%;padding:11px;font-size:14px}
 .hidden{display:none!important}
 .empty{color:#8A8A83;font-size:12.5px}
+</style>
+<link rel="stylesheet" href="dashboard.scoped.css?v=msn8gu9r">
+<style>
+/* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
+   sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
+#dash-root{flex:1;min-height:0;overflow:auto}
+#dash-root[hidden]{display:none}
+#dash-root .layout{min-height:0}
+/* Umschalter Board <-> Dashboard in der Topbar */
+.viewtabs{display:flex;gap:2px;background:rgba(28,28,26,.06);border-radius:8px;padding:2px}
+.viewtabs button{font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;color:#5C5C56}
+.viewtabs button.on{background:#fff;color:#1C1C1A;box-shadow:0 1px 2px rgba(28,28,26,.10)}
 </style>
 </head>
 <body>
@@ -211,10 +231,34 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
   <div class="main">
     <div class="topbar" id="topbar"></div>
     <div class="boardwrap" id="board"></div>
+    <!-- Projekt-Dashboard: eigener Container, damit die Dashboard-Styles (auf
+         #dash-root gekapselt) das Board nicht anfassen. Die oberste Leiste des
+         Dashboards bleibt verborgen -- Marke, Konto und Abmelden stehen in der
+         Huelle; die Elemente bleiben nur bestehen, weil dashboard.js sie kennt. -->
+    <div id="dash-root" hidden>
+      <div id="shell">
+        <div class="top" style="display:none">
+          <button class="menu-btn" id="menubtn" aria-label="Menü">☰</button><span class="brand">Gutthann HIW</span><span class="crumb" id="crumb"></span>
+          <span class="right"><button class="glossbtn" id="glossbtn" title="Glossar &amp; Legende">?</button><span class="rstatus off" id="rstatus"><span class="d"></span><span id="rstext">Runner aus</span></span><span class="user" id="useremail"></span><button class="lnk" id="logout">abmelden</button></span>
+        </div>
+        <div id="runbanner" class="runbanner" hidden></div>
+        <div class="sb-backdrop" id="sbbackdrop"></div>
+        <div class="layout">
+          <aside class="sidebar">
+            <div class="sb-proj-label" id="sbproj">Projekt</div>
+            <div id="sbagents"></div>
+            <div class="side-h"><span class="t">Agenten-Läufe</span><span class="mono" id="runlive" style="font-size:10px"></span></div>
+            <div id="runs"></div>
+          </aside>
+          <main class="main" id="main"></main>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=ms3a82s5"></script>
+<script src="app.js?v=msn8gu9r"></script>
+<script type="module" src="dashboard.js?v=msn8gu9r"></script>
 </body>
 </html>
