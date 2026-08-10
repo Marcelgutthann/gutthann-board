@@ -250,6 +250,7 @@ async function renderProject(){
     sb.from('documents').select('filename,modified_at').eq('project_id',current).or('filename.ilike.%kosten%,filename.ilike.%din%276%,filename.ilike.%honorar%,filename.ilike.%angebot%,filename.ilike.%nachtrag%').order('modified_at',{ascending:false}).limit(15),
     sb.from('item_feedback').select('item_type,item_title,kommentar').eq('project_id',current).order('created_at')]);
   if(!proj){go('cockpit');return;}
+  await betLaden();
   currentName=proj.name;lastD=proj.dashboard||{};lastStand=proj.dashboard_stand;lastChecklist=proj.checklist||{};lastL1=proj.lph1||null;renderSidebar();
   fbClosed={};(fbRows||[]).forEach(r=>{fbClosed[fbKey(r.item_type,r.item_title)]=r;});
   el('crumb').innerHTML='<a id="toC">Cockpit</a><span class="sep">›</span>'+esc(short(proj.name));
@@ -350,12 +351,20 @@ async function renderProject(){
   const mg=mgAll.filter(x=>x&&!fbClosed[fbKey('mangel',x.beschreibung||'')]);
   if(mg.length){const mgOpen=mg.filter(x=>x.status!=='behoben'&&x.status!=='abgenommen');const offenM=mgOpen.length;
    h+=sec('maengel','','⚠',gl('Mängel','Dokumentierte Baumängel und offene Abnahme-Punkte (LPH 8 Objektüberwachung) mit Beseitigungsfrist.')+' & Abnahmen',mg.length+' erfasst','<span class="stat'+(offenM?' alert':' ok')+'">'+offenM+' offen</span>',renderMaengel(mgAll),(mgOpen.length?mgOpen.slice(0,2).map(m=>tz('bad',esc(m.beschreibung||''),m.frist?fmtFrist(m.frist):'')).join('')+(offenM>2?tz(null,'+ '+(offenM-2)+' weitere offen','','tz-more'):''):tz('ok','Alle Mängel behoben','')));}
-  // Beteiligte — aus der belegten Analyse-Liste (D.beteiligte), Bauherr oben, nach Firma gruppiert
-  const betArr=(D&&D.beteiligte)||[];const betWarn=(D&&D._qa&&D._qa.beteiligte&&D._qa.beteiligte.length)?D._qa.beteiligte.length:0;
-  {const bh=betArr.find(p=>p&&(p.ist_bauherr||/bauherr|auftraggeber/i.test(p.rolle||'')));
-   const firmen=new Set(betArr.map(p=>p&&(p.firma||p.organisation)).filter(Boolean)).size;
-   const tBet=betArr.length?((bh?tz(null,'<strong>Bauherr:</strong> '+esc(bh.name||bh.firma||''),''):'')+tz(null,betArr.length+' Personen'+(firmen?' · '+firmen+' Firmen':''),'')):tz('warn','Noch keine Beteiligten erfasst','');
-   h+=sec('beteiligte','','👤','Beteiligte','Projektbeteiligte & Bauherr aus der Analyse','<span class="stat'+(betWarn?' alert':'')+'">'+betArr.length+'</span>',renderBeteiligte(D),tBet);}
+  // Beteiligtenliste — selbst gepflegt (Tabelle beteiligte). Analyse liefert nur Vorschlaege.
+  {const eintr=betL.filter(r=>r.art==='eintrag');
+   const bh=eintr.find(r=>r.ist_bauherr);
+   const firmen=new Set(eintr.map(r=>r.firma).filter(Boolean)).size;
+   const offenN=eintr.filter(r=>r.status==='offen').length;
+   const vorschlag=((D&&D.beteiligte)||[]).length;
+   const tBet=eintr.length
+     ?((bh?tz(null,'<strong>Bauherr:</strong> '+esc(bh.firma||betName(bh)||''),''):'')
+       +tz(null,eintr.length+' Beteiligte'+(firmen?' · '+firmen+' Firmen':''),'')
+       +(offenN?tz('warn',offenN+' Gewerk(e) noch nicht vergeben',''):''))
+     :(betL.length?tz('warn','Gliederung steht — noch keine Beteiligten eingetragen','')
+                  :tz('warn','Noch keine Liste angelegt'+(vorschlag?' · '+vorschlag+' Vorschläge aus der Analyse':''),''));
+   h+=sec('beteiligte','prominent','👤','Beteiligtenliste','gegliederte Projektbeteiligte — frei bearbeitbar',
+          '<span class="stat'+(offenN?' warn':'')+'">'+eintr.length+'</span>',renderBet(),tBet);}
   // Projektstruktur
   h+=sec('struktur','','📁','Projekt-Struktur',(folders||[]).length+' Top-Ordner · '+(docCount||0)+' Dokumente','','<div class="inner">'+renderFolders(folders||[],docCount||1)+'</div>',(folders&&folders.length?folders.slice(0,3).map(f=>tz(null,esc(f.ordner||'(Wurzel)'),''+f.anzahl)).join(''):''));
   // Dokument-Suche
@@ -1092,6 +1101,209 @@ function betForm(e){
      '<button class="btn-sm ghost" data-bet="abbrechen">Abbrechen</button></div></div>';
   return h;
 }
+// --- Beteiligtenliste: laden, speichern, umsortieren ------------------------
+async function betLaden(){
+  const[{data:L},{data:R}]=await Promise.all([
+    sb.rpc('beteiligte_liste',{pid:current}),
+    betRollen.length?Promise.resolve({data:betRollen}):sb.from('beteiligten_rollen').select('rolle,bereich').order('bereich').order('pos')]);
+  betL=L||[];betRollen=R||[];
+}
+function betHinweis(t){const e=el('main').querySelector('#bethint');if(e){e.textContent=t;if(t)setTimeout(()=>{if(e.textContent===t)e.textContent='';},3500);}}
+// Nur den Fensterinhalt neu zeichnen — ein voller render() wuerde das Formular schliessen.
+async function betNeuZeichnen(){await betLaden();const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
+  if(!bd){render();return;}bd.innerHTML=renderBet();wireBet();}
+
+function betFormLesen(){
+  const g=id=>{const e=el('main').querySelector('#'+id);return e?e.value.trim():'';};
+  const ck=id=>{const e=el('main').querySelector('#'+id);return !!(e&&e.checked);};
+  const konts=[];el('main').querySelectorAll('#bf_konts .bf-k').forEach(z=>{
+    const w=z.querySelector('.bf-kval').value.trim();
+    if(w)konts.push({art:z.querySelector('.bf-kart').value,kontext:z.querySelector('.bf-kctx').value,wert:w});});
+  const isG=betEdit&&betEdit.art==='gruppe';
+  const d={art:isG?'gruppe':'eintrag',titel:g('bf_titel')||null,nummer_manuell:g('bf_nummer')||null};
+  if(!isG)Object.assign(d,{firma:g('bf_firma')||null,anrede:g('bf_anrede')||null,namenstitel:g('bf_namenstitel')||null,
+    vorname:g('bf_vorname')||null,nachname:g('bf_nachname')||null,funktion:g('bf_funktion')||null,
+    strasse:g('bf_strasse')||null,plz:g('bf_plz')||null,ort:g('bf_ort')||null,notiz:g('bf_notiz')||null,
+    status:g('bf_status')||'aktiv',ist_bauherr:ck('bf_bh'),ist_intern:ck('bf_int'),kontakte:konts});
+  return d;
+}
+async function betSpeichern(){
+  const d=betFormLesen();
+  if(!d.titel&&!d.firma){betHinweis('Bitte mindestens Rolle oder Firma angeben.');return;}
+  if(betEdit.id){
+    const{error}=await sb.from('beteiligte').update(d).eq('id',betEdit.id);
+    if(error){betHinweis('Nicht gespeichert: '+error.message);return;}
+  }else{
+    // ans Ende des Zielzweigs
+    const gesch=betL.filter(r=>(r.parent_id||null)===(betEdit.parent_id||null));
+    const pos=gesch.length?Math.max(...gesch.map((_,i)=>i))*10+10:10;
+    const{error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,parent_id:betEdit.parent_id||null,
+      pos:pos+10,quelle:betEdit.quelle||'hand'},d,betEdit.crm||{}));
+    if(error){betHinweis('Nicht angelegt: '+error.message);return;}
+  }
+  betEdit=null;await betNeuZeichnen();betHinweis('Gespeichert.');
+}
+async function betLoeschen(id){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  const kinder=betL.filter(x=>x.parent_id===id).length;
+  const was=r.art==='gruppe'?('Gruppe „'+(r.titel||'')+'“'):('Eintrag „'+(r.titel||r.firma||'')+'“');
+  if(!confirm(was+' löschen?'+(kinder?'\n\nAchtung: '+kinder+' untergeordnete Zeile(n) werden mitgelöscht.':'')))return;
+  const{error}=await sb.from('beteiligte').delete().eq('id',id);
+  if(error){betHinweis('Nicht gelöscht: '+error.message);return;}
+  await betNeuZeichnen();betHinweis('Gelöscht.');
+}
+// Umsortieren: pos der Geschwister neu vergeben (10,20,30 …) und tauschen.
+async function betVerschieben(id,richtung){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  const gesch=betL.filter(x=>(x.parent_id||null)===(r.parent_id||null));
+  const i=gesch.findIndex(x=>x.id===id),j=i+(richtung==='up'?-1:1);
+  if(j<0||j>=gesch.length)return;
+  const neu=gesch.slice();neu.splice(j,0,neu.splice(i,1)[0]);
+  await Promise.all(neu.map((x,k)=>sb.from('beteiligte').update({pos:(k+1)*10}).eq('id',x.id)));
+  await betNeuZeichnen();
+}
+// Einruecken: unter die vorhergehende Geschwisterzeile haengen. Ausruecken: eine Ebene hoeher.
+async function betEbene(id,rein){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  let ziel;
+  if(rein){
+    const gesch=betL.filter(x=>(x.parent_id||null)===(r.parent_id||null));
+    const i=gesch.findIndex(x=>x.id===id);
+    if(i<=0){betHinweis('Zum Einrücken muss eine Zeile darüber stehen.');return;}
+    ziel=gesch[i-1].id;
+  }else{
+    if(!r.parent_id){betHinweis('Diese Zeile ist bereits auf oberster Ebene.');return;}
+    ziel=(betL.find(x=>x.id===r.parent_id)||{}).parent_id||null;
+  }
+  const{error}=await sb.from('beteiligte').update({parent_id:ziel,pos:9999}).eq('id',id);
+  if(error){betHinweis('Nicht verschoben: '+error.message);return;}
+  await betNeuZeichnen();
+}
+async function betVorlage(){
+  const{data,error}=await sb.rpc('beteiligte_vorlage',{pid:current});
+  if(error){betHinweis('Fehler: '+error.message);return;}
+  await betNeuZeichnen();betHinweis(data?('Gliederung angelegt ('+data+' Zeilen).'):'Es gibt bereits eine Liste — unverändert gelassen.');
+}
+async function betAusAnalyse(){
+  if(!betL.length){betHinweis('Erst die Gliederung anlegen, dann übernehmen.');return;}
+  const{data,error}=await sb.rpc('beteiligte_aus_analyse',{pid:current});
+  if(error){betHinweis('Fehler: '+error.message);return;}
+  await betNeuZeichnen();
+  betHinweis(data?(data+' Beteiligte aus der Analyse übernommen — bitte einsortieren.'):'Nichts Neues in der Analyse gefunden.');
+}
+async function betVerteiler(){
+  const mails=[];betL.forEach(r=>{if(r.art!=='eintrag'||r.status==='ausgeschieden')return;
+    betKont(r).forEach(k=>{if(k.art==='email'&&k.wert&&!mails.includes(k.wert))mails.push(k.wert);});});
+  if(!mails.length){betHinweis('Keine E-Mail-Adressen in der Liste.');return;}
+  try{await navigator.clipboard.writeText(mails.join('; '));betHinweis(mails.length+' Adressen kopiert.');}
+  catch(e){betHinweis('Kopieren nicht möglich: '+e.message);}
+}
+// Druckfassung im Layout der Papierliste: Nummer rechts, Beteiligte links, Kontakte in eigener Spalte.
+// --- CRM (Poool-Spiegel): Firmen und Personen suchen, in das Formular uebernehmen
+async function betCrmSuche(){
+  const q=(el('main').querySelector('#bf_crmq')||{}).value?.trim()||'';
+  const box=el('main').querySelector('#bf_crmres');if(!box)return;
+  if(q.length<2){box.innerHTML='<div class="empty">Mindestens zwei Zeichen eingeben.</div>';return;}
+  box.innerHTML='<div class="empty">Suche …</div>';
+  const[{data:P,error:eP},{data:F,error:eF}]=await Promise.all([
+    sb.from('crm_personen').select('crm_id,vorname,nachname,anrede,namenstitel,funktion,kontakte,firma_name,crm_company_id,strasse,plz,ort')
+      .or('nachname.ilike.%'+q+'%,vorname.ilike.%'+q+'%,firma_name.ilike.%'+q+'%').limit(15),
+    sb.from('crm_firmen').select('crm_id,name,strasse,plz,ort,kontakte').ilike('name','%'+q+'%').limit(10)]);
+  if(eP||eF){box.innerHTML='<div class="empty">CRM nicht erreichbar: '+esc((eP||eF).message)+'</div>';return;}
+  const P2=P||[],F2=F||[];
+  if(!P2.length&&!F2.length){box.innerHTML='<div class="empty">Keine Treffer im CRM.</div>';return;}
+  let h='';
+  F2.forEach(f=>{h+='<button class="bet-crm-hit" data-crmf="'+f.crm_id+'"><span class="h1">'+esc(f.name||'')+'</span>'+
+    '<span class="h2">Firma'+(f.ort?' · '+esc([f.plz,f.ort].filter(Boolean).join(' ')):'')+'</span></button>';});
+  P2.forEach(p=>{h+='<button class="bet-crm-hit" data-crmp="'+p.crm_id+'"><span class="h1">'+
+    esc([p.anrede,p.namenstitel,p.vorname,p.nachname].filter(Boolean).join(' '))+'</span>'+
+    '<span class="h2">'+esc(p.firma_name||'ohne Firma')+(p.funktion?' · '+esc(p.funktion):'')+'</span></button>';});
+  box.innerHTML=h;
+  box._F=F2;box._P=P2;
+  box.querySelectorAll('[data-crmf]').forEach(b=>b.onclick=()=>{
+    const f=(box._F||[]).find(x=>String(x.crm_id)===b.dataset.crmf);if(!f)return;
+    betUebernehmen({firma:f.name,strasse:f.strasse,plz:f.plz,ort:f.ort,kontakte:f.kontakte||[],crm_company_id:f.crm_id});});
+  box.querySelectorAll('[data-crmp]').forEach(b=>b.onclick=()=>{
+    const p=(box._P||[]).find(x=>String(x.crm_id)===b.dataset.crmp);if(!p)return;
+    betUebernehmen({firma:p.firma_name,anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,
+      funktion:p.funktion,strasse:p.strasse,plz:p.plz,ort:p.ort,kontakte:p.kontakte||[],
+      crm_company_id:p.crm_company_id,crm_person_id:p.crm_id});});
+}
+// Uebernahme fuellt nur das Formular — gespeichert wird erst mit "Speichern".
+function betUebernehmen(d){
+  const cur=betFormLesen();
+  betEdit=Object.assign({},betEdit,cur,{
+    firma:d.firma||cur.firma,anrede:d.anrede||cur.anrede,namenstitel:d.namenstitel||cur.namenstitel,
+    vorname:d.vorname||cur.vorname,nachname:d.nachname||cur.nachname,funktion:d.funktion||cur.funktion,
+    strasse:d.strasse||cur.strasse,plz:d.plz||cur.plz,ort:d.ort||cur.ort,
+    kontakte:(d.kontakte&&d.kontakte.length)?d.kontakte:cur.kontakte,
+    quelle:'crm',crm:{crm_company_id:d.crm_company_id||null,crm_person_id:d.crm_person_id||null}});
+  const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
+  if(bd){bd.innerHTML=renderBet();wireBet();betHinweis('Aus dem CRM übernommen — noch nicht gespeichert.');}
+}
+
+function wireBet(){
+  const M=el('main');
+  M.querySelectorAll('[data-bet]').forEach(b=>b.onclick=async()=>{
+    const a=b.dataset.bet;
+    if(a==='neu-gruppe'){betEdit={art:'gruppe',parent_id:null};}
+    else if(a==='neu-eintrag'){const g=betL.find(r=>r.art==='gruppe');betEdit={art:'eintrag',parent_id:g?g.id:null,kontakte:[]};}
+    else if(a==='abbrechen'){betEdit=null;}
+    else if(a==='speichern'){await betSpeichern();return;}
+    else if(a==='vorlage'){await betVorlage();return;}
+    else if(a==='analyse'){await betAusAnalyse();return;}
+    else if(a==='verteiler'){await betVerteiler();return;}
+    else if(a==='druck'){betDruck();return;}
+    else if(a==='crm-suche'){await betCrmSuche();return;}
+    else if(a==='kont-plus'){const cur=betFormLesen();betEdit=Object.assign({},betEdit,cur);
+      betEdit.kontakte=(cur.kontakte||[]).concat([{art:'telefon',kontext:'arbeit',wert:''}]);}
+    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');
+    if(bd){bd.innerHTML=renderBet();wireBet();const f=M.querySelector('#bf_titel');if(f&&betEdit)f.focus();}
+  });
+  M.querySelectorAll('[data-bfkdel]').forEach(b=>b.onclick=()=>{
+    const cur=betFormLesen();betEdit=Object.assign({},betEdit,cur);
+    const i=+b.dataset.bfkdel;betEdit.kontakte=(cur.kontakte||[]).filter((_,k)=>k!==i);
+    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();}});
+  M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=()=>{
+    const r=betL.find(x=>x.id===b.dataset.betedit);if(!r)return;
+    betEdit=Object.assign({},r,{kontakte:betKont(r)});
+    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();
+      const f=M.querySelector('#bf_titel');if(f)f.focus();}});
+  M.querySelectorAll('[data-betadd]').forEach(b=>b.onclick=()=>{
+    betEdit={art:'eintrag',parent_id:b.dataset.betadd,kontakte:[]};
+    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();
+      const f=M.querySelector('#bf_titel');if(f)f.focus();}});
+  M.querySelectorAll('[data-betdel]').forEach(b=>b.onclick=()=>betLoeschen(b.dataset.betdel));
+  M.querySelectorAll('[data-betup]').forEach(b=>b.onclick=()=>betVerschieben(b.dataset.betup,'up'));
+  M.querySelectorAll('[data-betdown]').forEach(b=>b.onclick=()=>betVerschieben(b.dataset.betdown,'down'));
+  M.querySelectorAll('[data-betin]').forEach(b=>b.onclick=()=>betEbene(b.dataset.betin,true));
+  M.querySelectorAll('[data-betout]').forEach(b=>b.onclick=()=>betEbene(b.dataset.betout,false));
+  M.querySelectorAll('[data-betfold]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);
+    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();}});
+  const q=M.querySelector('#bf_crmq');if(q)q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();betCrmSuche();}};
+}
+function betDruck(){
+  const zeilen=betL.map(r=>{
+    if(r.art==='gruppe')return '<tr class="g"><td colspan="2"><b>'+esc(r.titel||'')+'</b></td><td class="nr">'+esc(r.nummer)+'</td></tr>';
+    const K=betKont(r),nm=betName(r);
+    const links=[r.titel?'<b>'+esc(r.titel)+'</b>':'',r.firma?esc(r.firma):'',nm?esc(nm):'',betAdr(r)?esc(betAdr(r)):'']
+      .filter(Boolean).join('<br>');
+    const rechts=K.map(k=>esc(((BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['',''])[1])+(k.kontext?'('+k.kontext+')':'')+': '+k.wert)).join('<br>');
+    return '<tr><td>'+links+'</td><td>'+rechts+'</td><td class="nr">'+esc(r.nummer)+'</td></tr>';}).join('');
+  const w=window.open('','_blank');
+  if(!w){betHinweis('Bitte Pop-ups für diese Seite erlauben.');return;}
+  w.document.write('<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Projekt-Beteiligte '+esc(currentName)+'</title>'+
+    '<style>@page{size:A4;margin:16mm 14mm}body{font:10pt/1.35 Arial,Helvetica,sans-serif;color:#111}'+
+    'h1{font-size:15pt;margin:0 0 2mm}.sub{font-size:10pt;color:#444;margin-bottom:5mm}'+
+    'table{width:100%;border-collapse:collapse}thead th{font-size:8.5pt;text-align:left;border-bottom:1px solid #333;padding:1mm 2mm}'+
+    'td{vertical-align:top;padding:1.6mm 2mm;border-bottom:.4pt solid #ccc}tr.g td{background:#eee;border-bottom:1px solid #999}'+
+    'td.nr{text-align:right;white-space:nowrap;width:16mm;color:#444}thead{display:table-header-group}tr{break-inside:avoid}</style></head><body>'+
+    '<h1>Projekt-Beteiligte</h1><div class="sub">'+esc(currentName)+'</div>'+
+    '<table><thead><tr><th>Beteiligte</th><th>Tel./Fax/E-Mail</th><th style="text-align:right">Nummer</th></tr></thead><tbody>'+
+    zeilen+'</tbody></table></body></html>');
+  w.document.close();w.focus();setTimeout(()=>w.print(),300);
+}
 function renderFolders(F,total){if(!F.length)return '<div class="empty">Keine Ordner.</div>';const max=Math.max(...F.map(f=>+f.anzahl));return F.map(f=>'<div class="fld-row"><div><div>'+esc(f.ordner||'(Wurzel)')+'</div><div class="fld-bar"><i style="width:'+Math.round(+f.anzahl/max*100)+'%"></i></div></div><div class="fc2">'+f.anzahl+'</div></div>').join('');}
 function renderComms(C){if(!C.length)return '<div class="inner"><div class="empty">Keine Vorgänge erfasst.</div></div>';const td=today();
   const zu=C.filter(c=>fbClosed[fbKey('vorgang',c.betreff)]),CC=C.filter(c=>!fbClosed[fbKey('vorgang',c.betreff)]);
@@ -1121,6 +1333,7 @@ function wire(T,C){
   el('main').querySelectorAll('.task-row').forEach(r=>r.onclick=e=>{if(e.target.classList.contains('tcheck'))return;selTask=r.dataset.trow;el('main').querySelectorAll('.task-row').forEach(x=>x.classList.toggle('sel',x.dataset.trow===selTask));const d=el('aufgdetail');if(d){d.innerHTML=renderTaskDetail(taskMap[selTask]);wireDetail();}});
   el('main').querySelectorAll('.tcheck').forEach(cb=>cb.onchange=()=>toggleTask(cb.dataset.task,cb));
   wireDetail();
+  wireBet();
   el('main').querySelectorAll('button[data-agent]').forEach(b=>b.onclick=()=>queueAgent(b.dataset.agent,b.dataset.lph?{lph:+b.dataset.lph}:{},b));
   el('main').querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;applyTaskFilter();el('main').querySelectorAll('.tab-btn').forEach(x=>x.classList.toggle('active',x===b));});
   el('main').querySelectorAll('.fc').forEach(f=>f.onclick=()=>{const p=f.dataset.p;prioFilters.has(p)?prioFilters.delete(p):prioFilters.add(p);f.classList.toggle('active');applyTaskFilter();});
