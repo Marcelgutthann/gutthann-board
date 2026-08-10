@@ -68,6 +68,9 @@ let selTask=null,taskMap={},peopleMail={},lastChecklist={},openCl=new Set(),last
 let fbClosed={},fbUid=0,lastKat=null,lastKatLph=1,lastKz=null,lastKzName='';
 // ---- Projektbericht (ersetzt den Nachtrag-Chat; Konzept: PROJEKTBERICHT-KONZEPT.md) ----
 let berTyp='lagebericht',berSel=null,berPollTimer=null;
+// Beteiligtenliste: betL = flacher Baum aus beteiligte_liste(), betEdit = offenes Formular,
+// betRollen = Vorschlagsliste fuers Rollenfeld, betSel = eingeklappte Gruppen.
+let betL=[],betEdit=null,betRollen=[],betZu=new Set();
 const BER_TYPEN=[['lagebericht','Lagebericht','letzte 3 Monate'],['projektakte','Projektakte','ganzes Projekt'],['zielpfad','Zielpfad','Ausblick']];
 const BER_DIM={kosten:'Kosten',termine:'Termine',planung:'Planung',bauherr:'Bauherr',team:'Team',dokumentation:'Doku/Risiko'};
 const berCls=s=>s==='danger'||s==='ueberfaellig'?'d':s==='warn'?'w':'o';
@@ -968,24 +971,126 @@ function renderEntscheidungen(eo){const td=today();const eKey=e=>fbKey('entschei
   const zu=eo.filter(e=>e&&fbClosed[eKey(e)]),open=eo.filter(e=>e&&!fbClosed[eKey(e)]);
   return open.map(e=>{const ov=e.bis&&e.bis<td;const fb=fbUI('entscheidung',e.thema||e.titel||e.text||'');return '<div class="vrow'+(ov?' overdue':'')+'"><div style="flex:1"><div class="vtitle">'+esc(e.thema||'')+'</div>'+(e.kontext?'<div class="ent-ctx">'+esc(e.kontext)+'</div>':'')+'<div class="vmeta">'+(e.wer?'<span class="task-chip">'+esc(e.wer)+'</span>':'')+(e.bis?'<span class="mono'+(ov?'':'')+'">bis '+esc(fmtFrist(e.bis))+'</span>':'<span class="mono" style="color:var(--c-slate-400)">Termin offen</span>')+'</div></div>'+fb.btn+'</div>'+fb.form;}).join('')+fbDoneSec(zu.map(e=>({title:e.thema||e.titel||e.text||'',kommentar:(fbClosed[eKey(e)]||{}).kommentar})));}
 function renderAktivitaet(recent){if(!recent.length)return '<div class="empty">Keine datierten Dateien.</div>';return recent.map(d=>'<div class="act-row"><span class="af">'+esc(d.filename)+'</span><span class="ad">'+esc(d.doctype||'')+' · '+fmtD(d.modified_at)+'</span></div>').join('');}
-function renderBeteiligte(D){
-  const bet=(D&&Array.isArray(D.beteiligte))?D.beteiligte:[];
-  if(!bet.length)return '<div class="inner"><div class="empty">Keine Beteiligten erfasst — die Tiefenanalyse zieht sie aus den Unterlagen.</div></div>';
-  const isBH=p=>p&&(p.ist_bauherr||/bauherr|auftraggeber/i.test(p.rolle||''));
-  const person=p=>'<div class="ppl-card"><div class="ppl-name">'+esc(p.name||p.firma||'—')+'</div>'+(p.rolle?'<div class="ppl-role">'+esc(p.rolle)+'</div>':'')+(p.email?'<div class="ppl-mail">'+esc(p.email)+'</div>':'')+(p.telefon?'<div class="ppl-tel">'+esc(p.telefon)+'</div>':'')+'</div>';
-  const bauherr=bet.filter(isBH),rest=bet.filter(p=>!isBH(p));
-  const groups={};rest.forEach(p=>{const f=p.firma||p.name||'—';(groups[f]=groups[f]||[]).push(p);});
-  let h='<div class="inner">';
-  const qa=(D&&D._qa&&D._qa.beteiligte)||[];
-  if(qa.length)h+='<div class="bet-warn">⚠ Prüfen: '+qa.map(esc).join(' · ')+'</div>';
-  if(bauherr.length){
-    const adr=(bauherr.find(b=>b.adresse)||{}).adresse;const org=(bauherr.find(b=>b.firma)||{}).firma;
-    h+='<div class="bet-bauherr"><div class="bet-bh-label">Bauherr / Auftraggeber</div>'+(org?'<div class="bet-bh-org">'+esc(org)+'</div>':'')+(adr?'<div class="bet-bh-adr">'+esc(adr)+'</div>':'<div class="bet-bh-adr missing">Anschrift nicht belegt — Tiefenanalyse erneut laufen lassen</div>')+'<div class="ppl-grid">'+bauherr.map(person).join('')+'</div></div>';
-  }else{
-    h+='<div class="bet-warn">⚠ Kein Bauherr/Auftraggeber in der Analyse erkannt — Tiefenanalyse erneut laufen lassen.</div>';
+// ---------------------------------------------------------------------------
+// Beteiligtenliste — gepflegte Liste (Tabelle beteiligte), nicht der Analyse-Output.
+// Gliederungsbaum wie ein LV: 'gruppe' = Ueberschrift, 'eintrag' = Beteiligter.
+// Die Analyse ist nur noch Zulieferer ueber den Knopf "Aus Analyse".
+// ---------------------------------------------------------------------------
+const BET_KONTAKTARTEN=[['telefon','Telefon'],['mobil','Mobil'],['fax','Fax'],['email','E-Mail'],['web','Web']];
+const BET_KONTEXTE=[['arbeit','Arbeit'],['zentrale','Zentrale'],['privat','Privat']];
+const betName=r=>[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' ').trim();
+const betAdr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+const betKont=r=>Array.isArray(r.kontakte)?r.kontakte:(r.kontakte?JSON.parse(r.kontakte):[]);
+function betKontZeile(k){const art=(BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['','?'])[1];
+  const ico=k.art==='email'?'✉':k.art==='fax'?'📠':k.art==='web'?'🌐':k.art==='mobil'?'📱':'☎';
+  const wert=k.art==='email'?'<a href="mailto:'+esc(k.wert)+'">'+esc(k.wert)+'</a>':esc(k.wert);
+  return '<span class="bet-k" title="'+esc(art+(k.kontext?' ('+k.kontext+')':''))+'">'+ico+' '+wert+'</span>';}
+
+function renderBet(){
+  const L=betL||[];
+  let h='<div class="inner bet-wrap">';
+  h+='<div class="bet-bar">'+
+     '<button class="btn-sm" data-bet="neu-gruppe">+ Gruppe</button>'+
+     '<button class="btn-sm" data-bet="neu-eintrag">+ Beteiligter</button>'+
+     '<span class="bet-bar-sep"></span>'+
+     '<button class="btn-sm ghost" data-bet="vorlage">Standard-Gliederung</button>'+
+     '<button class="btn-sm ghost" data-bet="analyse">Aus Analyse übernehmen</button>'+
+     '<span class="bet-bar-sep"></span>'+
+     '<button class="btn-sm ghost" data-bet="verteiler">Verteiler kopieren</button>'+
+     '<button class="btn-sm ghost" data-bet="druck">Drucken</button>'+
+     '<span class="bet-hint" id="bethint"></span></div>';
+  if(betEdit)h+=betForm(betEdit);
+  if(!L.length){
+    h+='<div class="cta"><p>Für dieses Projekt ist noch keine Beteiligtenliste angelegt. '+
+       '„Standard-Gliederung“ legt das gewohnte Gerüst an (Behörden · Auftraggeber · Gesamtplanung · Ausführende Firmen mit Rohbau/Ausbau/Technik). '+
+       'Danach jede Zeile frei ergänzen, verschieben und umbenennen.</p></div></div>';
+    return h;
   }
-  Object.keys(groups).sort().forEach(f=>{h+='<div class="bet-group"><div class="bet-firma">'+esc(f)+'</div><div class="ppl-grid">'+groups[f].map(person).join('')+'</div></div>';});
-  h+='</div>';return h;
+  // eingeklappte Gruppen: alle Nachfahren ueberspringen
+  const zu=id=>betZu.has(id);
+  const versteckt=new Set();
+  L.forEach(r=>{if(r.parent_id&&(versteckt.has(r.parent_id)||zu(r.parent_id)))versteckt.add(r.id);});
+  h+='<div class="bet-tree">';
+  L.forEach(r=>{
+    if(versteckt.has(r.id))return;
+    const kinder=L.some(x=>x.parent_id===r.id);
+    const werkzeug='<span class="bet-tools">'+
+      (r.art==='gruppe'?'<button class="bet-t" data-betadd="'+r.id+'" title="Beteiligten in dieser Gruppe anlegen">+</button>':'')+
+      '<button class="bet-t" data-betup="'+r.id+'" title="nach oben">↑</button>'+
+      '<button class="bet-t" data-betdown="'+r.id+'" title="nach unten">↓</button>'+
+      '<button class="bet-t" data-betout="'+r.id+'" title="ausrücken (eine Ebene höher)">←</button>'+
+      '<button class="bet-t" data-betin="'+r.id+'" title="einrücken (unter die Zeile darüber)">→</button>'+
+      '<button class="bet-t" data-betedit="'+r.id+'" title="bearbeiten">✎</button>'+
+      '<button class="bet-t del" data-betdel="'+r.id+'" title="löschen">🗑</button></span>';
+    if(r.art==='gruppe'){
+      h+='<div class="bet-row grp" style="--lvl:'+r.tiefe+'">'+
+         '<button class="bet-fold" data-betfold="'+r.id+'">'+(kinder?(zu(r.id)?'▸':'▾'):'·')+'</button>'+
+         '<span class="bet-nr">'+esc(r.nummer)+'</span>'+
+         '<span class="bet-grp-t">'+esc(r.titel||'(ohne Titel)')+'</span>'+werkzeug+'</div>';
+      return;
+    }
+    const K=betKont(r),nm=betName(r),adr=betAdr(r);
+    const offen=r.status==='offen',raus=r.status==='ausgeschieden';
+    h+='<div class="bet-row ent'+(offen?' offen':'')+(raus?' raus':'')+(r.ist_bauherr?' bh':'')+'" style="--lvl:'+r.tiefe+'">'+
+       '<span class="bet-fold">·</span><span class="bet-nr">'+esc(r.nummer)+'</span>'+
+       '<span class="bet-main">'+
+         '<span class="bet-rolle">'+esc(r.titel||'—')+
+           (r.ist_bauherr?'<span class="bet-tag bh">Bauherr</span>':'')+
+           (r.ist_intern?'<span class="bet-tag in">intern</span>':'')+
+           (r.quelle==='crm'?'<span class="bet-tag crm">CRM</span>':'')+
+           (r.quelle==='analyse'?'<span class="bet-tag an">Analyse</span>':'')+
+           (offen?'<span class="bet-tag off">noch offen</span>':'')+
+           (raus?'<span class="bet-tag off">ausgeschieden</span>':'')+'</span>'+
+         (r.firma?'<span class="bet-firma2">'+esc(r.firma)+'</span>':'')+
+         (nm?'<span class="bet-person">'+esc(nm)+(r.funktion?' <span class="bet-funk">'+esc(r.funktion)+'</span>':'')+'</span>':'')+
+         (adr?'<span class="bet-adr">'+esc(adr)+'</span>':'')+
+         (K.length?'<span class="bet-konts">'+K.map(betKontZeile).join('')+'</span>':'')+
+         (r.notiz?'<span class="bet-notiz">'+esc(r.notiz)+'</span>':'')+
+       '</span>'+werkzeug+'</div>';
+  });
+  h+='</div></div>';return h;
+}
+
+// Formular: alle Felder eines Knotens. neu===true legt an, sonst aendern.
+function betForm(e){
+  const isG=e.art==='gruppe',K=e.kontakte||[];
+  const opt=(list,val)=>list.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>').join('');
+  let h='<div class="bet-form"><div class="bet-form-head">'+(e.id?'Zeile bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
+        '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></div>';
+  h+='<div class="bet-fgrid">';
+  h+='<label class="bf w2">'+(isG?'Gruppentitel':'Rolle / Funktion im Projekt')+
+     '<input id="bf_titel" list="bf_rollen" value="'+esc(e.titel||'')+'" placeholder="'+(isG?'z. B. Ausführende Firmen':'z. B. Fachplanung Statik')+'"></label>';
+  h+='<datalist id="bf_rollen">'+betRollen.map(r=>'<option value="'+esc(r.rolle)+'">').join('')+'</datalist>';
+  h+='<label class="bf">Nummer (leer = automatisch)<input id="bf_nummer" value="'+esc(e.nummer_manuell||'')+'" placeholder="'+esc(e.nummer||'')+'"></label>';
+  if(!isG){
+    h+='<label class="bf w2">Firma / Stelle<input id="bf_firma" value="'+esc(e.firma||'')+'" placeholder="z. B. Lammel, Lerch & Partner"></label>';
+    h+='<label class="bf">Status<select id="bf_status">'+opt([['aktiv','aktiv'],['offen','noch offen (Platzhalter)'],['ausgeschieden','ausgeschieden']],e.status||'aktiv')+'</select></label>';
+    h+='<label class="bf sm">Anrede<input id="bf_anrede" value="'+esc(e.anrede||'')+'" placeholder="Herr"></label>';
+    h+='<label class="bf sm">Titel<input id="bf_namenstitel" value="'+esc(e.namenstitel||'')+'" placeholder="Dipl.-Ing."></label>';
+    h+='<label class="bf">Vorname<input id="bf_vorname" value="'+esc(e.vorname||'')+'"></label>';
+    h+='<label class="bf">Nachname<input id="bf_nachname" value="'+esc(e.nachname||'')+'"></label>';
+    h+='<label class="bf">Position in der Firma<input id="bf_funktion" value="'+esc(e.funktion||'')+'" placeholder="Projektleiter"></label>';
+    h+='<label class="bf w2">Straße<input id="bf_strasse" value="'+esc(e.strasse||'')+'"></label>';
+    h+='<label class="bf sm">PLZ<input id="bf_plz" value="'+esc(e.plz||'')+'"></label>';
+    h+='<label class="bf">Ort<input id="bf_ort" value="'+esc(e.ort||'')+'"></label>';
+    h+='<label class="bf w2">Notiz<input id="bf_notiz" value="'+esc(e.notiz||'')+'" placeholder="frei"></label>';
+    h+='<div class="bf w3"><span class="bf-lab">Kontaktwege</span><div id="bf_konts">';
+    (K.length?K:[{art:'telefon',kontext:'arbeit',wert:''}]).forEach((k,i)=>{
+      h+='<div class="bf-k" data-ki="'+i+'"><select class="bf-kart">'+opt(BET_KONTAKTARTEN,k.art)+'</select>'+
+         '<select class="bf-kctx">'+opt(BET_KONTEXTE,k.kontext||'arbeit')+'</select>'+
+         '<input class="bf-kval" value="'+esc(k.wert||'')+'" placeholder="Nummer oder Adresse">'+
+         '<button class="bet-t del" data-bfkdel="'+i+'" title="Zeile entfernen">🗑</button></div>';});
+    h+='</div><button class="btn-sm ghost" data-bet="kont-plus">+ Kontaktweg</button></div>';
+    h+='<label class="bf ck"><input type="checkbox" id="bf_bh"'+(e.ist_bauherr?' checked':'')+'> Bauherrenseite</label>';
+    h+='<label class="bf ck"><input type="checkbox" id="bf_int"'+(e.ist_intern?' checked':'')+'> eigenes Büro</label>';
+  }
+  h+='</div>';
+  if(!isG)h+='<div class="bet-crm"><span class="bf-lab">Aus dem CRM übernehmen (Poool)</span>'+
+     '<div class="bet-crm-box"><input id="bf_crmq" placeholder="Firma oder Person suchen — z. B. Lammel oder Koller"><button class="btn-sm" data-bet="crm-suche">Suchen</button></div>'+
+     '<div id="bf_crmres" class="bet-crm-res"></div></div>';
+  h+='<div class="bet-form-foot"><button class="btn-sm" data-bet="speichern">Speichern</button>'+
+     '<button class="btn-sm ghost" data-bet="abbrechen">Abbrechen</button></div></div>';
+  return h;
 }
 function renderFolders(F,total){if(!F.length)return '<div class="empty">Keine Ordner.</div>';const max=Math.max(...F.map(f=>+f.anzahl));return F.map(f=>'<div class="fld-row"><div><div>'+esc(f.ordner||'(Wurzel)')+'</div><div class="fld-bar"><i style="width:'+Math.round(+f.anzahl/max*100)+'%"></i></div></div><div class="fc2">'+f.anzahl+'</div></div>').join('');}
 function renderComms(C){if(!C.length)return '<div class="inner"><div class="empty">Keine Vorgänge erfasst.</div></div>';const td=today();
