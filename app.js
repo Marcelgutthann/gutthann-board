@@ -60,7 +60,7 @@ async function lotse(action, body = {}, retried = false) {
     // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
     // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
     // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
-    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard'];
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'kalender', 'agent_laeufe'];
     if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
@@ -210,8 +210,10 @@ function zeigeAnsicht(welche) {
 }
 
 // ---------- Projekt-Kalender (Loop proaktiver Kollege, Baustein E) ----------
+let kalToken = 0; // verwirft veraltete Antworten bei Monats-/Projektwechsel
 async function renderKalender() {
   const root = document.getElementById('kal-root'); if (!root || S.active?.typ !== 'projekt') return;
+  const token = ++kalToken;
   if (!S.kal) { const h = new Date(); S.kal = { jahr: h.getFullYear(), monat: h.getMonth() + 1 }; }
   root.innerHTML = '';
   root.append(el('div', { class: 'kalkopf' },
@@ -223,6 +225,7 @@ async function renderKalender() {
   for (const w of ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']) grid.append(el('div', { class: 'kalwt' }, w));
   root.append(grid);
   const d = await lotse('kalender', { projekt: S.active.name, jahr: S.kal.jahr, monat: S.kal.monat }).catch(() => ({ fehler: 'Netzwerkfehler' }));
+  if (token !== kalToken || !S.kal || S.active?.typ !== 'projekt') return; // inzwischen gewechselt
   if (d.fehler) { root.append(el('div', { class: 'empty', style: 'padding:16px' }, d.fehler)); return; }
   const tage = new Date(S.kal.jahr, S.kal.monat, 0).getDate();
   const offset = (new Date(S.kal.jahr, S.kal.monat - 1, 1).getDay() + 6) % 7; // Mo = 0
@@ -1227,8 +1230,12 @@ async function start() {
   // Cursor in einem Eingabefeld) — sonst raeumt der Neu-Aufbau die Eingabe weg.
   S.poll = setInterval(async () => {
     const tippt = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
-    if (S.detail || S.newCardCol || S.drag || tippt) return;
-    try { await ladeBoard(); } catch {}
+    if (S.detail || S.newCardCol || S.drag || S.kalDrag || tippt) return;
+    try {
+      await ladeBoard();
+      // Offener Kalender-Tab bekommt Frist-Aenderungen anderer auch mit.
+      if (S.ansicht === 'kal' && S.active?.typ === 'projekt') await renderKalender();
+    } catch {}
   }, 60000);
 }
 document.getElementById('li-btn').addEventListener('click', doLogin);
