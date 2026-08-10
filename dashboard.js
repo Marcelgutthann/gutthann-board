@@ -73,8 +73,11 @@ let berTyp='lagebericht',berSel=null,berPollTimer=null;
 let betL=[],betEdit=null,betRollen=[],betZu=new Set();
 // PDF-Import: betPdfFunde = erkannte Zeilen der hochgeladenen Datei (null = keine Vorschau offen)
 let betPdfFunde=null,betPdfName='';
-// CRM-Auswahl: aktiver Filter der Vorschlagsliste (null = alle)
-let betCrmFilter=null;
+// CRM-Auswahl: Filter, letzte Eingabe, Trefferliste; betCrmFirma/betCrmMit halten
+// die geoeffnete Firma samt Ansprechpartnern, betMitWahl die angehakten Personen.
+let betCrmFilter=null,betCrmQ='',betCrmTr=[],betCrmOffen=false,betCrmFirma=null,betCrmMit=[],betMitWahl=new Set();
+// betSel = angeklickte Zeile (Detail rechts), betFilter = Schnellfilter der Liste
+let betSel=null,betFilter='';
 const BER_TYPEN=[['lagebericht','Lagebericht','letzte 3 Monate'],['projektakte','Projektakte','ganzes Projekt'],['zielpfad','Zielpfad','Ausblick']];
 const BER_DIM={kosten:'Kosten',termine:'Termine',planung:'Planung',bauherr:'Bauherr',team:'Team',dokumentation:'Doku/Risiko'};
 const berCls=s=>s==='danger'||s==='ueberfaellig'?'d':s==='warn'?'w':'o';
@@ -367,7 +370,7 @@ async function renderProject(){
        +(offenN?tz('warn',offenN+' Gewerk(e) noch nicht vergeben',''):''))
      :(betL.length?tz('warn','Gliederung steht — noch keine Beteiligten eingetragen','')
                   :tz('warn','Noch keine Liste angelegt'+(vorschlag?' · '+vorschlag+' Vorschläge aus der Analyse':''),''));
-   h+=sec('beteiligte','prominent','👤','Beteiligtenliste','gegliederte Projektbeteiligte — frei bearbeitbar',
+   h+=sec('beteiligte','prominent weit','👤','Beteiligtenliste','gegliederte Projektbeteiligte — frei bearbeitbar',
           '<span class="stat'+(offenN?' warn':'')+'">'+eintr.length+'</span>',renderBet(),tBet);}
   // Projektstruktur
   h+=sec('struktur','','📁','Projekt-Struktur',(folders||[]).length+' Top-Ordner · '+(docCount||0)+' Dokumente','','<div class="inner">'+renderFolders(folders||[],docCount||1)+'</div>',(folders&&folders.length?folders.slice(0,3).map(f=>tz(null,esc(f.ordner||'(Wurzel)'),''+f.anzahl)).join(''):''));
@@ -999,131 +1002,182 @@ function betKontZeile(k){const art=(BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['',
   const wert=k.art==='email'?'<a href="mailto:'+esc(k.wert)+'">'+esc(k.wert)+'</a>':esc(k.wert);
   return '<span class="bet-k" title="'+esc(art+(k.kontext?' ('+k.kontext+')':''))+'">'+ico+' '+wert+'</span>';}
 
+// Vollbild-Ansicht: links die Liste (eine Zeile je Beteiligtem), rechts ein
+// Arbeitsbereich, der je nach Lage Details, Formular, CRM-Auswahl oder den
+// PDF-Import zeigt. Vorher stand alles untereinander in einer schmalen Spalte --
+// bei 68 Eintraegen unbrauchbar.
 function renderBet(){
   const L=betL||[];
-  let h='<div class="inner bet-wrap">';
+  let h='<div class="bet-shell">';
   h+='<div class="bet-bar">'+
-     '<button class="btn-sm" data-bet="neu-gruppe">+ Gruppe</button>'+
      '<button class="btn-sm" data-bet="neu-eintrag">+ Beteiligter</button>'+
+     '<button class="btn-sm ghost" data-bet="neu-gruppe">+ Gruppe</button>'+
      '<span class="bet-bar-sep"></span>'+
-     '<button class="btn-sm ghost" data-bet="vorlage">Standard-Gliederung</button>'+
-     '<button class="btn-sm ghost" data-bet="analyse">Aus Analyse übernehmen</button>'+
+     (L.length?'':'<button class="btn-sm ghost" data-bet="vorlage">Standard-Gliederung</button>')+
+     '<button class="btn-sm ghost" data-bet="analyse">Aus Analyse</button>'+
      '<button class="btn-sm ghost" data-bet="pdf">PDF einlesen</button>'+
      '<input type="file" id="bet_pdf" accept="application/pdf,.pdf" hidden>'+
      '<span class="bet-bar-sep"></span>'+
-     '<button class="btn-sm ghost" data-bet="verteiler">Verteiler kopieren</button>'+
+     '<button class="btn-sm ghost" data-bet="verteiler">Verteiler</button>'+
      '<button class="btn-sm ghost" data-bet="druck">Als PDF drucken</button>'+
-     '<span class="bet-hint" id="bethint"></span></div>';
-  h+='<div id="bet_pdfres"></div>';
-  if(betPdfFunde)h+=betPdfVorschau();
-  if(betEdit)h+=betForm(betEdit);
-  if(!L.length){
-    h+='<div class="cta"><p>Für dieses Projekt ist noch keine Beteiligtenliste angelegt. '+
-       '„Standard-Gliederung“ legt das gewohnte Gerüst an (Behörden · Auftraggeber · Gesamtplanung · Ausführende Firmen mit Rohbau/Ausbau/Technik). '+
-       'Danach jede Zeile frei ergänzen, verschieben und umbenennen.</p></div></div>';
-    return h;
-  }
-  // Stand-Zeile: woher stammt die Liste und wie alt ist sie?
-  {const E=L.filter(r=>r.art==='eintrag');
-   const zaehl={hand:0,analyse:0,crm:0,pdf:0};E.forEach(r=>{zaehl[r.quelle]=(zaehl[r.quelle]||0)+1;});
-   const teile=[];
-   if(zaehl.hand)teile.push(zaehl.hand+'× selbst erfasst');
-   if(zaehl.crm)teile.push(zaehl.crm+'× aus dem CRM');
-   if(zaehl.pdf)teile.push(zaehl.pdf+'× aus PDF');
-   if(zaehl.analyse)teile.push(zaehl.analyse+'× aus der Analyse');
-   const letzte=E.map(r=>r.geaendert_am).filter(Boolean).sort().pop();
-   const dateien=[...new Set(E.map(r=>r.importiert_aus).filter(Boolean))];
-   if(E.length)h+='<div class="bet-stand">'+teile.join(' · ')+
-     (letzte?' · zuletzt geändert '+esc(fmtD(letzte)):'')+
-     (dateien.length?'<span class="q"> · Quelle: '+esc(dateien.join(', '))+'</span>':'')+'</div>';}
-  // eingeklappte Gruppen: alle Nachfahren ueberspringen
-  const zu=id=>betZu.has(id);
-  const versteckt=new Set();
-  L.forEach(r=>{if(r.parent_id&&(versteckt.has(r.parent_id)||zu(r.parent_id)))versteckt.add(r.id);});
-  h+='<div class="bet-tree">';
-  L.forEach(r=>{
-    if(versteckt.has(r.id))return;
-    const kinder=L.some(x=>x.parent_id===r.id);
-    const werkzeug='<span class="bet-tools">'+
-      (r.art==='gruppe'?'<button class="bet-t" data-betadd="'+r.id+'" title="Beteiligten in dieser Gruppe anlegen">+</button>':'')+
-      '<button class="bet-t" data-betup="'+r.id+'" title="nach oben">↑</button>'+
-      '<button class="bet-t" data-betdown="'+r.id+'" title="nach unten">↓</button>'+
-      '<button class="bet-t" data-betout="'+r.id+'" title="ausrücken (eine Ebene höher)">←</button>'+
-      '<button class="bet-t" data-betin="'+r.id+'" title="einrücken (unter die Zeile darüber)">→</button>'+
-      '<button class="bet-t" data-betedit="'+r.id+'" title="bearbeiten">✎</button>'+
-      '<button class="bet-t del" data-betdel="'+r.id+'" title="löschen">🗑</button></span>';
-    if(r.art==='gruppe'){
-      h+='<div class="bet-row grp" style="--lvl:'+r.tiefe+'">'+
-         '<button class="bet-fold" data-betfold="'+r.id+'">'+(kinder?(zu(r.id)?'▸':'▾'):'·')+'</button>'+
-         '<span class="bet-nr">'+esc(r.nummer)+'</span>'+
-         '<span class="bet-grp-t">'+esc(r.titel||'(ohne Titel)')+'</span>'+werkzeug+'</div>';
-      return;
-    }
-    const K=betKont(r),nm=betName(r),adr=betAdr(r);
-    const offen=r.status==='offen',raus=r.status==='ausgeschieden';
-    h+='<div class="bet-row ent'+(offen?' offen':'')+(raus?' raus':'')+(r.ist_bauherr?' bh':'')+'" style="--lvl:'+r.tiefe+'">'+
-       '<span class="bet-fold">·</span><span class="bet-nr">'+esc(r.nummer)+'</span>'+
-       '<span class="bet-main">'+
-         '<span class="bet-rolle">'+esc(r.titel||'—')+
-           (r.ist_bauherr?'<span class="bet-tag bh">Bauherr</span>':'')+
-           (r.ist_intern?'<span class="bet-tag in">intern</span>':'')+
-           (r.quelle==='crm'?'<span class="bet-tag crm">CRM</span>':'')+
-           (r.quelle==='analyse'?'<span class="bet-tag an">Analyse</span>':'')+
-           (r.quelle==='pdf'?'<span class="bet-tag pdf" title="'+esc('aus '+(r.importiert_aus||'PDF')+(r.importiert_am?', eingelesen '+fmtD(r.importiert_am):''))+'">PDF</span>':'')+
-           (offen?'<span class="bet-tag off">noch offen</span>':'')+
-           (raus?'<span class="bet-tag off">ausgeschieden</span>':'')+'</span>'+
-         (r.firma?'<span class="bet-firma2">'+esc(r.firma)+'</span>':'')+
-         (nm?'<span class="bet-person">'+esc(nm)+(r.funktion?' <span class="bet-funk">'+esc(r.funktion)+'</span>':'')+'</span>':'')+
-         (adr?'<span class="bet-adr">'+esc(adr)+'</span>':'')+
-         (K.length?'<span class="bet-konts">'+K.map(betKontZeile).join('')+'</span>':'')+
-         (r.notiz?'<span class="bet-notiz">'+esc(r.notiz)+'</span>':'')+
-       '</span>'+werkzeug+'</div>';
-  });
-  h+='</div></div>';return h;
+     '<span class="bet-hint" id="bethint"></span>'+
+     '<span class="bet-filter"><input id="bet_q" placeholder="in der Liste filtern …" value="'+esc(betFilter||'')+'">'+
+     (betFilter?'<button class="bet-t" data-bet="filter-weg" title="Filter aufheben">✕</button>':'')+'</span>'+
+     '</div>';
+  h+='<div class="bet-split"><div class="bet-liste">'+betListe(L)+'</div>'+
+     '<aside class="bet-seite">'+betSeite()+'</aside></div></div>';
+  return h;
 }
 
-// Formular: alle Felder eines Knotens. neu===true legt an, sonst aendern.
+function betListe(L){
+  if(!L.length)return '<div class="bet-leer">Für dieses Projekt ist noch keine Beteiligtenliste angelegt.<br>'+
+    '„Standard-Gliederung“ legt das gewohnte Gerüst an (Behörden · Auftraggeber · Gesamtplanung · Ausführende Firmen '+
+    'mit Rohbau/Ausbau/Technik) — oder ein bestehendes PDF einlesen.</div>';
+  const f=(betFilter||'').toLowerCase().trim();
+  const passt=r=>!f||[r.titel,r.firma,betName(r),r.ort,r.nummer].filter(Boolean).join(' ').toLowerCase().includes(f);
+  // Beim Filtern verschwinden Gruppen ohne Treffer; ohne Filter gilt das Ein-/Ausklappen.
+  const zu=id=>betZu.has(id);
+  const versteckt=new Set();
+  if(!f)L.forEach(r=>{if(r.parent_id&&(versteckt.has(r.parent_id)||zu(r.parent_id)))versteckt.add(r.id);});
+  const hatTreffer={};
+  if(f){const merken=id=>{let x=L.find(r=>r.id===id);while(x){hatTreffer[x.id]=true;x=L.find(r=>r.id===x.parent_id);}};
+        L.forEach(r=>{if(r.art==='eintrag'&&passt(r))merken(r.id);});}
+  let h='',gezeigt=0;
+  L.forEach(r=>{
+    if(f?!hatTreffer[r.id]:versteckt.has(r.id))return;
+    if(r.art==='gruppe'){
+      const kinder=L.filter(x=>x.parent_id===r.id);
+      const n=kinder.filter(x=>x.art==='eintrag').length;
+      h+='<div class="bet-g t'+Math.min(r.tiefe,2)+'" data-betfold="'+r.id+'">'+
+         '<span class="bet-g-nr">'+(kinder.length?(zu(r.id)&&!f?'▸ ':'▾ '):'')+esc(r.nummer)+'</span>'+
+         '<span class="bet-g-t">'+esc(r.titel||'(ohne Titel)')+'</span>'+
+         (n?'<span class="bet-g-n">'+n+'</span>':'')+
+         '<button class="bet-t" data-betadd="'+r.id+'" title="Beteiligten in dieser Gruppe anlegen">+</button></div>';
+      return;}
+    gezeigt++;
+    const K=betKont(r),nm=betName(r);
+    const mail=K.find(k=>k.art==='email'),tel=K.find(k=>k.art==='telefon'||k.art==='mobil');
+    h+='<div class="bet-z t'+Math.min(r.tiefe,3)+(betSel===r.id?' sel':'')+
+       (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'">'+
+       '<span class="z-nr">'+esc(r.nummer)+'</span>'+
+       '<span class="z-rolle">'+esc(r.titel||'—')+'</span>'+
+       '<span class="z-firma">'+esc(r.firma||(r.status==='offen'?'— noch nicht vergeben —':''))+'</span>'+
+       '<span class="z-person">'+esc(nm)+'</span>'+
+       '<span class="z-kon">'+(tel?'<i title="'+esc(tel.wert)+'">☎</i>':'')+(mail?'<i title="'+esc(mail.wert)+'">✉</i>':'')+'</span>'+
+       '<span class="z-tags">'+
+         (r.ist_bauherr?'<span class="bet-tag bh">BH</span>':'')+
+         (r.ist_intern?'<span class="bet-tag in">intern</span>':'')+
+         (r.quelle==='crm'?'<span class="bet-tag crm">CRM</span>':'')+
+         (r.quelle==='pdf'?'<span class="bet-tag pdf">PDF</span>':'')+
+         (r.quelle==='analyse'?'<span class="bet-tag an">Analyse</span>':'')+
+       '</span></div>';});
+  if(f&&!gezeigt)h='<div class="bet-leer">Kein Eintrag passt zu „'+esc(betFilter)+'“.</div>';
+  return h;
+}
+
+// Was rechts steht, richtet sich nach der Lage: laufender Import zuerst,
+// dann offenes Formular, dann CRM-Auswahl, sonst die angeklickte Zeile.
+function betSeite(){
+  if(betPdfFunde)return betPdfVorschau();
+  // Adressbuch geht vor dem Formular: beim Anlegen sucht man zuerst jemanden.
+  // Nach der Uebernahme schliesst betUebernehmen() das Adressbuch, dann steht
+  // das ausgefuellte Formular da.
+  if(betCrmOffen)return betCrmPanel();
+  if(betEdit)return betForm(betEdit);
+  const r=betL.find(x=>x.id===betSel);
+  if(r)return betDetail(r);
+  return betUebersicht();
+}
+
+function betUebersicht(){
+  const E=betL.filter(r=>r.art==='eintrag');
+  if(!E.length)return '<div class="bet-p"><div class="bet-p-kopf">Beteiligtenliste</div>'+
+    '<p class="bet-imp-p">Noch keine Einträge. Über „+ Beteiligter“ aus dem Adressbuch übernehmen, '+
+    'oder eine bestehende Liste als PDF einlesen.</p></div>';
+  const z={hand:0,analyse:0,crm:0,pdf:0};E.forEach(r=>{z[r.quelle]=(z[r.quelle]||0)+1;});
+  const firmen=new Set(E.map(r=>r.firma).filter(Boolean)).size;
+  const offen=E.filter(r=>r.status==='offen').length;
+  const bh=E.find(r=>r.ist_bauherr);
+  const letzte=E.map(r=>r.geaendert_am).filter(Boolean).sort().pop();
+  const dateien=[...new Set(E.map(r=>r.importiert_aus).filter(Boolean))];
+  const zeile=(l,w)=>'<div class="bet-p-sub"><b>'+w+'</b> '+l+'</div>';
+  return '<div class="bet-p"><div class="bet-p-kopf">Stand der Liste</div>'+
+    zeile('Beteiligte',E.length)+zeile('Firmen',firmen)+
+    (offen?zeile('Gewerke noch nicht vergeben',offen):'')+
+    (bh?'<div class="bet-p-adr">Bauherr: '+esc(bh.firma||betName(bh))+'</div>':
+        '<div class="bet-p-adr" style="color:#b45309">Kein Bauherr gekennzeichnet</div>')+
+    '<div class="bet-p-adr">Herkunft: '+
+      [z.hand?z.hand+'× selbst erfasst':'',z.crm?z.crm+'× CRM':'',z.pdf?z.pdf+'× PDF':'',z.analyse?z.analyse+'× Analyse':'']
+      .filter(Boolean).join(' · ')+
+      (letzte?'<br>zuletzt geändert '+esc(fmtD(letzte)):'')+
+      (dateien.length?'<br>Quelle: '+esc(dateien.join(', ')):'')+'</div>'+
+    '<p class="bet-imp-p" style="margin-top:14px">Eine Zeile anklicken, um sie anzusehen oder zu bearbeiten.</p></div>';
+}
+
+function betDetail(r){
+  const K=betKont(r),nm=betName(r),adr=betAdr(r);
+  const ico=k=>k.art==='email'?'✉':k.art==='fax'?'📠':k.art==='web'?'🌐':k.art==='mobil'?'📱':'☎';
+  return '<div class="bet-p">'+
+    '<div class="bet-p-kopf"><span>'+esc(r.nummer)+(r.art==='gruppe'?' · Gruppe':'')+'</span>'+
+      '<span class="bet-move">'+
+        '<button class="bet-t" data-betup="'+r.id+'" title="nach oben">↑</button>'+
+        '<button class="bet-t" data-betdown="'+r.id+'" title="nach unten">↓</button>'+
+        '<button class="bet-t" data-betout="'+r.id+'" title="ausrücken">←</button>'+
+        '<button class="bet-t" data-betin="'+r.id+'" title="einrücken">→</button></span></div>'+
+    '<div class="bet-p-titel">'+esc(r.titel||'—')+'</div>'+
+    (r.firma?'<div class="bet-p-sub">'+esc(r.firma)+'</div>':'')+
+    (nm?'<div class="bet-p-sub">'+esc(nm)+(r.funktion?' · '+esc(r.funktion):'')+'</div>':'')+
+    (adr?'<div class="bet-p-adr">'+esc(adr)+'</div>':'')+
+    (K.length?'<div class="bet-p-kon">'+K.map(k=>k.art==='email'
+        ?'<a href="mailto:'+esc(k.wert)+'">'+ico(k)+' '+esc(k.wert)+'</a>'
+        :'<span>'+ico(k)+' '+esc(k.wert)+'</span>').join('')+'</div>':'')+
+    (r.notiz?'<div class="bet-p-adr">'+esc(r.notiz)+'</div>':'')+
+    (r.quelle==='pdf'&&r.importiert_aus?'<div class="bet-p-adr">aus '+esc(r.importiert_aus)+
+       (r.importiert_am?', eingelesen '+esc(fmtD(r.importiert_am)):'')+'</div>':'')+
+    '<div class="bet-p-akt">'+
+      '<button class="btn-sm" data-betedit="'+r.id+'">Bearbeiten</button>'+
+      (r.art==='gruppe'?'<button class="btn-sm ghost" data-betadd="'+r.id+'">+ Beteiligter</button>':'')+
+      (r.crm_company_id?'<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+'">Firma im CRM</button>':'')+
+      '<button class="btn-sm ghost" data-betdel="'+r.id+'">Löschen</button>'+
+    '</div></div>';
+}
+
+// Formular: alle Felder eines Knotens. Ohne id wird angelegt, sonst geaendert.
 function betForm(e){
   const isG=e.art==='gruppe',K=e.kontakte||[];
   const opt=(list,val)=>list.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>').join('');
-  let h='<div class="bet-form"><div class="bet-form-head">'+(e.id?'Zeile bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
+  let h='<div class="bet-p"><div class="bet-p-kopf">'+(e.id?'Bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
         '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></div>';
   h+='<div class="bet-fgrid">';
-  h+='<label class="bf w2">'+(isG?'Gruppentitel':'Rolle / Funktion im Projekt')+
+  h+='<label class="bf w2">'+(isG?'Gruppentitel':'Rolle im Projekt')+
      '<input id="bf_titel" list="bf_rollen" value="'+esc(e.titel||'')+'" placeholder="'+(isG?'z. B. Ausführende Firmen':'z. B. Fachplanung Statik')+'"></label>';
   h+='<datalist id="bf_rollen">'+betRollen.map(r=>'<option value="'+esc(r.rolle)+'">').join('')+'</datalist>';
-  h+='<label class="bf">Nummer (leer = automatisch)<input id="bf_nummer" value="'+esc(e.nummer_manuell||'')+'" placeholder="'+esc(e.nummer||'')+'"></label>';
+  h+='<label class="bf">Nummer<input id="bf_nummer" value="'+esc(e.nummer_manuell||'')+'" placeholder="'+esc(e.nummer||'automatisch')+'"></label>';
   if(!isG){
-    h+='<label class="bf w2">Firma / Stelle<input id="bf_firma" value="'+esc(e.firma||'')+'" placeholder="z. B. Lammel, Lerch & Partner"></label>';
-    h+='<label class="bf">Status<select id="bf_status">'+opt([['aktiv','aktiv'],['offen','noch offen (Platzhalter)'],['ausgeschieden','ausgeschieden']],e.status||'aktiv')+'</select></label>';
-    h+='<label class="bf sm">Anrede<input id="bf_anrede" value="'+esc(e.anrede||'')+'" placeholder="Herr"></label>';
-    h+='<label class="bf sm">Titel<input id="bf_namenstitel" value="'+esc(e.namenstitel||'')+'" placeholder="Dipl.-Ing."></label>';
+    h+='<label class="bf">Status<select id="bf_status">'+opt([['aktiv','aktiv'],['offen','noch offen'],['ausgeschieden','ausgeschieden']],e.status||'aktiv')+'</select></label>';
+    h+='<label class="bf w2">Firma / Stelle<input id="bf_firma" value="'+esc(e.firma||'')+'"></label>';
+    h+='<label class="bf">Anrede<input id="bf_anrede" value="'+esc(e.anrede||'')+'" placeholder="Herr"></label>';
+    h+='<label class="bf">Titel<input id="bf_namenstitel" value="'+esc(e.namenstitel||'')+'" placeholder="Dipl.-Ing."></label>';
     h+='<label class="bf">Vorname<input id="bf_vorname" value="'+esc(e.vorname||'')+'"></label>';
     h+='<label class="bf">Nachname<input id="bf_nachname" value="'+esc(e.nachname||'')+'"></label>';
-    h+='<label class="bf">Position in der Firma<input id="bf_funktion" value="'+esc(e.funktion||'')+'" placeholder="Projektleiter"></label>';
+    h+='<label class="bf w2">Position in der Firma<input id="bf_funktion" value="'+esc(e.funktion||'')+'"></label>';
     h+='<label class="bf w2">Straße<input id="bf_strasse" value="'+esc(e.strasse||'')+'"></label>';
-    h+='<label class="bf sm">PLZ<input id="bf_plz" value="'+esc(e.plz||'')+'"></label>';
+    h+='<label class="bf">PLZ<input id="bf_plz" value="'+esc(e.plz||'')+'"></label>';
     h+='<label class="bf">Ort<input id="bf_ort" value="'+esc(e.ort||'')+'"></label>';
-    h+='<label class="bf w2">Notiz<input id="bf_notiz" value="'+esc(e.notiz||'')+'" placeholder="frei"></label>';
-    h+='<div class="bf w3"><span class="bf-lab">Kontaktwege</span><div id="bf_konts">';
+    h+='<label class="bf w2">Notiz<input id="bf_notiz" value="'+esc(e.notiz||'')+'"></label>';
+    h+='<div class="bf w2"><span class="bf-lab">Kontaktwege</span><div id="bf_konts">';
     (K.length?K:[{art:'telefon',kontext:'arbeit',wert:''}]).forEach((k,i)=>{
       h+='<div class="bf-k" data-ki="'+i+'"><select class="bf-kart">'+opt(BET_KONTAKTARTEN,k.art)+'</select>'+
          '<select class="bf-kctx">'+opt(BET_KONTEXTE,k.kontext||'arbeit')+'</select>'+
-         '<input class="bf-kval" value="'+esc(k.wert||'')+'" placeholder="Nummer oder Adresse">'+
-         '<button class="bet-t del" data-bfkdel="'+i+'" title="Zeile entfernen">🗑</button></div>';});
+         '<input class="bf-kval" value="'+esc(k.wert||'')+'" placeholder="Nummer / Adresse">'+
+         '<button class="bet-t del" data-bfkdel="'+i+'" title="entfernen">🗑</button></div>';});
     h+='</div><button class="btn-sm ghost" data-bet="kont-plus">+ Kontaktweg</button></div>';
     h+='<label class="bf ck"><input type="checkbox" id="bf_bh"'+(e.ist_bauherr?' checked':'')+'> Bauherrenseite</label>';
     h+='<label class="bf ck"><input type="checkbox" id="bf_int"'+(e.ist_intern?' checked':'')+'> eigenes Büro</label>';
   }
   h+='</div>';
-  if(!isG){
-    const f=(id,label)=>'<button class="bet-crm-f'+(betCrmFilter===id?' an':'')+'" data-crmfilter="'+(id||'')+'">'+label+'</button>';
-    h+='<div class="bet-crm"><span class="bf-lab">Aus dem Adressbuch übernehmen (Poool-CRM, 2.198 Firmen · 3.269 Personen)</span>'+
-     '<div class="bet-crm-box"><input id="bf_crmq" placeholder="eingrenzen — Firma, Nachname oder Ort, mehrere Wörter erlaubt">'+
-     '<button class="btn-sm" data-bet="crm-suche">Suchen</button></div>'+
-     '<div class="bet-crm-filter">'+f(null,'Alle')+f('lieferant','Firmen &amp; Planer')+f('kunde','Auftraggeber')+f('intern','Eigenes Büro')+'</div>'+
-     '<div id="bf_crmres" class="bet-crm-res"></div></div>';}
-  h+='<div class="bet-form-foot"><button class="btn-sm" data-bet="speichern">Speichern</button>'+
+  h+='<div class="bet-p-akt"><button class="btn-sm" data-bet="speichern">Speichern</button>'+
+     (!isG?'<button class="btn-sm ghost" data-bet="crm-auf">Aus Adressbuch füllen</button>':'')+
      '<button class="btn-sm ghost" data-bet="abbrechen">Abbrechen</button></div></div>';
   return h;
 }
@@ -1351,8 +1405,8 @@ async function betPdfImport(datei){
     if(!e.istGruppe&&!e.firma&&!e.nachname&&!e.kontakte.length)e.status='offen';
     gefunden.push(e);});
   betPdfFunde=gefunden;betPdfName=datei.name;
-  const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
-  if(bd){bd.innerHTML=renderBet();wireBet();}
+  betEdit=null;betCrmOffen=false;betCrmFirma=null;
+  betNurSeite();
 }
 // Vorschau: was steckt in der Datei, was ist davon neu?
 function betPdfVorschau(){
@@ -1442,40 +1496,140 @@ async function betPdfUebernehmen(){
   await betNeuZeichnen();betHinweis(angelegt+' Zeilen aus dem PDF übernommen.');
 }
 
-// --- CRM (Poool-Spiegel): Firmen und Personen suchen, in das Formular uebernehmen
-// Vorschlaege kommen aus der Datenbankfunktion crm_vorschlaege: sie zerlegt die
-// Eingabe in Woerter (Kommas und volle Namen sind damit unproblematisch) und
-// stellt Firmen nach oben, die im Buero schon einmal in dieser Rolle beauftragt
-// waren. Ohne Eingabe zeigt sie einfach das Adressbuch.
+// --- Adressbuch (Poool-Spiegel) ---------------------------------------------
+// Zwei Ebenen: erst Firmen und Personen, dann eine Firma mit allen Mitarbeitern.
+// Aus der Firmenansicht lassen sich mehrere Personen auf einmal uebernehmen --
+// genau der Fall "ich brauche von dem Buero noch zwei weitere Leute".
+function betCrmPanel(){
+  if(betCrmFirma)return betCrmFirmaPanel();
+  const f=(id,label)=>'<button class="bet-crm-f'+(betCrmFilter===id?' an':'')+'" data-crmfilter="'+(id||'')+'">'+label+'</button>';
+  let h='<div class="bet-p"><div class="bet-p-kopf">Adressbuch'+
+    '<span>'+(betEdit?'<button class="bet-t" data-bet="crm-zu" title="ohne Adressbuch weiter">von Hand eintragen ›</button>':'')+
+    '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></span></div>'+
+    '<div class="bet-crm-box"><input id="bf_crmq" placeholder="Firma, Nachname oder Ort" value="'+esc(betCrmQ||'')+'">'+
+    '<button class="btn-sm" data-bet="crm-suche">Suchen</button></div>'+
+    '<div class="bet-crm-filter">'+f(null,'Alle')+f('lieferant','Firmen &amp; Planer')+f('kunde','Auftraggeber')+f('intern','Eigenes Büro')+'</div>'+
+    '<div id="bf_crmres" class="bet-crm-res"></div></div>';
+  return h;
+}
+
+// Ergebnisliste zeichnen (ohne das ganze Panel neu zu bauen — das Eingabefeld
+// soll den Fokus behalten).
+function betCrmTreffer(T){
+  if(!T.length)return '<div class="bet-leer">'+(betCrmQ
+    ?'Nichts gefunden zu „'+esc(betCrmQ)+'“.'
+    :'Keine Einträge — läuft der Abgleich? (node runner/poool_sync.mjs)')+'</div>';
+  return T.map((r,i)=>{
+    if(r.art==='firma')
+      return '<button class="bet-crm-hit'+(r.grund?' merk':'')+'" data-crmfirma="'+r.crm_id+'">'+
+        '<span class="ico">🏢</span><span class="tx">'+
+        '<span class="h1">'+esc(r.firma||'—')+'</span>'+
+        '<span class="h2">'+esc([r.plz,r.ort].filter(Boolean).join(' ')||'Firma')+'</span>'+
+        (r.grund?'<span class="h3">★ '+esc(r.grund)+'</span>':'')+
+        '</span><span class="pfeil">›</span></button>';
+    const nm=[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' ');
+    return '<button class="bet-crm-hit'+(r.grund?' merk':'')+'" data-crmi="'+i+'">'+
+      '<span class="ico">👤</span><span class="tx">'+
+      '<span class="h1">'+esc(nm||'—')+'</span>'+
+      '<span class="h2">'+esc([r.firma||'ohne Firma',r.funktion].filter(Boolean).join(' · '))+'</span>'+
+      (r.grund?'<span class="h3">★ '+esc(r.grund)+'</span>':'')+
+      '</span></button>';}).join('');
+}
+
+// Firmenansicht: Kopf mit Anschrift, darunter alle Mitarbeiter zum Ankreuzen.
+function betCrmFirmaPanel(){
+  const F=betCrmFirma,M=betCrmMit||[];
+  const adr=[F.strasse,[F.plz,F.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const gewaehlt=betMitWahl.size;
+  let h='<div class="bet-p">'+
+    '<button class="bet-crm-zurueck" data-bet="crm-zurueck">‹ zurück zum Adressbuch</button>'+
+    '<div class="bet-firma-kopf"><div class="n">'+esc(F.firma||'—')+'</div>'+
+    (adr?'<div class="a">'+esc(adr)+'</div>':'')+
+    '<div class="bet-p-akt" style="margin-top:9px;padding-top:9px">'+
+      '<button class="btn-sm" data-bet="crm-firma-uebernehmen">Nur die Firma übernehmen</button></div></div>';
+  if(!M.length){
+    h+='<div class="bet-leer">Zu dieser Firma sind im CRM keine Ansprechpartner hinterlegt.</div></div>';
+    return h;}
+  // Eine Rolle fuer alle: man uebernimmt meist mehrere Leute derselben Firma in
+  // derselben Funktion ("die sind unser Statiker"). Sonst stuende jede Zeile ohne Rolle da.
+  h+='<label class="bf w2" style="margin-bottom:4px">Rolle für die Übernahme'+
+     '<input id="bf_mitrolle" list="bf_rollen" value="'+esc((betEdit&&betEdit.titel)||'')+'" placeholder="z. B. Fachplanung Statik"></label>'+
+     '<datalist id="bf_rollen">'+betRollen.map(r=>'<option value="'+esc(r.rolle)+'">').join('')+'</datalist>';
+  h+='<div class="bet-mit-kopf"><span>'+M.length+' Ansprechpartner</span>'+
+     '<button class="bet-t" data-bet="mit-alle">'+(gewaehlt===M.length?'keine':'alle')+'</button></div>'+
+     '<div class="bet-mit-liste">';
+  M.forEach((p,i)=>{
+    const nm=[p.anrede,p.namenstitel,p.vorname,p.nachname].filter(Boolean).join(' ');
+    const mail=(p.kontakte||[]).find(k=>k.art==='email');
+    h+='<label class="bet-mit'+(betMitWahl.has(p.crm_id)?' gewaehlt':'')+'">'+
+       '<input type="checkbox" data-miti="'+i+'"'+(betMitWahl.has(p.crm_id)?' checked':'')+'>'+
+       '<span class="tx"><span class="n">'+esc(nm||'—')+'</span>'+
+       '<span class="f">'+esc([p.funktion,mail?mail.wert:''].filter(Boolean).join(' · '))+'</span></span></label>';});
+  h+='</div><div class="bet-p-akt">'+
+     '<button class="btn-sm" data-bet="mit-uebernehmen">'+
+       (gewaehlt?gewaehlt+' Ausgewählte übernehmen':'Ausgewählte übernehmen')+'</button>'+
+     '<button class="bet-t" data-bet="crm-zurueck">Abbrechen</button></div></div>';
+  return h;
+}
+
+// Vorschlaege holen. Die Rolle aus dem Formular steuert die Reihenfolge:
+// Firmen, die im Buero schon einmal so beauftragt waren, stehen oben.
 async function betCrmSuche(){
   const box=el('main').querySelector('#bf_crmres');if(!box)return;
-  const q=(el('main').querySelector('#bf_crmq')||{}).value?.trim()||'';
-  const rolle=(el('main').querySelector('#bf_titel')||{}).value?.trim()||'';
-  box.innerHTML='<div class="empty">Einen Moment …</div>';
+  const feld=el('main').querySelector('#bf_crmq');
+  betCrmQ=feld?feld.value.trim():'';
+  const rolle=(betEdit&&betEdit.titel)||(el('main').querySelector('#bf_titel')||{}).value||'';
+  box.innerHTML='<div class="bet-leer">Einen Moment …</div>';
   const{data,error}=await sb.rpc('crm_vorschlaege',
-    {p_suche:q||null,p_rolle:rolle||null,p_filter:betCrmFilter||null,p_limit:60});
-  if(error){box.innerHTML='<div class="empty">CRM nicht erreichbar: '+esc(error.message)+'</div>';return;}
-  const T=data||[];
-  if(!T.length){box.innerHTML='<div class="empty">'+(q?'Nichts gefunden zu „'+esc(q)+'“. Weniger Wörter eingeben oder Filter „Alle“ wählen.'
-    :'Keine Einträge im CRM — läuft der Abgleich? (node runner/poool_sync.mjs)')+'</div>';return;}
-  box._T=T;
-  box.innerHTML=T.map((r,i)=>{
-    const name=r.art==='person'?[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' '):(r.firma||'');
-    const unten=r.art==='person'
-      ?[r.firma||'ohne Firma',r.funktion].filter(Boolean).join(' · ')
-      :['Firma',[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
-    const mail=(r.kontakte||[]).find(k=>k.art==='email');
-    return '<button class="bet-crm-hit'+(r.grund?' merk':'')+'" data-crmi="'+i+'">'+
-      '<span class="h1">'+esc(name||'—')+'</span>'+
-      '<span class="h2">'+esc(unten)+'</span>'+
-      (r.grund?'<span class="h3">★ '+esc(r.grund)+'</span>':'')+
-      (mail?'<span class="h4">'+esc(mail.wert)+'</span>':'')+'</button>';}).join('');
-  box.querySelectorAll('[data-crmi]').forEach(b=>b.onclick=()=>{
-    const r=(box._T||[])[+b.dataset.crmi];if(!r)return;
-    betUebernehmen({firma:r.firma,anrede:r.anrede,namenstitel:r.namenstitel,vorname:r.vorname,
-      nachname:r.nachname,funktion:r.funktion,strasse:r.strasse,plz:r.plz,ort:r.ort,
-      kontakte:r.kontakte||[],crm_company_id:r.crm_company_id,
-      crm_person_id:r.art==='person'?r.crm_id:null});});
+    {p_suche:betCrmQ||null,p_rolle:rolle.trim()||null,p_filter:betCrmFilter||null,p_limit:60});
+  if(error){box.innerHTML='<div class="bet-leer">Adressbuch nicht erreichbar: '+esc(error.message)+'</div>';return;}
+  betCrmTr=data||[];
+  box.innerHTML=betCrmTreffer(betCrmTr);
+  wireBetCrm();
+}
+
+// Firma oeffnen: Stammsatz + alle Personen dieser Firma laden.
+async function betCrmFirmaOeffnen(companyId){
+  const seite=el('main').querySelector('.bet-seite');
+  if(seite)seite.innerHTML='<div class="bet-leer">Lade Firma …</div>';
+  const[{data:F},{data:P}]=await Promise.all([
+    sb.from('crm_firmen').select('crm_id,name,strasse,plz,ort,kontakte').eq('crm_id',companyId).maybeSingle(),
+    sb.from('crm_personen').select('crm_id,crm_company_id,anrede,namenstitel,vorname,nachname,funktion,kontakte,strasse,plz,ort,firma_name')
+      .eq('crm_company_id',companyId).order('nachname')]);
+  if(!F){betHinweis('Firma nicht im Spiegel gefunden.');betCrmFirma=null;betNurSeite();return;}
+  betCrmFirma={crm_id:F.crm_id,firma:F.name,strasse:F.strasse,plz:F.plz,ort:F.ort,kontakte:F.kontakte||[]};
+  betCrmMit=P||[];betMitWahl=new Set();
+  betNurSeite();
+}
+
+// Mehrere Personen auf einmal anlegen — alle unter dieselbe Gruppe wie der
+// gerade bearbeitete Eintrag, mit der Rolle aus dem Formular.
+async function betMitUebernehmen(){
+  const M=(betCrmMit||[]).filter(p=>betMitWahl.has(p.crm_id));
+  if(!M.length){betHinweis('Keine Person angehakt.');return;}
+  const feld=el('main').querySelector('#bf_mitrolle');
+  const rolle=(feld?feld.value.trim():'')||(betEdit&&betEdit.titel)||'';
+  const ziel=(betEdit&&betEdit.parent_id)||(betL.find(r=>r.art==='gruppe')||{}).id||null;
+  const basis=betL.filter(r=>(r.parent_id||null)===(ziel||null)).length;
+  const F=betCrmFirma||{};
+  const zeilen=M.map((p,k)=>({project_id:current,parent_id:ziel,art:'eintrag',pos:(basis+k+1)*10,
+    titel:rolle||null,firma:p.firma_name||F.firma||null,
+    anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,funktion:p.funktion,
+    strasse:p.strasse||F.strasse,plz:p.plz||F.plz,ort:p.ort||F.ort,
+    kontakte:p.kontakte||[],quelle:'crm',crm_company_id:p.crm_company_id,crm_person_id:p.crm_id}));
+  const{error}=await sb.from('beteiligte').insert(zeilen);
+  if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+  betCrmFirma=null;betCrmMit=[];betMitWahl=new Set();betCrmOffen=false;betEdit=null;
+  await betNeuZeichnen();
+  betHinweis(zeilen.length+' Person'+(zeilen.length===1?'':'en')+' übernommen'+(rolle?'':' — bitte Rolle ergänzen')+'.');
+}
+
+// Nur die Firma (ohne Ansprechpartner) ins Formular uebernehmen.
+function betFirmaUebernehmen(){
+  const F=betCrmFirma;if(!F)return;
+  betUebernehmen({firma:F.firma,strasse:F.strasse,plz:F.plz,ort:F.ort,
+    kontakte:F.kontakte||[],crm_company_id:F.crm_id});
+  betCrmFirma=null;betCrmMit=[];betCrmOffen=false;
 }
 // Uebernahme fuellt nur das Formular — gespeichert wird erst mit "Speichern".
 function betUebernehmen(d){
@@ -1486,62 +1640,123 @@ function betUebernehmen(d){
     strasse:d.strasse||cur.strasse,plz:d.plz||cur.plz,ort:d.ort||cur.ort,
     kontakte:(d.kontakte&&d.kontakte.length)?d.kontakte:cur.kontakte,
     quelle:'crm',crm:{crm_company_id:d.crm_company_id||null,crm_person_id:d.crm_person_id||null}});
-  const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
-  if(bd){bd.innerHTML=renderBet();wireBet();betHinweis('Aus dem CRM übernommen — noch nicht gespeichert.');}
+  betCrmOffen=false;betCrmFirma=null;
+  betNurSeite();
+  betHinweis('Aus dem Adressbuch übernommen — noch nicht gespeichert.');
+}
+
+// Nur den rechten Arbeitsbereich neu zeichnen — die Liste (und ihre Scrollhoehe)
+// bleibt stehen. Ein voller Neuaufbau wuerde bei jedem Klick nach oben springen.
+function betNurSeite(){
+  const s=el('main').querySelector('.bet-seite');
+  if(!s){const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
+    if(bd){bd.innerHTML=renderBet();wireBet();}return;}
+  s.innerHTML=betSeite();wireBet();
+  if(betCrmOffen&&!betCrmFirma){const r=el('main').querySelector('#bf_crmres');
+    if(r&&!r.dataset.geladen){r.dataset.geladen='1';betCrmSuche();}}
+}
+// Nur die Liste neu zeichnen (Auswahl, Filter, Ein-/Ausklappen).
+function betNurListe(){
+  const l=el('main').querySelector('.bet-liste');
+  if(!l)return betNurSeite();
+  l.innerHTML=betListe(betL||[]);wireBet();
 }
 
 function wireBet(){
   const M=el('main');
+  const neuZeichnen=()=>{const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');
+    if(bd){bd.innerHTML=renderBet();wireBet();}};
   M.querySelectorAll('[data-bet]').forEach(b=>b.onclick=async()=>{
     const a=b.dataset.bet;
-    if(a==='neu-gruppe'){betEdit={art:'gruppe',parent_id:null};}
-    else if(a==='neu-eintrag'){const g=betL.find(r=>r.art==='gruppe');betEdit={art:'eintrag',parent_id:g?g.id:null,kontakte:[]};}
-    else if(a==='abbrechen'){betEdit=null;}
+    if(a==='neu-gruppe'){betEdit={art:'gruppe',parent_id:null};betCrmOffen=false;betSel=null;}
+    else if(a==='neu-eintrag'){
+      const g=betL.find(r=>r.art==='gruppe'&&r.id===(betL.find(x=>x.id===betSel)||{}).parent_id)
+             ||betL.find(r=>r.id===betSel&&r.art==='gruppe')||betL.find(r=>r.art==='gruppe');
+      betEdit={art:'eintrag',parent_id:g?g.id:null,kontakte:[]};betCrmOffen=true;betCrmFirma=null;betSel=null;}
+    else if(a==='abbrechen'){betEdit=null;betCrmOffen=false;betCrmFirma=null;}
     else if(a==='speichern'){await betSpeichern();return;}
     else if(a==='vorlage'){await betVorlage();return;}
     else if(a==='analyse'){await betAusAnalyse();return;}
     else if(a==='verteiler'){await betVerteiler();return;}
     else if(a==='druck'){betDruck();return;}
-    else if(a==='crm-suche'){await betCrmSuche();return;}
     else if(a==='pdf'){const f=M.querySelector('#bet_pdf');if(f)f.click();return;}
     else if(a==='pdf-uebernehmen'){await betPdfUebernehmen();return;}
     else if(a==='pdf-abbrechen'){betPdfFunde=null;betPdfName='';}
+    else if(a==='crm-auf'){betCrmOffen=true;betCrmFirma=null;betNurSeite();return;}
+    else if(a==='crm-zu'){betCrmOffen=false;betCrmFirma=null;betNurSeite();return;}
+    else if(a==='crm-suche'){await betCrmSuche();return;}
+    else if(a==='crm-zurueck'){betCrmFirma=null;betCrmMit=[];betMitWahl=new Set();betNurSeite();return;}
+    else if(a==='crm-firma-uebernehmen'){betFirmaUebernehmen();return;}
+    else if(a==='mit-uebernehmen'){await betMitUebernehmen();return;}
+    else if(a==='mit-alle'){
+      const alle=betMitWahl.size===(betCrmMit||[]).length;
+      betMitWahl=alle?new Set():new Set((betCrmMit||[]).map(p=>p.crm_id));betNurSeite();return;}
+    else if(a==='filter-weg'){betFilter='';neuZeichnen();return;}
     else if(a==='kont-plus'){const cur=betFormLesen();betEdit=Object.assign({},betEdit,cur);
       betEdit.kontakte=(cur.kontakte||[]).concat([{art:'telefon',kontext:'arbeit',wert:''}]);}
-    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');
-    if(bd){bd.innerHTML=renderBet();wireBet();const f=M.querySelector('#bf_titel');if(f&&betEdit)f.focus();}
+    betNurSeite();
+    const f=M.querySelector('#bf_titel');if(f&&betEdit&&!betEdit.id)f.focus();
   });
+  // Zeile anklicken -> Details rechts
+  M.querySelectorAll('[data-betrow]').forEach(z=>z.onclick=()=>{
+    betSel=z.dataset.betrow;betEdit=null;betCrmOffen=false;betCrmFirma=null;
+    M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
+    betNurSeite();});
+  M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const r=betL.find(x=>x.id===b.dataset.betedit);if(!r)return;
+    betEdit=Object.assign({},r,{kontakte:betKont(r)});betCrmOffen=false;betNurSeite();
+    const f=M.querySelector('#bf_titel');if(f)f.focus();});
+  M.querySelectorAll('[data-betadd]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    betEdit={art:'eintrag',parent_id:b.dataset.betadd,kontakte:[]};betCrmOffen=true;betCrmFirma=null;betSel=null;
+    betNurSeite();});
+  M.querySelectorAll('[data-betdel]').forEach(b=>b.onclick=e=>{e.stopPropagation();betLoeschen(b.dataset.betdel);});
+  M.querySelectorAll('[data-betup]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betup,'up');});
+  M.querySelectorAll('[data-betdown]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betdown,'down');});
+  M.querySelectorAll('[data-betin]').forEach(b=>b.onclick=e=>{e.stopPropagation();betEbene(b.dataset.betin,true);});
+  M.querySelectorAll('[data-betout]').forEach(b=>b.onclick=e=>{e.stopPropagation();betEbene(b.dataset.betout,false);});
+  M.querySelectorAll('[data-betfold]').forEach(g=>g.onclick=e=>{
+    if(e.target.closest('[data-betadd]'))return;
+    const id=g.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);betNurListe();});
+  M.querySelectorAll('[data-betfirma]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();betCrmOffen=true;betCrmFirmaOeffnen(+b.dataset.betfirma);});
   M.querySelectorAll('[data-bfkdel]').forEach(b=>b.onclick=()=>{
     const cur=betFormLesen();betEdit=Object.assign({},betEdit,cur);
-    const i=+b.dataset.bfkdel;betEdit.kontakte=(cur.kontakte||[]).filter((_,k)=>k!==i);
-    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();}});
-  M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=()=>{
-    const r=betL.find(x=>x.id===b.dataset.betedit);if(!r)return;
-    betEdit=Object.assign({},r,{kontakte:betKont(r)});
-    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();
-      const f=M.querySelector('#bf_titel');if(f)f.focus();}});
-  M.querySelectorAll('[data-betadd]').forEach(b=>b.onclick=()=>{
-    betEdit={art:'eintrag',parent_id:b.dataset.betadd,kontakte:[]};
-    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();
-      const f=M.querySelector('#bf_titel');if(f)f.focus();}});
-  M.querySelectorAll('[data-betdel]').forEach(b=>b.onclick=()=>betLoeschen(b.dataset.betdel));
-  M.querySelectorAll('[data-betup]').forEach(b=>b.onclick=()=>betVerschieben(b.dataset.betup,'up'));
-  M.querySelectorAll('[data-betdown]').forEach(b=>b.onclick=()=>betVerschieben(b.dataset.betdown,'down'));
-  M.querySelectorAll('[data-betin]').forEach(b=>b.onclick=()=>betEbene(b.dataset.betin,true));
-  M.querySelectorAll('[data-betout]').forEach(b=>b.onclick=()=>betEbene(b.dataset.betout,false));
-  M.querySelectorAll('[data-betfold]').forEach(b=>b.onclick=()=>{
-    const id=b.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);
-    const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();}});
-  const q=M.querySelector('#bf_crmq');if(q)q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();betCrmSuche();}};
+    betEdit.kontakte=(cur.kontakte||[]).filter((_,k)=>k!==+b.dataset.bfkdel);betNurSeite();});
+  // Schnellfilter der Liste
+  const q=M.querySelector('#bet_q');
+  if(q&&!q.dataset.wired){q.dataset.wired='1';
+    q.oninput=()=>{betFilter=q.value;betNurListe();};
+    q.onkeydown=e=>{if(e.key==='Escape'){betFilter='';q.value='';betNurListe();}};}
+  const dz=M.querySelector('#bet_pdf');
+  if(dz)dz.onchange=async()=>{const f=dz.files&&dz.files[0];if(f){await betPdfImport(f);dz.value='';}};
+  wireBetCrm();
+}
+
+// Treffer im Adressbuch: Firma oeffnet die Mitarbeiteransicht, Person wird direkt
+// ins Formular uebernommen.
+function wireBetCrm(){
+  const M=el('main');
+  M.querySelectorAll('[data-crmfirma]').forEach(b=>b.onclick=()=>betCrmFirmaOeffnen(+b.dataset.crmfirma));
+  M.querySelectorAll('[data-crmi]').forEach(b=>b.onclick=()=>{
+    const r=(betCrmTr||[])[+b.dataset.crmi];if(!r)return;
+    betUebernehmen({firma:r.firma,anrede:r.anrede,namenstitel:r.namenstitel,vorname:r.vorname,
+      nachname:r.nachname,funktion:r.funktion,strasse:r.strasse,plz:r.plz,ort:r.ort,
+      kontakte:r.kontakte||[],crm_company_id:r.crm_company_id,crm_person_id:r.crm_id});});
+  M.querySelectorAll('[data-miti]').forEach(c=>c.onchange=()=>{
+    const p=(betCrmMit||[])[+c.dataset.miti];if(!p)return;
+    c.checked?betMitWahl.add(p.crm_id):betMitWahl.delete(p.crm_id);
+    c.closest('.bet-mit').classList.toggle('gewaehlt',c.checked);
+    const knopf=M.querySelector('[data-bet="mit-uebernehmen"]');
+    if(knopf)knopf.textContent=betMitWahl.size?betMitWahl.size+' Ausgewählte übernehmen':'Ausgewählte übernehmen';});
   M.querySelectorAll('[data-crmfilter]').forEach(b=>b.onclick=()=>{
     betCrmFilter=b.dataset.crmfilter||null;
     M.querySelectorAll('[data-crmfilter]').forEach(x=>x.classList.toggle('an',x===b));
     betCrmSuche();});
-  const dz=M.querySelector('#bet_pdf');
-  if(dz)dz.onchange=async()=>{const f=dz.files&&dz.files[0];if(f){await betPdfImport(f);dz.value='';}};
-  // Vorschlaege stehen sofort da — erst tippen zu muessen war der Denkfehler.
-  const res=M.querySelector('#bf_crmres');
-  if(res&&!res.dataset.geladen){res.dataset.geladen='1';betCrmSuche();}
+  const q=M.querySelector('#bf_crmq');
+  if(q&&!q.dataset.wired){q.dataset.wired='1';
+    q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();betCrmSuche();}};}
 }
 function betDruck(){
   const zeilen=betL.map(r=>{
