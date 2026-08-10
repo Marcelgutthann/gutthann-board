@@ -18,6 +18,7 @@ const CHIPS = {
 const S = {
   session: null, liste: null, projects: [],
   active: null, // {typ:'board'|'projekt', id, name}
+  ansicht: 'board', // im Projekt: 'board' (Aufgaben) oder 'dash' (Projekt-Dashboard)
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
 };
 
@@ -56,8 +57,11 @@ async function lotse(action, body = {}, retried = false) {
       body: JSON.stringify({ action, ...body }),
     });
   } catch (e) {
-    // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen
-    if (!retried) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
+    // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
+    // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
+    // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard'];
+    if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
   const j = await r.json().catch(() => ({}));
@@ -65,7 +69,20 @@ async function lotse(action, body = {}, retried = false) {
     if (!retried && await authRefresh()) return lotse(action, body, true);
     showLogin(); throw new Error('Sitzung abgelaufen');
   }
+  // lotse liefert Transportfehler als {error} mit HTTP 200, die RPCs App-Fehler als
+  // {fehler} — vereinheitlichen, damit jede r.fehler-Pruefung beide Kanaele sieht.
+  if (j && j.error && !j.fehler) j.fehler = j.error;
   return j;
+}
+
+// Mutation mit zentraler Fehlermeldung: Aktionen ohne eigene Fehlerbehandlung liefen
+// bisher still ins Leere (Aktion sah erfolgreich aus, nichts passierte).
+async function mut(action, body = {}) {
+  let r;
+  try { r = await lotse(action, body); }
+  catch (e) { r = { fehler: e.message || 'Netzwerkfehler' }; }
+  if (r && r.fehler) alert(r.fehler);
+  return r;
 }
 
 // ---------- Helfer ----------
@@ -129,8 +146,11 @@ function ctxMenu(x, y, items) {
     if (it.note) m.append(el('div', { class: 'note' }, it.note));
     else m.append(el('button', { class: it.danger ? 'danger' : '', onclick: () => { closeCtx(); it.do(); } }, it.txt));
   }
-  m.style.left = Math.min(x, innerWidth - 240) + 'px'; m.style.top = Math.min(y, innerHeight - 200) + 'px';
   document.getElementById('ctx-root').append(m);
+  // Erst nach dem Einhaengen an der ECHTEN Groesse klemmen — lange Menues
+  // (Projektliste) ragten sonst unter den Viewport.
+  m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + 'px';
+  m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + 'px';
   setTimeout(() => addEventListener('click', closeCtx, { once: true }));
 }
 function closeCtx() { document.getElementById('ctx-root').innerHTML = ''; }
@@ -143,14 +163,39 @@ async function ladeAlles() {
   renderSidebar();
   await ladeBoard();
 }
+let ladeToken = 0; // verwirft veraltete Antworten bei schnellem Board-Wechsel
 async function ladeBoard() {
   if (!S.active) return;
-  S.board = S.active.typ === 'projekt'
+  const token = ++ladeToken;
+  const b = S.active.typ === 'projekt'
     ? await lotse('board', { projekt: S.active.name })
     : await lotse('board', { board_id: S.active.id });
+  if (token !== ladeToken) return; // inzwischen wurde ein anderes Board angefordert
+  S.board = b;
   renderTopbar(); renderBoard();
 }
-async function wechsle(typ, id, name) { S.active = { typ, id, name }; S.board = null; renderSidebar(); renderTopbar(); renderBoard(); await ladeBoard(); }
+async function wechsle(typ, id, name) {
+  S.active = { typ, id, name }; S.board = null;
+  // Halboffene Neue-Karte-Zeile gehoert zum alten Board — sonst blockiert ihr
+  // Poll-Guard den Auto-Refresh dauerhaft.
+  S.newCardCol = null; S.newCardText = '';
+  zeigeAnsicht('board'); // beim Wechsel immer zuerst die Aufgaben zeigen
+  renderSidebar(); renderTopbar(); renderBoard(); await ladeBoard();
+}
+
+// Umschalten zwischen Aufgaben-Board und Projekt-Dashboard. Beide leben im selben
+// Hauptbereich; das Dashboard bekommt beim ersten Aufruf die Sitzung der Huelle.
+function zeigeAnsicht(welche) {
+  S.ansicht = welche;
+  const dash = document.getElementById('dash-root');
+  const board = document.getElementById('board');
+  if (!dash || !board) return;
+  const dashAn = welche === 'dash' && S.active?.typ === 'projekt';
+  board.style.display = dashAn ? 'none' : '';
+  dash.hidden = !dashAn;
+  if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
+  renderTopbar();
+}
 
 // ---------- Sidebar ----------
 function renderSidebar() {
@@ -164,11 +209,15 @@ function renderSidebar() {
   const g1 = grp('Meine Boards');
   for (const b of li.boards || []) {
     const aktiv = S.active?.typ === 'board' && S.active.id === b.id;
+    // Default-Board (erstes) traegt den Zaehler offener, mir zugewiesener Karten —
+    // dort kommen sie an (Migration 78).
+    const badge = (b === (li.boards || [])[0] && (li.zugewiesen_offen || 0) > 0)
+      ? el('span', { class: 'badge', title: 'Dir zugewiesene offene Aufgaben' }, String(li.zugewiesen_offen)) : '';
     g1.append(el('div', {
       class: 'row' + (aktiv ? ' active' : ''),
       onclick: () => wechsle('board', b.id, b.name),
       oncontextmenu: (e) => { e.preventDefault(); boardMenu(e, b, li.boards.length <= 1); },
-    }, '▦ ', b.name));
+    }, '▦ ', b.name, badge));
   }
   g1.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('privat') }, '+ Neues Board'));
 
@@ -189,7 +238,7 @@ function renderSidebar() {
       const aktiv = S.active?.typ === 'projekt' && S.active.name === p.name;
       g3.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => wechsle('projekt', p.project_id, p.name) },
         '⌖ ', p.name,
-        el('button', { class: 'pin', title: 'Lösen', onclick: async (e) => { e.stopPropagation(); await lotse('pin', { projekt: p.name, an: false }); S.liste = await lotse('board_liste'); renderSidebar(); } }, '✕')));
+        el('button', { class: 'pin', title: 'Lösen', onclick: async (e) => { e.stopPropagation(); await mut('pin',{ projekt: p.name, an: false }); S.liste = await lotse('board_liste'); renderSidebar(); } }, '✕')));
     }
   }
 
@@ -200,12 +249,12 @@ function renderSidebar() {
     g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => wechsle('projekt', p.id, p.name) },
       el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }), p.name,
       gepinnt.has(p.name) ? '' :
-        el('button', { class: 'pin', title: 'An Sidebar anheften', onclick: async (e) => { e.stopPropagation(); await lotse('pin', { projekt: p.name, an: true }); S.liste = await lotse('board_liste'); renderSidebar(); } }, '⌖')));
+        el('button', { class: 'pin', title: 'An Sidebar anheften', onclick: async (e) => { e.stopPropagation(); await mut('pin',{ projekt: p.name, an: true }); S.liste = await lotse('board_liste'); renderSidebar(); } }, '⌖')));
   }
 }
 function boardMenu(e, b, letztes) {
   ctxMenu(e.clientX, e.clientY, [
-    { txt: 'Umbenennen', do: async () => { const n = prompt('Neuer Name:', b.name); if (n?.trim()) { await lotse('board_umbenennen', { board_id: b.id, name: n.trim() }); await ladeAlles(); } } },
+    { txt: 'Umbenennen', do: async () => { const n = prompt('Neuer Name:', b.name); if (n?.trim()) { await mut('board_umbenennen',{ board_id: b.id, name: n.trim() }); await ladeAlles(); } } },
     letztes ? { note: 'Letztes Board – nicht löschbar' } :
       { txt: 'Löschen', danger: true, do: async () => { if (confirm(`Board "${b.name}" löschen? Karten wandern ins Default-Board.`)) { const r = await lotse('board_loeschen', { board_id: b.id }); if (r.fehler) alert(r.fehler); if (S.active?.id === b.id) S.active = null; await ladeAlles(); } } },
   ]);
@@ -227,6 +276,15 @@ function renderTopbar() {
   const scope = S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
+  // Im Projekt: Aufgaben und Dashboard sind zwei Ansichten derselben Ebene
+  // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
+  if (S.active.typ === 'projekt') {
+    const tabs = el('div', { class: 'viewtabs' });
+    for (const [key, label] of [['board', 'Aufgaben'], ['dash', 'Dashboard']]) {
+      tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
+    }
+    tb.append(tabs);
+  }
   // Dashboard neben dem Boardnamen — vorerst nur fuer das VgV-Radar-Board (Marcels Auftrag 24.07.)
   if (S.board?.ist_team && S.active.name === 'VgV-Radar') {
     tb.append(el('button', { class: 'dashbtn', onclick: openVgvDashboard }, '▦ Dashboard'));
@@ -265,9 +323,8 @@ function renderBoard() {
       ondrop: async (e) => {
         e.preventDefault(); colEl.classList.remove('dragover');
         if (!S.drag) return;
-        const r = await lotse('todo_verschieben', { todo_id: S.drag, spalte_id: sp.id });
-        S.drag = null;
-        if (r.fehler) alert(r.fehler);
+        const id = S.drag; S.drag = null;
+        await mut('todo_verschieben', { todo_id: id, spalte_id: sp.id });
         await ladeBoard();
       },
     });
@@ -276,7 +333,7 @@ function renderBoard() {
       sp.auto_status === 'rueckfrage' ? el('span', { class: 'roledot', style: 'background:#E29A2E', title: 'Rückfragen wandern automatisch her' }) : '',
       sp.auto_status === 'fertig' ? el('span', { class: 'roledot', style: 'background:#4F7A4B', title: 'Fertige Agenten-Ergebnisse landen hier' }) : '',
       el('span', { class: 'name' }, sp.name),
-      sp.automatik ? el('span', {
+      sp.automatik?.auftrag ? el('span', {
         class: 'autochip', title: 'Automatik: ' + (sp.automatik.auftrag || '').slice(0, 200),
         onclick: (e) => { e.stopPropagation(); spalteAutomatikDialog(sp); },
       }, '⚙ Auto') : '',
@@ -306,14 +363,18 @@ function renderBoard() {
               alert('Nicht gespeichert: ' + ((r && (r.fehler || r.error)) || 'keine Antwort vom Server') + '\nDer Text bleibt stehen — bitte nochmal Enter.');
               return;
             }
-            if (!sp.ist_erledigt) await lotse('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
+            // mut wirft nie — der State-Reset laeuft auch, wenn das Einsortieren
+            // fehlschlaegt (die Karte existiert dann bereits in Spalte 1).
+            if (!sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
             S.newCardCol = null; S.newCardText = ''; await ladeBoard();
           }
         },
       });
       inp.value = S.newCardText;
       colEl.append(inp); setTimeout(() => { inp.focus(); inp.selectionStart = inp.value.length; });
-    } else {
+    } else if (!sp.ist_erledigt) {
+      // In der Erledigt-Spalte kein "+ Aufgabe": neu Angelegtes landete dort ohnehin
+      // nie (Schutz gegen als-erledigt-Anlegen), sondern kommentarlos in Spalte 1.
       colEl.append(el('button', { class: 'addcard', onclick: () => { S.newCardCol = sp.id; S.newCardText = ''; renderBoard(); } }, '+ Aufgabe'));
     }
     bw.append(colEl);
@@ -337,8 +398,8 @@ function spaltenMenu(e, sp, nSpalten) {
       await ladeBoard();
     }
   } });
-  const rolle = async (r) => { await lotse('spalte_rolle', { spalte_id: sp.id, rolle: r }); await ladeBoard(); };
-  if (!sp.ist_erledigt && !sp.ist_agent) items.push({ txt: sp.automatik ? 'Automatik bearbeiten…' : 'Automatisieren (Agent verarbeitet jede Karte hier)…', do: () => spalteAutomatikDialog(sp) });
+  const rolle = async (r) => { await mut('spalte_rolle',{ spalte_id: sp.id, rolle: r }); await ladeBoard(); };
+  if (!sp.ist_erledigt && !sp.ist_agent) items.push({ txt: sp.automatik?.auftrag ? 'Automatik bearbeiten…' : 'Automatisieren (Agent verarbeitet jede Karte hier)…', do: () => spalteAutomatikDialog(sp) });
   if (!sp.ist_erledigt) items.push({ txt: sp.ist_agent ? 'Agenten-Rolle entfernen' : 'Als Agenten-Spalte (Karte rein = erledigen lassen)', do: () => rolle(sp.ist_agent ? 'keine' : 'agent') });
   if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'rueckfrage' ? 'Rückfrage-Rolle entfernen' : 'Als Rückfrage-Spalte (Karten wandern automatisch her)', do: () => rolle(sp.auto_status === 'rueckfrage' ? 'keine' : 'rueckfrage') });
   if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'fertig' ? 'Fertig-prüfen-Rolle entfernen' : 'Als Fertig-prüfen-Spalte (Agenten-Ergebnisse landen hier)', do: () => rolle(sp.auto_status === 'fertig' ? 'keine' : 'fertig_pruefen') });
@@ -631,6 +692,35 @@ function renderVgvDashboard(box, d) {
   box.append(grid);
 }
 
+// Rechtsklick auf eine Karte: Verschieben (auch der Touch-Ausweg ohne Drag&Drop),
+// Projekt zuweisen/entfernen, Loeschen. Untermenues oeffnen nach dem closeCtx des
+// Hauptmenues (setTimeout, weil ctxMenu einen once-Klick-Listener zum Schliessen setzt).
+function kartenMenu(e, t) {
+  const x = e.clientX, y = e.clientY;
+  const items = [];
+  const andere = (S.board?.spalten || []).filter((s2) => s2.id !== t.spalte_id);
+  if (andere.length) items.push({ txt: '→ Verschieben nach…', do: () => setTimeout(() => ctxMenu(x, y,
+    andere.map((s2) => ({ txt: s2.name, do: async () => { await mut('todo_verschieben', { todo_id: t.id, spalte_id: s2.id }); await ladeBoard(); } })))) });
+  // Auf Team-Boards keine Projekt-Zuordnung — Projekt-Karten gehoeren nicht auf
+  // Team-Boards (Server lehnt ab, Migration 79).
+  if (!S.board?.ist_team) {
+    items.push({ txt: '⌖ ' + (t.projekt_name ? 'Projekt ändern…' : 'Projekt zuweisen…'), do: () => setTimeout(() => projektMenu(x, y, t.id)) });
+    if (t.projekt_name) items.push({ txt: '⌖ Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
+  }
+  items.push({ txt: 'Löschen…', danger: true, do: async () => {
+    if (!confirm(`Karte "${t.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
+    await mut('todo_loeschen', { todo_id: t.id }); await ladeBoard();
+  } });
+  ctxMenu(x, y, items);
+}
+function projektMenu(x, y, todoId, danach) {
+  const fertig = danach || (async () => { await ladeBoard(); });
+  if (!S.projects.length) { alert('Keine aktiven Projekte gefunden.'); return; }
+  ctxMenu(x, y, S.projects.map((p) => ({ txt: p.name, do: async () => {
+    await mut('todo_projekt', { todo_id: todoId, projekt: p.name }); await fertig();
+  } })));
+}
+
 function renderCard(t) {
   const st = statusVon(t);
   const chip = st && CHIPS[st];
@@ -639,10 +729,14 @@ function renderCard(t) {
     class: 'card' + (st === 'arbeitet' ? ' aura' : '') + (st === 'rueckfrage' ? ' rf' : ''),
     draggable: 'true',
     ondragstart: () => { S.drag = t.id; },
+    // Ohne dragend blieb S.drag nach einem abgebrochenen Drag (Esc, daneben fallen
+    // gelassen) haengen — und der 60s-Auto-Refresh war fuer den Rest der Sitzung tot.
+    ondragend: () => { S.drag = null; },
     onclick: () => openCard(t.id),
+    oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); kartenMenu(e, t); },
   });
   if (chip) c.append(el('div', { class: 'chip', style: `background:${chip.bg};color:${chip.fg}` },
-    el('span', { class: 'cdot', style: `background:${chip.dot};${chip.anim ? 'animation:dotPulse 1.8s ease-in-out infinite' : ''}` }),
+    el('span', { class: 'cdot', style: `background:${chip.dot}` }),
     chip.txt, st === 'fertig' && t.anhaenge_n ? ' 📎' : ''));
   c.append(el('div', { class: 't' }, t.titel));
   // VgV-Karte: Empfehlung + Abgabefrist direkt auf der Kachel (Radar-Board)
@@ -657,10 +751,10 @@ function renderCard(t) {
     c.append(row);
   }
   const meta = el('div', { class: 'meta' });
-  meta.append(el('span', {}, t.quelle === 'voice' ? '📞' : '⌨'));
+  // Redesign 10.08.: die Kachel zeigt nur Frist, Personen, Herkunft, Projekt — Zaehler
+  // (Unterpunkte/Kommentare) und das ⌨-Icon stehen im Detail, nicht auf der Karte.
+  if (t.quelle === 'voice') meta.append(el('span', { title: 'Per Anruf erstellt' }, '📞'));
   if (due) meta.append(el('span', { class: 'due' + (due.urgent ? ' urgent' : '') }, due.txt));
-  if (t.unterpunkte_gesamt) meta.append(el('span', {}, `☑ ${t.unterpunkte_erledigt}/${t.unterpunkte_gesamt}`));
-  if (t.kommentare_n) meta.append(el('span', {}, `💬 ${t.kommentare_n}`));
   if ((t.zugewiesen || []).length) {
     const avs = el('span', { class: 'avs' });
     for (const p of t.zugewiesen.slice(0, 3)) avs.append(el('span', { class: 'av', style: 'background:' + avColor(p), title: personName(p) }, initialen(personName(p))));
@@ -700,12 +794,39 @@ function renderDrawer() {
   const titelZeile = el('div', { class: 't', style: 'display:flex;gap:8px;align-items:baseline' }, d.titel,
     el('button', { title: 'Titel bearbeiten', style: 'font-size:13px;color:#9A9A93', onclick: async () => {
       const t2 = prompt('Titel bearbeiten:', d.titel);
-      if (t2 !== null && t2.trim() && t2.trim() !== d.titel) { await lotse('todo_update', { todo_id: d.id, titel: t2.trim() }); await openCard(d.id); await ladeBoard(); }
+      if (t2 !== null && t2.trim() && t2.trim() !== d.titel) { await mut('todo_update', { todo_id: d.id, titel: t2.trim() }); await openCard(d.id); await ladeBoard(); }
     } }, '✎'));
   head.append(chipRow, titelZeile);
   const meta = el('div', { class: 'meta' });
-  if (d.projekt) meta.append(el('span', {}, '⌖ ' + d.projekt.name));
-  if (d.faellig) meta.append(el('span', {}, 'fällig ' + new Date(d.faellig).toLocaleDateString('de-DE')));
+  // Projekt: klickbar — zuweisen, aendern, entfernen (Migration 78).
+  meta.append(el('button', { class: 'metabtn', title: 'Projekt zuweisen oder ändern', onclick: (e) => {
+    if (S.board?.ist_team) { alert('Karte liegt auf einem Team-Board — Projekt-Zuordnung dort nicht möglich.'); return; }
+    const x = e.clientX, y = e.clientY;
+    const danach = async () => { await openCard(d.id); await ladeBoard(); };
+    const items = S.projects.map((p) => ({ txt: p.name, do: async () => { await mut('todo_projekt', { todo_id: d.id, projekt: p.name }); await danach(); } }));
+    if (d.projekt) items.push({ txt: 'Projekt entfernen', danger: true, do: async () => { await mut('todo_projekt', { todo_id: d.id, projekt: null }); await danach(); } });
+    if (!items.length) { alert('Keine aktiven Projekte gefunden.'); return; }
+    ctxMenu(x, y, items);
+  } }, d.projekt ? '⌖ ' + d.projekt.name : '⌖ Projekt zuweisen'));
+  // Frist: klickbar — Schnellwahl, freies Datum, entfernen (Migration 78: leerbar).
+  const inTagen = (n) => { const dt = new Date(); dt.setDate(dt.getDate() + n);
+    return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); };
+  const fristBtn = el('button', { class: 'metabtn', title: 'Frist setzen oder ändern', onclick: (e) => {
+    const x = e.clientX, y = e.clientY;
+    const setze = async (body) => { await mut('todo_update', { todo_id: d.id, ...body }); await openCard(d.id); await ladeBoard(); };
+    ctxMenu(x, y, [
+      { txt: 'Heute', do: () => setze({ faellig: inTagen(0) }) },
+      { txt: 'Morgen', do: () => setze({ faellig: inTagen(1) }) },
+      { txt: 'In einer Woche', do: () => setze({ faellig: inTagen(7) }) },
+      { txt: 'Datum wählen…', do: () => {
+        const di = el('input', { type: 'date', class: 'metabtn', onchange: () => { if (di.value) setze({ faellig: di.value }); } });
+        di.value = d.faellig || '';
+        fristBtn.replaceWith(di); setTimeout(() => { di.focus(); di.showPicker?.(); });
+      } },
+      ...(d.faellig ? [{ txt: 'Frist entfernen', danger: true, do: () => setze({ faellig_leeren: true }) }] : []),
+    ]);
+  } }, d.faellig ? '📅 fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : '📅 Frist setzen');
+  meta.append(fristBtn);
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta); dr.append(head);
 
@@ -718,7 +839,7 @@ function renderDrawer() {
       const ta = el('textarea', { style: 'width:100%;min-height:110px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px' });
       ta.value = d.notiz || '';
       const speichern = el('button', { class: 'btn', style: 'margin-top:8px', onclick: async () => {
-        await lotse('todo_update', { todo_id: d.id, notiz: ta.value }); await openCard(d.id);
+        await mut('todo_update', { todo_id: d.id, notiz: ta.value }); await openCard(d.id);
       } }, 'Speichern');
       inhalt.replaceWith(el('div', {}, ta, speichern));
     } }, 'Bearbeiten'));
@@ -804,7 +925,7 @@ function renderDrawer() {
       const inp = el('input', { placeholder: 'Deine Antwort…' });
       inp.value = f.antwort || '';
       inputs.push({ f, inp }); sec.append(inp);
-      if (f.status === 'offen') sec.append(el('button', { style: 'font-size:11.5px;color:#8A5606;margin:4px 0 8px', onclick: async () => { await lotse('rueckfrage_antworten', { rueckfrage_id: f.id, antwort: 'ueberspringen' }); await openCard(d.id); await ladeBoard(); } }, 'Überspringen'));
+      if (f.status === 'offen') sec.append(el('button', { style: 'font-size:11.5px;color:#8A5606;margin:4px 0 8px', onclick: async () => { await mut('rueckfrage_antworten',{ rueckfrage_id: f.id, antwort: 'ueberspringen' }); await openCard(d.id); await ladeBoard(); } }, 'Überspringen'));
     });
     const speichereEntwuerfe = async () => {
       for (const { f, inp } of inputs) if (inp.value.trim() && inp.value.trim() !== (f.antwort || '')) {
@@ -848,15 +969,16 @@ function renderDrawer() {
 
   // Unterpunkte
   const su = el('div', { class: 'dsec' });
-  su.append(el('div', { class: 'slbl' }, `Unterpunkte ${d.unterpunkte.length ? `(${d.unterpunkte.filter(u => u.erledigt).length}/${d.unterpunkte.length})` : ''}`));
+  // Leere Sektionen zeigen kein Label — nur die schlanke Hinzufuegen-Zeile (Redesign 10.08.).
+  if (d.unterpunkte.length) su.append(el('div', { class: 'slbl' }, `Unterpunkte (${d.unterpunkte.filter(u => u.erledigt).length}/${d.unterpunkte.length})`));
   for (const u of d.unterpunkte) {
     su.append(el('div', { class: 'sub' },
-      el('input', { type: 'checkbox', ...(u.erledigt ? { checked: '' } : {}), onchange: async (e) => { await lotse('unterpunkt_setzen', { unterpunkt_id: u.id, erledigt: e.target.checked }); await openCard(d.id); } }),
+      el('input', { type: 'checkbox', ...(u.erledigt ? { checked: '' } : {}), onchange: async (e) => { await mut('unterpunkt_setzen',{ unterpunkt_id: u.id, erledigt: e.target.checked }); await openCard(d.id); } }),
       el('span', { style: u.erledigt ? 'text-decoration:line-through;color:#8A8A83' : '' }, u.text),
-      el('button', { class: 'del', onclick: async () => { await lotse('unterpunkt_loeschen', { unterpunkt_id: u.id }); await openCard(d.id); } }, '✕')));
+      el('button', { class: 'del', onclick: async () => { await mut('unterpunkt_loeschen',{ unterpunkt_id: u.id }); await openCard(d.id); } }, '✕')));
   }
   const addU = el('div', { class: 'inline-add' });
-  const uInp = el('input', { placeholder: 'Unterpunkt hinzufügen…', onkeydown: async (e) => { if (e.key === 'Enter' && uInp.value.trim()) { await lotse('unterpunkt_anlegen', { todo_id: d.id, text: uInp.value.trim() }); await openCard(d.id); } } });
+  const uInp = el('input', { placeholder: 'Unterpunkt hinzufügen…', onkeydown: async (e) => { if (e.key === 'Enter' && uInp.value.trim()) { await mut('unterpunkt_anlegen',{ todo_id: d.id, text: uInp.value.trim() }); await openCard(d.id); } } });
   addU.append(uInp); su.append(addU); dr.append(su);
 
   // Personen
@@ -864,20 +986,20 @@ function renderDrawer() {
   sp2.append(el('div', { class: 'slbl' }, 'Personen'));
   for (const p of d.zugewiesen) sp2.append(el('span', { class: 'pill' },
     el('span', { class: 'av', style: 'width:16px;height:16px;border-radius:50%;color:#fff;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;background:' + avColor(p) }, initialen(personName(p))),
-    personName(p), el('button', { style: 'color:#9A9A93', onclick: async () => { await lotse('todo_zuweisen', { todo_id: d.id, person: p, an: false }); await openCard(d.id); await ladeBoard(); } }, '✕')));
+    personName(p), el('button', { style: 'color:#9A9A93', onclick: async () => { await mut('todo_zuweisen',{ todo_id: d.id, person: p, an: false }); await openCard(d.id); await ladeBoard(); } }, '✕')));
   sp2.append(el('button', { class: 'btn ghost', style: 'font-size:12px;padding:5px 11px', onclick: (e) => {
     const kandidaten = personListe().filter((p) => !d.zugewiesen.includes(p.kurz));
     if (!kandidaten.length) return;
-    ctxMenu(e.clientX, e.clientY, kandidaten.map((p) => ({ txt: p.name, do: async () => { await lotse('todo_zuweisen', { todo_id: d.id, person: p.kurz, an: true }); await openCard(d.id); await ladeBoard(); } })));
+    ctxMenu(e.clientX, e.clientY, kandidaten.map((p) => ({ txt: p.name, do: async () => { await mut('todo_zuweisen',{ todo_id: d.id, person: p.kurz, an: true }); await openCard(d.id); await ladeBoard(); } })));
   } }, '+ Person')); dr.append(sp2);
 
   // Anhaenge
   const sa = el('div', { class: 'dsec' });
-  sa.append(el('div', { class: 'slbl' }, 'Dateien'));
+  if (d.anhaenge.length) sa.append(el('div', { class: 'slbl' }, 'Dateien'));
   for (const a of d.anhaenge) sa.append(el('div', { class: 'sub' },
     el('a', { href: '#', style: 'color:#1C1C1A;font-weight:500', onclick: async (e) => { e.preventDefault(); await downloadAnhang(a); } }, '📎 ' + a.name),
     el('span', { style: 'color:#9A9A93;font-size:11.5px' }, a.groesse ? Math.round(a.groesse / 1024) + ' KB' : ''),
-    el('button', { class: 'del', onclick: async () => { await lotse('anhang_loeschen', { anhang_id: a.id }); await openCard(d.id); } }, '✕')));
+    el('button', { class: 'del', onclick: async () => { await mut('anhang_loeschen',{ anhang_id: a.id }); await openCard(d.id); } }, '✕')));
   const fileInp = el('input', { type: 'file', style: 'display:none', onchange: async (e) => {
     const f = e.target.files[0]; if (!f) return;
     const pfad = `${d.id}/${Date.now()}_${f.name.replace(/[^\w.\-äöüÄÖÜß ]/g, '_')}`;
@@ -885,20 +1007,20 @@ function renderDrawer() {
       method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token }, body: f,
     });
     if (!up.ok) { alert('Upload fehlgeschlagen'); return; }
-    await lotse('anhang_registrieren', { todo_id: d.id, pfad, name: f.name, groesse: f.size });
+    await mut('anhang_registrieren',{ todo_id: d.id, pfad, name: f.name, groesse: f.size });
     await openCard(d.id); await ladeBoard();
   } });
   sa.append(fileInp, el('button', { class: 'btn ghost', style: 'font-size:12px;padding:5px 11px', onclick: () => fileInp.click() }, 'Anhängen')); dr.append(sa);
 
   // Kommentare
   const sk = el('div', { class: 'dsec' });
-  sk.append(el('div', { class: 'slbl' }, 'Kommentare'));
+  if (d.kommentare.length) sk.append(el('div', { class: 'slbl' }, 'Kommentare'));
   for (const k of d.kommentare) sk.append(el('div', { class: 'kom' },
     el('div', { class: 'von' }, `${k.von} · ${new Date(k.am).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`),
     el('div', { class: 'txt' }, k.text)));
   const addK = el('div', { class: 'inline-add' });
   const kInp = el('input', { placeholder: 'Kommentar…' });
-  addK.append(kInp, el('button', { class: 'btn', onclick: async () => { if (kInp.value.trim()) { await lotse('kommentar_anlegen', { todo_id: d.id, text: kInp.value.trim() }); await openCard(d.id); await ladeBoard(); } } }, 'Senden'));
+  addK.append(kInp, el('button', { class: 'btn', onclick: async () => { if (kInp.value.trim()) { await mut('kommentar_anlegen',{ todo_id: d.id, text: kInp.value.trim() }); await openCard(d.id); await ladeBoard(); } } }, 'Senden'));
   sk.append(addK); dr.append(sk);
 
   // Verlauf
@@ -918,11 +1040,16 @@ function renderDrawer() {
     sf.append(el('button', { class: 'btn lime', onclick: async () => {
       const kom = prompt('Kommentar zum Abschluss (fließt ins Agenten-Gedächtnis):', '');
       if (kom === null) return;
-      await lotse('todo_complete', { todo_id: d.id, kommentar: kom || null });
+      await mut('todo_complete',{ todo_id: d.id, kommentar: kom || null });
       closeDrawer(); await ladeBoard();
     } }, 'Mit Kommentar abschließen'));
   }
   sf.append(el('button', { class: 'btn ghost', title: 'Kommt in der nächsten Ausbaustufe', disabled: '', style: 'opacity:.45;cursor:default' }, 'Nachbessern'));
+  sf.append(el('button', { class: 'btn ghost gefahr', style: 'margin-left:auto', onclick: async () => {
+    if (!confirm(`Karte "${d.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
+    const r = await mut('todo_loeschen', { todo_id: d.id });
+    if (r && r.ok) { closeDrawer(); await ladeBoard(); }
+  } }, 'Löschen'));
   dr.append(sf);
 
   ov.append(dr); root.append(ov);
