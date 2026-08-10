@@ -73,6 +73,8 @@ let berTyp='lagebericht',berSel=null,berPollTimer=null;
 let betL=[],betEdit=null,betRollen=[],betZu=new Set();
 // PDF-Import: betPdfFunde = erkannte Zeilen der hochgeladenen Datei (null = keine Vorschau offen)
 let betPdfFunde=null,betPdfName='';
+// CRM-Auswahl: aktiver Filter der Vorschlagsliste (null = alle)
+let betCrmFilter=null;
 const BER_TYPEN=[['lagebericht','Lagebericht','letzte 3 Monate'],['projektakte','Projektakte','ganzes Projekt'],['zielpfad','Zielpfad','Ausblick']];
 const BER_DIM={kosten:'Kosten',termine:'Termine',planung:'Planung',bauherr:'Bauherr',team:'Team',dokumentation:'Doku/Risiko'};
 const berCls=s=>s==='danger'||s==='ueberfaellig'?'d':s==='warn'?'w':'o';
@@ -1114,9 +1116,13 @@ function betForm(e){
     h+='<label class="bf ck"><input type="checkbox" id="bf_int"'+(e.ist_intern?' checked':'')+'> eigenes Büro</label>';
   }
   h+='</div>';
-  if(!isG)h+='<div class="bet-crm"><span class="bf-lab">Aus dem CRM übernehmen (Poool)</span>'+
-     '<div class="bet-crm-box"><input id="bf_crmq" placeholder="Firma oder Person suchen — z. B. Lammel oder Koller"><button class="btn-sm" data-bet="crm-suche">Suchen</button></div>'+
-     '<div id="bf_crmres" class="bet-crm-res"></div></div>';
+  if(!isG){
+    const f=(id,label)=>'<button class="bet-crm-f'+(betCrmFilter===id?' an':'')+'" data-crmfilter="'+(id||'')+'">'+label+'</button>';
+    h+='<div class="bet-crm"><span class="bf-lab">Aus dem Adressbuch übernehmen (Poool-CRM, 2.198 Firmen · 3.269 Personen)</span>'+
+     '<div class="bet-crm-box"><input id="bf_crmq" placeholder="eingrenzen — Firma, Nachname oder Ort, mehrere Wörter erlaubt">'+
+     '<button class="btn-sm" data-bet="crm-suche">Suchen</button></div>'+
+     '<div class="bet-crm-filter">'+f(null,'Alle')+f('lieferant','Firmen &amp; Planer')+f('kunde','Auftraggeber')+f('intern','Eigenes Büro')+'</div>'+
+     '<div id="bf_crmres" class="bet-crm-res"></div></div>';}
   h+='<div class="bet-form-foot"><button class="btn-sm" data-bet="speichern">Speichern</button>'+
      '<button class="btn-sm ghost" data-bet="abbrechen">Abbrechen</button></div></div>';
   return h;
@@ -1437,34 +1443,39 @@ async function betPdfUebernehmen(){
 }
 
 // --- CRM (Poool-Spiegel): Firmen und Personen suchen, in das Formular uebernehmen
+// Vorschlaege kommen aus der Datenbankfunktion crm_vorschlaege: sie zerlegt die
+// Eingabe in Woerter (Kommas und volle Namen sind damit unproblematisch) und
+// stellt Firmen nach oben, die im Buero schon einmal in dieser Rolle beauftragt
+// waren. Ohne Eingabe zeigt sie einfach das Adressbuch.
 async function betCrmSuche(){
-  const q=(el('main').querySelector('#bf_crmq')||{}).value?.trim()||'';
   const box=el('main').querySelector('#bf_crmres');if(!box)return;
-  if(q.length<2){box.innerHTML='<div class="empty">Mindestens zwei Zeichen eingeben.</div>';return;}
-  box.innerHTML='<div class="empty">Suche …</div>';
-  const[{data:P,error:eP},{data:F,error:eF}]=await Promise.all([
-    sb.from('crm_personen').select('crm_id,vorname,nachname,anrede,namenstitel,funktion,kontakte,firma_name,crm_company_id,strasse,plz,ort')
-      .or('nachname.ilike.%'+q+'%,vorname.ilike.%'+q+'%,firma_name.ilike.%'+q+'%').limit(15),
-    sb.from('crm_firmen').select('crm_id,name,strasse,plz,ort,kontakte').ilike('name','%'+q+'%').limit(10)]);
-  if(eP||eF){box.innerHTML='<div class="empty">CRM nicht erreichbar: '+esc((eP||eF).message)+'</div>';return;}
-  const P2=P||[],F2=F||[];
-  if(!P2.length&&!F2.length){box.innerHTML='<div class="empty">Keine Treffer im CRM.</div>';return;}
-  let h='';
-  F2.forEach(f=>{h+='<button class="bet-crm-hit" data-crmf="'+f.crm_id+'"><span class="h1">'+esc(f.name||'')+'</span>'+
-    '<span class="h2">Firma'+(f.ort?' · '+esc([f.plz,f.ort].filter(Boolean).join(' ')):'')+'</span></button>';});
-  P2.forEach(p=>{h+='<button class="bet-crm-hit" data-crmp="'+p.crm_id+'"><span class="h1">'+
-    esc([p.anrede,p.namenstitel,p.vorname,p.nachname].filter(Boolean).join(' '))+'</span>'+
-    '<span class="h2">'+esc(p.firma_name||'ohne Firma')+(p.funktion?' · '+esc(p.funktion):'')+'</span></button>';});
-  box.innerHTML=h;
-  box._F=F2;box._P=P2;
-  box.querySelectorAll('[data-crmf]').forEach(b=>b.onclick=()=>{
-    const f=(box._F||[]).find(x=>String(x.crm_id)===b.dataset.crmf);if(!f)return;
-    betUebernehmen({firma:f.name,strasse:f.strasse,plz:f.plz,ort:f.ort,kontakte:f.kontakte||[],crm_company_id:f.crm_id});});
-  box.querySelectorAll('[data-crmp]').forEach(b=>b.onclick=()=>{
-    const p=(box._P||[]).find(x=>String(x.crm_id)===b.dataset.crmp);if(!p)return;
-    betUebernehmen({firma:p.firma_name,anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,
-      funktion:p.funktion,strasse:p.strasse,plz:p.plz,ort:p.ort,kontakte:p.kontakte||[],
-      crm_company_id:p.crm_company_id,crm_person_id:p.crm_id});});
+  const q=(el('main').querySelector('#bf_crmq')||{}).value?.trim()||'';
+  const rolle=(el('main').querySelector('#bf_titel')||{}).value?.trim()||'';
+  box.innerHTML='<div class="empty">Einen Moment …</div>';
+  const{data,error}=await sb.rpc('crm_vorschlaege',
+    {p_suche:q||null,p_rolle:rolle||null,p_filter:betCrmFilter||null,p_limit:60});
+  if(error){box.innerHTML='<div class="empty">CRM nicht erreichbar: '+esc(error.message)+'</div>';return;}
+  const T=data||[];
+  if(!T.length){box.innerHTML='<div class="empty">'+(q?'Nichts gefunden zu „'+esc(q)+'“. Weniger Wörter eingeben oder Filter „Alle“ wählen.'
+    :'Keine Einträge im CRM — läuft der Abgleich? (node runner/poool_sync.mjs)')+'</div>';return;}
+  box._T=T;
+  box.innerHTML=T.map((r,i)=>{
+    const name=r.art==='person'?[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' '):(r.firma||'');
+    const unten=r.art==='person'
+      ?[r.firma||'ohne Firma',r.funktion].filter(Boolean).join(' · ')
+      :['Firma',[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+    const mail=(r.kontakte||[]).find(k=>k.art==='email');
+    return '<button class="bet-crm-hit'+(r.grund?' merk':'')+'" data-crmi="'+i+'">'+
+      '<span class="h1">'+esc(name||'—')+'</span>'+
+      '<span class="h2">'+esc(unten)+'</span>'+
+      (r.grund?'<span class="h3">★ '+esc(r.grund)+'</span>':'')+
+      (mail?'<span class="h4">'+esc(mail.wert)+'</span>':'')+'</button>';}).join('');
+  box.querySelectorAll('[data-crmi]').forEach(b=>b.onclick=()=>{
+    const r=(box._T||[])[+b.dataset.crmi];if(!r)return;
+    betUebernehmen({firma:r.firma,anrede:r.anrede,namenstitel:r.namenstitel,vorname:r.vorname,
+      nachname:r.nachname,funktion:r.funktion,strasse:r.strasse,plz:r.plz,ort:r.ort,
+      kontakte:r.kontakte||[],crm_company_id:r.crm_company_id,
+      crm_person_id:r.art==='person'?r.crm_id:null});});
 }
 // Uebernahme fuellt nur das Formular — gespeichert wird erst mit "Speichern".
 function betUebernehmen(d){
@@ -1522,8 +1533,15 @@ function wireBet(){
     const id=b.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);
     const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');if(bd){bd.innerHTML=renderBet();wireBet();}});
   const q=M.querySelector('#bf_crmq');if(q)q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();betCrmSuche();}};
+  M.querySelectorAll('[data-crmfilter]').forEach(b=>b.onclick=()=>{
+    betCrmFilter=b.dataset.crmfilter||null;
+    M.querySelectorAll('[data-crmfilter]').forEach(x=>x.classList.toggle('an',x===b));
+    betCrmSuche();});
   const dz=M.querySelector('#bet_pdf');
   if(dz)dz.onchange=async()=>{const f=dz.files&&dz.files[0];if(f){await betPdfImport(f);dz.value='';}};
+  // Vorschlaege stehen sofort da — erst tippen zu muessen war der Denkfehler.
+  const res=M.querySelector('#bf_crmres');
+  if(res&&!res.dataset.geladen){res.dataset.geladen='1';betCrmSuche();}
 }
 function betDruck(){
   const zeilen=betL.map(r=>{
