@@ -173,9 +173,16 @@ async function ladeBoard() {
   if (token !== ladeToken) return; // inzwischen wurde ein anderes Board angefordert
   S.board = b;
   renderTopbar(); renderBoard();
+  // Agenten-Taskbar nachladen (blockiert das Board nicht; Fehler sind egal)
+  lotse('agent_laeufe').then((r) => {
+    if (token !== ladeToken) return;
+    S.laeufe = r.laeufe || [];
+    renderTopbar();
+  }).catch(() => {});
 }
 async function wechsle(typ, id, name) {
   S.active = { typ, id, name }; S.board = null;
+  S.kal = null; // Kalender-Monat gehoert zum alten Projekt
   // Halboffene Neue-Karte-Zeile gehoert zum alten Board — sonst blockiert ihr
   // Poll-Guard den Auto-Refresh dauerhaft.
   S.newCardCol = null; S.newCardText = '';
@@ -189,12 +196,76 @@ function zeigeAnsicht(welche) {
   S.ansicht = welche;
   const dash = document.getElementById('dash-root');
   const board = document.getElementById('board');
+  const kal = document.getElementById('kal-root');
   if (!dash || !board) return;
-  const dashAn = welche === 'dash' && S.active?.typ === 'projekt';
-  board.style.display = dashAn ? 'none' : '';
+  const istProjekt = S.active?.typ === 'projekt';
+  const dashAn = welche === 'dash' && istProjekt;
+  const kalAn = welche === 'kal' && istProjekt;
+  board.style.display = (dashAn || kalAn) ? 'none' : '';
   dash.hidden = !dashAn;
+  if (kal) kal.hidden = !kalAn;
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
+  if (kalAn) renderKalender();
   renderTopbar();
+}
+
+// ---------- Projekt-Kalender (Loop proaktiver Kollege, Baustein E) ----------
+async function renderKalender() {
+  const root = document.getElementById('kal-root'); if (!root || S.active?.typ !== 'projekt') return;
+  if (!S.kal) { const h = new Date(); S.kal = { jahr: h.getFullYear(), monat: h.getMonth() + 1 }; }
+  root.innerHTML = '';
+  root.append(el('div', { class: 'kalkopf' },
+    el('button', { class: 'kalnav', onclick: () => { S.kal.monat--; if (S.kal.monat < 1) { S.kal.monat = 12; S.kal.jahr--; } renderKalender(); } }, '‹'),
+    el('span', { class: 'kaltitel' }, new Date(S.kal.jahr, S.kal.monat - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })),
+    el('button', { class: 'kalnav', onclick: () => { S.kal.monat++; if (S.kal.monat > 12) { S.kal.monat = 1; S.kal.jahr++; } renderKalender(); } }, '›'),
+    el('span', { class: 'kalhint' }, 'Karte auf einen Tag ziehen = Frist ändern · Doppelklick auf einen Tag = Aufgabe anlegen')));
+  const grid = el('div', { class: 'kalgrid' });
+  for (const w of ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']) grid.append(el('div', { class: 'kalwt' }, w));
+  root.append(grid);
+  const d = await lotse('kalender', { projekt: S.active.name, jahr: S.kal.jahr, monat: S.kal.monat }).catch(() => ({ fehler: 'Netzwerkfehler' }));
+  if (d.fehler) { root.append(el('div', { class: 'empty', style: 'padding:16px' }, d.fehler)); return; }
+  const tage = new Date(S.kal.jahr, S.kal.monat, 0).getDate();
+  const offset = (new Date(S.kal.jahr, S.kal.monat - 1, 1).getDay() + 6) % 7; // Mo = 0
+  const heute = new Date();
+  const proTag = {}; for (const k of d.karten || []) (proTag[k.tag] = proTag[k.tag] || []).push(k);
+  const fixProTag = {}; for (const f of d.fixtermine || []) (fixProTag[f.tag] = fixProTag[f.tag] || []).push(f);
+  for (let i = 0; i < offset; i++) grid.append(el('div', { class: 'kaltag leer' }));
+  for (let t = 1; t <= tage; t++) {
+    const datum = `${S.kal.jahr}-${String(S.kal.monat).padStart(2, '0')}-${String(t).padStart(2, '0')}`;
+    const istHeute = heute.getFullYear() === S.kal.jahr && heute.getMonth() + 1 === S.kal.monat && heute.getDate() === t;
+    const wtag = new Date(S.kal.jahr, S.kal.monat - 1, t).getDay();
+    const zelle = el('div', {
+      class: 'kaltag' + (istHeute ? ' heute' : '') + (wtag === 0 || wtag === 6 ? ' we' : ''),
+      ondragover: (e) => { e.preventDefault(); zelle.classList.add('dragover'); },
+      ondragleave: () => zelle.classList.remove('dragover'),
+      ondrop: async (e) => {
+        e.preventDefault(); zelle.classList.remove('dragover');
+        if (!S.kalDrag) return;
+        const id = S.kalDrag; S.kalDrag = null;
+        await mut('todo_update', { todo_id: id, faellig: datum });
+        renderKalender();
+      },
+      ondblclick: async (e) => {
+        if (e.target !== zelle && !e.target.closest('b')) return; // nur auf freier Flaeche
+        const titel = prompt(`Neue Aufgabe am ${t}.${S.kal.monat}.${S.kal.jahr}:`);
+        if (!titel?.trim()) return;
+        const r = await mut('todo_create', { titel: titel.trim(), projekt: S.active.name, faellig: datum });
+        if (r && r.todo_id) renderKalender();
+      },
+    }, el('b', {}, String(t)));
+    for (const f of fixProTag[t] || []) zelle.append(el('div', { class: 'kalfix', title: f.titel }, f.titel));
+    for (const k of proTag[t] || []) {
+      const pille = el('div', {
+        class: 'kalpille' + (k.zuarbeit ? ' zu' : '') + (k.status === 'erledigt' ? ' erl' : ''),
+        draggable: 'true', title: k.titel,
+        ondragstart: () => { S.kalDrag = k.id; },
+        ondragend: () => { S.kalDrag = null; },
+        onclick: () => openCard(k.id),
+      }, k.titel);
+      zelle.append(pille);
+    }
+    grid.append(zelle);
+  }
 }
 
 // ---------- Sidebar ----------
@@ -280,7 +351,7 @@ function renderTopbar() {
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['board', 'Aufgaben'], ['dash', 'Dashboard']]) {
+    for (const [key, label] of [['board', 'Aufgaben'], ['kal', 'Kalender'], ['dash', 'Dashboard']]) {
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
     tb.append(tabs);
@@ -302,6 +373,33 @@ function renderTopbar() {
   if (rf.length) tb.append(el('button', {
     class: 'alertbtn', onclick: () => openCard(rf[0].id),
   }, '⚠ ', rf.length === 1 ? '1 Rückfrage wartet auf dich' : rf.length + ' Rückfragen warten auf dich'));
+  // Agenten-Taskbar (Loop D): was die Flotte JETZT tut — klickbar zur Karte.
+  const laufend = (S.laeufe || []).filter((l) => l.status === 'running').slice(0, 3);
+  const wartend = (S.laeufe || []).filter((l) => l.status === 'queued').length;
+  if (laufend.length || wartend) {
+    const tb2 = el('div', { class: 'taskbar' });
+    for (const l of laufend) tb2.append(el('button', {
+      class: 'tchip', title: (l.titel || l.agent) + (l.projekt ? ' · ' + l.projekt : ''),
+      onclick: () => { if (l.todo_id) openCard(l.todo_id); },
+    }, el('span', { class: 'tdot' }),
+      (l.projekt ? l.projekt.replace(/^\d+\s*-?\s*/, '').slice(0, 16) + ': ' : '') + (l.titel || l.agent).slice(0, 34),
+      l.seit_min != null ? el('small', {}, ' ' + l.seit_min + ' min') : ''));
+    if (wartend) tb2.append(el('span', { class: 'tchip warte' }, '+' + wartend + ' wartend'));
+    tb.append(tb2);
+  }
+  // "Gerade in Arbeit" (Loop D): wer im Projekt woran dran ist — nur Karten-Daten.
+  const ia = S.board?.in_arbeit || [];
+  if (S.active.typ === 'projekt' && S.ansicht === 'board' && ia.length) {
+    const z = el('div', { class: 'inarbeit' }, 'Gerade in Arbeit:');
+    for (const p2 of ia.slice(0, 5)) {
+      const t0 = (p2.themen || [])[0];
+      if (!t0) continue;
+      z.append(el('span', { class: 'who', title: (p2.themen || []).map((x) => x.titel).slice(0, 5).join(' · ') },
+        el('span', { class: 'av', style: 'background:' + avColor(p2.person) }, initialen(p2.name)),
+        String(p2.name).split(' ')[0] + ' · ' + t0.titel.slice(0, 36)));
+    }
+    tb.append(z);
+  }
 }
 
 function renderBoard() {
@@ -735,10 +833,13 @@ function renderCard(t) {
     onclick: () => openCard(t.id),
     oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); kartenMenu(e, t); },
   });
+  if (t.zuarbeit) c.append(el('div', { class: 'chip zu' }, '⇄ Zuarbeit · vom Agenten'));
   if (chip) c.append(el('div', { class: 'chip', style: `background:${chip.bg};color:${chip.fg}` },
     el('span', { class: 'cdot', style: `background:${chip.dot}` }),
     chip.txt, st === 'fertig' && t.anhaenge_n ? ' 📎' : ''));
   c.append(el('div', { class: 't' }, t.titel));
+  // Zielbild-Pflicht (Marcels Regel): das WOFUER steht sichtbar VOR der Bitte.
+  if (t.zuarbeit && t.zielbild) c.append(el('div', { class: 'wofuer' }, el('b', {}, 'Wofür: '), t.zielbild));
   // VgV-Karte: Empfehlung + Abgabefrist direkt auf der Kachel (Radar-Board)
   if (t.vgv_empfehlung || t.vgv_frist) {
     const rest = vgvRest(t.vgv_frist);
@@ -789,7 +890,9 @@ function renderDrawer() {
   const head = el('div', { class: 'dsec dhead' });
   const chipRow = el('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' });
   if (chip) chipRow.append(el('span', { class: 'chip', style: `display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${chip.bg};color:${chip.fg}` }, chip.txt));
-  chipRow.append(el('span', { style: 'font-size:12px;color:#75756E' }, (d.quelle === 'voice' ? '📞 per Anruf erstellt' : '⌨ in der App erstellt')));
+  if (d.zuarbeit) chipRow.append(el('span', { class: 'chip zu', style: 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px' }, '⇄ Zuarbeit · vom Agenten' + (d.projekt ? ' für ' + d.projekt.name : '')));
+  chipRow.append(el('span', { style: 'font-size:12px;color:#75756E' },
+    d.quelle === 'agent' ? '⚙ vom Agenten angelegt' : d.quelle === 'voice' ? '📞 per Anruf erstellt' : '⌨ in der App erstellt'));
   chipRow.append(el('button', { style: 'margin-left:auto;font-size:16px;color:#75756E', onclick: closeDrawer }, '✕'));
   const titelZeile = el('div', { class: 't', style: 'display:flex;gap:8px;align-items:baseline' }, d.titel,
     el('button', { title: 'Titel bearbeiten', style: 'font-size:13px;color:#9A9A93', onclick: async () => {
@@ -830,10 +933,18 @@ function renderDrawer() {
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta); dr.append(head);
 
+  // Zielbild-Pflicht (Loop B2): bei Zuarbeitskarten steht das WOFUER vor der Bitte.
+  if (d.zuarbeit && d.zielbild) {
+    const sec = el('div', { class: 'dsec' });
+    sec.append(el('div', { class: 'slbl' }, 'Wofür der Agent das braucht'));
+    sec.append(el('div', { class: 'zielbild' }, d.zielbild));
+    dr.append(sec);
+  }
+
   // Auftrag (editierbar — auch KI-formulierte Texte)
   {
     const sec = el('div', { class: 'dsec' });
-    const kopf = el('div', { class: 'slbl', style: 'display:flex;gap:10px;align-items:center' }, 'Auftrag');
+    const kopf = el('div', { class: 'slbl', style: 'display:flex;gap:10px;align-items:center' }, d.zuarbeit ? 'Die Bitte' : 'Auftrag');
     const inhalt = el('div', { class: 'pre' }, d.notiz || '');
     kopf.append(el('button', { style: 'font-size:11px;color:#75756E', onclick: () => {
       const ta = el('textarea', { style: 'width:100%;min-height:110px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px' });
@@ -1045,6 +1156,16 @@ function renderDrawer() {
     } }, 'Mit Kommentar abschließen'));
   }
   sf.append(el('button', { class: 'btn ghost', title: 'Kommt in der nächsten Ausbaustufe', disabled: '', style: 'opacity:.45;cursor:default' }, 'Nachbessern'));
+  // "Nicht relevant" (Loop D): die Begruendung fliesst als Kommentar-Abschluss in die
+  // Lernschleife (item_feedback via assistant_todo_abschliessen, Migration 52).
+  if (d.status === 'offen' && (d.zuarbeit || d.quelle === 'agent')) {
+    sf.append(el('button', { class: 'btn ghost gefahr', onclick: async () => {
+      const grund = prompt('Warum ist das gerade nicht relevant? (fließt ins Agenten-Gedächtnis — er schlägt so etwas dann nicht mehr vor)');
+      if (grund === null || !grund.trim()) return;
+      await mut('todo_complete', { todo_id: d.id, kommentar: 'NICHT RELEVANT: ' + grund.trim() });
+      closeDrawer(); await ladeBoard();
+    } }, 'Nicht relevant…'));
+  }
   sf.append(el('button', { class: 'btn ghost gefahr', style: 'margin-left:auto', onclick: async () => {
     if (!confirm(`Karte "${d.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
     const r = await mut('todo_loeschen', { todo_id: d.id });
