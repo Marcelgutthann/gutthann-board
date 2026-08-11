@@ -1943,18 +1943,18 @@ function betDruckInhalt(){
     if(r.status==='ausgeschieden')return;
     const nr='<span class="nr">'+esc(r.nummer)+'</span>';
     if(r.art==='gruppe'){
-      // Noch nicht vergeben: nur der Balken, kein leerer Satz darunter. Sonst
-      // braucht ein frisch angelegtes Projekt sechs Seiten fuer lauter Leerzeilen.
-      if(!r.firma&&!nm&&!betKont(r).length){
-        h+='<div class="balken e'+Math.min(r.tiefe,2)+' leer">'+nr+esc(r.titel||'')+
-           '<span class="offen-tag">noch nicht vergeben</span></div>';
-        return;}
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
       return;}
     const vater=r.parent_id?L.find(x=>x.id===r.parent_id):null;
     const unterFirma=vater&&vater.art==='eintrag';
     const nm=betName(r);
     if(!unterFirma){
+      // Noch nicht vergeben: nur der Balken mit Vermerk, kein leerer Satz darunter.
+      // Sonst braucht ein frisch angelegtes Projekt sechs Seiten fuer Leerzeilen.
+      if(!r.firma&&!nm&&!betKont(r).length){
+        h+='<div class="balken e'+Math.min(r.tiefe,2)+' leer">'+nr+esc(r.titel||'')+
+           '<span class="offen-tag">noch nicht vergeben</span></div>';
+        return;}
       // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
       h+='<table class="satz"><tr><td class="li">'+
