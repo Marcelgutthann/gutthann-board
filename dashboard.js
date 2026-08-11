@@ -78,6 +78,8 @@ let betPdfFunde=null,betPdfName='';
 let betCrmFilter=null,betCrmQ='',betCrmTr=[],betCrmOffen=false,betCrmFirma=null,betCrmMit=[];
 // Rolle bleibt ueber mehrere Klicks in derselben Firma erhalten
 let betMitRolle='';
+// id der Zeile, fuer die gerade die Loeschfrage im Arbeitsbereich steht
+let betLoeschFrage=null;
 // betSel = angeklickte Zeile (Detail rechts), betFilter = Schnellfilter der Liste
 let betSel=null,betFilter='';
 const BER_TYPEN=[['lagebericht','Lagebericht','letzte 3 Monate'],['projektakte','Projektakte','ganzes Projekt'],['zielpfad','Zielpfad','Ausblick']];
@@ -1002,6 +1004,10 @@ const BET_KONTEXTE=[['arbeit','Arbeit'],['zentrale','Zentrale'],['privat','Priva
 const betName=r=>[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' ').trim();
 const betAdr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 const betKont=r=>Array.isArray(r.kontakte)?r.kontakte:(r.kontakte?JSON.parse(r.kontakte):[]);
+// Eine Zeile haelt die "Firmenposition", wenn sie direkt unter einer Gruppe
+// (oder ganz oben) steht — dort gehoert die Firma hin, die Personen darunter.
+const betIstFirmenzeile=r=>{if(!r.parent_id)return true;
+  const v=betL.find(x=>x.id===r.parent_id);return !v||v.art==='gruppe';};
 function betKontZeile(k){const art=(BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['','?'])[1];
   const ico=k.art==='email'?'✉':k.art==='fax'?'📠':k.art==='web'?'🌐':k.art==='mobil'?'📱':'☎';
   const wert=k.art==='email'?'<a href="mailto:'+esc(k.wert)+'">'+esc(k.wert)+'</a>':esc(k.wert);
@@ -1083,6 +1089,8 @@ function betListe(L){
 // Was rechts steht, richtet sich nach der Lage: laufender Import zuerst,
 // dann offenes Formular, dann CRM-Auswahl, sonst die angeklickte Zeile.
 function betSeite(){
+  if(betLoeschFrage){const r=betL.find(x=>x.id===betLoeschFrage);
+    if(r)return betLoeschPanel(r);betLoeschFrage=null;}
   if(betPdfFunde)return betPdfVorschau();
   // Adressbuch geht vor dem Formular: beim Anlegen sucht man zuerst jemanden.
   // Nach der Uebernahme schliesst betUebernehmen() das Adressbuch, dann steht
@@ -1146,6 +1154,11 @@ function betDetail(r){
         ? '<button class="btn-sm" data-betfill="'+r.id+'">'+
           (r.firma?'+ Person ergänzen':'+ Firma / Person hinzufügen')+'</button>'
         : '<button class="btn-sm" data-betadd="'+r.id+'">+ Beteiligter</button>')+
+      // Nur sinnvoll, wenn die Zeile selbst die Firmenposition innehat (haengt
+      // direkt unter einer Gruppe) und trotzdem eine Person traegt. Bei Zeilen,
+      // die schon unter einer Firma stehen, waere der Knopf Unsinn.
+      (r.art==='eintrag'&&r.firma&&(r.nachname||r.vorname)&&betIstFirmenzeile(r)
+        ? '<button class="btn-sm ghost" data-betrunter="'+r.id+'" title="Firma bleibt oben stehen, die Person rückt eine Ebene tiefer">Person nach unten</button>':'')+
       '<button class="btn-sm ghost" data-betedit="'+r.id+'">Bearbeiten</button>'+
       (r.crm_company_id?'<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+'">Firma im CRM</button>':'')+
       '<button class="btn-sm ghost" data-betdel="'+r.id+'">Löschen</button>'+
@@ -1233,14 +1246,46 @@ async function betSpeichern(){
   }
   betEdit=null;await betNeuZeichnen();betHinweis('Gespeichert.');
 }
+// Loeschen wird im Arbeitsbereich rechts bestaetigt, nicht ueber den
+// Browser-Dialog: der reisst den Fokus aus der App und sieht fremd aus.
 async function betLoeschen(id){
-  const r=betL.find(x=>x.id===id);if(!r)return;
-  const kinder=betL.filter(x=>x.parent_id===id).length;
-  const was=r.art==='gruppe'?('Gruppe „'+(r.titel||'')+'“'):('Eintrag „'+(r.titel||r.firma||'')+'“');
-  if(!confirm(was+' löschen?'+(kinder?'\n\nAchtung: '+kinder+' untergeordnete Zeile(n) werden mitgelöscht.':'')))return;
   const{error}=await sb.from('beteiligte').delete().eq('id',id);
   if(error){betHinweis('Nicht gelöscht: '+error.message);return;}
+  betLoeschFrage=null;if(betSel===id)betSel=null;
   await betNeuZeichnen();betHinweis('Gelöscht.');
+}
+// Rueckfrage vor dem Loeschen — als Panel, mit Hinweis auf Unterzeilen.
+function betLoeschPanel(r){
+  const kinder=betL.filter(x=>x.parent_id===r.id).length;
+  const was=r.art==='gruppe'?'Gruppe':'Eintrag';
+  return '<div class="bet-p"><div class="bet-p-kopf">'+was+' löschen?'+
+    '<button class="bet-t" data-bet="del-nein" title="abbrechen">✕</button></div>'+
+    '<div class="bet-p-titel">'+esc(r.titel||r.firma||'—')+'</div>'+
+    (r.firma&&r.titel?'<div class="bet-p-sub">'+esc(r.firma)+'</div>':'')+
+    (kinder?'<div class="bet-warnbox">Dazu gehören '+kinder+' untergeordnete Zeile'+(kinder===1?'':'n')+
+      ' — sie werden mitgelöscht.</div>':'')+
+    '<div class="bet-p-akt"><button class="btn-sm rot" data-betdelok="'+r.id+'">Endgültig löschen</button>'+
+    '<button class="btn-sm ghost" data-bet="del-nein">Abbrechen</button></div></div>';
+}
+// Eine Person aus der Firmenzeile in eine Unterzeile schieben: oben bleibt die
+// Firma, darunter steht der Ansprechpartner. So sieht die Papierliste aus.
+async function betPersonRunter(id){
+  const r=betL.find(x=>x.id===id);if(!r||!(r.nachname||r.vorname))return;
+  const kinder=betL.filter(x=>x.parent_id===id).length;
+  const{error:e1}=await sb.from('beteiligte').insert({
+    project_id:current,parent_id:id,art:'eintrag',pos:(kinder+1)*10,
+    titel:r.titel,firma:r.firma,anrede:r.anrede,namenstitel:r.namenstitel,
+    vorname:r.vorname,nachname:r.nachname,funktion:r.funktion,
+    strasse:r.strasse,plz:r.plz,ort:r.ort,kontakte:betKont(r),
+    quelle:r.quelle,crm_company_id:r.crm_company_id,crm_person_id:r.crm_person_id});
+  if(e1){betHinweis('Nicht verschoben: '+e1.message);return;}
+  // Oben bleiben Rolle und Firma stehen; Personendaten und persoenliche
+  // Kontakte wandern mit nach unten.
+  const{error:e2}=await sb.from('beteiligte').update({
+    anrede:null,namenstitel:null,vorname:null,nachname:null,funktion:null,
+    kontakte:[],crm_person_id:null}).eq('id',id);
+  if(e2){betHinweis('Nicht verschoben: '+e2.message);return;}
+  await betNeuZeichnen();betHinweis('Person steht jetzt unter der Firma.');
 }
 // Umsortieren: pos der Geschwister neu vergeben (10,20,30 …) und tauschen.
 async function betVerschieben(id,richtung){
@@ -1623,43 +1668,58 @@ async function betCrmFirmaOeffnen(companyId){
 // bleibt offen, damit man den naechsten Ansprechpartner direkt wegklicken kann.
 // Der erste Klick besetzt einen offenen Platzhalter (wenn von dort gestartet),
 // weitere haengen als Unterzeilen darunter -- 2.3 / 2.3.1 wie auf dem Papier.
+// Personen aus der Firmenansicht in die Liste holen.
+// GRUNDREGEL (Marcel 11.08.): oben steht die FIRMA, die Mitarbeiter stehen
+// darunter. Also besetzt die Firma die Rolle (2.1) und jede Person bekommt eine
+// eigene Unterzeile (2.1.1, 2.1.2 ...) -- nie die Person in die Rollenzeile.
+// Die Firmenansicht bleibt offen, damit man mehrere hintereinander wegklickt.
 async function betPersonHinzu(indizes){
   const M=(betCrmMit||[]).filter((_,i)=>indizes.includes(i));
   if(!M.length)return;
   const feld=el('main').querySelector('#bf_mitrolle');
   const rolle=(feld?feld.value.trim():'')||betMitRolle||(betEdit&&betEdit.titel)||'';
-  betMitRolle=rolle;                       // ueber mehrere Klicks hinweg merken
+  betMitRolle=rolle;
   const F=betCrmFirma||{};
-  const daten=p=>({titel:rolle||null,firma:p.firma_name||F.firma||null,
-    anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,funktion:p.funktion,
-    strasse:p.strasse||F.strasse,plz:p.plz||F.plz,ort:p.ort||F.ort,
-    kontakte:p.kontakte||[],quelle:'crm',crm_company_id:p.crm_company_id,crm_person_id:p.crm_id});
 
-  // Ein noch offener Platzhalter, von dem aus geoeffnet wurde, wird besetzt.
-  const platz=betEdit&&betEdit.id&&betEdit.status==='offen'&&!betEdit.firma?betEdit:null;
-  // Steht von dieser Firma schon jemand in der Liste, haengen weitere darunter.
-  const anker=betL.find(r=>r.art==='eintrag'&&r.crm_company_id===F.crm_id&&!r.parent_id_ist_person)
-            ||betL.find(r=>r.art==='eintrag'&&r.crm_company_id===F.crm_id);
-  let rest=M;
+  // 1) Firmenzeile bestimmen: der offene Platzhalter, von dem aus geoeffnet
+  //    wurde, sonst eine schon vorhandene Zeile dieser Firma.
+  let firmenId=null;
+  const platz=betEdit&&betEdit.id?betL.find(x=>x.id===betEdit.id):null;
+  if(platz&&!platz.firma){
+    const{error}=await sb.from('beteiligte').update({
+      status:'aktiv',titel:rolle||platz.titel,firma:F.firma||null,
+      strasse:F.strasse,plz:F.plz,ort:F.ort,kontakte:F.kontakte||[],
+      quelle:'crm',crm_company_id:F.crm_id}).eq('id',platz.id);
+    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+    firmenId=platz.id;betEdit=null;
+  }else if(platz&&platz.firma){
+    firmenId=platz.id;
+  }else{
+    const da=betL.find(r=>r.art==='eintrag'&&r.crm_company_id===F.crm_id&&!r.crm_person_id);
+    if(da)firmenId=da.id;
+  }
+  // 2) Ohne Firmenzeile: eine anlegen, damit die Personen darunter Platz haben.
+  if(!firmenId){
+    const ziel=(betEdit&&betEdit.parent_id)||(betL.find(r=>r.art==='gruppe')||{}).id||null;
+    const gesch=betL.filter(r=>(r.parent_id||null)===(ziel||null)).length;
+    const{data,error}=await sb.from('beteiligte').insert({
+      project_id:current,parent_id:ziel,art:'eintrag',pos:(gesch+1)*10,
+      titel:rolle||null,firma:F.firma||null,strasse:F.strasse,plz:F.plz,ort:F.ort,
+      kontakte:F.kontakte||[],quelle:'crm',crm_company_id:F.crm_id}).select('id');
+    if(error){betHinweis('Nicht angelegt: '+error.message);return;}
+    firmenId=(data||[])[0]?.id;betEdit=null;
+  }
+  // 3) Jede Person als Unterzeile der Firma.
+  const kinder=betL.filter(r=>r.parent_id===firmenId).length;
+  const zeilen=M.map((p,k)=>({project_id:current,parent_id:firmenId,art:'eintrag',
+    pos:(kinder+k+1)*10,titel:rolle||null,firma:p.firma_name||F.firma||null,
+    anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,
+    funktion:p.funktion,strasse:p.strasse||F.strasse,plz:p.plz||F.plz,ort:p.ort||F.ort,
+    kontakte:p.kontakte||[],quelle:'crm',crm_company_id:p.crm_company_id,crm_person_id:p.crm_id}));
+  const{error}=await sb.from('beteiligte').insert(zeilen);
+  if(error){betHinweis('Nicht übernommen: '+error.message);return;}
 
-  if(platz){
-    const{error}=await sb.from('beteiligte')
-      .update(Object.assign({status:'aktiv'},daten(M[0]),rolle?{}:{titel:platz.titel})).eq('id',platz.id);
-    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
-    betEdit=null;rest=M.slice(1);
-  }
-  if(rest.length){
-    const vater=platz?platz.id:(anker?anker.id:null);
-    const ziel=vater||(betEdit&&betEdit.parent_id)||(betL.find(r=>r.art==='gruppe')||{}).id||null;
-    const gesch=betL.filter(r=>(r.parent_id||null)===(vater?vater:(ziel||null))).length;
-    const zeilen=rest.map((p,k)=>Object.assign({project_id:current,
-      parent_id:vater||ziel,art:'eintrag',pos:(gesch+k+1)*10},daten(p)));
-    const{error}=await sb.from('beteiligte').insert(zeilen);
-    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
-  }
-  // Liste links neu, Firmenansicht rechts bleibt stehen.
-  await betLaden();
-  betNurListe();betNurSeite();
+  await betLaden();betNurListe();betNurSeite();
   betHinweis(M.length===1?'Hinzugefügt.':M.length+' Personen hinzugefügt.');
 }
 
@@ -1742,6 +1802,7 @@ function wireBet(){
     else if(a==='pdf-abbrechen'){betPdfFunde=null;betPdfName='';}
     else if(a==='crm-auf'){betCrmOffen=true;betCrmFirma=null;betNurSeite();return;}
     else if(a==='crm-zu'){betCrmOffen=false;betCrmFirma=null;betNurSeite();return;}
+    else if(a==='del-nein'){betLoeschFrage=null;betNurSeite();return;}
     else if(a==='crm-suche'){await betCrmSuche();return;}
     else if(a==='crm-zurueck'){betCrmFirma=null;betCrmMit=[];betMitRolle='';betNurSeite();return;}
     else if(a==='crm-firma-uebernehmen'){await betFirmaUebernehmen();return;}
@@ -1776,7 +1837,10 @@ function wireBet(){
     e.stopPropagation();
     betEdit={art:'eintrag',parent_id:b.dataset.betadd,kontakte:[]};betCrmOffen=true;betCrmFirma=null;betSel=null;
     betNurSeite();});
-  M.querySelectorAll('[data-betdel]').forEach(b=>b.onclick=e=>{e.stopPropagation();betLoeschen(b.dataset.betdel);});
+  M.querySelectorAll('[data-betdel]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();betLoeschFrage=b.dataset.betdel;betEdit=null;betCrmOffen=false;betNurSeite();});
+  M.querySelectorAll('[data-betdelok]').forEach(b=>b.onclick=e=>{e.stopPropagation();betLoeschen(b.dataset.betdelok);});
+  M.querySelectorAll('[data-betrunter]').forEach(b=>b.onclick=e=>{e.stopPropagation();betPersonRunter(b.dataset.betrunter);});
   M.querySelectorAll('[data-betup]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betup,'up');});
   M.querySelectorAll('[data-betdown]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betdown,'down');});
   M.querySelectorAll('[data-betin]').forEach(b=>b.onclick=e=>{e.stopPropagation();betEbene(b.dataset.betin,true);});
