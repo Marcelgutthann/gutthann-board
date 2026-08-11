@@ -1021,8 +1021,8 @@ function renderBet(){
   const L=betL||[];
   let h='<div class="bet-shell">';
   h+='<div class="bet-bar">'+
-     '<button class="btn-sm" data-bet="neu-eintrag">+ Beteiligter</button>'+
-     '<button class="btn-sm ghost" data-bet="neu-gruppe">+ Gruppe</button>'+
+     '<button class="btn-sm" data-bet="neu-eintrag" title="Öffnet das Adressbuch und legt die gewählte Firma bzw. Person in der ersten Gruppe an. Danach lässt sie sich mit den Pfeilen verschieben.">+ Firma / Person</button>'+
+     '<button class="btn-sm ghost" data-bet="neu-gruppe" title="Legt eine neue Überschrift auf oberster Ebene an">+ Gruppe</button>'+
      '<span class="bet-bar-sep"></span>'+
      (L.length?'':'<button class="btn-sm ghost" data-bet="vorlage">Standard-Gliederung</button>')+
      '<button class="btn-sm'+(betAnalyseAn?'':' ghost')+'" data-bet="analyse" title="'+
@@ -1162,16 +1162,16 @@ function betDetail(r){
        (r.importiert_am?', eingelesen '+esc(fmtD(r.importiert_am)):'')+'</div>':'')+
     '<div class="bet-p-akt">'+
       (r.art==='eintrag'
-        ? '<button class="btn-sm" data-betfill="'+r.id+'">'+
-          (r.firma?'+ Person ergänzen':'+ Firma / Person hinzufügen')+'</button>'
-        : '<button class="btn-sm" data-betadd="'+r.id+'">+ Beteiligter</button>')+
+        ? '<button class="btn-sm" data-betfill="'+r.id+'" title="Öffnet das Adressbuch. Die gewählte Person wird als weitere Zeile unter dieser Firma angelegt — nichts wird überschrieben.">'+
+          (r.firma?'+ Ansprechpartner dieser Firma':'+ Firma zuweisen')+'</button>'
+        : '<button class="btn-sm" data-betadd="'+r.id+'" title="Legt eine neue Zeile in dieser Gruppe an">+ Zeile in dieser Gruppe</button>')+
       // Nur sinnvoll, wenn die Zeile selbst die Firmenposition innehat (haengt
       // direkt unter einer Gruppe) und trotzdem eine Person traegt. Bei Zeilen,
       // die schon unter einer Firma stehen, waere der Knopf Unsinn.
       (r.art==='eintrag'&&r.firma&&(r.nachname||r.vorname)&&betIstFirmenzeile(r)
         ? '<button class="btn-sm ghost" data-betrunter="'+r.id+'" title="Firma bleibt oben stehen, die Person rückt eine Ebene tiefer">Person nach unten</button>':'')+
       '<button class="btn-sm ghost" data-betedit="'+r.id+'">Bearbeiten</button>'+
-      (r.crm_company_id?'<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+'">Firma im CRM</button>':'')+
+      (r.crm_company_id?'<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+'" title="Zeigt alle im CRM hinterlegten Ansprechpartner dieser Firma zum Anklicken">Alle Personen dieser Firma</button>':'')+
       '<button class="btn-sm ghost" data-betdel="'+r.id+'">Löschen</button>'+
     '</div></div>';
 }
@@ -1617,12 +1617,13 @@ function betCrmTreffer(T){
         '<span class="h2">'+esc([r.plz,r.ort].filter(Boolean).join(' ')||'Firma')+'</span>'+
         (r.grund?'<span class="h3">★ '+esc(r.grund)+'</span>':'')+
         '</span><span class="pfeil">›</span></button>';
+    // Der Hinweis "schon beauftragt" gilt der FIRMA. An jeder einzelnen Person
+    // wiederholt faerbte er fast die ganze Liste gruen und sagte nichts aus.
     const nm=[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' ');
-    return '<button class="bet-crm-hit'+(r.grund?' merk':'')+'" data-crmi="'+i+'">'+
+    return '<button class="bet-crm-hit" data-crmi="'+i+'">'+
       '<span class="ico">👤</span><span class="tx">'+
       '<span class="h1">'+esc(nm||'—')+'</span>'+
       '<span class="h2">'+esc([r.firma||'ohne Firma',r.funktion].filter(Boolean).join(' · '))+'</span>'+
-      (r.grund?'<span class="h3">★ '+esc(r.grund)+'</span>':'')+
       '</span></button>';}).join('');
 }
 
@@ -1786,8 +1787,14 @@ async function betFirmaUebernehmen(){
 }
 // Uebernahme fuellt nur das Formular — gespeichert wird erst mit "Speichern".
 function betUebernehmen(d){
-  const cur=betFormLesen();
+  // Wird aus dem Adressbuch uebernommen, ist das Formular gar nicht gezeichnet --
+  // betFormLesen() liefert dann lauter Leerwerte. Was in betEdit steht (etwa die
+  // Rolle der Firmenzeile), darf davon nicht ueberschrieben werden.
+  const roh=betFormLesen();
+  const cur={};Object.keys(roh).forEach(k=>{
+    const v=roh[k];if(v!==''&&v!==null&&!(Array.isArray(v)&&!v.length))cur[k]=v;});
   betEdit=Object.assign({},betEdit,cur,{
+    titel:cur.titel||betEdit.titel||betMitRolle||null,
     firma:d.firma||cur.firma,anrede:d.anrede||cur.anrede,namenstitel:d.namenstitel||cur.namenstitel,
     vorname:d.vorname||cur.vorname,nachname:d.nachname||cur.nachname,funktion:d.funktion||cur.funktion,
     strasse:d.strasse||cur.strasse,plz:d.plz||cur.plz,ort:d.ort||cur.ort,
@@ -1858,11 +1865,21 @@ function wireBet(){
     M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
     betNurSeite();});
   // "Firma / Person hinzufügen" an einer Rolle: Adressbuch mit dieser Zeile als Ziel.
+  // Ansprechpartner hinzufuegen: die neue Person wird ANGEHAENGT, nicht die
+  // angeklickte Zeile ueberschrieben. Deshalb bekommt betEdit KEINE id --
+  // vorher wurde damit die bestehende Zeile bearbeitet und die Person darin
+  // ersetzt. Ziel ist immer die Firmenzeile: steht man auf einer Person, ist
+  // das deren Elternteil, sonst die Zeile selbst.
   M.querySelectorAll('[data-betfill]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const r=betL.find(x=>x.id===b.dataset.betfill);if(!r)return;
-    betEdit=Object.assign({},r,{kontakte:betKont(r)});
-    betMitRolle=r.titel||'';betCrmOffen=true;betCrmFirma=null;betNurSeite();});
+    const vater=r.parent_id?betL.find(x=>x.id===r.parent_id):null;
+    const aufPerson=!!(r.nachname||r.vorname)&&vater&&vater.art==='eintrag';
+    const firmenzeile=aufPerson?vater:r;
+    betEdit={art:'eintrag',parent_id:firmenzeile.id,titel:firmenzeile.titel||r.titel||'',
+             firma:firmenzeile.firma||null,kontakte:[]};
+    betMitRolle=firmenzeile.titel||r.titel||'';
+    betCrmOffen=true;betCrmFirma=null;betNurSeite();});
   M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const r=betL.find(x=>x.id===b.dataset.betedit);if(!r)return;
