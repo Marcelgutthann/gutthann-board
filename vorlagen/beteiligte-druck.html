@@ -65,17 +65,11 @@ h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 2.5mm; }
   break-after: avoid;
   page-break-after: avoid;
   break-inside: avoid;
-  /* Rahmen als Rueckfall: sollte ein Drucker die Flaechenfuellung doch
-     unterdruecken, bleibt der Balken durch die Linien erkennbar. Rahmen werden
-     im Gegensatz zu Hintergruenden immer gedruckt. */
-  border-top: .5pt solid #9a9a9a;
-  border-bottom: .5pt solid #9a9a9a;
+  /* Bewusst ohne Rahmen: die reine Flaeche reicht. Damit haengt die Sichtbarkeit
+     allein an "Hintergrundgrafiken" im Druckdialog -- darauf weist der Hinweis
+     ueber der Liste hin. */
 }
 .balken .nr { font-weight: bold; margin-right: 3mm; }
-/* Noch nicht vergebene Rolle: heller Balken, nur die Rolle als Platzhalter.
-   Kein Vermerk im Ausdruck -- die Liste geht auch nach draussen. */
-.balken.leer { background: #f2f2f2; font-weight: normal; }
-.balken.leer .nr { font-weight: normal; }
 .balken.e1 { margin-top: 4mm; }
 .balken.e2 { margin-top: 3mm; }
 
