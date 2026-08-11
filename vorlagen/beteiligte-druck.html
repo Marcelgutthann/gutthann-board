@@ -21,7 +21,9 @@
     {{INHALT}}    die erzeugten Gruppen-, Firmen- und Personenbloecke
 -->
 <style>
-@page { size: A4; margin: 15mm 15mm 20mm; }
+/* Querformat: 297 x 210 mm, nutzbare Satzbreite 267 mm. Der Gewinn liegt darin,
+   dass lange Firmennamen und Mailadressen sicher in eine Zeile passen. */
+@page { size: A4 landscape; margin: 14mm 15mm 20mm; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: Verdana, Geneva, sans-serif;
@@ -42,15 +44,15 @@ body {
 @media print { .hinweis { display: none !important; } }
 
 /* ---- Kopf der ersten Seite ------------------------------------------- */
-.kopf { display: flex; align-items: flex-start; gap: 10mm; margin-bottom: 14mm; }
+.kopf { display: flex; align-items: flex-start; gap: 10mm; margin-bottom: 10mm; }
 .kopf .tx { flex: 1; min-width: 0; }
 .kopf h1 { font-size: 11pt; font-weight: bold; margin: 0 0 6mm; }
 .kopf .zeile { display: flex; gap: 6mm; font-size: 9pt; }
 .kopf .zeile .lab { width: 26mm; flex-shrink: 0; }
 .kopf .logo { width: 33mm; flex-shrink: 0; }
 .kopf .logo img { width: 100%; height: auto; display: block; }
-h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
-.titel-linie { border-bottom: .75pt solid #a6a6a6; margin-bottom: 10mm; }
+h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 2.5mm; }
+.titel-linie { border-bottom: .75pt solid #a6a6a6; margin-bottom: 7mm; }
 
 /* ---- Gruppen- und Firmenbalken --------------------------------------- */
 /* Volle Satzbreite, hellgrau. Im Original tragen Gruppen UND Firmenpositionen
@@ -59,8 +61,10 @@ h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
   background: #e3e3e3;
   font-weight: bold;
   padding: 2.2pt 0 2.2pt 7.5pt;
-  margin: 6mm 0 2.5mm;
+  margin: 5mm 0 2mm;
   break-after: avoid;
+  page-break-after: avoid;
+  break-inside: avoid;
   /* Rahmen als Rueckfall: sollte ein Drucker die Flaechenfuellung doch
      unterdruecken, bleibt der Balken durch die Linien erkennbar. Rahmen werden
      im Gegensatz zu Hintergruenden immer gedruckt. */
@@ -68,21 +72,31 @@ h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
   border-bottom: .5pt solid #9a9a9a;
 }
 .balken .nr { font-weight: bold; margin-right: 3mm; }
+/* Balken einer noch nicht vergebenen Rolle: heller, mit Vermerk statt Leerzeile */
+.balken.leer { background: #f2f2f2; font-weight: normal; }
+.balken.leer .nr { font-weight: normal; }
+.offen-tag { float: right; padding-right: 3mm; font-size: 8pt; color: #7a6212; font-style: italic; }
 .balken.e1 { margin-top: 4mm; }
 .balken.e2 { margin-top: 3mm; }
 
 /* ---- Eintragssatz: links Anschrift, rechts Kontakte ------------------- */
-.satz {
-  display: flex;
-  gap: 4mm;
-  padding: 2mm 0 2.5mm 7.5pt;
+/* Jeder Eintrag ist eine eigene einzeilige Tabelle. Grund: Chrome schneidet
+   Flex- und Block-Container beim Seitenumbruch mitten durch, obwohl
+   break-inside:avoid gesetzt ist -- eine Tabellenzeile dagegen wird zuverlaessig
+   komplett auf die naechste Seite geschoben. */
+table.satz {
+  width: 100%;
+  border-collapse: collapse;
   break-inside: avoid;
+  page-break-inside: avoid;
 }
-.satz + .satz { border-top: .75pt solid #a6a6a6; }
-/* 45 % links reichen fuer Firma und Anschrift; der Rest wird gebraucht, damit
-   lange Mailadressen nicht mitten im Wort umbrechen. */
-.satz .li { flex: 0 0 45%; }
-.satz .re { flex: 1; }
+table.satz > tbody > tr > td { padding: 2mm 0 2.5mm; vertical-align: top; }
+table.satz > tbody > tr > td.li { padding-left: 7.5pt; }
+table.satz + table.satz > tbody > tr > td { border-top: .75pt solid #a6a6a6; }
+/* Im Querformat reichen 34 % fuer Firma und Anschrift. Der Satz bekommt eine
+   Maximalbreite, sonst stehen die Kontaktwerte einsam am rechten Blattrand. */
+table.satz { max-width: 215mm; }
+table.satz > tbody > tr > td.li { width: 34%; padding-right: 4mm; }
 .satz .kopfzeile { margin-bottom: .4mm; }
 .satz .kopfzeile .nr { margin-right: 3mm; }
 .satz .firma { font-weight: bold; }
