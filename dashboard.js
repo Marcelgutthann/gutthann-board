@@ -1225,6 +1225,19 @@ async function betLaden(){
   betL=L||[];betRollen=R||[];
   betAnalyseAn=betL.some(r=>r.art==='eintrag'&&(r.quelle==='analyse'||r.analyse_befuellt));
 }
+// Datenbankfehler in einen Satz uebersetzen, mit dem man etwas anfangen kann.
+// Haeufigster Fall: das Projekt wurde inzwischen geloescht oder umbenannt, die
+// offene Seite zeigt noch die alte Kennung -- dann hilft nur neu laden.
+function betFehler(e){
+  const m=String((e&&e.message)||e||'');
+  if(/beteiligte_project_id_fkey|violates foreign key/i.test(m))
+    return 'Dieses Projekt gibt es nicht mehr (oder die Seite ist veraltet). Bitte die Seite neu laden.';
+  if(/row-level security|permission denied/i.test(m))
+    return 'Keine Berechtigung — bist du noch mit dem Büro-Konto angemeldet?';
+  if(/duplicate key/i.test(m))
+    return 'Dieser Eintrag steht schon in der Liste.';
+  return m;
+}
 function betHinweis(t){const e=el('main').querySelector('#bethint');if(e){e.textContent=t;if(t)setTimeout(()=>{if(e.textContent===t)e.textContent='';},3500);}}
 // Nur den Fensterinhalt neu zeichnen — ein voller render() wuerde das Formular schliessen.
 async function betNeuZeichnen(){await betLaden();const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
@@ -1249,14 +1262,14 @@ async function betSpeichern(){
   if(!d.titel&&!d.firma){betHinweis('Bitte mindestens Rolle oder Firma angeben.');return;}
   if(betEdit.id){
     const{error}=await sb.from('beteiligte').update(d).eq('id',betEdit.id);
-    if(error){betHinweis('Nicht gespeichert: '+error.message);return;}
+    if(error){betHinweis('Nicht gespeichert: '+betFehler(error));return;}
   }else{
     // ans Ende des Zielzweigs
     const gesch=betL.filter(r=>(r.parent_id||null)===(betEdit.parent_id||null));
     const pos=gesch.length?Math.max(...gesch.map((_,i)=>i))*10+10:10;
     const{error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,parent_id:betEdit.parent_id||null,
       pos:pos+10,quelle:betEdit.quelle||'hand'},d,betEdit.crm||{}));
-    if(error){betHinweis('Nicht angelegt: '+error.message);return;}
+    if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
   }
   betEdit=null;await betNeuZeichnen();betHinweis('Gespeichert.');
 }
@@ -1264,7 +1277,7 @@ async function betSpeichern(){
 // Browser-Dialog: der reisst den Fokus aus der App und sieht fremd aus.
 async function betLoeschen(id){
   const{error}=await sb.from('beteiligte').delete().eq('id',id);
-  if(error){betHinweis('Nicht gelöscht: '+error.message);return;}
+  if(error){betHinweis('Nicht gelöscht: '+betFehler(error));return;}
   betLoeschFrage=null;if(betSel===id)betSel=null;
   await betNeuZeichnen();betHinweis('Gelöscht.');
 }
@@ -1292,13 +1305,13 @@ async function betPersonRunter(id){
     vorname:r.vorname,nachname:r.nachname,funktion:r.funktion,
     strasse:r.strasse,plz:r.plz,ort:r.ort,kontakte:betKont(r),
     quelle:r.quelle,crm_company_id:r.crm_company_id,crm_person_id:r.crm_person_id});
-  if(e1){betHinweis('Nicht verschoben: '+e1.message);return;}
+  if(e1){betHinweis('Nicht verschoben: '+betFehler(e1));return;}
   // Oben bleiben Rolle und Firma stehen; Personendaten und persoenliche
   // Kontakte wandern mit nach unten.
   const{error:e2}=await sb.from('beteiligte').update({
     anrede:null,namenstitel:null,vorname:null,nachname:null,funktion:null,
     kontakte:[],crm_person_id:null}).eq('id',id);
-  if(e2){betHinweis('Nicht verschoben: '+e2.message);return;}
+  if(e2){betHinweis('Nicht verschoben: '+betFehler(e2));return;}
   await betNeuZeichnen();betHinweis('Person steht jetzt unter der Firma.');
 }
 // Umsortieren: pos der Geschwister neu vergeben (10,20,30 …) und tauschen.
@@ -1325,12 +1338,12 @@ async function betEbene(id,rein){
     ziel=(betL.find(x=>x.id===r.parent_id)||{}).parent_id||null;
   }
   const{error}=await sb.from('beteiligte').update({parent_id:ziel,pos:9999}).eq('id',id);
-  if(error){betHinweis('Nicht verschoben: '+error.message);return;}
+  if(error){betHinweis('Nicht verschoben: '+betFehler(error));return;}
   await betNeuZeichnen();
 }
 async function betVorlage(){
   const{data,error}=await sb.rpc('beteiligte_vorlage',{pid:current});
-  if(error){betHinweis('Fehler: '+error.message);return;}
+  if(error){betHinweis('Fehler: '+betFehler(error));return;}
   await betNeuZeichnen();betHinweis(data?('Gliederung angelegt ('+data+' Zeilen).'):'Es gibt bereits eine Liste — unverändert gelassen.');
 }
 // "Aus Analyse" ist ein Schalter: einmal holt die Vorschlaege, nochmal nimmt sie
@@ -1339,12 +1352,12 @@ async function betAusAnalyse(){
   if(!betL.length){betHinweis('Erst die Gliederung anlegen, dann übernehmen.');return;}
   if(betAnalyseAn){
     const{data,error}=await sb.rpc('beteiligte_analyse_entfernen',{pid:current});
-    if(error){betHinweis('Fehler: '+error.message);return;}
+    if(error){betHinweis('Fehler: '+betFehler(error));return;}
     await betNeuZeichnen();
     betHinweis(data?(data+' Zeile(n) aus der Analyse wieder entfernt.'):'Nichts zu entfernen.');
     return;}
   const{data,error}=await sb.rpc('beteiligte_aus_analyse',{pid:current});
-  if(error){betHinweis('Fehler: '+error.message);return;}
+  if(error){betHinweis('Fehler: '+betFehler(error));return;}
   await betNeuZeichnen();
   betHinweis(data?(data+' Beteiligte übernommen — mit dem CRM abgeglichen.'):'Nichts Neues in der Analyse gefunden.');
 }
@@ -1565,7 +1578,7 @@ async function betPdfUebernehmen(){
         ist_bauherr:/bauherr|auftraggeber/i.test(e.titel||''),
         quelle:'pdf',importiert_aus:betPdfName,importiert_am:stempel};});
     const{data,error}=await sb.from('beteiligte').insert(zeilen).select('id');
-    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+    if(error){betHinweis('Nicht übernommen: '+betFehler(error));return;}
     (data||[]).forEach((r,k)=>{idVon[stapel[k].i]=r.id;});
     angelegt+=zeilen.length;
   }
@@ -1712,7 +1725,7 @@ async function betPersonHinzu(indizes){
       status:'aktiv',titel:rolle||platz.titel,firma:F.firma||null,
       strasse:F.strasse,plz:F.plz,ort:F.ort,kontakte:F.kontakte||[],
       quelle:'crm',crm_company_id:F.crm_id}).eq('id',platz.id);
-    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+    if(error){betHinweis('Nicht übernommen: '+betFehler(error));return;}
     firmenId=platz.id;betEdit=null;
   }else if(platz&&platz.firma){
     firmenId=platz.id;
@@ -1728,7 +1741,7 @@ async function betPersonHinzu(indizes){
       project_id:current,parent_id:ziel,art:'eintrag',pos:(gesch+1)*10,
       titel:rolle||null,firma:F.firma||null,strasse:F.strasse,plz:F.plz,ort:F.ort,
       kontakte:F.kontakte||[],quelle:'crm',crm_company_id:F.crm_id}).select('id');
-    if(error){betHinweis('Nicht angelegt: '+error.message);return;}
+    if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
     firmenId=(data||[])[0]?.id;betEdit=null;
   }
   // 3) Jede Person als Unterzeile der Firma.
@@ -1739,7 +1752,7 @@ async function betPersonHinzu(indizes){
     funktion:p.funktion,strasse:p.strasse||F.strasse,plz:p.plz||F.plz,ort:p.ort||F.ort,
     kontakte:p.kontakte||[],quelle:'crm',crm_company_id:p.crm_company_id,crm_person_id:p.crm_id}));
   const{error}=await sb.from('beteiligte').insert(zeilen);
-  if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+  if(error){betHinweis('Nicht übernommen: '+betFehler(error));return;}
 
   await betLaden();betNurListe();betNurSeite();
   betHinweis(M.length===1?'Hinzugefügt.':M.length+' Personen hinzugefügt.');
@@ -1759,14 +1772,14 @@ async function betFirmaUebernehmen(){
   if(platz){
     const{error}=await sb.from('beteiligte')
       .update(Object.assign({status:'aktiv'},d,rolle?{titel:rolle}:{})).eq('id',platz.id);
-    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+    if(error){betHinweis('Nicht übernommen: '+betFehler(error));return;}
     betEdit=null;
   }else{
     const ziel=(betL.find(r=>r.art==='gruppe')||{}).id||null;
     const gesch=betL.filter(r=>(r.parent_id||null)===(ziel||null)).length;
     const{error}=await sb.from('beteiligte').insert(Object.assign(
       {project_id:current,parent_id:ziel,art:'eintrag',pos:(gesch+1)*10,titel:rolle||null},d));
-    if(error){betHinweis('Nicht angelegt: '+error.message);return;}
+    if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
   }
   await betLaden();betNurListe();betNurSeite();
   betHinweis('Firma übernommen — Ansprechpartner können jetzt dazugeklickt werden.');
