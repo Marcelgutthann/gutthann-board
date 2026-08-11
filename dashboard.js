@@ -1890,76 +1890,107 @@ function wireBetCrm(){
   if(q&&!q.dataset.wired){q.dataset.wired='1';
     q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();betCrmSuche();}};}
 }
-// Druckfassung im Layout des Bueroausdrucks:
-//   [grauer Balken]  Nr + Rolle
-//   Firma fett, Anschrift            |  Kontakte rechts
-//   ------------------------------------------------------
-//   Nr + Funktion, Person, Anschrift |  Kontakte rechts
-// Der Firmenname wird bei den Personen NICHT wiederholt -- er steht eine Zeile
-// hoeher und waere im Ausdruck nur Ballast.
-function betDruck(){
-  const L=betL||[];
-  const artName={telefon:'Telefon',mobil:'Mobil',fax:'Fax',email:'E-Mail',web:'Web'};
-  const kontSpalte=r=>{const K=betKont(r);
-    if(!K.length)return '';
-    const gross=t=>t?t.charAt(0).toUpperCase()+t.slice(1):'Arbeit';
-    return '<table class="kon">'+K.map(k=>'<tr><td class="ka">'+esc((artName[k.art]||k.art))+'</td>'+
-      '<td class="kk">('+esc(gross(k.kontext))+')</td><td class="kw">'+esc(k.wert)+'</td></tr>').join('')+'</table>';};
-  const adr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean);
+// Druckfassung aus der Vorlage vorlagen/beteiligte-druck.html.
+// Die Vorlage haelt Layout, Masse und Logo (nachgebaut aus dem Buero-Ausdruck);
+// hier wird nur der Inhalt erzeugt und in die Platzhalter gesetzt. Wer das
+// Aussehen aendern will, aendert die Vorlage -- nicht diesen Code.
+// Kontaktsymbole als Inline-SVG: Unicode-Zeichen fuer Telefon/Fax werden je
+// nach installierter Schrift als Emoji oder als durchgestrichenes Telefon
+// gezeichnet -- im Ausdruck unbrauchbar.
+const BET_SVG=(d,extra)=>'<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.7" '+
+  'stroke-linecap="round" stroke-linejoin="round">'+d+(extra||'')+'</svg>';
+const BET_KON_ICON={
+  telefon:BET_SVG('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8.1 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/>'),
+  mobil:BET_SVG('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'),
+  fax:BET_SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 17h10v4H7z"/>'),
+  email:BET_SVG('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/>'),
+  web:BET_SVG('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/>')};
+let betDruckVorlage=null,betLogo=null;
 
+async function betVorlageLaden(){
+  if(betDruckVorlage&&betLogo)return;
+  const basis=location.pathname.replace(/[^/]*$/,'');
+  // Der Kopfkommentar der Vorlage beschreibt die Platzhalter und enthaelt sie
+  // deshalb selbst — er muss vor dem Ersetzen raus, sonst landet der Inhalt
+  // zusaetzlich im Kommentar.
+  if(!betDruckVorlage)betDruckVorlage=(await (await fetch(basis+'vorlagen/beteiligte-druck.html')).text())
+    .replace(/^\s*<!--[\s\S]*?-->\s*/,'');
+  if(!betLogo){
+    // Typ selbst setzen: der lokale Vorschauserver liefert PNG sonst als
+    // text/plain, und der data-URI waere im Druckfenster kein Bild mehr.
+    const roh=await (await fetch(basis+'vorlagen/ghiw-logo.png')).arrayBuffer();
+    const blob=new Blob([roh],{type:'image/png'});
+    betLogo=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(blob);});
+  }
+}
+
+// Kontaktspalte: Symbol, Kontext in Klammern, Wert -- wie im Original.
+function betDruckKontakte(r){
+  const K=betKont(r);
+  if(!K.length)return '';
+  const gross=t=>t?t.charAt(0).toUpperCase()+t.slice(1):'Arbeit';
+  return '<table class="kon">'+K.map(k=>
+    '<tr><td class="ki">'+(BET_KON_ICON[k.art]||'&#9679;')+'</td>'+
+    '<td class="kk">('+esc(gross(k.kontext))+')</td>'+
+    '<td class="kw">'+esc(k.wert)+'</td></tr>').join('')+'</table>';
+}
+
+function betDruckInhalt(){
+  const L=betL||[];
+  const adr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean);
   let h='';
   L.forEach(r=>{
     if(r.status==='ausgeschieden')return;
+    const nr='<span class="nr">'+esc(r.nummer)+'</span>';
     if(r.art==='gruppe'){
-      h+='<div class="gr t'+Math.min(r.tiefe,2)+'"><span class="nr">'+esc(r.nummer)+'</span> '+esc(r.titel||'')+'</div>';
+      h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
       return;}
     const vater=r.parent_id?L.find(x=>x.id===r.parent_id):null;
     const unterFirma=vater&&vater.art==='eintrag';
     const nm=betName(r);
     if(!unterFirma){
-      // Firmenposition: Balken mit Nummer und Rolle, darunter die Firma
-      h+='<div class="balken"><span class="nr">'+esc(r.nummer)+'</span> '+esc(r.titel||'')+'</div>';
+      // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz
+      h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
       h+='<div class="satz"><div class="li">'+
         (r.firma?'<div class="firma">'+esc(r.firma)+'</div>':'')+
-        (nm?'<div>'+esc(nm)+(r.funktion?' <span class="fu">'+esc(r.funktion)+'</span>':'')+'</div>':'')+
+        (nm?'<div>'+esc(nm)+'</div>':'')+
+        (r.funktion?'<div class="funktion">'+esc(r.funktion)+'</div>':'')+
         adr(r).map(z=>'<div>'+esc(z)+'</div>').join('')+
         (!r.firma&&!nm?'<div class="offen">— noch nicht vergeben —</div>':'')+
-        '</div><div class="re">'+kontSpalte(r)+'</div></div>';
+        '</div><div class="re">'+betDruckKontakte(r)+'</div></div>';
       return;}
-    // Person unter einer Firma: ohne Firmenname
+    // Person unter der Firma: Firmenname und -anschrift stehen eine Zeile
+    // hoeher und werden hier weggelassen.
     const eigeneAdr=(r.strasse||r.ort)&&
       ((r.strasse||'')!==(vater.strasse||'')||(r.ort||'')!==(vater.ort||''));
-    h+='<div class="satz person"><div class="li">'+
-      '<div class="pk"><span class="nr">'+esc(r.nummer)+'</span> '+esc(r.titel||'')+'</div>'+
-      (nm?'<div class="pn">'+esc(nm)+(r.funktion?' <span class="fu">'+esc(r.funktion)+'</span>':'')+'</div>':'')+
+    h+='<div class="satz"><div class="li">'+
+      '<div class="kopfzeile">'+nr+esc(r.titel||'')+'</div>'+
+      (nm?'<div>'+esc(nm)+'</div>':'')+
+      (r.funktion?'<div class="funktion">'+esc(r.funktion)+'</div>':'')+
       (eigeneAdr?adr(r).map(z=>'<div>'+esc(z)+'</div>').join(''):'')+
-      '</div><div class="re">'+kontSpalte(r)+'</div></div>';
+      '</div><div class="re">'+betDruckKontakte(r)+'</div></div>';
   });
+  return h;
+}
 
+async function betDruck(){
+  betHinweis('Druckfassung wird aufgebaut …');
+  try{await betVorlageLaden();}
+  catch(e){betHinweis('Druckvorlage nicht gefunden: '+e.message);return;}
+  const heute=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const html=betDruckVorlage
+    .replace(/\{\{PROJEKT\}\}/g,esc(currentName||''))
+    .replace(/\{\{TITEL\}\}/g,'Projektbeteiligte '+heute)
+    .replace(/\{\{DATUM\}\}/g,heute)
+    .replace(/\{\{LOGO\}\}/g,betLogo||'')
+    .replace(/\{\{INHALT\}\}/g,betDruckInhalt());
   const w=window.open('','_blank');
   if(!w){betHinweis('Bitte Pop-ups für diese Seite erlauben.');return;}
   w.document.write('<!doctype html><html lang="de"><head><meta charset="utf-8">'+
-    '<title>Projektbeteiligte '+esc(currentName)+'</title><style>'+
-    '@page{size:A4;margin:16mm 14mm 14mm}'+
-    'body{font:9pt/1.35 Arial,Helvetica,sans-serif;color:#000;margin:0}'+
-    'h1{font-size:11pt;margin:0 0 1mm}.pj{font-size:9pt;margin-bottom:6mm}'+
-    '.pj b{font-weight:400;color:#444}'+
-    '.gr{font-weight:700;font-size:9pt;margin:5mm 0 1.5mm;padding-bottom:.8mm;border-bottom:.8pt solid #b3b3b3}'+
-    '.gr.t1{margin-left:4mm}.gr.t2{margin-left:8mm}'+
-    '.balken{background:#e3e3e3;font-weight:700;padding:1.6mm 2mm;margin:3mm 0 1.5mm}'+
-    '.nr{font-weight:400;color:#333;margin-right:1.5mm}'+
-    '.satz{display:flex;gap:6mm;padding:1.5mm 2mm;break-inside:avoid}'+
-    '.satz .li{flex:0 0 52%}.satz .re{flex:1}'+
-    '.satz.person{border-top:.5pt solid #ccc}'+
-    '.firma{font-weight:700}.pk{margin-bottom:.4mm}.pn{}'+
-    '.fu{color:#444}.offen{color:#8a6d1f;font-style:italic}'+
-    'table.kon{border-collapse:collapse;font-size:8pt}'+
-    'table.kon td{padding:0 1.5mm 0 0;vertical-align:top;white-space:nowrap}'+
-    'td.ka{color:#444}td.kk{color:#666}'+
-    '</style></head><body>'+
-    '<h1>Beteiligtenliste</h1><div class="pj"><b>Projekt:</b> '+esc(currentName)+'</div>'+
-    h+'</body></html>');
-  w.document.close();w.focus();setTimeout(()=>w.print(),300);
+    '<title>Projektbeteiligte '+esc(currentName||'')+'</title></head><body>'+html+'</body></html>');
+  w.document.close();w.focus();
+  betHinweis('');
+  setTimeout(()=>w.print(),400);
 }
 function renderFolders(F,total){if(!F.length)return '<div class="empty">Keine Ordner.</div>';const max=Math.max(...F.map(f=>+f.anzahl));return F.map(f=>'<div class="fld-row"><div><div>'+esc(f.ordner||'(Wurzel)')+'</div><div class="fld-bar"><i style="width:'+Math.round(+f.anzahl/max*100)+'%"></i></div></div><div class="fc2">'+f.anzahl+'</div></div>').join('');}
 function renderComms(C){if(!C.length)return '<div class="inner"><div class="empty">Keine Vorgänge erfasst.</div></div>';const td=today();
