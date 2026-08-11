@@ -1142,8 +1142,11 @@ function betDetail(r){
     (r.quelle==='pdf'&&r.importiert_aus?'<div class="bet-p-adr">aus '+esc(r.importiert_aus)+
        (r.importiert_am?', eingelesen '+esc(fmtD(r.importiert_am)):'')+'</div>':'')+
     '<div class="bet-p-akt">'+
-      '<button class="btn-sm" data-betedit="'+r.id+'">Bearbeiten</button>'+
-      (r.art==='gruppe'?'<button class="btn-sm ghost" data-betadd="'+r.id+'">+ Beteiligter</button>':'')+
+      (r.art==='eintrag'
+        ? '<button class="btn-sm" data-betfill="'+r.id+'">'+
+          (r.firma?'+ Person ergänzen':'+ Firma / Person hinzufügen')+'</button>'
+        : '<button class="btn-sm" data-betadd="'+r.id+'">+ Beteiligter</button>')+
+      '<button class="btn-sm ghost" data-betedit="'+r.id+'">Bearbeiten</button>'+
       (r.crm_company_id?'<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+'">Firma im CRM</button>':'')+
       '<button class="btn-sm ghost" data-betdel="'+r.id+'">Löschen</button>'+
     '</div></div>';
@@ -1661,11 +1664,30 @@ async function betPersonHinzu(indizes){
 }
 
 // Nur die Firma (ohne Ansprechpartner) ins Formular uebernehmen.
-function betFirmaUebernehmen(){
+// Nur die Firma setzen (ohne Ansprechpartner) — legt sofort an und bleibt in der
+// Firmenansicht, damit danach die Personen dazugeklickt werden koennen.
+async function betFirmaUebernehmen(){
   const F=betCrmFirma;if(!F)return;
-  betUebernehmen({firma:F.firma,strasse:F.strasse,plz:F.plz,ort:F.ort,
-    kontakte:F.kontakte||[],crm_company_id:F.crm_id});
-  betCrmFirma=null;betCrmMit=[];betCrmOffen=false;
+  const feld=el('main').querySelector('#bf_mitrolle');
+  const rolle=(feld?feld.value.trim():'')||betMitRolle||(betEdit&&betEdit.titel)||'';
+  betMitRolle=rolle;
+  const d={firma:F.firma,strasse:F.strasse,plz:F.plz,ort:F.ort,
+           kontakte:F.kontakte||[],quelle:'crm',crm_company_id:F.crm_id};
+  const platz=betEdit&&betEdit.id?betEdit:null;
+  if(platz){
+    const{error}=await sb.from('beteiligte')
+      .update(Object.assign({status:'aktiv'},d,rolle?{titel:rolle}:{})).eq('id',platz.id);
+    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+    betEdit=null;
+  }else{
+    const ziel=(betL.find(r=>r.art==='gruppe')||{}).id||null;
+    const gesch=betL.filter(r=>(r.parent_id||null)===(ziel||null)).length;
+    const{error}=await sb.from('beteiligte').insert(Object.assign(
+      {project_id:current,parent_id:ziel,art:'eintrag',pos:(gesch+1)*10,titel:rolle||null},d));
+    if(error){betHinweis('Nicht angelegt: '+error.message);return;}
+  }
+  await betLaden();betNurListe();betNurSeite();
+  betHinweis('Firma übernommen — Ansprechpartner können jetzt dazugeklickt werden.');
 }
 // Uebernahme fuellt nur das Formular — gespeichert wird erst mit "Speichern".
 function betUebernehmen(d){
@@ -1722,7 +1744,7 @@ function wireBet(){
     else if(a==='crm-zu'){betCrmOffen=false;betCrmFirma=null;betNurSeite();return;}
     else if(a==='crm-suche'){await betCrmSuche();return;}
     else if(a==='crm-zurueck'){betCrmFirma=null;betCrmMit=[];betMitRolle='';betNurSeite();return;}
-    else if(a==='crm-firma-uebernehmen'){betFirmaUebernehmen();return;}
+    else if(a==='crm-firma-uebernehmen'){await betFirmaUebernehmen();return;}
     else if(a==='mit-alle-sofort'){
       const drin=new Set(betL.filter(r=>r.crm_person_id).map(r=>r.crm_person_id));
       const offen=(betCrmMit||[]).map((p,i)=>drin.has(p.crm_id)?-1:i).filter(i=>i>=0);
@@ -1733,17 +1755,18 @@ function wireBet(){
     betNurSeite();
     const f=M.querySelector('#bf_titel');if(f&&betEdit&&!betEdit.id)f.focus();
   });
-  // Zeile anklicken -> Details rechts. Bei einem noch nicht vergebenen Gewerk
-  // geht direkt das Adressbuch auf (mit der Rolle vorbelegt) -- dort will man
-  // in dem Moment hin: "wer macht das?".
+  // Zeile anklicken -> Details rechts. Von dort geht es per Knopf weiter ins
+  // Adressbuch; kein automatisches Aufklappen, damit der Weg vorhersehbar bleibt.
   M.querySelectorAll('[data-betrow]').forEach(z=>z.onclick=()=>{
-    const r=betL.find(x=>x.id===z.dataset.betrow);
-    betSel=z.dataset.betrow;
+    betSel=z.dataset.betrow;betEdit=null;betCrmOffen=false;betCrmFirma=null;betMitRolle='';
     M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
-    if(r&&r.status==='offen'&&!r.firma){
-      betEdit=Object.assign({},r,{kontakte:betKont(r)});betCrmOffen=true;betCrmFirma=null;
-    }else{betEdit=null;betCrmOffen=false;betCrmFirma=null;}
     betNurSeite();});
+  // "Firma / Person hinzufügen" an einer Rolle: Adressbuch mit dieser Zeile als Ziel.
+  M.querySelectorAll('[data-betfill]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const r=betL.find(x=>x.id===b.dataset.betfill);if(!r)return;
+    betEdit=Object.assign({},r,{kontakte:betKont(r)});
+    betMitRolle=r.titel||'';betCrmOffen=true;betCrmFirma=null;betNurSeite();});
   M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const r=betL.find(x=>x.id===b.dataset.betedit);if(!r)return;
