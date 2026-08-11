@@ -1,0 +1,111 @@
+<!--
+  Druckvorlage Beteiligtenliste — nachgebaut aus dem Buero-Ausdruck
+  "Projektbeteiligte_2026-07-20 inkl Logo.pdf" (3901-23 Hemau).
+
+  Alle Masse sind aus dem Original gemessen (A4 595x842 pt):
+    Rand links/rechts  42,5 pt        = 15 mm
+    Satzbreite         510  pt        = 180 mm
+    Schrift            Verdana 9 pt, Kontaktspalte 8 pt
+    Gruppenbalken      volle Satzbreite, Fuellung #e3e3e3, Hoehe 23 pt
+    Text im Balken     7,5 pt eingerueckt, fett
+    Kontaktspalte      beginnt bei 322 pt = 54 % der Satzbreite
+    Trennlinie         0,5 pt #b3b3b3, eingerueckt auf 50 pt
+    Kopfzeile Folgeseiten: Projektname + Linie
+    Fusszeile: "Erstellt am ... | Seite x von y", rechtsbuendig
+
+  PLATZHALTER, die dashboard.js ersetzt:
+    {{PROJEKT}}   Projektname
+    {{TITEL}}     Ueberschrift der Liste (mit Datum)
+    {{DATUM}}     Erstellungsdatum, z. B. 20.07.2026
+    {{LOGO}}      data:-URI des Buero-Logos
+    {{INHALT}}    die erzeugten Gruppen-, Firmen- und Personenbloecke
+-->
+<style>
+@page { size: A4; margin: 15mm 15mm 20mm; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 9pt;
+  line-height: 1.45;
+  color: #000;
+}
+
+/* ---- Kopf der ersten Seite ------------------------------------------- */
+.kopf { display: flex; align-items: flex-start; gap: 10mm; margin-bottom: 14mm; }
+.kopf .tx { flex: 1; min-width: 0; }
+.kopf h1 { font-size: 11pt; font-weight: bold; margin: 0 0 6mm; }
+.kopf .zeile { display: flex; gap: 6mm; font-size: 9pt; }
+.kopf .zeile .lab { width: 26mm; flex-shrink: 0; }
+.kopf .logo { width: 33mm; flex-shrink: 0; }
+.kopf .logo img { width: 100%; height: auto; display: block; }
+h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
+.titel-linie { border-bottom: .5pt solid #b3b3b3; margin-bottom: 10mm; }
+
+/* ---- Gruppen- und Firmenbalken --------------------------------------- */
+/* Volle Satzbreite, hellgrau. Im Original tragen Gruppen UND Firmenpositionen
+   denselben Balken -- nur die Einrueckung des Textes unterscheidet sie. */
+.balken {
+  background: #e3e3e3;
+  font-weight: bold;
+  padding: 2.2pt 0 2.2pt 7.5pt;
+  margin: 6mm 0 2.5mm;
+  break-after: avoid;
+}
+.balken .nr { font-weight: bold; margin-right: 3mm; }
+.balken.e1 { margin-top: 4mm; }
+.balken.e2 { margin-top: 3mm; }
+
+/* ---- Eintragssatz: links Anschrift, rechts Kontakte ------------------- */
+.satz {
+  display: flex;
+  gap: 4mm;
+  padding: 2mm 0 2.5mm 7.5pt;
+  break-inside: avoid;
+}
+.satz + .satz { border-top: .5pt solid #b3b3b3; }
+/* 45 % links reichen fuer Firma und Anschrift; der Rest wird gebraucht, damit
+   lange Mailadressen nicht mitten im Wort umbrechen. */
+.satz .li { flex: 0 0 45%; }
+.satz .re { flex: 1; }
+.satz .kopfzeile { margin-bottom: .4mm; }
+.satz .kopfzeile .nr { margin-right: 3mm; }
+.satz .firma { font-weight: bold; }
+.satz .funktion { color: #333; }
+.satz .offen { color: #7a6212; font-style: italic; }
+
+/* ---- Kontaktspalte ---------------------------------------------------- */
+/* Feste Spaltenbreiten, sonst rutscht der Wert je nach Textlaenge hin und her. */
+table.kon { border-collapse: collapse; font-size: 8pt; width: 100%; table-layout: fixed; }
+table.kon td { padding: 0 1.5mm .4mm 0; vertical-align: top; }
+td.ki { width: 5mm; }
+td.kk { width: 13mm; white-space: nowrap; color: #000; }
+td.kw { word-break: break-word; }
+/* Symbole als Vektor: Unicode-Telefone und -Faxe sehen je nach installierter
+   Schrift voellig anders aus (mal Emoji, mal durchgestrichenes Telefon). */
+td.ki svg { width: 3.2mm; height: 3.2mm; display: block; margin-top: .35mm; }
+
+/* ---- Fusszeile -------------------------------------------------------- */
+/* Ohne Seitenzahl-Zaehler des Browsers: der Druckdialog blendet Kopf- und
+   Fusszeilen selbst ein, wenn gewuenscht. Hier steht nur das Erstelldatum. */
+.fuss {
+  position: fixed; bottom: 6mm; left: 0; right: 0;
+  border-top: .5pt solid #b3b3b3;
+  padding-top: 1.5mm;
+  font-size: 8pt; text-align: right;
+}
+</style>
+
+<div class="kopf">
+  <div class="tx">
+    <h1>Beteiligtenliste</h1>
+    <div class="zeile"><span class="lab">Projekt:</span><span>{{PROJEKT}}</span></div>
+  </div>
+  <div class="logo"><img src="{{LOGO}}" alt=""></div>
+</div>
+
+<h2 class="titel">{{TITEL}}</h2>
+<div class="titel-linie"></div>
+
+{{INHALT}}
+
+<div class="fuss">Erstellt am {{DATUM}}</div>
