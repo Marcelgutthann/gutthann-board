@@ -29,6 +29,17 @@ body {
   line-height: 1.45;
   color: #000;
 }
+/* WICHTIG: Browser drucken Hintergrundfarben standardmaessig NICHT ("Hintergrund-
+   grafiken" ist im Druckdialog per Voreinstellung aus). Ohne diese Zeilen bleiben
+   die grauen Balken im PDF unsichtbar. Gilt fuer Chrome/Edge/Safari/Firefox. */
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+/* ---- Bedienhinweis: nur am Bildschirm, nie im Ausdruck ---------------- */
+.hinweis {
+  background: #fff7ed; border: 1px solid #f0b866; border-radius: 4px;
+  padding: 8px 12px; margin-bottom: 8mm; font-size: 8.5pt; line-height: 1.5; color: #7a4b06;
+}
+@media print { .hinweis { display: none !important; } }
 
 /* ---- Kopf der ersten Seite ------------------------------------------- */
 .kopf { display: flex; align-items: flex-start; gap: 10mm; margin-bottom: 14mm; }
@@ -39,7 +50,7 @@ body {
 .kopf .logo { width: 33mm; flex-shrink: 0; }
 .kopf .logo img { width: 100%; height: auto; display: block; }
 h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
-.titel-linie { border-bottom: .5pt solid #b3b3b3; margin-bottom: 10mm; }
+.titel-linie { border-bottom: .75pt solid #a6a6a6; margin-bottom: 10mm; }
 
 /* ---- Gruppen- und Firmenbalken --------------------------------------- */
 /* Volle Satzbreite, hellgrau. Im Original tragen Gruppen UND Firmenpositionen
@@ -50,6 +61,11 @@ h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
   padding: 2.2pt 0 2.2pt 7.5pt;
   margin: 6mm 0 2.5mm;
   break-after: avoid;
+  /* Rahmen als Rueckfall: sollte ein Drucker die Flaechenfuellung doch
+     unterdruecken, bleibt der Balken durch die Linien erkennbar. Rahmen werden
+     im Gegensatz zu Hintergruenden immer gedruckt. */
+  border-top: .5pt solid #9a9a9a;
+  border-bottom: .5pt solid #9a9a9a;
 }
 .balken .nr { font-weight: bold; margin-right: 3mm; }
 .balken.e1 { margin-top: 4mm; }
@@ -62,7 +78,7 @@ h2.titel { font-size: 10pt; font-weight: bold; margin: 0 0 3mm; }
   padding: 2mm 0 2.5mm 7.5pt;
   break-inside: avoid;
 }
-.satz + .satz { border-top: .5pt solid #b3b3b3; }
+.satz + .satz { border-top: .75pt solid #a6a6a6; }
 /* 45 % links reichen fuer Firma und Anschrift; der Rest wird gebraucht, damit
    lange Mailadressen nicht mitten im Wort umbrechen. */
 .satz .li { flex: 0 0 45%; }
@@ -89,11 +105,20 @@ td.ki svg { width: 3.2mm; height: 3.2mm; display: block; margin-top: .35mm; }
    Fusszeilen selbst ein, wenn gewuenscht. Hier steht nur das Erstelldatum. */
 .fuss {
   position: fixed; bottom: 6mm; left: 0; right: 0;
-  border-top: .5pt solid #b3b3b3;
+  border-top: .75pt solid #a6a6a6;
   padding-top: 1.5mm;
   font-size: 8pt; text-align: right;
 }
 </style>
+
+<!-- Nur am Bildschirm sichtbar, wird nie mitgedruckt: die Checkbox
+     "Hintergrundgrafiken" im Druckdialog sticht jedes CSS. Ohne sie bleiben
+     die grauen Balken leer. -->
+<div class="hinweis">
+  <b>Vor dem Speichern:</b> im Druckdialog unter „Weitere Einstellungen“ den Haken bei
+  <b>Hintergrundgrafiken</b> setzen — sonst bleiben die grauen Balken weiß.
+  Ziel „Als PDF speichern“, Ränder „Standard“, Kopf- und Fußzeilen aus.
+</div>
 
 <div class="kopf">
   <div class="tx">
