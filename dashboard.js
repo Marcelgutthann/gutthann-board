@@ -360,18 +360,21 @@ async function renderProject(){
    h+=sec('maengel','','⚠',gl('Mängel','Dokumentierte Baumängel und offene Abnahme-Punkte (LPH 8 Objektüberwachung) mit Beseitigungsfrist.')+' & Abnahmen',mg.length+' erfasst','<span class="stat'+(offenM?' alert':' ok')+'">'+offenM+' offen</span>',renderMaengel(mgAll),(mgOpen.length?mgOpen.slice(0,2).map(m=>tz('bad',esc(m.beschreibung||''),m.frist?fmtFrist(m.frist):'')).join('')+(offenM>2?tz(null,'+ '+(offenM-2)+' weitere offen','','tz-more'):''):tz('ok','Alle Mängel behoben','')));}
   // Beteiligtenliste — selbst gepflegt (Tabelle beteiligte). Analyse liefert nur Vorschlaege.
   {const eintr=betL.filter(r=>r.art==='eintrag');
-   const bh=eintr.find(r=>r.ist_bauherr);
-   const firmen=new Set(eintr.map(r=>r.firma).filter(Boolean)).size;
+   // Platzhalter sind noch keine Beteiligten — sonst meldet ein frisches Projekt
+   // "36 Beteiligte", obwohl keine einzige Firma feststeht.
+   const besetzt=eintr.filter(r=>r.firma||r.nachname);
+   const bh=besetzt.find(r=>r.ist_bauherr);
+   const firmen=new Set(besetzt.map(r=>r.firma).filter(Boolean)).size;
    const offenN=eintr.filter(r=>r.status==='offen').length;
    const vorschlag=((D&&D.beteiligte)||[]).length;
-   const tBet=eintr.length
+   const tBet=besetzt.length
      ?((bh?tz(null,'<strong>Bauherr:</strong> '+esc(bh.firma||betName(bh)||''),''):'')
-       +tz(null,eintr.length+' Beteiligte'+(firmen?' · '+firmen+' Firmen':''),'')
-       +(offenN?tz('warn',offenN+' Gewerk(e) noch nicht vergeben',''):''))
-     :(betL.length?tz('warn','Gliederung steht — noch keine Beteiligten eingetragen','')
+       +tz(null,besetzt.length+' Beteiligte'+(firmen?' · '+firmen+' Firmen':''),'')
+       +(offenN?tz('warn',offenN+' noch nicht vergeben',''):''))
+     :(betL.length?tz('warn','Gerüst steht — '+offenN+' Rollen noch zu besetzen','')
                   :tz('warn','Noch keine Liste angelegt'+(vorschlag?' · '+vorschlag+' Vorschläge aus der Analyse':''),''));
    h+=sec('beteiligte','prominent weit','👤','Beteiligtenliste','gegliederte Projektbeteiligte — frei bearbeitbar',
-          '<span class="stat'+(offenN?' warn':'')+'">'+eintr.length+'</span>',renderBet(),tBet);}
+          '<span class="stat'+(besetzt.length?'':' warn')+'">'+besetzt.length+'</span>',renderBet(),tBet);}
   // Projektstruktur
   h+=sec('struktur','','📁','Projekt-Struktur',(folders||[]).length+' Top-Ordner · '+(docCount||0)+' Dokumente','','<div class="inner">'+renderFolders(folders||[],docCount||1)+'</div>',(folders&&folders.length?folders.slice(0,3).map(f=>tz(null,esc(f.ordner||'(Wurzel)'),''+f.anzahl)).join(''):''));
   // Dokument-Suche
@@ -1062,7 +1065,7 @@ function betListe(L){
        '<span class="z-nr">'+esc(r.nummer)+'</span>'+
        '<span class="z-rolle">'+esc(r.titel||'—')+'</span>'+
        '<span class="z-firma">'+esc(r.firma||(r.status==='offen'?'— noch nicht vergeben —':''))+'</span>'+
-       '<span class="z-person">'+esc(nm)+'</span>'+
+       '<span class="z-person">'+esc(nm)+(r.funktion?' <span class="z-funk">'+esc(r.funktion)+'</span>':'')+'</span>'+
        '<span class="z-kon">'+(tel?'<i title="'+esc(tel.wert)+'">☎</i>':'')+(mail?'<i title="'+esc(mail.wert)+'">✉</i>':'')+'</span>'+
        '<span class="z-tags">'+
          (r.ist_bauherr?'<span class="bet-tag bh">BH</span>':'')+
@@ -1090,13 +1093,15 @@ function betSeite(){
 }
 
 function betUebersicht(){
-  const E=betL.filter(r=>r.art==='eintrag');
-  if(!E.length)return '<div class="bet-p"><div class="bet-p-kopf">Beteiligtenliste</div>'+
+  const A=betL.filter(r=>r.art==='eintrag');
+  if(!A.length)return '<div class="bet-p"><div class="bet-p-kopf">Beteiligtenliste</div>'+
     '<p class="bet-imp-p">Noch keine Einträge. Über „+ Beteiligter“ aus dem Adressbuch übernehmen, '+
     'oder eine bestehende Liste als PDF einlesen.</p></div>';
+  // Nur besetzte Zeilen zaehlen als Beteiligte; Platzhalter sind offene Punkte.
+  const E=A.filter(r=>r.firma||r.nachname);
   const z={hand:0,analyse:0,crm:0,pdf:0};E.forEach(r=>{z[r.quelle]=(z[r.quelle]||0)+1;});
   const firmen=new Set(E.map(r=>r.firma).filter(Boolean)).size;
-  const offen=E.filter(r=>r.status==='offen').length;
+  const offen=A.filter(r=>r.status==='offen').length;
   const bh=E.find(r=>r.ist_bauherr);
   const letzte=E.map(r=>r.geaendert_am).filter(Boolean).sort().pop();
   const dateien=[...new Set(E.map(r=>r.importiert_aus).filter(Boolean))];
@@ -1612,16 +1617,31 @@ async function betMitUebernehmen(){
   const ziel=(betEdit&&betEdit.parent_id)||(betL.find(r=>r.art==='gruppe')||{}).id||null;
   const basis=betL.filter(r=>(r.parent_id||null)===(ziel||null)).length;
   const F=betCrmFirma||{};
-  const zeilen=M.map((p,k)=>({project_id:current,parent_id:ziel,art:'eintrag',pos:(basis+k+1)*10,
-    titel:rolle||null,firma:p.firma_name||F.firma||null,
+  const daten=p=>({titel:rolle||null,firma:p.firma_name||F.firma||null,
     anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,funktion:p.funktion,
     strasse:p.strasse||F.strasse,plz:p.plz||F.plz,ort:p.ort||F.ort,
-    kontakte:p.kontakte||[],quelle:'crm',crm_company_id:p.crm_company_id,crm_person_id:p.crm_id}));
-  const{error}=await sb.from('beteiligte').insert(zeilen);
-  if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+    kontakte:p.kontakte||[],quelle:'crm',crm_company_id:p.crm_company_id,crm_person_id:p.crm_id});
+  // Wurde von einem noch offenen Gewerk aus geoeffnet, besetzt die erste Person
+  // genau diese Zeile — sonst bliebe der Platzhalter als Dublette daneben stehen.
+  const platz=betEdit&&betEdit.id&&betEdit.status==='offen'&&!betEdit.firma?betEdit:null;
+  const rest=platz?M.slice(1):M;
+  if(platz){
+    const{error}=await sb.from('beteiligte')
+      .update(Object.assign({status:'aktiv'},daten(M[0]),rolle?{}:{titel:platz.titel})).eq('id',platz.id);
+    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+  }
+  // Weitere Personen derselben Firma haengen unter die erste (2.2 / 2.2.1 wie auf
+  // dem Papier), statt ans Ende der Gruppe zu rutschen.
+  const zeilen=rest.map((p,k)=>Object.assign({project_id:current,
+    parent_id:platz?platz.id:ziel,art:'eintrag',
+    pos:platz?(k+1)*10:(basis+k+1)*10},daten(p)));
+  if(zeilen.length){
+    const{error}=await sb.from('beteiligte').insert(zeilen);
+    if(error){betHinweis('Nicht übernommen: '+error.message);return;}
+  }
   betCrmFirma=null;betCrmMit=[];betMitWahl=new Set();betCrmOffen=false;betEdit=null;
   await betNeuZeichnen();
-  betHinweis(zeilen.length+' Person'+(zeilen.length===1?'':'en')+' übernommen'+(rolle?'':' — bitte Rolle ergänzen')+'.');
+  betHinweis(M.length+' Person'+(M.length===1?'':'en')+' übernommen'+(rolle?'':' — bitte Rolle ergänzen')+'.');
 }
 
 // Nur die Firma (ohne Ansprechpartner) ins Formular uebernehmen.
@@ -1697,10 +1717,16 @@ function wireBet(){
     betNurSeite();
     const f=M.querySelector('#bf_titel');if(f&&betEdit&&!betEdit.id)f.focus();
   });
-  // Zeile anklicken -> Details rechts
+  // Zeile anklicken -> Details rechts. Bei einem noch nicht vergebenen Gewerk
+  // geht direkt das Adressbuch auf (mit der Rolle vorbelegt) -- dort will man
+  // in dem Moment hin: "wer macht das?".
   M.querySelectorAll('[data-betrow]').forEach(z=>z.onclick=()=>{
-    betSel=z.dataset.betrow;betEdit=null;betCrmOffen=false;betCrmFirma=null;
+    const r=betL.find(x=>x.id===z.dataset.betrow);
+    betSel=z.dataset.betrow;
     M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
+    if(r&&r.status==='offen'&&!r.firma){
+      betEdit=Object.assign({},r,{kontakte:betKont(r)});betCrmOffen=true;betCrmFirma=null;
+    }else{betEdit=null;betCrmOffen=false;betCrmFirma=null;}
     betNurSeite();});
   M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
