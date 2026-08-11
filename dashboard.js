@@ -1965,9 +1965,18 @@ function betDruckKontakte(r){
 function betDruckInhalt(){
   const L=betL||[];
   const adr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean);
+  // Der Ausdruck zeigt nur, was wirklich besetzt ist. Unbesetzte Rollen fallen
+  // weg -- und mit ihnen jede Gruppe, in der danach nichts mehr uebrig waere
+  // (sonst stuenden leere Ueberschriften wie "Rohbau" ohne Inhalt da).
+  const besetzt=r=>r.art==='eintrag'&&r.status!=='ausgeschieden'&&
+    !!(r.firma||betName(r)||betKont(r).length);
+  const traegtInhalt={};
+  for(let i=L.length-1;i>=0;i--){const r=L[i];
+    const eigen=besetzt(r)||L.some(k=>k.parent_id===r.id&&traegtInhalt[k.id]);
+    traegtInhalt[r.id]=eigen;}
   let h='';
   L.forEach(r=>{
-    if(r.status==='ausgeschieden')return;
+    if(!traegtInhalt[r.id])return;
     const nr='<span class="nr">'+esc(r.nummer)+'</span>';
     if(r.art==='gruppe'){
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
@@ -1976,12 +1985,6 @@ function betDruckInhalt(){
     const unterFirma=vater&&vater.art==='eintrag';
     const nm=betName(r);
     if(!unterFirma){
-      // Noch nicht vergeben: nur der Balken mit Rolle, ohne Vermerk und ohne
-      // leeren Satz darunter. Im Ausdruck soll die Rolle als Platzhalter stehen
-      // (wie auf der Papierliste), aber kein "noch nicht vergeben".
-      if(!r.firma&&!nm&&!betKont(r).length){
-        h+='<div class="balken e'+Math.min(r.tiefe,2)+' leer">'+nr+esc(r.titel||'')+'</div>';
-        return;}
       // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
       h+='<table class="satz"><tr><td class="li">'+
