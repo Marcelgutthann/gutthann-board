@@ -1068,11 +1068,19 @@ function betListe(L){
     gezeigt++;
     const K=betKont(r),nm=betName(r);
     const mail=K.find(k=>k.art==='email'),tel=K.find(k=>k.art==='telefon'||k.art==='mobil');
+    // Firmenzeile = die Zeile, die unter einer Gruppe die Firma haelt. Sie wird
+    // wie im Buero-Ausdruck als Balken gesetzt; die Personen darunter zeigen den
+    // Firmennamen nicht noch einmal (steht ja eine Zeile hoeher).
+    const istFirma=betIstFirmenzeile(r);
+    const vater=r.parent_id?L.find(x=>x.id===r.parent_id):null;
+    const firmaGleich=vater&&vater.art==='eintrag'&&
+      (vater.firma||'').trim().toLowerCase()===(r.firma||'').trim().toLowerCase();
     h+='<div class="bet-z t'+Math.min(r.tiefe,3)+(betSel===r.id?' sel':'')+
+       (istFirma?' firmenzeile':'')+
        (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'">'+
        '<span class="z-nr">'+esc(r.nummer)+'</span>'+
        '<span class="z-rolle">'+esc(r.titel||'—')+'</span>'+
-       '<span class="z-firma">'+esc(r.firma||(r.status==='offen'?'— noch nicht vergeben —':''))+'</span>'+
+       '<span class="z-firma">'+esc(firmaGleich?'':(r.firma||(r.status==='offen'?'— noch nicht vergeben —':'')))+'</span>'+
        '<span class="z-person">'+esc(nm)+(r.funktion?' <span class="z-funk">'+esc(r.funktion)+'</span>':'')+'</span>'+
        '<span class="z-kon">'+(tel?'<i title="'+esc(tel.wert)+'">☎</i>':'')+(mail?'<i title="'+esc(mail.wert)+'">✉</i>':'')+'</span>'+
        '<span class="z-tags">'+
@@ -1882,25 +1890,75 @@ function wireBetCrm(){
   if(q&&!q.dataset.wired){q.dataset.wired='1';
     q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();betCrmSuche();}};}
 }
+// Druckfassung im Layout des Bueroausdrucks:
+//   [grauer Balken]  Nr + Rolle
+//   Firma fett, Anschrift            |  Kontakte rechts
+//   ------------------------------------------------------
+//   Nr + Funktion, Person, Anschrift |  Kontakte rechts
+// Der Firmenname wird bei den Personen NICHT wiederholt -- er steht eine Zeile
+// hoeher und waere im Ausdruck nur Ballast.
 function betDruck(){
-  const zeilen=betL.map(r=>{
-    if(r.art==='gruppe')return '<tr class="g"><td colspan="2"><b>'+esc(r.titel||'')+'</b></td><td class="nr">'+esc(r.nummer)+'</td></tr>';
-    const K=betKont(r),nm=betName(r);
-    const links=[r.titel?'<b>'+esc(r.titel)+'</b>':'',r.firma?esc(r.firma):'',nm?esc(nm):'',betAdr(r)?esc(betAdr(r)):'']
-      .filter(Boolean).join('<br>');
-    const rechts=K.map(k=>esc(((BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['',''])[1])+(k.kontext?'('+k.kontext+')':'')+': '+k.wert)).join('<br>');
-    return '<tr><td>'+links+'</td><td>'+rechts+'</td><td class="nr">'+esc(r.nummer)+'</td></tr>';}).join('');
+  const L=betL||[];
+  const artName={telefon:'Telefon',mobil:'Mobil',fax:'Fax',email:'E-Mail',web:'Web'};
+  const kontSpalte=r=>{const K=betKont(r);
+    if(!K.length)return '';
+    const gross=t=>t?t.charAt(0).toUpperCase()+t.slice(1):'Arbeit';
+    return '<table class="kon">'+K.map(k=>'<tr><td class="ka">'+esc((artName[k.art]||k.art))+'</td>'+
+      '<td class="kk">('+esc(gross(k.kontext))+')</td><td class="kw">'+esc(k.wert)+'</td></tr>').join('')+'</table>';};
+  const adr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean);
+
+  let h='';
+  L.forEach(r=>{
+    if(r.status==='ausgeschieden')return;
+    if(r.art==='gruppe'){
+      h+='<div class="gr t'+Math.min(r.tiefe,2)+'"><span class="nr">'+esc(r.nummer)+'</span> '+esc(r.titel||'')+'</div>';
+      return;}
+    const vater=r.parent_id?L.find(x=>x.id===r.parent_id):null;
+    const unterFirma=vater&&vater.art==='eintrag';
+    const nm=betName(r);
+    if(!unterFirma){
+      // Firmenposition: Balken mit Nummer und Rolle, darunter die Firma
+      h+='<div class="balken"><span class="nr">'+esc(r.nummer)+'</span> '+esc(r.titel||'')+'</div>';
+      h+='<div class="satz"><div class="li">'+
+        (r.firma?'<div class="firma">'+esc(r.firma)+'</div>':'')+
+        (nm?'<div>'+esc(nm)+(r.funktion?' <span class="fu">'+esc(r.funktion)+'</span>':'')+'</div>':'')+
+        adr(r).map(z=>'<div>'+esc(z)+'</div>').join('')+
+        (!r.firma&&!nm?'<div class="offen">— noch nicht vergeben —</div>':'')+
+        '</div><div class="re">'+kontSpalte(r)+'</div></div>';
+      return;}
+    // Person unter einer Firma: ohne Firmenname
+    const eigeneAdr=(r.strasse||r.ort)&&
+      ((r.strasse||'')!==(vater.strasse||'')||(r.ort||'')!==(vater.ort||''));
+    h+='<div class="satz person"><div class="li">'+
+      '<div class="pk"><span class="nr">'+esc(r.nummer)+'</span> '+esc(r.titel||'')+'</div>'+
+      (nm?'<div class="pn">'+esc(nm)+(r.funktion?' <span class="fu">'+esc(r.funktion)+'</span>':'')+'</div>':'')+
+      (eigeneAdr?adr(r).map(z=>'<div>'+esc(z)+'</div>').join(''):'')+
+      '</div><div class="re">'+kontSpalte(r)+'</div></div>';
+  });
+
   const w=window.open('','_blank');
   if(!w){betHinweis('Bitte Pop-ups für diese Seite erlauben.');return;}
-  w.document.write('<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Projekt-Beteiligte '+esc(currentName)+'</title>'+
-    '<style>@page{size:A4;margin:16mm 14mm}body{font:10pt/1.35 Arial,Helvetica,sans-serif;color:#111}'+
-    'h1{font-size:15pt;margin:0 0 2mm}.sub{font-size:10pt;color:#444;margin-bottom:5mm}'+
-    'table{width:100%;border-collapse:collapse}thead th{font-size:8.5pt;text-align:left;border-bottom:1px solid #333;padding:1mm 2mm}'+
-    'td{vertical-align:top;padding:1.6mm 2mm;border-bottom:.4pt solid #ccc}tr.g td{background:#eee;border-bottom:1px solid #999}'+
-    'td.nr{text-align:right;white-space:nowrap;width:16mm;color:#444}thead{display:table-header-group}tr{break-inside:avoid}</style></head><body>'+
-    '<h1>Projekt-Beteiligte</h1><div class="sub">'+esc(currentName)+'</div>'+
-    '<table><thead><tr><th>Beteiligte</th><th>Tel./Fax/E-Mail</th><th style="text-align:right">Nummer</th></tr></thead><tbody>'+
-    zeilen+'</tbody></table></body></html>');
+  w.document.write('<!doctype html><html lang="de"><head><meta charset="utf-8">'+
+    '<title>Projektbeteiligte '+esc(currentName)+'</title><style>'+
+    '@page{size:A4;margin:16mm 14mm 14mm}'+
+    'body{font:9pt/1.35 Arial,Helvetica,sans-serif;color:#000;margin:0}'+
+    'h1{font-size:11pt;margin:0 0 1mm}.pj{font-size:9pt;margin-bottom:6mm}'+
+    '.pj b{font-weight:400;color:#444}'+
+    '.gr{font-weight:700;font-size:9pt;margin:5mm 0 1.5mm;padding-bottom:.8mm;border-bottom:.8pt solid #b3b3b3}'+
+    '.gr.t1{margin-left:4mm}.gr.t2{margin-left:8mm}'+
+    '.balken{background:#e3e3e3;font-weight:700;padding:1.6mm 2mm;margin:3mm 0 1.5mm}'+
+    '.nr{font-weight:400;color:#333;margin-right:1.5mm}'+
+    '.satz{display:flex;gap:6mm;padding:1.5mm 2mm;break-inside:avoid}'+
+    '.satz .li{flex:0 0 52%}.satz .re{flex:1}'+
+    '.satz.person{border-top:.5pt solid #ccc}'+
+    '.firma{font-weight:700}.pk{margin-bottom:.4mm}.pn{}'+
+    '.fu{color:#444}.offen{color:#8a6d1f;font-style:italic}'+
+    'table.kon{border-collapse:collapse;font-size:8pt}'+
+    'table.kon td{padding:0 1.5mm 0 0;vertical-align:top;white-space:nowrap}'+
+    'td.ka{color:#444}td.kk{color:#666}'+
+    '</style></head><body>'+
+    '<h1>Beteiligtenliste</h1><div class="pj"><b>Projekt:</b> '+esc(currentName)+'</div>'+
+    h+'</body></html>');
   w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
 function renderFolders(F,total){if(!F.length)return '<div class="empty">Keine Ordner.</div>';const max=Math.max(...F.map(f=>+f.anzahl));return F.map(f=>'<div class="fld-row"><div><div>'+esc(f.ordner||'(Wurzel)')+'</div><div class="fld-bar"><i style="width:'+Math.round(+f.anzahl/max*100)+'%"></i></div></div><div class="fc2">'+f.anzahl+'</div></div>').join('');}
