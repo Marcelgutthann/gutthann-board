@@ -1870,14 +1870,24 @@ function wireBet(){
   // vorher wurde damit die bestehende Zeile bearbeitet und die Person darin
   // ersetzt. Ziel ist immer die Firmenzeile: steht man auf einer Person, ist
   // das deren Elternteil, sonst die Zeile selbst.
+  // ZWEI FAELLE, die vorher verwechselt wurden:
+  //  a) Die Rolle ist noch LEER -> die gewaehlte Firma besetzt GENAU DIESE Zeile
+  //     (betEdit MIT id = Aenderung). Sonst entsteht eine zweite Zeile daneben.
+  //  b) Die Rolle traegt schon eine Firma -> die gewaehlte Person wird als
+  //     Unterzeile ANGEHAENGT (betEdit OHNE id = Neuanlage).
+  // Steht man auf einer Person, ist die Firmenzeile immer deren Elternteil.
   M.querySelectorAll('[data-betfill]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const r=betL.find(x=>x.id===b.dataset.betfill);if(!r)return;
     const vater=r.parent_id?betL.find(x=>x.id===r.parent_id):null;
     const aufPerson=!!(r.nachname||r.vorname)&&vater&&vater.art==='eintrag';
     const firmenzeile=aufPerson?vater:r;
-    betEdit={art:'eintrag',parent_id:firmenzeile.id,titel:firmenzeile.titel||r.titel||'',
-             firma:firmenzeile.firma||null,kontakte:[]};
+    if(!firmenzeile.firma){
+      betEdit=Object.assign({},firmenzeile,{kontakte:betKont(firmenzeile)});
+    }else{
+      betEdit={art:'eintrag',parent_id:firmenzeile.id,titel:firmenzeile.titel||'',
+               firma:firmenzeile.firma,kontakte:[]};
+    }
     betMitRolle=firmenzeile.titel||r.titel||'';
     betCrmOffen=true;betCrmFirma=null;betNurSeite();});
   M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=e=>{
