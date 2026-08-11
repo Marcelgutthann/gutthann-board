@@ -1943,6 +1943,12 @@ function betDruckInhalt(){
     if(r.status==='ausgeschieden')return;
     const nr='<span class="nr">'+esc(r.nummer)+'</span>';
     if(r.art==='gruppe'){
+      // Noch nicht vergeben: nur der Balken, kein leerer Satz darunter. Sonst
+      // braucht ein frisch angelegtes Projekt sechs Seiten fuer lauter Leerzeilen.
+      if(!r.firma&&!nm&&!betKont(r).length){
+        h+='<div class="balken e'+Math.min(r.tiefe,2)+' leer">'+nr+esc(r.titel||'')+
+           '<span class="offen-tag">noch nicht vergeben</span></div>';
+        return;}
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
       return;}
     const vater=r.parent_id?L.find(x=>x.id===r.parent_id):null;
@@ -1951,24 +1957,23 @@ function betDruckInhalt(){
     if(!unterFirma){
       // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
-      h+='<div class="satz"><div class="li">'+
+      h+='<table class="satz"><tr><td class="li">'+
         (r.firma?'<div class="firma">'+esc(r.firma)+'</div>':'')+
         (nm?'<div>'+esc(nm)+'</div>':'')+
         (r.funktion?'<div class="funktion">'+esc(r.funktion)+'</div>':'')+
         adr(r).map(z=>'<div>'+esc(z)+'</div>').join('')+
-        (!r.firma&&!nm?'<div class="offen">— noch nicht vergeben —</div>':'')+
-        '</div><div class="re">'+betDruckKontakte(r)+'</div></div>';
+        '</td><td class="re">'+betDruckKontakte(r)+'</td></tr></table>';
       return;}
     // Person unter der Firma: Firmenname und -anschrift stehen eine Zeile
     // hoeher und werden hier weggelassen.
     const eigeneAdr=(r.strasse||r.ort)&&
       ((r.strasse||'')!==(vater.strasse||'')||(r.ort||'')!==(vater.ort||''));
-    h+='<div class="satz"><div class="li">'+
+    h+='<table class="satz"><tr><td class="li">'+
       '<div class="kopfzeile">'+nr+esc(r.titel||'')+'</div>'+
       (nm?'<div>'+esc(nm)+'</div>':'')+
       (r.funktion?'<div class="funktion">'+esc(r.funktion)+'</div>':'')+
       (eigeneAdr?adr(r).map(z=>'<div>'+esc(z)+'</div>').join(''):'')+
-      '</div><div class="re">'+betDruckKontakte(r)+'</div></div>';
+      '</td><td class="re">'+betDruckKontakte(r)+'</td></tr></table>';
   });
   return h;
 }
