@@ -23,7 +23,7 @@
 <style>
 /* Querformat: 297 x 210 mm, nutzbare Satzbreite 267 mm. Der Gewinn liegt darin,
    dass lange Firmennamen und Mailadressen sicher in eine Zeile passen. */
-@page { size: A4 landscape; margin: 14mm 15mm 20mm; }
+@page { size: A4 landscape; margin: 10mm 10mm 16mm; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: Verdana, Geneva, sans-serif;
@@ -95,8 +95,7 @@ table.satz > tbody > tr > td.li { padding-left: 7.5pt; }
 table.satz + table.satz > tbody > tr > td { border-top: .75pt solid #a6a6a6; }
 /* Im Querformat reichen 34 % fuer Firma und Anschrift. Der Satz bekommt eine
    Maximalbreite, sonst stehen die Kontaktwerte einsam am rechten Blattrand. */
-table.satz { max-width: 215mm; }
-table.satz > tbody > tr > td.li { width: 34%; padding-right: 4mm; }
+table.satz > tbody > tr > td.li { width: 38%; padding-right: 6mm; }
 .satz .kopfzeile { margin-bottom: .4mm; }
 .satz .kopfzeile .nr { margin-right: 3mm; }
 .satz .firma { font-weight: bold; }
@@ -107,8 +106,8 @@ table.satz > tbody > tr > td.li { width: 34%; padding-right: 4mm; }
 /* Feste Spaltenbreiten, sonst rutscht der Wert je nach Textlaenge hin und her. */
 table.kon { border-collapse: collapse; font-size: 8pt; width: 100%; table-layout: fixed; }
 table.kon td { padding: 0 1.5mm .4mm 0; vertical-align: top; }
-td.ki { width: 5mm; }
-td.kk { width: 13mm; white-space: nowrap; color: #000; }
+td.ki { width: 6mm; }
+td.kk { width: 16mm; white-space: nowrap; color: #000; }
 td.kw { word-break: break-word; }
 /* Symbole als Vektor: Unicode-Telefone und -Faxe sehen je nach installierter
    Schrift voellig anders aus (mal Emoji, mal durchgestrichenes Telefon). */
