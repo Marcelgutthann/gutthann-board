@@ -14,6 +14,7 @@
     Fusszeile: "Erstellt am ... | Seite x von y", rechtsbuendig
 
   PLATZHALTER, die dashboard.js ersetzt:
+    {{KOPF}}      Name der Liste, gross oben links (z. B. "Beteiligtenliste")
     {{PROJEKT}}   Projektname
     {{TITEL}}     Ueberschrift der Liste (mit Datum)
     {{DATUM}}     Erstellungsdatum, z. B. 20.07.2026
@@ -130,7 +131,7 @@ td.ki svg { width: 3.2mm; height: 3.2mm; display: block; margin-top: .35mm; }
 
 <div class="kopf">
   <div class="tx">
-    <h1>Beteiligtenliste</h1>
+    <h1>{{KOPF}}</h1>
     <div class="zeile"><span class="lab">Projekt:</span><span>{{PROJEKT}}</span></div>
   </div>
   <div class="logo"><img src="{{LOGO}}" alt=""></div>
