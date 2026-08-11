@@ -71,6 +71,8 @@ let berTyp='lagebericht',berSel=null,berPollTimer=null;
 // Beteiligtenliste: betL = flacher Baum aus beteiligte_liste(), betEdit = offenes Formular,
 // betRollen = Vorschlagsliste fuers Rollenfeld, betSel = eingeklappte Gruppen.
 let betL=[],betEdit=null,betRollen=[],betZu=new Set();
+// Ein Projekt kann mehrere Listen haben: betListen = alle, betListe = die offene.
+let betListen=[],betListeId=null,betVorlagen=[],betNeueListe=null;
 // PDF-Import: betPdfFunde = erkannte Zeilen der hochgeladenen Datei (null = keine Vorschau offen)
 let betPdfFunde=null,betPdfName='';
 // CRM-Auswahl: Filter, letzte Eingabe, Trefferliste; betCrmFirma/betCrmMit halten
@@ -1020,11 +1022,27 @@ function betKontZeile(k){const art=(BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['',
 function renderBet(){
   const L=betL||[];
   let h='<div class="bet-shell">';
+  // Listenreiter: ein Projekt kann mehrere Listen haben (Projektbeteiligte,
+  // Fachplaner, Gewerke-Empfehlungen ...). Der aktive Reiter bestimmt, welche
+  // Zeilen unten stehen.
+  h+='<div class="bet-tabs">'+
+     betListen.map(l=>'<button class="bet-tab'+(l.id===betListeId?' an':'')+'" data-betlist="'+l.id+'">'+
+       esc(l.name)+
+       (l.lph?'<span class="tab-meta">LPH '+esc(String(l.lph))+'</span>':'')+
+       (l.bauabschnitt?'<span class="tab-meta">'+esc(l.bauabschnitt)+'</span>':'')+
+       '</button>').join('')+
+     '<button class="bet-tab neu" data-bet="liste-neu" title="Neue Liste aus einer Vorlage anlegen">+ Liste</button>'+
+     (betListeId?'<span class="bet-tabs-rechts">'+
+       '<button class="bet-t" data-bet="liste-links" title="Reiter nach links">◂</button>'+
+       '<button class="bet-t" data-bet="liste-rechts" title="Reiter nach rechts">▸</button>'+
+       '<button class="bet-t" data-bet="liste-umbenennen" title="Liste umbenennen">✎</button>'+
+       '<button class="bet-t" data-bet="liste-vorlage" title="Diese Liste als Vorlage sichern — Gruppen und Rollen, ohne Firmen">Als Vorlage</button>'+
+       '<button class="bet-t del" data-bet="liste-loeschen" title="Diese Liste löschen">🗑</button></span>':'')+
+     '</div>';
   h+='<div class="bet-bar">'+
      '<button class="btn-sm" data-bet="neu-eintrag" title="Öffnet das Adressbuch und legt die gewählte Firma bzw. Person in der ersten Gruppe an. Danach lässt sie sich mit den Pfeilen verschieben.">+ Firma / Person</button>'+
      '<button class="btn-sm ghost" data-bet="neu-gruppe" title="Legt eine neue Überschrift auf oberster Ebene an">+ Gruppe</button>'+
      '<span class="bet-bar-sep"></span>'+
-     (L.length?'':'<button class="btn-sm ghost" data-bet="vorlage">Standard-Gliederung</button>')+
      '<button class="btn-sm'+(betAnalyseAn?'':' ghost')+'" data-bet="analyse" title="'+
        (betAnalyseAn?'Vorschläge der Tiefenanalyse wieder entfernen (von Hand Ergänztes bleibt)'
                    :'Beteiligte aus der Tiefenanalyse übernehmen, mit dem CRM abgeglichen')+'">'+
@@ -1044,9 +1062,11 @@ function renderBet(){
 }
 
 function betListe(L){
-  if(!L.length)return '<div class="bet-leer">Für dieses Projekt ist noch keine Beteiligtenliste angelegt.<br>'+
-    '„Standard-Gliederung“ legt das gewohnte Gerüst an (Behörden · Auftraggeber · Gesamtplanung · Ausführende Firmen '+
-    'mit Rohbau/Ausbau/Technik) — oder ein bestehendes PDF einlesen.</div>';
+  if(!L.length)return '<div class="bet-leer">'+(betListeId
+    ?'Diese Liste ist noch leer.<br>Mit „+ Firma / Person“ füllen, ein bestehendes PDF einlesen '+
+     'oder „+ Gruppe“ für eine eigene Überschrift.'
+    :'Für dieses Projekt ist noch keine Liste angelegt.<br>Oben auf „+ Liste“ — dort lässt sich eine Vorlage wählen, '+
+     'die die Gruppen gleich mitbringt.')+'</div>';
   const f=(betFilter||'').toLowerCase().trim();
   const passt=r=>!f||[r.titel,r.firma,betName(r),r.ort,r.nummer].filter(Boolean).join(' ').toLowerCase().includes(f);
   // Beim Filtern verschwinden Gruppen ohne Treffer; ohne Filter gilt das Ein-/Ausklappen.
@@ -1100,6 +1120,17 @@ function betListe(L){
 // Was rechts steht, richtet sich nach der Lage: laufender Import zuerst,
 // dann offenes Formular, dann CRM-Auswahl, sonst die angeklickte Zeile.
 function betSeite(){
+  if(betNeueListe)return betListeForm();
+  if(betLoeschFrage==='LISTE'){
+    const l=betListen.find(x=>x.id===betListeId)||{};
+    const n=betL.filter(r=>r.art==='eintrag').length;
+    return '<div class="bet-p"><div class="bet-p-kopf">Liste löschen?'+
+      '<button class="bet-t" data-bet="del-nein">✕</button></div>'+
+      '<div class="bet-p-titel">'+esc(l.name||'')+'</div>'+
+      '<div class="bet-warnbox">Die Liste und ihre '+n+' Einträge werden gelöscht. '+
+      'Andere Listen dieses Projekts bleiben unberührt.</div>'+
+      '<div class="bet-p-akt"><button class="btn-sm rot" data-bet="liste-loeschen-ok">Endgültig löschen</button>'+
+      '<button class="btn-sm ghost" data-bet="del-nein">Abbrechen</button></div></div>';}
   if(betLoeschFrage){const r=betL.find(x=>x.id===betLoeschFrage);
     if(r)return betLoeschPanel(r);betLoeschFrage=null;}
   if(betPdfFunde)return betPdfVorschau();
@@ -1111,6 +1142,101 @@ function betSeite(){
   const r=betL.find(x=>x.id===betSel);
   if(r)return betDetail(r);
   return betUebersicht();
+}
+
+// --- Listen anlegen, umbenennen, sichern, loeschen --------------------------
+// betNeueListe: {modus:'neu'|'umbenennen'|'vorlage'} — steuert, was das Panel zeigt.
+function betListeForm(){
+  const m=betNeueListe.modus;
+  const aktuelle=betListen.find(l=>l.id===betListeId);
+  if(m==='umbenennen')
+    return '<div class="bet-p"><div class="bet-p-kopf">Liste umbenennen'+
+      '<button class="bet-t" data-bet="liste-abbrechen">✕</button></div>'+
+      '<div class="bet-fgrid">'+
+      '<label class="bf w2">Name<input id="bl_name" value="'+esc(aktuelle?aktuelle.name:'')+'"></label>'+
+      '<label class="bf">Leistungsphase<input id="bl_lph" value="'+esc(aktuelle&&aktuelle.lph?String(aktuelle.lph):'')+'" placeholder="z. B. 8"></label>'+
+      '<label class="bf">Bauabschnitt<input id="bl_ba" value="'+esc(aktuelle&&aktuelle.bauabschnitt?aktuelle.bauabschnitt:'')+'" placeholder="z. B. BA 1"></label>'+
+      '</div><div class="bet-p-akt">'+
+      '<button class="btn-sm" data-bet="liste-speichern">Speichern</button>'+
+      '<button class="btn-sm ghost" data-bet="liste-abbrechen">Abbrechen</button></div></div>';
+  if(m==='vorlage')
+    return '<div class="bet-p"><div class="bet-p-kopf">Als Vorlage sichern'+
+      '<button class="bet-t" data-bet="liste-abbrechen">✕</button></div>'+
+      '<p class="bet-imp-p">Gesichert werden die <b>Gruppen und Rollen</b> dieser Liste — '+
+      'keine Firmen und keine Personen. Die Vorlage steht danach beim Anlegen jeder neuen Liste zur Wahl.</p>'+
+      '<div class="bet-fgrid">'+
+      '<label class="bf w2">Name der Vorlage<input id="bl_name" value="'+esc(aktuelle?aktuelle.name:'')+'" placeholder="z. B. Fachplaner"></label>'+
+      '<label class="bf w2">Beschreibung<input id="bl_besch" placeholder="wofür ist sie gedacht?"></label>'+
+      '</div><div class="bet-p-akt">'+
+      '<button class="btn-sm" data-bet="liste-speichern">Vorlage anlegen</button>'+
+      '<button class="btn-sm ghost" data-bet="liste-abbrechen">Abbrechen</button></div></div>';
+  // Neue Liste
+  return '<div class="bet-p"><div class="bet-p-kopf">Neue Liste'+
+    '<button class="bet-t" data-bet="liste-abbrechen">✕</button></div>'+
+    '<div class="bet-fgrid">'+
+    '<label class="bf w2">Name<input id="bl_name" placeholder="z. B. Fachplaner, Estrich-Angebote"></label>'+
+    '<label class="bf w2">Vorlage<select id="bl_vorlage">'+
+      '<option value="">— leer, ohne Gruppen —</option>'+
+      betVorlagen.map(v=>'<option value="'+v.id+'">'+esc(v.name)+'</option>').join('')+
+    '</select></label>'+
+    (betVorlagen.length?'<div class="bf w2"><span class="bf-lab">'+
+      esc((betVorlagen[0]||{}).beschreibung||'')+'</span></div>':'')+
+    '<label class="bf">Leistungsphase<input id="bl_lph" placeholder="optional"></label>'+
+    '<label class="bf">Bauabschnitt<input id="bl_ba" placeholder="optional"></label>'+
+    '</div><div class="bet-p-akt">'+
+    '<button class="btn-sm" data-bet="liste-speichern">Liste anlegen</button>'+
+    '<button class="btn-sm ghost" data-bet="liste-abbrechen">Abbrechen</button></div></div>';
+}
+
+async function betListeSpeichern(){
+  const M=el('main');
+  const wert=id=>{const e=M.querySelector('#'+id);return e?e.value.trim():'';};
+  const name=wert('bl_name');
+  const m=betNeueListe.modus;
+  if(!name){betHinweis('Bitte einen Namen angeben.');return;}
+  if(m==='umbenennen'){
+    const{error}=await sb.from('beteiligten_listen').update({
+      name,lph:wert('bl_lph')?Number(wert('bl_lph')):null,
+      bauabschnitt:wert('bl_ba')||null}).eq('id',betListeId);
+    if(error){betHinweis('Nicht gespeichert: '+betFehler(error));return;}
+  }else if(m==='vorlage'){
+    const{error}=await sb.rpc('liste_als_vorlage',
+      {p_liste:betListeId,p_name:name,p_beschreibung:wert('bl_besch')||null});
+    if(error){betHinweis('Nicht gesichert: '+betFehler(error));return;}
+    betNeueListe=null;await betNeuZeichnen();
+    betHinweis('Vorlage „'+name+'“ angelegt — sie steht jetzt beim Anlegen zur Wahl.');
+    return;
+  }else{
+    const{data,error}=await sb.rpc('liste_anlegen',{
+      p_projekt:current,p_name:name,p_vorlage:wert('bl_vorlage')||null,
+      p_lph:wert('bl_lph')?Number(wert('bl_lph')):null,p_bauabschnitt:wert('bl_ba')||null});
+    if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
+    betListeId=data;                       // direkt in die neue Liste wechseln
+  }
+  betNeueListe=null;betSel=null;await betNeuZeichnen();
+  betHinweis(m==='umbenennen'?'Umbenannt.':'Liste „'+name+'“ angelegt.');
+}
+
+async function betListeLoeschen(){
+  const l=betListen.find(x=>x.id===betListeId);if(!l)return;
+  const{error}=await sb.from('beteiligten_listen').delete().eq('id',betListeId);
+  if(error){betHinweis('Nicht gelöscht: '+betFehler(error));return;}
+  betListeId=null;betSel=null;betLoeschFrage=null;
+  await betNeuZeichnen();betHinweis('Liste „'+l.name+'“ gelöscht.');
+}
+// Reiter verschieben: die Nachbarn tauschen den Platz. Danach wird die ganze
+// Reihe neu durchnummeriert (10, 20, 30 …), damit doppelte pos-Werte aus
+// frueheren Anlagen nicht zu einer zufaelligen Reihenfolge fuehren.
+async function betListeSchieben(richtung){
+  const i=betListen.findIndex(x=>x.id===betListeId);
+  const j=i+richtung;
+  if(i<0||j<0||j>=betListen.length){betHinweis('Der Reiter ist schon ganz außen.');return;}
+  const R=betListen.slice();R.splice(j,0,R.splice(i,1)[0]);
+  for(let k=0;k<R.length;k++){
+    const{error}=await sb.from('beteiligten_listen').update({pos:(k+1)*10}).eq('id',R[k].id);
+    if(error){betHinweis('Nicht verschoben: '+betFehler(error));return;}
+  }
+  await betNeuZeichnen();
 }
 
 function betUebersicht(){
@@ -1219,10 +1345,16 @@ function betForm(e){
 // true, wenn gerade Zeilen aus der Analyse in der Liste stehen (Schalterzustand)
 let betAnalyseAn=false;
 async function betLaden(){
-  const[{data:L},{data:R}]=await Promise.all([
-    sb.rpc('beteiligte_liste',{pid:current}),
-    betRollen.length?Promise.resolve({data:betRollen}):sb.from('beteiligten_rollen').select('rolle,bereich').order('bereich').order('pos')]);
-  betL=L||[];betRollen=R||[];
+  // Listen des Projekts zuerst — ohne sie weiss man nicht, welche Zeilen gelten.
+  const{data:LI}=await sb.from('beteiligten_listen')
+    .select('id,name,vorlage_id,lph,bauabschnitt,pos').eq('project_id',current).order('pos');
+  betListen=LI||[];
+  if(!betListen.some(x=>x.id===betListeId))betListeId=betListen.length?betListen[0].id:null;
+  const[{data:L},{data:R},{data:V}]=await Promise.all([
+    betListeId?sb.rpc('beteiligte_liste',{p_liste:betListeId}):Promise.resolve({data:[]}),
+    betRollen.length?Promise.resolve({data:betRollen}):sb.from('beteiligten_rollen').select('rolle,bereich').order('bereich').order('pos'),
+    sb.from('listen_vorlagen').select('id,name,beschreibung').order('pos')]);
+  betL=L||[];betRollen=R||[];betVorlagen=V||[];
   betAnalyseAn=betL.some(r=>r.art==='eintrag'&&(r.quelle==='analyse'||r.analyse_befuellt));
 }
 // Datenbankfehler in einen Satz uebersetzen, mit dem man etwas anfangen kann.
@@ -1267,7 +1399,7 @@ async function betSpeichern(){
     // ans Ende des Zielzweigs
     const gesch=betL.filter(r=>(r.parent_id||null)===(betEdit.parent_id||null));
     const pos=gesch.length?Math.max(...gesch.map((_,i)=>i))*10+10:10;
-    const{error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,parent_id:betEdit.parent_id||null,
+    const{error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,listen_id:betListeId,parent_id:betEdit.parent_id||null,
       pos:pos+10,quelle:betEdit.quelle||'hand'},d,betEdit.crm||{}));
     if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
   }
@@ -1300,7 +1432,7 @@ async function betPersonRunter(id){
   const r=betL.find(x=>x.id===id);if(!r||!(r.nachname||r.vorname))return;
   const kinder=betL.filter(x=>x.parent_id===id).length;
   const{error:e1}=await sb.from('beteiligte').insert({
-    project_id:current,parent_id:id,art:'eintrag',pos:(kinder+1)*10,
+    project_id:current,listen_id:betListeId,parent_id:id,art:'eintrag',pos:(kinder+1)*10,
     titel:r.titel,firma:r.firma,anrede:r.anrede,namenstitel:r.namenstitel,
     vorname:r.vorname,nachname:r.nachname,funktion:r.funktion,
     strasse:r.strasse,plz:r.plz,ort:r.ort,kontakte:betKont(r),
@@ -1341,22 +1473,17 @@ async function betEbene(id,rein){
   if(error){betHinweis('Nicht verschoben: '+betFehler(error));return;}
   await betNeuZeichnen();
 }
-async function betVorlage(){
-  const{data,error}=await sb.rpc('beteiligte_vorlage',{pid:current});
-  if(error){betHinweis('Fehler: '+betFehler(error));return;}
-  await betNeuZeichnen();betHinweis(data?('Gliederung angelegt ('+data+' Zeilen).'):'Es gibt bereits eine Liste — unverändert gelassen.');
-}
 // "Aus Analyse" ist ein Schalter: einmal holt die Vorschlaege, nochmal nimmt sie
 // wieder heraus. Von Hand Ergaenztes bleibt dabei stehen (siehe Migration 92).
 async function betAusAnalyse(){
   if(!betL.length){betHinweis('Erst die Gliederung anlegen, dann übernehmen.');return;}
   if(betAnalyseAn){
-    const{data,error}=await sb.rpc('beteiligte_analyse_entfernen',{pid:current});
+    const{data,error}=await sb.rpc('beteiligte_analyse_entfernen',{p_liste:betListeId});
     if(error){betHinweis('Fehler: '+betFehler(error));return;}
     await betNeuZeichnen();
     betHinweis(data?(data+' Zeile(n) aus der Analyse wieder entfernt.'):'Nichts zu entfernen.');
     return;}
-  const{data,error}=await sb.rpc('beteiligte_aus_analyse',{pid:current});
+  const{data,error}=await sb.rpc('beteiligte_aus_analyse',{p_liste:betListeId});
   if(error){betHinweis('Fehler: '+betFehler(error));return;}
   await betNeuZeichnen();
   betHinweis(data?(data+' Beteiligte übernommen — mit dem CRM abgeglichen.'):'Nichts Neues in der Analyse gefunden.');
@@ -1570,7 +1697,7 @@ async function betPdfUebernehmen(){
     const zeilen=stapel.map(z=>{const e=F[z.i];
       const vater=z.vater!==undefined?idVon[z.vater]:undefined;
       // pos aus der Position im PDF: so bleibt die Reihenfolge des Ausdrucks erhalten
-      return{project_id:current,parent_id:vater!==undefined?vater:wurzel,
+      return{project_id:current,listen_id:betListeId,parent_id:vater!==undefined?vater:wurzel,
         art:e.istGruppe?'gruppe':'eintrag',pos:(basis+1)*10+z.i*10,
         titel:e.titel,firma:e.istGruppe?null:e.firma,anrede:e.anrede,namenstitel:e.namenstitel,
         vorname:e.vorname,nachname:e.nachname,strasse:e.strasse,plz:e.plz,ort:e.ort,
@@ -1739,7 +1866,7 @@ async function betPersonHinzu(indizes){
     const ziel=(betEdit&&betEdit.parent_id)||(betL.find(r=>r.art==='gruppe')||{}).id||null;
     const gesch=betL.filter(r=>(r.parent_id||null)===(ziel||null)).length;
     const{data,error}=await sb.from('beteiligte').insert({
-      project_id:current,parent_id:ziel,art:'eintrag',pos:(gesch+1)*10,
+      project_id:current,listen_id:betListeId,parent_id:ziel,art:'eintrag',pos:(gesch+1)*10,
       titel:rolle||null,firma:F.firma||null,strasse:F.strasse,plz:F.plz,ort:F.ort,
       kontakte:F.kontakte||[],quelle:'crm',crm_company_id:F.crm_id}).select('id');
     if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
@@ -1747,7 +1874,7 @@ async function betPersonHinzu(indizes){
   }
   // 3) Jede Person als Unterzeile der Firma.
   const kinder=betL.filter(r=>r.parent_id===firmenId).length;
-  const zeilen=M.map((p,k)=>({project_id:current,parent_id:firmenId,art:'eintrag',
+  const zeilen=M.map((p,k)=>({project_id:current,listen_id:betListeId,parent_id:firmenId,art:'eintrag',
     pos:(kinder+k+1)*10,titel:rolle||null,firma:p.firma_name||F.firma||null,
     anrede:p.anrede,namenstitel:p.namenstitel,vorname:p.vorname,nachname:p.nachname,
     funktion:p.funktion,strasse:p.strasse||F.strasse,plz:p.plz||F.plz,ort:p.ort||F.ort,
@@ -1835,7 +1962,6 @@ function wireBet(){
       betEdit={art:'eintrag',parent_id:g?g.id:null,kontakte:[]};betCrmOffen=true;betCrmFirma=null;betSel=null;}
     else if(a==='abbrechen'){betEdit=null;betCrmOffen=false;betCrmFirma=null;}
     else if(a==='speichern'){await betSpeichern();return;}
-    else if(a==='vorlage'){await betVorlage();return;}
     else if(a==='analyse'){await betAusAnalyse();return;}
     else if(a==='verteiler'){await betVerteiler();return;}
     else if(a==='druck'){betDruck();return;}
@@ -1845,6 +1971,15 @@ function wireBet(){
     else if(a==='crm-auf'){betCrmOffen=true;betCrmFirma=null;betNurSeite();return;}
     else if(a==='crm-zu'){betCrmOffen=false;betCrmFirma=null;betNurSeite();return;}
     else if(a==='del-nein'){betLoeschFrage=null;betNurSeite();return;}
+    else if(a==='liste-neu'){betNeueListe={modus:'neu'};betEdit=null;betCrmOffen=false;betSel=null;}
+    else if(a==='liste-umbenennen'){betNeueListe={modus:'umbenennen'};betEdit=null;betCrmOffen=false;}
+    else if(a==='liste-vorlage'){betNeueListe={modus:'vorlage'};betEdit=null;betCrmOffen=false;}
+    else if(a==='liste-abbrechen'){betNeueListe=null;}
+    else if(a==='liste-speichern'){await betListeSpeichern();return;}
+    else if(a==='liste-loeschen'){betLoeschFrage='LISTE';betNeueListe=null;betEdit=null;betCrmOffen=false;}
+    else if(a==='liste-loeschen-ok'){await betListeLoeschen();return;}
+    else if(a==='liste-links'){await betListeSchieben(-1);return;}
+    else if(a==='liste-rechts'){await betListeSchieben(1);return;}
     else if(a==='crm-suche'){await betCrmSuche();return;}
     else if(a==='crm-zurueck'){betCrmFirma=null;betCrmMit=[];betMitRolle='';betNurSeite();return;}
     else if(a==='crm-firma-uebernehmen'){await betFirmaUebernehmen();return;}
@@ -1858,6 +1993,12 @@ function wireBet(){
     betNurSeite();
     const f=M.querySelector('#bf_titel');if(f&&betEdit&&!betEdit.id)f.focus();
   });
+  // Listenreiter wechseln
+  M.querySelectorAll('[data-betlist]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.betlist===betListeId)return;
+    betListeId=b.dataset.betlist;betSel=null;betEdit=null;betCrmOffen=false;
+    betNeueListe=null;betLoeschFrage=null;betFilter='';
+    await betNeuZeichnen();});
   // Zeile anklicken -> Details rechts. Von dort geht es per Knopf weiter ins
   // Adressbuch; kein automatisches Aufklappen, damit der Weg vorhersehbar bleibt.
   M.querySelectorAll('[data-betrow]').forEach(z=>z.onclick=()=>{
@@ -2040,9 +2181,16 @@ async function betDruck(){
   try{await betVorlageLaden();}
   catch(e){betHinweis('Druckvorlage nicht gefunden: '+e.message);return;}
   const heute=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  // Kopf und Ueberschrift kommen aus der gedruckten Liste, nicht mehr fest
+  // "Beteiligtenliste"/"Projektbeteiligte" — sonst steht auf einer Gewerke-
+  // Empfehlung der falsche Dokumenttyp.
+  const liste=betListen.find(l=>l.id===betListeId)||{},
+        kopf=liste.name||'Beteiligtenliste',
+        titel=[liste.lph?'LPH '+liste.lph:'',liste.bauabschnitt||'',heute].filter(Boolean).join(' · ');
   const html=betDruckVorlage
+    .replace(/\{\{KOPF\}\}/g,esc(kopf))
     .replace(/\{\{PROJEKT\}\}/g,esc(currentName||''))
-    .replace(/\{\{TITEL\}\}/g,'Projektbeteiligte '+heute)
+    .replace(/\{\{TITEL\}\}/g,esc(titel))
     .replace(/\{\{DATUM\}\}/g,heute)
     .replace(/\{\{LOGO\}\}/g,betLogo||'')
     .replace(/\{\{INHALT\}\}/g,betDruckInhalt());
@@ -2052,7 +2200,7 @@ async function betDruck(){
   // bis man das Fenster schliesst. Mit eigener Adresse laeuft es getrennt, und
   // der Druckdialog wird im Dokument selbst ausgeloest.
   const seite='<!doctype html><html lang="de"><head><meta charset="utf-8">'+
-    '<title>Projektbeteiligte '+esc(currentName||'')+'</title></head><body>'+html+
+    '<title>'+esc(kopf)+' '+esc(currentName||'')+'</title></head><body>'+html+
     '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});'+
     'window.addEventListener("afterprint",function(){setTimeout(function(){window.close();},150);});'+
     '<\/script></body></html>';
