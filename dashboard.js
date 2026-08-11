@@ -1025,7 +1025,10 @@ function renderBet(){
      '<button class="btn-sm ghost" data-bet="neu-gruppe">+ Gruppe</button>'+
      '<span class="bet-bar-sep"></span>'+
      (L.length?'':'<button class="btn-sm ghost" data-bet="vorlage">Standard-Gliederung</button>')+
-     '<button class="btn-sm ghost" data-bet="analyse">Aus Analyse</button>'+
+     '<button class="btn-sm'+(betAnalyseAn?'':' ghost')+'" data-bet="analyse" title="'+
+       (betAnalyseAn?'Vorschläge der Tiefenanalyse wieder entfernen (von Hand Ergänztes bleibt)'
+                   :'Beteiligte aus der Tiefenanalyse übernehmen, mit dem CRM abgeglichen')+'">'+
+       (betAnalyseAn?'Analyse ✕':'Aus Analyse')+'</button>'+
      '<button class="btn-sm ghost" data-bet="pdf">PDF einlesen</button>'+
      '<input type="file" id="bet_pdf" accept="application/pdf,.pdf" hidden>'+
      '<span class="bet-bar-sep"></span>'+
@@ -1213,11 +1216,14 @@ function betForm(e){
   return h;
 }
 // --- Beteiligtenliste: laden, speichern, umsortieren ------------------------
+// true, wenn gerade Zeilen aus der Analyse in der Liste stehen (Schalterzustand)
+let betAnalyseAn=false;
 async function betLaden(){
   const[{data:L},{data:R}]=await Promise.all([
     sb.rpc('beteiligte_liste',{pid:current}),
     betRollen.length?Promise.resolve({data:betRollen}):sb.from('beteiligten_rollen').select('rolle,bereich').order('bereich').order('pos')]);
   betL=L||[];betRollen=R||[];
+  betAnalyseAn=betL.some(r=>r.art==='eintrag'&&(r.quelle==='analyse'||r.analyse_befuellt));
 }
 function betHinweis(t){const e=el('main').querySelector('#bethint');if(e){e.textContent=t;if(t)setTimeout(()=>{if(e.textContent===t)e.textContent='';},3500);}}
 // Nur den Fensterinhalt neu zeichnen — ein voller render() wuerde das Formular schliessen.
@@ -1327,12 +1333,20 @@ async function betVorlage(){
   if(error){betHinweis('Fehler: '+error.message);return;}
   await betNeuZeichnen();betHinweis(data?('Gliederung angelegt ('+data+' Zeilen).'):'Es gibt bereits eine Liste — unverändert gelassen.');
 }
+// "Aus Analyse" ist ein Schalter: einmal holt die Vorschlaege, nochmal nimmt sie
+// wieder heraus. Von Hand Ergaenztes bleibt dabei stehen (siehe Migration 92).
 async function betAusAnalyse(){
   if(!betL.length){betHinweis('Erst die Gliederung anlegen, dann übernehmen.');return;}
+  if(betAnalyseAn){
+    const{data,error}=await sb.rpc('beteiligte_analyse_entfernen',{pid:current});
+    if(error){betHinweis('Fehler: '+error.message);return;}
+    await betNeuZeichnen();
+    betHinweis(data?(data+' Zeile(n) aus der Analyse wieder entfernt.'):'Nichts zu entfernen.');
+    return;}
   const{data,error}=await sb.rpc('beteiligte_aus_analyse',{pid:current});
   if(error){betHinweis('Fehler: '+error.message);return;}
   await betNeuZeichnen();
-  betHinweis(data?(data+' Beteiligte aus der Analyse übernommen — bitte einsortieren.'):'Nichts Neues in der Analyse gefunden.');
+  betHinweis(data?(data+' Beteiligte übernommen — mit dem CRM abgeglichen.'):'Nichts Neues in der Analyse gefunden.');
 }
 async function betVerteiler(){
   const mails=[];betL.forEach(r=>{if(r.art!=='eintrag'||r.status==='ausgeschieden')return;
@@ -1949,11 +1963,11 @@ function betDruckInhalt(){
     const unterFirma=vater&&vater.art==='eintrag';
     const nm=betName(r);
     if(!unterFirma){
-      // Noch nicht vergeben: nur der Balken mit Vermerk, kein leerer Satz darunter.
-      // Sonst braucht ein frisch angelegtes Projekt sechs Seiten fuer Leerzeilen.
+      // Noch nicht vergeben: nur der Balken mit Rolle, ohne Vermerk und ohne
+      // leeren Satz darunter. Im Ausdruck soll die Rolle als Platzhalter stehen
+      // (wie auf der Papierliste), aber kein "noch nicht vergeben".
       if(!r.firma&&!nm&&!betKont(r).length){
-        h+='<div class="balken e'+Math.min(r.tiefe,2)+' leer">'+nr+esc(r.titel||'')+
-           '<span class="offen-tag">noch nicht vergeben</span></div>';
+        h+='<div class="balken e'+Math.min(r.tiefe,2)+' leer">'+nr+esc(r.titel||'')+'</div>';
         return;}
       // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
@@ -1989,13 +2003,22 @@ async function betDruck(){
     .replace(/\{\{DATUM\}\}/g,heute)
     .replace(/\{\{LOGO\}\}/g,betLogo||'')
     .replace(/\{\{INHALT\}\}/g,betDruckInhalt());
-  const w=window.open('','_blank');
-  if(!w){betHinweis('Bitte Pop-ups für diese Seite erlauben.');return;}
-  w.document.write('<!doctype html><html lang="de"><head><meta charset="utf-8">'+
-    '<title>Projektbeteiligte '+esc(currentName||'')+'</title></head><body>'+html+'</body></html>');
-  w.document.close();w.focus();
-  betHinweis('');
-  setTimeout(()=>w.print(),400);
+  // Das Druckfenster bekommt eine eigene Blob-Adresse statt document.write.
+  // Grund: ein per window.open('') erzeugtes Fenster teilt sich den Prozess mit
+  // dieser Seite -- der Druckdialog blockiert dann BEIDE, und das Board haengt,
+  // bis man das Fenster schliesst. Mit eigener Adresse laeuft es getrennt, und
+  // der Druckdialog wird im Dokument selbst ausgeloest.
+  const seite='<!doctype html><html lang="de"><head><meta charset="utf-8">'+
+    '<title>Projektbeteiligte '+esc(currentName||'')+'</title></head><body>'+html+
+    '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});'+
+    'window.addEventListener("afterprint",function(){setTimeout(function(){window.close();},150);});'+
+    '<\/script></body></html>';
+  const adresse=URL.createObjectURL(new Blob([seite],{type:'text/html;charset=utf-8'}));
+  const w=window.open(adresse,'_blank');
+  if(!w){URL.revokeObjectURL(adresse);betHinweis('Bitte Pop-ups für diese Seite erlauben.');return;}
+  // Adresse erst freigeben, wenn das Fenster sie geladen hat.
+  setTimeout(()=>URL.revokeObjectURL(adresse),60000);
+  betHinweis('Druckfenster geöffnet.');
 }
 function renderFolders(F,total){if(!F.length)return '<div class="empty">Keine Ordner.</div>';const max=Math.max(...F.map(f=>+f.anzahl));return F.map(f=>'<div class="fld-row"><div><div>'+esc(f.ordner||'(Wurzel)')+'</div><div class="fld-bar"><i style="width:'+Math.round(+f.anzahl/max*100)+'%"></i></div></div><div class="fc2">'+f.anzahl+'</div></div>').join('');}
 function renderComms(C){if(!C.length)return '<div class="inner"><div class="empty">Keine Vorgänge erfasst.</div></div>';const td=today();
