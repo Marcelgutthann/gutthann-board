@@ -111,7 +111,7 @@ async function renderBericht(proj){el('crumb').textContent=short(proj.name||curr
   el('main').querySelectorAll('button[data-btyp]').forEach(b=>b.onclick=()=>{berTyp=b.dataset.btyp;berSel=null;renderBericht(proj);});
   const hs=el('ber-hist');if(hs)hs.onchange=()=>{berSel=hs.value;renderBericht(proj);};
   el('ber-neu').onclick=async()=>{const{error}=await sb.from('agent_runs').insert({project_id:current,agent:'projektbericht',status:'queued',meta:{typ:berTyp,trigger:'app'}});
-    if(error&&error.code!=='23505'){alert('Konnte nicht starten: '+error.message);return;}renderBericht(proj);};
+    if(error&&error.code!=='23505'){uiHinweis('Konnte nicht starten: '+error.message);return;}renderBericht(proj);};
   const body=el('ber-body');
   if(!berSel){body.innerHTML='<div class="empty" style="padding:34px">'+(busy?'Der Bericht wird gerade erstellt — das dauert ein paar Minuten.':'Noch kein '+((BER_TYPEN.find(t=>t[0]===berTyp)||[])[1]||'Bericht')+' vorhanden. Klick „▶ Neu erzeugen".')+'</div>'+berZieleCard(proj);}
   else{const{data:ber}=await sb.from('berichte').select('*').eq('id',berSel).single();body.innerHTML=(ber?berHtml(ber):'<div class="empty">Bericht nicht ladbar.</div>')+berZieleCard(proj);}
@@ -159,7 +159,7 @@ function berZieleCard(proj){const z=Array.isArray(proj.ziele)?proj.ziele:[];
   h+=z.map((g,i)=>'<div class="ber-ziel"><span class="ber-ziel-t">'+esc(g.titel||'')+'</span>'+(g.termin?'<span class="mono ber-ziel-d">'+esc(g.termin)+'</span>':'')+(g.kontext?'<span class="ber-ziel-k">'+esc(g.kontext)+'</span>':'')+'<button class="ber-ziel-x" data-zdel="'+i+'" title="Ziel löschen">×</button></div>').join('');
   h+='<div class="ber-ziel-add"><input id="zt" placeholder="Ziel (z.B. Bauantrag eingereicht)"><input id="zd" type="date" title="Termin"><input id="zk" placeholder="Kontext (optional)"><button class="btn-sm" id="zadd">+ Ziel</button></div>';
   h+='</div></details>';return h;}
-async function saveZiele(proj,z){proj.ziele=z;const{error}=await sb.from('projects').update({ziele:z}).eq('id',current);if(error)alert('Ziele nicht gespeichert: '+error.message);renderBericht(proj);}
+async function saveZiele(proj,z){proj.ziele=z;const{error}=await sb.from('projects').update({ziele:z}).eq('id',current);if(error)uiHinweis('Ziele nicht gespeichert: '+error.message);renderBericht(proj);}
 function wireZiele(proj){const z=Array.isArray(proj.ziele)?proj.ziele:[];
   el('main').querySelectorAll('button[data-zdel]').forEach(b=>b.onclick=()=>{const c=[...z];c.splice(Number(b.dataset.zdel),1);saveZiele(proj,c);});
   const add=el('zadd');if(add)add.onclick=()=>{const t=(el('zt').value||'').trim();if(!t)return;const g={titel:t};const d=el('zd').value;if(d)g.termin=d;const k=(el('zk').value||'').trim();if(k)g.kontext=k;saveZiele(proj,[...z,g]);};}
@@ -196,7 +196,7 @@ function boot(){if(started){render();return;}started=true;render();loadRuns();
 function go(v,id){view=v;current=id||null;openWin=null;document.body.style.overflow='';if(v==='project'){pview='dashboard';tab='alle';prioFilters.clear();}setDrawer(false);render();}
 async function render(){renderSidebar();if(view==='cockpit')await renderCockpit();else if(view==='project'&&pview==='system')await renderSystemPanel();else await renderProject();}
 function timeAgo(d){if(!d)return '—';const s=(Date.now()-new Date(d).getTime())/1000;if(s<90)return 'gerade';if(s<5400)return 'vor '+Math.round(s/60)+' min';if(s<172800)return 'vor '+Math.round(s/3600)+' h';return 'vor '+Math.round(s/86400)+' d';}
-async function queueAgentFor(projectId,agent,btn){if(btn){btn.disabled=true;btn.textContent='…';}const{error}=await sb.from('agent_runs').insert({project_id:projectId,agent,status:'queued',meta:{trigger:'manuell'}});const dup=error&&error.code==='23505';if(error&&!dup)alert('Konnte nicht starten: '+error.message);if(btn){btn.textContent=dup?'läuft bereits':'…';setTimeout(()=>{btn.disabled=false;btn.textContent='Aktualisieren';},1600);}loadRuns();}
+async function queueAgentFor(projectId,agent,btn){if(btn){btn.disabled=true;btn.textContent='…';}const{error}=await sb.from('agent_runs').insert({project_id:projectId,agent,status:'queued',meta:{trigger:'manuell'}});const dup=error&&error.code==='23505';if(error&&!dup)uiHinweis('Konnte nicht starten: '+error.message);if(btn){btn.textContent=dup?'läuft bereits':'…';setTimeout(()=>{btn.disabled=false;btn.textContent='Aktualisieren';},1600);}loadRuns();}
 async function renderSystemPanel(){
   el('crumb').innerHTML='<a id="toC">Cockpit</a><span class="sep">›</span>System & Automatik';
   const[{data:hb},{data:projs},{data:runs}]=await Promise.all([
@@ -523,7 +523,7 @@ function addTaskForm(){const inp='font:inherit;font-size:12px;padding:6px 9px;bo
 }
 async function createTask(){const title=el('nt-title').value.trim();if(!title)return;
   const{error}=await sb.from('tasks').insert({project_id:current,title,prio:el('nt-prio').value,kategorie:el('nt-kat').value,assignee:el('nt-assignee').value.trim()||null,due_date:el('nt-frist').value||null,status:'offen',meta:{source:'manuell'}});
-  if(error){alert('Konnte Aufgabe nicht anlegen: '+error.message);return;}
+  if(error){uiHinweis('Konnte Aufgabe nicht anlegen: '+error.message);return;}
   el('nt-title').value='';el('nt-assignee').value='';el('addtaskform').hidden=true;}
 // ── Kommentar-Abschluss (item_feedback): generierte Einträge mit Begründung schließen — die Korrektur ist für die nächste Analyse verbindlich ──
 function fbKey(type,title){return type+'|'+String(title||'').trim().toLowerCase();}
@@ -536,7 +536,7 @@ async function fbSave(btn){const f=el('fbf-'+btn.dataset.fbsave),ta=f?f.querySel
   if(!kom){if(ta)ta.focus();return;}
   btn.disabled=true;btn.textContent='…';
   const{error}=await sb.from('item_feedback').insert({project_id:current,item_type:btn.dataset.fbtype,item_title:btn.dataset.fbtitle,feedback:'mit Kommentar abgeschlossen',kommentar:kom});
-  if(error){btn.disabled=false;btn.textContent='Abschließen';alert('Konnte Feedback nicht speichern: '+error.message);return;}
+  if(error){btn.disabled=false;btn.textContent='Abschließen';uiHinweis('Konnte Feedback nicht speichern: '+error.message);return;}
   if(btn.dataset.fbtask)await sb.from('tasks').update({status:'erledigt',done_at:new Date().toISOString()}).eq('id',btn.dataset.fbtask);
   if(btn.dataset.fbcomm)await sb.from('communications').update({status:'erledigt'}).eq('id',btn.dataset.fbcomm);
   if(view==='project')render();}
@@ -546,8 +546,8 @@ async function fbSave(btn){const f=el('fbf-'+btn.dataset.fbsave),ta=f?f.querySel
 async function toBoard(b){if(b.disabled)return;b.disabled=true;const o=b.textContent;b.textContent='…';
   try{const j=await window.lotse('todo_aus_aufgabe',{task_id:b.dataset.toboard});
     if(j&&j.ok){b.textContent=j.schon_da?'✓ Schon im Board':'✓ Im Board';}
-    else{b.disabled=false;b.textContent=o;alert('Ins Board legen fehlgeschlagen: '+((j&&(j.fehler||j.error))||'unbekannt'));}
-  }catch(e2){b.disabled=false;b.textContent=o;alert('Ins Board legen fehlgeschlagen: '+e2.message);}}
+    else{b.disabled=false;b.textContent=o;uiHinweis('Ins Board legen fehlgeschlagen: '+((j&&(j.fehler||j.error))||'unbekannt'));}
+  }catch(e2){b.disabled=false;b.textContent=o;uiHinweis('Ins Board legen fehlgeschlagen: '+e2.message);}}
 document.addEventListener('click',function(e){
   var tb=e.target.closest&&e.target.closest('[data-toboard]');if(tb){e.preventDefault();e.stopPropagation();toBoard(tb);return;}
   var o=e.target.closest&&e.target.closest('[data-fbopen]');if(o){e.preventDefault();e.stopPropagation();const f=el('fbf-'+o.dataset.fbopen);if(f){f.hidden=!f.hidden;const ta=f.querySelector('textarea');if(!f.hidden&&ta)ta.focus();}return;}
@@ -622,9 +622,9 @@ function wireDetail(){const d=el('aufgdetail');if(!d)return;
     const ls=new Set(m.locked||[]);if(np!==op)ls.add('prio');if(na!==oa)ls.add('assignee');if((nf||null)!==(of||null))ls.add('due_date');
     const base=Object.assign({},m);delete base.frist;base.locked=[...ls];
     b.disabled=true;b.textContent='…';const{error}=await sb.from('tasks').update({prio:np,assignee:na||null,due_date:nf,meta:base}).eq('id',id);
-    if(error){b.disabled=false;b.textContent='Speichern';alert('Speichern fehlgeschlagen: '+error.message);}});
-  d.querySelectorAll('button[data-deltask]').forEach(b=>b.onclick=async()=>{if(confirm('Aufgabe löschen?')){const{error}=await sb.from('tasks').delete().eq('id',b.dataset.deltask);if(error)alert('Fehler: '+error.message);}});}
-async function toggleDoneBtn(id){const t=taskMap[id];if(!t||!t.id)return;const nd=t.status!=='erledigt';const{error}=await sb.from('tasks').update({status:nd?'erledigt':'offen',done_at:nd?new Date().toISOString():null}).eq('id',t.id);if(error)alert('Fehler: '+error.message);}
+    if(error){b.disabled=false;b.textContent='Speichern';uiHinweis('Speichern fehlgeschlagen: '+error.message);}});
+  d.querySelectorAll('button[data-deltask]').forEach(b=>b.onclick=async()=>{if(await uiFrage('Aufgabe löschen?')){const{error}=await sb.from('tasks').delete().eq('id',b.dataset.deltask);if(error)uiHinweis('Fehler: '+error.message);}});}
+async function toggleDoneBtn(id){const t=taskMap[id];if(!t||!t.id)return;const nd=t.status!=='erledigt';const{error}=await sb.from('tasks').update({status:nd?'erledigt':'offen',done_at:nd?new Date().toISOString():null}).eq('id',t.id);if(error)uiHinweis('Fehler: '+error.message);}
 function fmtFrist(d){if(!d)return '—';const m=String(d).match(/(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'.'+m[2]+'.'+m[1]:String(d);}
 function copyToClip(txt,b){const ok=()=>{const o=b.textContent;b.textContent='✓ kopiert';setTimeout(()=>{b.textContent=o;},1500);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,ok);}else{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(_){}ta.remove();ok();}}
 // E-Mail im EIGENEN Outlook des Nutzers oeffnen (mailto): generierter Text oben, die persoenliche
@@ -985,7 +985,7 @@ function renderChecklist(activeLph){
     h+='<details class="cl-ph"'+(op?' open':'')+' data-cllph="'+l+'"><summary class="cl-sum"><span class="cl-lph '+cls+'">LPH '+l+'</span><span class="cl-name">'+esc(LPH[l-1])+(l===activeLph?' · aktiv':'')+'</span><span class="cl-prog">'+done+'/'+items.length+'</span></summary><div class="cl-body">'+
       items.map((it,i)=>{const k=clKey(l,i),ck=!!lastChecklist[k];return '<label class="cl-item'+(ck?' done':'')+'"><input type="checkbox" class="cl-cb" data-clkey="'+k+'"'+(ck?' checked':'')+'><span>'+esc(it)+'</span></label>';}).join('')+'</div></details>';}
   return h;}
-async function toggleChecklist(key,val){const nc=Object.assign({},lastChecklist);if(val)nc[key]=true;else delete nc[key];lastChecklist=nc;const{error}=await sb.from('projects').update({checklist:nc}).eq('id',current);if(error)alert('Fehler beim Speichern: '+error.message);}
+async function toggleChecklist(key,val){const nc=Object.assign({},lastChecklist);if(val)nc[key]=true;else delete nc[key];lastChecklist=nc;const{error}=await sb.from('projects').update({checklist:nc}).eq('id',current);if(error)uiHinweis('Fehler beim Speichern: '+error.message);}
 function renderLphBew(D){if(D&&D.lph_bewertung&&D.lph_bewertung.length)return D.lph_bewertung.map(r=>'<div class="lrow"><span>'+esc(r.leistung)+'</span><span class="ls '+slug(r.status)+'">'+esc(stL(r.status))+'</span></div>').join('');
   return '<div class="cta"><p>Die Bewertung der HOAI-Grundleistungen (vollständig / teilweise / fehlend) kommt aus der Dashboard-Analyse.</p><button class="btn-sm" data-agent="dashboard-analyse">Tiefenanalyse starten</button></div>';}
 function renderBeschluesse(D){if(D&&D.beschluesse&&D.beschluesse.length)return D.beschluesse.map(b=>'<div class="vrow"><div style="flex:1"><div class="vtitle">'+esc(b.text)+'</div><div class="vmeta"><span class="mono">'+esc(b.datum||'')+'</span>'+(b.quelle?'<span>'+esc(b.quelle)+'</span>':'')+'</div></div></div>').join('');
@@ -1014,7 +1014,7 @@ const betKont=r=>Array.isArray(r.kontakte)?r.kontakte:(r.kontakte?JSON.parse(r.k
 const betIstFirmenzeile=r=>{if(!r.parent_id)return true;
   const v=betL.find(x=>x.id===r.parent_id);return !v||v.art==='gruppe';};
 function betKontZeile(k){const art=(BET_KONTAKTARTEN.find(a=>a[0]===k.art)||['','?'])[1];
-  const ico=k.art==='email'?'✉':k.art==='fax'?'📠':k.art==='web'?'🌐':k.art==='mobil'?'📱':'☎';
+  const ico=k.art==='email'?'✉':k.art==='fax'?'Fax':k.art==='web'?'Web':k.art==='mobil'?'Mobil':'☎';
   const wert=k.art==='email'?'<a href="mailto:'+esc(k.wert)+'">'+esc(k.wert)+'</a>':esc(k.wert);
   return '<span class="bet-k" title="'+esc(art+(k.kontext?' ('+k.kontext+')':''))+'">'+ico+' '+wert+'</span>';}
 
@@ -1040,7 +1040,7 @@ function renderBet(){
        '<button class="bet-t" data-bet="liste-rechts" title="Reiter nach rechts">▸</button>'+
        '<button class="bet-t" data-bet="liste-umbenennen" title="Liste umbenennen">✎</button>'+
        '<button class="bet-t" data-bet="liste-vorlage" title="Diese Liste als Vorlage sichern — Gruppen und Rollen, ohne Firmen">Als Vorlage</button>'+
-       '<button class="bet-t del" data-bet="liste-loeschen" title="Diese Liste löschen">🗑</button></span>':'')+
+       '<button class="bet-t del" data-bet="liste-loeschen" title="Diese Liste mit allen Zeilen löschen">Liste löschen</button></span>':'')+
      '</div>';
   h+='<div class="bet-bar">'+
      '<button class="btn-sm" data-bet="neu-eintrag" title="Öffnet das Adressbuch und legt die gewählte Firma bzw. Person in der ersten Gruppe an. Danach lässt sie sich mit den Pfeilen verschieben.">+ Firma / Person</button>'+
@@ -1276,7 +1276,7 @@ function betUebersicht(){
 
 function betDetail(r){
   const K=betKont(r),nm=betName(r),adr=betAdr(r);
-  const ico=k=>k.art==='email'?'✉':k.art==='fax'?'📠':k.art==='web'?'🌐':k.art==='mobil'?'📱':'☎';
+  const ico=k=>k.art==='email'?'✉':k.art==='fax'?'Fax':k.art==='web'?'Web':k.art==='mobil'?'Mobil':'☎';
   return '<div class="bet-p">'+
     '<div class="bet-p-kopf"><span>'+esc(r.nummer)+(r.art==='gruppe'?' · Gruppe':'')+'</span>'+
       '<span class="bet-move">'+
@@ -1360,7 +1360,7 @@ function betForm(e,eingebettet){
       h+='<div class="bf-k" data-ki="'+i+'"><select class="bf-kart">'+opt(BET_KONTAKTARTEN,k.art)+'</select>'+
          '<select class="bf-kctx">'+opt(BET_KONTEXTE,k.kontext||'arbeit')+'</select>'+
          '<input class="bf-kval" value="'+esc(k.wert||'')+'" placeholder="Nummer / Adresse">'+
-         '<button class="bet-t del" data-bfkdel="'+i+'" title="entfernen">🗑</button></div>';});
+         '<button class="bet-t del" data-bfkdel="'+i+'" title="Kontaktweg entfernen">✕</button></div>';});
     h+='</div><button class="btn-sm ghost" data-bet="kont-plus">+ Kontaktweg</button></div>';
     h+='<label class="bf ck"><input type="checkbox" id="bf_bh"'+(e.ist_bauherr?' checked':'')+'> Bauherrenseite</label>';
     h+='<label class="bf ck"><input type="checkbox" id="bf_int"'+(e.ist_intern?' checked':'')+'> eigenes Büro</label>';
@@ -2274,7 +2274,7 @@ function wire(T,C){
   if(openWin){const o=el('main').querySelector('.win[data-sec="'+openWin+'"] .win-ov');if(o){o.hidden=false;document.body.style.overflow='hidden';}else{openWin=null;document.body.style.overflow='';}}
   {const cb=el('main').querySelector('#kzcopy');if(cb)cb.onclick=async()=>{
     try{await navigator.clipboard.writeText(kzRefText());const h=el('main').querySelector('#kzcopyh');if(h){h.textContent='kopiert ✓';setTimeout(()=>{h.textContent='';},2500);}}
-    catch(e){alert('Kopieren nicht möglich: '+e.message);}};}
+    catch(e){uiHinweis('Kopieren nicht möglich: '+e.message);}};}
   el('main').querySelectorAll('.pilgrim-station').forEach(st=>st.onclick=async()=>{await sb.from('projects').update({lph:+st.dataset.lph}).eq('id',current);render();});
   el('main').querySelectorAll('.task-row').forEach(r=>r.onclick=e=>{if(e.target.classList.contains('tcheck'))return;selTask=r.dataset.trow;el('main').querySelectorAll('.task-row').forEach(x=>x.classList.toggle('sel',x.dataset.trow===selTask));const d=el('aufgdetail');if(d){d.innerHTML=renderTaskDetail(taskMap[selTask]);wireDetail();}});
   el('main').querySelectorAll('.tcheck').forEach(cb=>cb.onchange=()=>toggleTask(cb.dataset.task,cb));
@@ -2287,7 +2287,7 @@ function wire(T,C){
   const atb=el('addtaskbtn'),atf=el('addtaskform');
   if(atb&&atf)atb.onclick=()=>{atf.hidden=!atf.hidden;if(!atf.hidden)el('nt-title').focus();};
   if(atf)atf.onsubmit=e=>{e.preventDefault();createTask();};
-  el('main').querySelectorAll('button[data-deltask]').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(confirm('Aufgabe löschen?')){const{error}=await sb.from('tasks').delete().eq('id',b.dataset.deltask);if(error)alert('Fehler: '+error.message);}});
+  el('main').querySelectorAll('button[data-deltask]').forEach(b=>b.onclick=async e=>{e.stopPropagation();if(await uiFrage('Aufgabe löschen?')){const{error}=await sb.from('tasks').delete().eq('id',b.dataset.deltask);if(error)uiHinweis('Fehler: '+error.message);}});
   applyTaskFilter();
 }
 function applyTaskFilter(){el('main').querySelectorAll('.task-row').forEach(c=>{let show=true;if(tab!=='alle'&&c.dataset.category!==tab)show=false;if(prioFilters.size&&!prioFilters.has('P'+c.dataset.priority))show=false;c.classList.toggle('hide',!show);});}
@@ -2323,8 +2323,8 @@ async function mailsFor(q){
 }
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-mails]');if(b){e.preventDefault();mailsFor(b.dataset.mails);}});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var o=document.querySelector('.win-ov:not([hidden])');if(o){openWin=null;o.hidden=true;document.body.style.overflow='';}}});
-async function toggleTask(id,cb){const ck=cb.checked;const{error}=await sb.from('tasks').update({status:ck?'erledigt':'offen',done_at:ck?new Date().toISOString():null}).eq('id',id);if(error){cb.checked=!ck;alert('Fehler: '+error.message);}}
-async function queueAgent(agent,meta,btn){const lbl=btn?btn.textContent:'';if(btn){btn.disabled=true;btn.textContent='… eingereiht';}const{error}=await sb.from('agent_runs').insert({project_id:current,agent,status:'queued',meta});if(error){if(error.code==='23505'){if(btn)btn.textContent='läuft bereits';loadRuns();if(btn)setTimeout(()=>{btn.disabled=false;btn.textContent=lbl;},1600);return;}alert('Konnte Agent nicht starten: '+error.message);if(btn){btn.disabled=false;btn.textContent=lbl;}return;}loadRuns();if(btn)setTimeout(()=>{btn.disabled=false;btn.textContent=lbl;},1600);}
+async function toggleTask(id,cb){const ck=cb.checked;const{error}=await sb.from('tasks').update({status:ck?'erledigt':'offen',done_at:ck?new Date().toISOString():null}).eq('id',id);if(error){cb.checked=!ck;uiHinweis('Fehler: '+error.message);}}
+async function queueAgent(agent,meta,btn){const lbl=btn?btn.textContent:'';if(btn){btn.disabled=true;btn.textContent='… eingereiht';}const{error}=await sb.from('agent_runs').insert({project_id:current,agent,status:'queued',meta});if(error){if(error.code==='23505'){if(btn)btn.textContent='läuft bereits';loadRuns();if(btn)setTimeout(()=>{btn.disabled=false;btn.textContent=lbl;},1600);return;}uiHinweis('Konnte Agent nicht starten: '+error.message);if(btn){btn.disabled=false;btn.textContent=lbl;}return;}loadRuns();if(btn)setTimeout(()=>{btn.disabled=false;btn.textContent=lbl;},1600);}
 async function loadRuns(){const[{data,error},{data:hb}]=await Promise.all([
     sb.from('agent_runs').select('id,agent,status,result,log,started_at,project_id,projects(name)').order('created_at',{ascending:false}).limit(14),
     sb.from('runner_heartbeat').select('last_seen').eq('id',1)]);
