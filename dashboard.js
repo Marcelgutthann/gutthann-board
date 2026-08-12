@@ -1138,7 +1138,12 @@ function betSeite(){
   // Nach der Uebernahme schliesst betUebernehmen() das Adressbuch, dann steht
   // das ausgefuellte Formular da.
   if(betCrmOffen)return betCrmPanel();
-  if(betEdit)return betForm(betEdit);
+  if(betEdit){
+    // Angeklickte Zeile: Angaben oben, Bearbeitung direkt darunter -- kein Umweg
+    // ueber einen Knopf. Bei einer Neuanlage gibt es oben nichts zu zeigen.
+    const z=betEdit._inline&&betEdit.id?betL.find(x=>x.id===betEdit.id):null;
+    return z?betDetail(z)+betForm(betEdit,true):betForm(betEdit);
+  }
   const r=betL.find(x=>x.id===betSel);
   if(r)return betDetail(r);
   return betUebersicht();
@@ -1286,28 +1291,41 @@ function betDetail(r){
     (r.notiz?'<div class="bet-p-adr">'+esc(r.notiz)+'</div>':'')+
     (r.quelle==='pdf'&&r.importiert_aus?'<div class="bet-p-adr">aus '+esc(r.importiert_aus)+
        (r.importiert_am?', eingelesen '+esc(fmtD(r.importiert_am)):'')+'</div>':'')+
-    '<div class="bet-p-akt">'+
-      (r.art==='eintrag'
-        ? '<button class="btn-sm" data-betfill="'+r.id+'" title="Öffnet das Adressbuch. Die gewählte Person wird als weitere Zeile unter dieser Firma angelegt — nichts wird überschrieben.">'+
-          (r.firma?'+ Ansprechpartner dieser Firma':'+ Firma zuweisen')+'</button>'
-        : '<button class="btn-sm" data-betadd="'+r.id+'" title="Legt eine neue Zeile in dieser Gruppe an">+ Zeile in dieser Gruppe</button>')+
-      // Nur sinnvoll, wenn die Zeile selbst die Firmenposition innehat (haengt
-      // direkt unter einer Gruppe) und trotzdem eine Person traegt. Bei Zeilen,
-      // die schon unter einer Firma stehen, waere der Knopf Unsinn.
-      (r.art==='eintrag'&&r.firma&&(r.nachname||r.vorname)&&betIstFirmenzeile(r)
-        ? '<button class="btn-sm ghost" data-betrunter="'+r.id+'" title="Firma bleibt oben stehen, die Person rückt eine Ebene tiefer">Person nach unten</button>':'')+
-      '<button class="btn-sm ghost" data-betedit="'+r.id+'">Bearbeiten</button>'+
-      (r.crm_company_id?'<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+'" title="Zeigt alle im CRM hinterlegten Ansprechpartner dieser Firma zum Anklicken">Alle Personen dieser Firma</button>':'')+
-      '<button class="btn-sm ghost" data-betdel="'+r.id+'">Löschen</button>'+
-    '</div></div>';
+    betAktionen(r)+'</div>';
+}
+
+// Knopfleiste des Detailbereichs. Erste und letzte Reihe spannen ueber die volle
+// Breite, dazwischen stehen die Nebenaktionen paarweise nebeneinander; bleibt
+// eine allein uebrig, spannt sie ebenfalls -- sonst klafft eine halbe Luecke.
+function betAktionen(r){
+  const kopf=r.art==='eintrag'
+    ? '<button class="btn-sm weit" data-betfill="'+r.id+'" title="Öffnet das Adressbuch. Die gewählte Person wird als weitere Zeile unter dieser Firma angelegt — nichts wird überschrieben.">'+
+      (r.firma?'+ Ansprechpartner dieser Firma':'+ Firma zuweisen')+'</button>'
+    : '<button class="btn-sm weit" data-betadd="'+r.id+'" title="Legt eine neue Zeile in dieser Gruppe an">+ Zeile in dieser Gruppe</button>';
+  const neben=[];
+  if(r.crm_company_id)neben.push('<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+
+    '" title="Zeigt alle im CRM hinterlegten Ansprechpartner dieser Firma zum Anklicken">Alle Personen dieser Firma</button>');
+  // Nur sinnvoll, wenn die Zeile selbst die Firmenposition innehat (haengt
+  // direkt unter einer Gruppe) und trotzdem eine Person traegt. Bei Zeilen,
+  // die schon unter einer Firma stehen, waere der Knopf Unsinn.
+  if(r.art==='eintrag'&&r.firma&&(r.nachname||r.vorname)&&betIstFirmenzeile(r))
+    neben.push('<button class="btn-sm ghost" data-betrunter="'+r.id+
+      '" title="Firma bleibt oben stehen, die Person rückt eine Ebene tiefer">Person nach unten</button>');
+  const mitte=neben.length===1?neben[0].replace('btn-sm ghost','btn-sm ghost weit'):neben.join('');
+  return '<div class="bet-p-akt">'+kopf+mitte+
+    '<button class="btn-sm ghost warn weit" data-betdel="'+r.id+'">Löschen</button></div>';
 }
 
 // Formular: alle Felder eines Knotens. Ohne id wird angelegt, sonst geaendert.
-function betForm(e){
+// eingebettet = das Formular steht unter dem Detail derselben Zeile. Dann gibt
+// es nichts zu schliessen und nichts abzubrechen: eine andere Zeile anklicken
+// wechselt die Bearbeitung.
+function betForm(e,eingebettet){
   const isG=e.art==='gruppe',K=e.kontakte||[];
   const opt=(list,val)=>list.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>').join('');
-  let h='<div class="bet-p"><div class="bet-p-kopf">'+(e.id?'Bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
-        '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></div>';
+  let h='<div class="bet-p'+(eingebettet?' bet-p-unten':'')+'"><div class="bet-p-kopf">'+
+        (e.id?'Bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
+        (eingebettet?'':'<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button>')+'</div>';
   h+='<div class="bet-fgrid">';
   h+='<label class="bf w2">'+(isG?'Gruppentitel':'Rolle im Projekt')+
      '<input id="bf_titel" list="bf_rollen" value="'+esc(e.titel||'')+'" placeholder="'+(isG?'z. B. Ausführende Firmen':'z. B. Fachplanung Statik')+'"></label>';
@@ -1336,9 +1354,9 @@ function betForm(e){
     h+='<label class="bf ck"><input type="checkbox" id="bf_int"'+(e.ist_intern?' checked':'')+'> eigenes Büro</label>';
   }
   h+='</div>';
-  h+='<div class="bet-p-akt"><button class="btn-sm" data-bet="speichern">Speichern</button>'+
-     (!isG?'<button class="btn-sm ghost" data-bet="crm-auf">Aus Adressbuch füllen</button>':'')+
-     '<button class="btn-sm ghost" data-bet="abbrechen">Abbrechen</button></div></div>';
+  h+='<div class="bet-p-akt"><button class="btn-sm'+(isG||eingebettet?' weit':'')+'" data-bet="speichern">Speichern</button>'+
+     (!isG?'<button class="btn-sm ghost'+(eingebettet?' weit':'')+'" data-bet="crm-auf">Aus Adressbuch füllen</button>':'')+
+     (eingebettet?'':'<button class="btn-sm ghost weit" data-bet="abbrechen">Abbrechen</button>')+'</div></div>';
   return h;
 }
 // --- Beteiligtenliste: laden, speichern, umsortieren ------------------------
@@ -1999,10 +2017,18 @@ function wireBet(){
     betListeId=b.dataset.betlist;betSel=null;betEdit=null;betCrmOffen=false;
     betNeueListe=null;betLoeschFrage=null;betFilter='';
     await betNeuZeichnen();});
-  // Zeile anklicken -> Details rechts. Von dort geht es per Knopf weiter ins
-  // Adressbuch; kein automatisches Aufklappen, damit der Weg vorhersehbar bleibt.
+  // Zeile anklicken -> rechts oben die Angaben, direkt darunter die Bearbeitung.
+  // Das Adressbuch klappt weiterhin NICHT von selbst auf, damit der Weg
+  // vorhersehbar bleibt -- dafuer gibt es die Knoepfe dazwischen.
   M.querySelectorAll('[data-betrow]').forEach(z=>z.onclick=()=>{
-    betSel=z.dataset.betrow;betEdit=null;betCrmOffen=false;betCrmFirma=null;betMitRolle='';
+    betSel=z.dataset.betrow;
+    const r=betL.find(x=>x.id===betSel);
+    // _inline merkt: diese Bearbeitung gehoert unter das Detail derselben Zeile.
+    // Alle anderen Wege zu betEdit (Adressbuch, Neuanlage) setzen es nicht und
+    // zeigen weiter nur das Formular -- sonst stuende oben der alte Stand einer
+    // Zeile, die das Formular gerade schon mit CRM-Daten fuellt.
+    betEdit=r?Object.assign({},r,{kontakte:betKont(r),_inline:true}):null;
+    betCrmOffen=false;betCrmFirma=null;betMitRolle='';
     M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
     betNurSeite();});
   // "Firma / Person hinzufügen" an einer Rolle: Adressbuch mit dieser Zeile als Ziel.
@@ -2031,11 +2057,6 @@ function wireBet(){
     }
     betMitRolle=firmenzeile.titel||r.titel||'';
     betCrmOffen=true;betCrmFirma=null;betNurSeite();});
-  M.querySelectorAll('[data-betedit]').forEach(b=>b.onclick=e=>{
-    e.stopPropagation();
-    const r=betL.find(x=>x.id===b.dataset.betedit);if(!r)return;
-    betEdit=Object.assign({},r,{kontakte:betKont(r)});betCrmOffen=false;betNurSeite();
-    const f=M.querySelector('#bf_titel');if(f)f.focus();});
   M.querySelectorAll('[data-betadd]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     betEdit={art:'eintrag',parent_id:b.dataset.betadd,kontakte:[]};betCrmOffen=true;betCrmFirma=null;betSel=null;
