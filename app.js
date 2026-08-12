@@ -22,6 +22,74 @@ const S = {
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
 };
 
+// ---------- Dialoge ----------
+// Ersetzen alert / confirm / prompt. Gleiche Aufrufform, nur dass die beiden
+// fragenden ein Promise liefern und deshalb mit await stehen. Liegen hier in
+// app.js (klassisches Skript), damit auch dashboard.js (Modul) sie sieht.
+function uiEsc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function uiModal(inhalt, fertig) {
+  const o = document.createElement('div');
+  o.className = 'uidlg';
+  o.innerHTML = '<div class="uidlg-karte">' + inhalt + '</div>';
+  document.body.appendChild(o);
+  const schliessen = (wert) => { document.removeEventListener('keydown', taste, true); o.remove(); fertig(wert); };
+  const taste = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); schliessen(null); }
+    else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); o.querySelector('[data-ui="ok"]').click(); }
+  };
+  document.addEventListener('keydown', taste, true);
+  o.onclick = (e) => { if (e.target === o) schliessen(null); };
+  return { o, schliessen };
+}
+
+// Ja/Nein. Liefert true nur bei ausdruecklicher Zustimmung — Esc und Klick
+// daneben gelten als Nein, genau wie beim Browser-confirm.
+function uiFrage(text, opt) {
+  opt = opt || {};
+  return new Promise(fertig => {
+    const { o, schliessen } = uiModal(
+      '<div class="uidlg-t">' + uiEsc(opt.titel || 'Bitte bestätigen') + '</div>' +
+      '<div class="uidlg-x">' + uiEsc(text) + '</div>' +
+      '<div class="uidlg-akt">' +
+      '<button class="uidlg-b hell" data-ui="nein">' + uiEsc(opt.abbruch || 'Abbrechen') + '</button>' +
+      '<button class="uidlg-b' + (opt.gefahr ? ' rot' : '') + '" data-ui="ok">' + uiEsc(opt.ok || 'Ja') + '</button>' +
+      '</div>', w => fertig(w === true));
+    o.querySelector('[data-ui="ok"]').onclick = () => schliessen(true);
+    o.querySelector('[data-ui="nein"]').onclick = () => schliessen(false);
+    o.querySelector('[data-ui="ok"]').focus();
+  });
+}
+
+// Texteingabe. Liefert den Text oder null bei Abbruch — wie prompt().
+function uiEingabe(text, vorbelegt, opt) {
+  opt = opt || {};
+  return new Promise(fertig => {
+    const { o, schliessen } = uiModal(
+      '<div class="uidlg-t">' + uiEsc(text) + '</div>' +
+      '<input class="uidlg-i" value="' + uiEsc(vorbelegt || '') + '">' +
+      '<div class="uidlg-akt">' +
+      '<button class="uidlg-b hell" data-ui="nein">Abbrechen</button>' +
+      '<button class="uidlg-b" data-ui="ok">' + uiEsc(opt.ok || 'Übernehmen') + '</button>' +
+      '</div>', w => fertig(w));
+    const f = o.querySelector('.uidlg-i');
+    o.querySelector('[data-ui="ok"]').onclick = () => schliessen(f.value);
+    o.querySelector('[data-ui="nein"]').onclick = () => schliessen(null);
+    f.focus(); f.select();
+  });
+}
+
+// Kurze Meldung unten. Bleibt liegen, bis sie von selbst geht oder angeklickt wird.
+function uiHinweis(text, art) {
+  const t = document.createElement('div');
+  t.className = 'uitoast' + (art === 'ok' ? ' ok' : '');
+  t.textContent = String(text ?? '');
+  t.onclick = () => t.remove();
+  document.body.appendChild(t);
+  setTimeout(() => { t.classList.add('weg'); setTimeout(() => t.remove(), 400); }, art === 'ok' ? 2600 : 5400);
+}
+window.uiFrage = uiFrage; window.uiEingabe = uiEingabe; window.uiHinweis = uiHinweis;
+
 // ---------- API ----------
 function saveSession(s) { S.session = s; localStorage.setItem('gb_session', JSON.stringify(s)); }
 function loadSession() { try { S.session = JSON.parse(localStorage.getItem('gb_session')); } catch { S.session = null; } }
@@ -81,7 +149,7 @@ async function mut(action, body = {}) {
   let r;
   try { r = await lotse(action, body); }
   catch (e) { r = { fehler: e.message || 'Netzwerkfehler' }; }
-  if (r && r.fehler) alert(r.fehler);
+  if (r && r.fehler) uiHinweis(r.fehler);
   return r;
 }
 
@@ -250,7 +318,7 @@ async function renderKalender() {
       },
       ondblclick: async (e) => {
         if (e.target !== zelle && !e.target.closest('b')) return; // nur auf freier Flaeche
-        const titel = prompt(`Neue Aufgabe am ${t}.${S.kal.monat}.${S.kal.jahr}:`);
+        const titel = await uiEingabe(`Neue Aufgabe am ${t}.${S.kal.monat}.${S.kal.jahr}:`);
         if (!titel?.trim()) return;
         const r = await mut('todo_create', { titel: titel.trim(), projekt: S.active.name, faellig: datum });
         if (r && r.todo_id) renderKalender();
@@ -328,16 +396,16 @@ function renderSidebar() {
 }
 function boardMenu(e, b, letztes) {
   ctxMenu(e.clientX, e.clientY, [
-    { txt: 'Umbenennen', do: async () => { const n = prompt('Neuer Name:', b.name); if (n?.trim()) { await mut('board_umbenennen',{ board_id: b.id, name: n.trim() }); await ladeAlles(); } } },
+    { txt: 'Umbenennen', do: async () => { const n = await uiEingabe('Neuer Name:', b.name); if (n?.trim()) { await mut('board_umbenennen',{ board_id: b.id, name: n.trim() }); await ladeAlles(); } } },
     letztes ? { note: 'Letztes Board – nicht löschbar' } :
-      { txt: 'Löschen', danger: true, do: async () => { if (confirm(`Board "${b.name}" löschen? Karten wandern ins Default-Board.`)) { const r = await lotse('board_loeschen', { board_id: b.id }); if (r.fehler) alert(r.fehler); if (S.active?.id === b.id) S.active = null; await ladeAlles(); } } },
+      { txt: 'Löschen', danger: true, do: async () => { if (await uiFrage(`Board "${b.name}" löschen? Karten wandern ins Default-Board.`)) { const r = await lotse('board_loeschen', { board_id: b.id }); if (r.fehler) uiHinweis(r.fehler); if (S.active?.id === b.id) S.active = null; await ladeAlles(); } } },
   ]);
 }
 async function neuesBoard(typ) {
-  const n = prompt(typ === 'team' ? 'Name des Team-Boards:' : 'Name des Boards:');
+  const n = await uiEingabe(typ === 'team' ? 'Name des Team-Boards:' : 'Name des Boards:');
   if (!n?.trim()) return;
   const r = await lotse('board_anlegen', { name: n.trim(), typ });
-  if (r.fehler) { alert(r.fehler); return; }
+  if (r.fehler) { uiHinweis(r.fehler); return; }
   S.active = { typ: 'board', id: r.board_id, name: r.name };
   await ladeAlles();
 }
@@ -368,7 +436,7 @@ function renderTopbar() {
   const rufBtn = el('button', { class: 'callbtn', title: 'Der Assistent ruft dich auf deiner hinterlegten Nummer an', onclick: async () => {
     rufBtn.disabled = true; const alt = rufBtn.textContent; rufBtn.textContent = '📞 Anruf kommt…';
     const r = await lotse('ruf_mich_an').catch(() => ({ fehler: 'Netzwerkfehler' }));
-    if (r.fehler) { alert(r.fehler); rufBtn.textContent = alt; rufBtn.disabled = false; }
+    if (r.fehler) { uiHinweis(r.fehler); rufBtn.textContent = alt; rufBtn.disabled = false; }
     else setTimeout(() => { rufBtn.textContent = alt; rufBtn.disabled = false; }, 20000);
   } }, '📞 Ruf mich an');
   tb.append(rufBtn);
@@ -474,7 +542,7 @@ function renderBoard() {
             if (!r || !r.todo_id) {
               // Nicht gespeichert: Eingabe stehen lassen und sagen, was los ist.
               inp.disabled = false; inp.focus();
-              alert('Nicht gespeichert: ' + ((r && (r.fehler || r.error)) || 'keine Antwort vom Server') + '\nDer Text bleibt stehen — bitte nochmal Enter.');
+              uiHinweis('Nicht gespeichert: ' + ((r && (r.fehler || r.error)) || 'keine Antwort vom Server') + '\nDer Text bleibt stehen — bitte nochmal Enter.');
               return;
             }
             // mut wirft nie — der State-Reset laeuft auch, wenn das Einsortieren
@@ -494,10 +562,10 @@ function renderBoard() {
     bw.append(colEl);
   }
   bw.append(el('button', { class: 'addcol', onclick: async () => {
-    const n = prompt('Name der Spalte:'); if (!n?.trim()) return;
+    const n = await uiEingabe('Name der Spalte:'); if (!n?.trim()) return;
     const r = await lotse('spalte_anlegen', S.active.typ === 'projekt'
       ? { name: n.trim(), projekt: S.active.name } : { name: n.trim(), board_id: S.active.id });
-    if (r.fehler) alert(r.fehler);
+    if (r.fehler) uiHinweis(r.fehler);
     await ladeBoard();
   } }, '+ Spalte'));
 }
@@ -505,10 +573,10 @@ function renderBoard() {
 function spaltenMenu(e, sp, nSpalten) {
   const items = [];
   items.push({ txt: 'Umbenennen', do: async () => {
-    const n = prompt('Neuer Spaltenname:', sp.name);
+    const n = await uiEingabe('Neuer Spaltenname:', sp.name);
     if (n?.trim() && n.trim() !== sp.name) {
       const r = await lotse('spalte_umbenennen', { spalte_id: sp.id, name: n.trim() });
-      if (r.fehler) alert(r.fehler);
+      if (r.fehler) uiHinweis(r.fehler);
       await ladeBoard();
     }
   } });
@@ -519,7 +587,7 @@ function spaltenMenu(e, sp, nSpalten) {
   if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'fertig' ? 'Fertig-prüfen-Rolle entfernen' : 'Als Fertig-prüfen-Spalte (Agenten-Ergebnisse landen hier)', do: () => rolle(sp.auto_status === 'fertig' ? 'keine' : 'fertig_pruefen') });
   if (!sp.ist_erledigt) items.push({ txt: 'Als Erledigt-Spalte', do: () => rolle('erledigt') });
   if (sp.ist_erledigt) items.push({ note: 'Erledigt-Spalte – Rolle über andere Spalte ändern' });
-  if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Löschen – Karten wandern in erste Spalte', danger: true, do: async () => { const r = await lotse('spalte_loeschen', { spalte_id: sp.id }); if (r.fehler) alert(r.fehler); await ladeBoard(); } });
+  if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Löschen – Karten wandern in erste Spalte', danger: true, do: async () => { const r = await lotse('spalte_loeschen', { spalte_id: sp.id }); if (r.fehler) uiHinweis(r.fehler); await ladeBoard(); } });
   ctxMenu(e.clientX, e.clientY, items);
 }
 
@@ -560,15 +628,15 @@ function spalteAutomatikDialog(sp) {
   box.append(el('div', { style: 'font-size:11.5px;color:#8A8A83;margin-top:8px' }, 'Braucht der Agent etwas von dir, wandert die Karte in die Rückfrage-Spalte — antworten kannst du hier oder am Telefon. Nochmal ausführen: Karte kurz raus- und wieder reinziehen.'));
   const row = el('div', { style: 'display:flex;gap:9px;margin-top:16px;flex-wrap:wrap' });
   row.append(el('button', { class: 'btn lime', onclick: async () => {
-    if (!ta.value.trim()) { alert('Bitte einen Auftrag eingeben — oder „Automatik entfernen".'); return; }
+    if (!ta.value.trim()) { uiHinweis('Bitte einen Auftrag eingeben — oder „Automatik entfernen".'); return; }
     const quellen = QU.map(([k]) => k).filter((k) => checks[k].checked);
     const r = await lotse('spalte_automatik', { spalte_id: sp.id, auftrag: ta.value.trim(), quellen, ziel_spalte_id: sel.value || null });
-    if (r.fehler) { alert(r.fehler); return; }
+    if (r.fehler) { uiHinweis(r.fehler); return; }
     zu(); await ladeBoard();
   } }, 'Speichern'));
   if (a.auftrag) row.append(el('button', { class: 'btn warn', onclick: async () => {
     const r = await lotse('spalte_automatik', { spalte_id: sp.id, auftrag: null });
-    if (r.fehler) { alert(r.fehler); return; }
+    if (r.fehler) { uiHinweis(r.fehler); return; }
     zu(); await ladeBoard();
   } }, 'Automatik entfernen'));
   row.append(el('button', { class: 'btn ghost', onclick: zu }, 'Abbrechen'));
@@ -757,7 +825,7 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
     const entscheide = async (was, ev) => {
       ev.stopPropagation();
       const r = await lotse('vgv_entscheiden', { kandidat_id: k.id, entscheidung: was }).catch(() => ({ fehler: 'Netzwerkfehler' }));
-      if (r.fehler) { alert(r.fehler); return; }
+      if (r.fehler) { uiHinweis(r.fehler); return; }
       zeile.replaceWith(el('div', { class: 'kandhin' + (was === 'go' ? ' go' : '') },
         (was === 'go' ? '✓ GO — ' : '✕ No-Go — ') + (r.hinweis || '')));
       if (was === 'go') await ladeBoard();
@@ -822,14 +890,14 @@ function kartenMenu(e, t) {
     if (t.projekt_name) items.push({ txt: '⌖ Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
   }
   items.push({ txt: 'Löschen…', danger: true, do: async () => {
-    if (!confirm(`Karte "${t.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
+    if (!await uiFrage(`Karte "${t.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
     await mut('todo_loeschen', { todo_id: t.id }); await ladeBoard();
   } });
   ctxMenu(x, y, items);
 }
 function projektMenu(x, y, todoId, danach) {
   const fertig = danach || (async () => { await ladeBoard(); });
-  if (!S.projects.length) { alert('Keine aktiven Projekte gefunden.'); return; }
+  if (!S.projects.length) { uiHinweis('Keine aktiven Projekte gefunden.'); return; }
   ctxMenu(x, y, S.projects.map((p) => ({ txt: p.name, do: async () => {
     await mut('todo_projekt', { todo_id: todoId, projekt: p.name }); await fertig();
   } })));
@@ -897,7 +965,7 @@ function closeDrawer() { S.detail = null; document.getElementById('drawer-root')
 
 function renderDrawer() {
   const root = document.getElementById('drawer-root'); root.innerHTML = '';
-  const d = S.detail; if (!d || d.fehler) { if (d?.fehler) alert(d.fehler); return; }
+  const d = S.detail; if (!d || d.fehler) { if (d?.fehler) uiHinweis(d.fehler); return; }
   const st = statusVon(d); const chip = st && CHIPS[st];
   const ov = el('div', { class: 'overlay', onclick: (e) => { if (e.target === ov) closeDrawer(); } });
   const dr = el('div', { class: 'drawer' });
@@ -912,19 +980,19 @@ function renderDrawer() {
   chipRow.append(el('button', { style: 'margin-left:auto;font-size:16px;color:#75756E', onclick: closeDrawer }, '✕'));
   const titelZeile = el('div', { class: 't', style: 'display:flex;gap:8px;align-items:baseline' }, d.titel,
     el('button', { title: 'Titel bearbeiten', style: 'font-size:13px;color:#9A9A93', onclick: async () => {
-      const t2 = prompt('Titel bearbeiten:', d.titel);
+      const t2 = await uiEingabe('Titel bearbeiten:', d.titel);
       if (t2 !== null && t2.trim() && t2.trim() !== d.titel) { await mut('todo_update', { todo_id: d.id, titel: t2.trim() }); await openCard(d.id); await ladeBoard(); }
     } }, '✎'));
   head.append(chipRow, titelZeile);
   const meta = el('div', { class: 'meta' });
   // Projekt: klickbar — zuweisen, aendern, entfernen (Migration 78).
   meta.append(el('button', { class: 'metabtn', title: 'Projekt zuweisen oder ändern', onclick: (e) => {
-    if (S.board?.ist_team) { alert('Karte liegt auf einem Team-Board — Projekt-Zuordnung dort nicht möglich.'); return; }
+    if (S.board?.ist_team) { uiHinweis('Karte liegt auf einem Team-Board — Projekt-Zuordnung dort nicht möglich.'); return; }
     const x = e.clientX, y = e.clientY;
     const danach = async () => { await openCard(d.id); await ladeBoard(); };
     const items = S.projects.map((p) => ({ txt: p.name, do: async () => { await mut('todo_projekt', { todo_id: d.id, projekt: p.name }); await danach(); } }));
     if (d.projekt) items.push({ txt: 'Projekt entfernen', danger: true, do: async () => { await mut('todo_projekt', { todo_id: d.id, projekt: null }); await danach(); } });
-    if (!items.length) { alert('Keine aktiven Projekte gefunden.'); return; }
+    if (!items.length) { uiHinweis('Keine aktiven Projekte gefunden.'); return; }
     ctxMenu(x, y, items);
   } }, d.projekt ? '⌖ ' + d.projekt.name : '⌖ Projekt zuweisen'));
   // Frist: klickbar — Schnellwahl, freies Datum, entfernen (Migration 78: leerbar).
@@ -1057,14 +1125,14 @@ function renderDrawer() {
     const speichereEntwuerfe = async () => {
       for (const { f, inp } of inputs) if (inp.value.trim() && inp.value.trim() !== (f.antwort || '')) {
         const r = await lotse('rueckfrage_entwurf', { rueckfrage_id: f.id, antwort: inp.value.trim() });
-        if (r.fehler) alert(r.fehler);
+        if (r.fehler) uiHinweis(r.fehler);
       }
     };
     const rowB = el('div', { style: 'display:flex;gap:9px;margin-top:10px;flex-wrap:wrap' });
     rowB.append(el('button', { class: 'btn warn', onclick: async () => {
       await speichereEntwuerfe();
       const r = await lotse('rueckfragen_absenden', { todo_id: d.id });
-      if (r.fehler) alert(r.fehler);
+      if (r.fehler) uiHinweis(r.fehler);
       await openCard(d.id); await ladeBoard();
     } }, 'Losschicken – Agent arbeitet weiter'));
     rowB.append(el('button', { class: 'btn ghost', onclick: async () => {
@@ -1133,7 +1201,7 @@ function renderDrawer() {
     const up = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${pfad}`, {
       method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token }, body: f,
     });
-    if (!up.ok) { alert('Upload fehlgeschlagen'); return; }
+    if (!up.ok) { uiHinweis('Upload fehlgeschlagen'); return; }
     await mut('anhang_registrieren',{ todo_id: d.id, pfad, name: f.name, groesse: f.size });
     await openCard(d.id); await ladeBoard();
   } });
@@ -1165,7 +1233,7 @@ function renderDrawer() {
   const sf = el('div', { class: 'dsec', style: 'display:flex;gap:9px;border-bottom:none' });
   if (d.status === 'offen') {
     sf.append(el('button', { class: 'btn lime', onclick: async () => {
-      const kom = prompt('Kommentar zum Abschluss (fließt ins Agenten-Gedächtnis):', '');
+      const kom = await uiEingabe('Kommentar zum Abschluss (fließt ins Agenten-Gedächtnis):', '');
       if (kom === null) return;
       await mut('todo_complete',{ todo_id: d.id, kommentar: kom || null });
       closeDrawer(); await ladeBoard();
@@ -1176,14 +1244,14 @@ function renderDrawer() {
   // Lernschleife (item_feedback via assistant_todo_abschliessen, Migration 52).
   if (d.status === 'offen' && (d.zuarbeit || d.quelle === 'agent')) {
     sf.append(el('button', { class: 'btn ghost gefahr', onclick: async () => {
-      const grund = prompt('Warum ist das gerade nicht relevant? (fließt ins Agenten-Gedächtnis — er schlägt so etwas dann nicht mehr vor)');
+      const grund = await uiEingabe('Warum ist das gerade nicht relevant? (fließt ins Agenten-Gedächtnis — er schlägt so etwas dann nicht mehr vor)');
       if (grund === null || !grund.trim()) return;
       await mut('todo_complete', { todo_id: d.id, kommentar: 'NICHT RELEVANT: ' + grund.trim() });
       closeDrawer(); await ladeBoard();
     } }, 'Nicht relevant…'));
   }
   sf.append(el('button', { class: 'btn ghost gefahr', style: 'margin-left:auto', onclick: async () => {
-    if (!confirm(`Karte "${d.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
+    if (!await uiFrage(`Karte "${d.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
     const r = await mut('todo_loeschen', { todo_id: d.id });
     if (r && r.ok) { closeDrawer(); await ladeBoard(); }
   } }, 'Löschen'));
@@ -1207,14 +1275,14 @@ async function oeffneAnhaenge(liste) {
       const u = URL.createObjectURL(new Blob([buf], { type: typ }));
       if (wins[i] && !wins[i].closed) wins[i].location = u; else window.open(u);
       setTimeout(() => URL.revokeObjectURL(u), 60000);
-    } catch (e) { if (wins[i] && !wins[i].closed) wins[i].close(); alert('Öffnen fehlgeschlagen: ' + a.name); }
+    } catch (e) { if (wins[i] && !wins[i].closed) wins[i].close(); uiHinweis('Öffnen fehlgeschlagen: ' + a.name); }
   }
 }
 
 async function downloadAnhang(a) {
   const r = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${a.pfad}`, {
     headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token } });
-  if (!r.ok) { alert('Download fehlgeschlagen'); return; }
+  if (!r.ok) { uiHinweis('Download fehlgeschlagen'); return; }
   const blob = await r.blob();
   const u = URL.createObjectURL(blob);
   const link = document.createElement('a'); link.href = u; link.download = a.name; link.click();
