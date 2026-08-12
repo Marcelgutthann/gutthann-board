@@ -84,6 +84,9 @@ let betMitRolle='';
 let betLoeschFrage=null;
 // betSel = angeklickte Zeile (Detail rechts), betFilter = Schnellfilter der Liste
 let betSel=null,betFilter='';
+// Der Klappzustand der Bearbeitung ueberlebt das Neuladen -- wer sie einmal
+// weggeklappt hat, will sie nicht bei jedem Seitenaufruf wieder dastehen haben.
+let betFormAuf=localStorage.getItem('gb_bet_form')!=='zu';
 const BER_TYPEN=[['lagebericht','Lagebericht','letzte 3 Monate'],['projektakte','Projektakte','ganzes Projekt'],['zielpfad','Zielpfad','Ausblick']];
 const BER_DIM={kosten:'Kosten',termine:'Termine',planung:'Planung',bauherr:'Bauherr',team:'Team',dokumentation:'Doku/Risiko'};
 const berCls=s=>s==='danger'||s==='ueberfaellig'?'d':s==='warn'?'w':'o';
@@ -1323,9 +1326,18 @@ function betAktionen(r){
 function betForm(e,eingebettet){
   const isG=e.art==='gruppe',K=e.kontakte||[];
   const opt=(list,val)=>list.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>').join('');
-  let h='<div class="bet-p'+(eingebettet?' bet-p-unten':'')+'"><div class="bet-p-kopf">'+
-        (e.id?'Bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
-        (eingebettet?'':'<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button>')+'</div>';
+  let h='<div class="bet-p'+(eingebettet?' bet-p-unten':'')+'">';
+  if(eingebettet){
+    // Aufklappbar, und der Zustand bleibt ueber alle Zeilen hinweg: einmal
+    // zugeklappt, steht das Formular nicht mehr ueberall dazwischen.
+    h+='<button class="bet-falt'+(betFormAuf?' auf':'')+'" data-bet="form-falten" '+
+       'title="Bearbeitung ein- und ausklappen"><span>Bearbeiten</span>'+
+       '<span class="bet-falt-pfeil">'+(betFormAuf?'▾':'▸')+'</span></button>';
+    if(!betFormAuf)return h+'</div>';
+  }else{
+    h+='<div class="bet-p-kopf">'+(e.id?'Bearbeiten':(isG?'Neue Gruppe':'Neuer Beteiligter'))+
+       '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></div>';
+  }
   h+='<div class="bet-fgrid">';
   h+='<label class="bf w2">'+(isG?'Gruppentitel':'Rolle im Projekt')+
      '<input id="bf_titel" list="bf_rollen" value="'+esc(e.titel||'')+'" placeholder="'+(isG?'z. B. Ausführende Firmen':'z. B. Fachplanung Statik')+'"></label>';
@@ -2005,6 +2017,12 @@ function wireBet(){
       const drin=new Set(betL.filter(r=>r.crm_person_id).map(r=>r.crm_person_id));
       const offen=(betCrmMit||[]).map((p,i)=>drin.has(p.crm_id)?-1:i).filter(i=>i>=0);
       await betPersonHinzu(offen);return;}
+    else if(a==='form-falten'){
+      // Beim Zuklappen retten, was schon getippt ist -- sonst ist es beim
+      // Aufklappen wieder weg.
+      if(betFormAuf&&betEdit)betEdit=Object.assign({},betEdit,betFormLesen());
+      betFormAuf=!betFormAuf;
+      localStorage.setItem('gb_bet_form',betFormAuf?'auf':'zu');}
     else if(a==='filter-weg'){betFilter='';neuZeichnen();return;}
     else if(a==='kont-plus'){const cur=betFormLesen();betEdit=Object.assign({},betEdit,cur);
       betEdit.kontakte=(cur.kontakte||[]).concat([{art:'telefon',kontext:'arbeit',wert:''}]);}
