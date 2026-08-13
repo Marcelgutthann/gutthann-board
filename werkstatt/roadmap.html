@@ -1,0 +1,1689 @@
+﻿<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>KI-Strategie Roadmap — Workshop-Board</title>
+<style>
+  :root{
+    --paper:#EDF0EC; --surface:#FFFFFF; --surface-2:#F6F8F4; --surface-3:#E7EBE5;
+    --ink:#15191A; --ink-2:#4C5657; --ink-3:#7C8886;
+    --line:#D2D8D1; --line-strong:#B4BDB3;
+    --accent:#1C5B63; --accent-2:#2E8189; --accent-soft:#DBEAE9; --on-accent:#FFFFFF;
+    --signal:#BC5619; --signal-soft:#F6E2D3;
+    --good:#2E7048; --warn:#9C7218; --crit:#9C382C;
+    --shadow:0 1px 2px rgba(20,30,30,.06), 0 8px 24px -14px rgba(20,30,30,.35);
+    --display:Bahnschrift,"DIN Alternate","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+    --body:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+    --col:480px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0E1213; --surface:#161B1C; --surface-2:#1C2223; --surface-3:#232A2B;
+      --ink:#E7EDEA; --ink-2:#A3AFAD; --ink-3:#7C8886;
+      --line:#2A3233; --line-strong:#3A4445;
+      --accent:#6BC3C8; --accent-2:#8FD6DA; --accent-soft:#16383B; --on-accent:#0E1213;
+      --signal:#E2914F; --signal-soft:#3A2718;
+      --good:#6FBF8B; --warn:#D6B05C; --crit:#E08277;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E1213; --surface:#161B1C; --surface-2:#1C2223; --surface-3:#232A2B;
+    --ink:#E7EDEA; --ink-2:#A3AFAD; --ink-3:#7C8886;
+    --line:#2A3233; --line-strong:#3A4445;
+    --accent:#6BC3C8; --accent-2:#8FD6DA; --accent-soft:#16383B; --on-accent:#0E1213;
+    --signal:#E2914F; --signal-soft:#3A2718;
+    --good:#6FBF8B; --warn:#D6B05C; --crit:#E08277;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px -16px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button,input,textarea,select{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  ::selection{background:var(--accent-soft)}
+
+  .app{display:grid;grid-template-columns:290px 1fr;height:100vh;min-height:560px}
+
+  /* ---------- Rail ---------- */
+  .rail{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto;min-height:0}
+  .rail-head{padding:22px 22px 16px;border-bottom:1px solid var(--line)}
+  .mark{font-family:var(--display);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px}
+  .mark span{flex:1;height:1px;background:var(--line-strong)}
+  .rail-head h1{font-family:var(--display);font-size:27px;line-height:1.08;margin:12px 0 6px;letter-spacing:.01em;text-wrap:balance}
+  .rail-head p{margin:0;font-size:13px;color:var(--ink-2)}
+
+  .meta{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-family:var(--display);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .field input{background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:14px}
+
+  .cloud{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  .cloud .id{font-family:var(--mono);font-size:11px;color:var(--ink-2);word-break:break-all;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:6px 8px}
+  .prog{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  .prog-top{display:flex;justify-content:space-between;align-items:baseline}
+  .prog-top strong{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums}
+  .prog-top span{font-size:12px;color:var(--ink-2)}
+  .bar{height:6px;background:var(--surface-3);border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s ease}
+
+  .nav{padding:12px 12px 4px;display:flex;flex-direction:column;gap:2px}
+  .nav button{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;background:none;border:0;border-radius:4px;padding:8px 10px;cursor:pointer}
+  .nav button:hover{background:var(--surface-2)}
+  .nav .n{font-family:var(--mono);font-size:11px;color:var(--accent);min-width:14px}
+  .nav .t{flex:1;font-size:13.5px}
+  .nav .c{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+  .acts{margin-top:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--line)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line-strong);background:var(--surface-2);border-radius:3px;padding:9px 12px;cursor:pointer;font-size:13.5px;transition:background .15s,border-color .15s}
+  .btn:hover{background:var(--surface-3);border-color:var(--ink-3)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-family:var(--display);letter-spacing:.04em;font-size:15px;padding:11px 12px}
+  .btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+  .btn.ghost{background:none;border-color:var(--line)}
+  .btn-row{display:flex;gap:7px}
+  .btn-row .btn{flex:1}
+  .hint{font-size:11.5px;color:var(--ink-3);line-height:1.4}
+
+  /* ---------- Stage ---------- */
+  .stage{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .topbar{display:flex;align-items:center;gap:16px;padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .zoom{display:flex;align-items:center;gap:4px}
+  .zoom button{width:30px;height:30px;border:1px solid var(--line);background:var(--surface-2);border-radius:3px;cursor:pointer;font-size:15px;line-height:1}
+  .zoom button:hover{background:var(--surface-3)}
+  .zoom output{font-family:var(--mono);font-size:12px;min-width:44px;text-align:center;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .legend{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+  .dot{width:9px;height:9px;border-radius:99px;background:var(--line-strong);flex:none}
+  .dot.doing{background:var(--signal)}
+  .dot.done{background:var(--good)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .seg button{border:0;background:var(--surface-2);padding:6px 11px;cursor:pointer;font-size:12.5px}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+  .board{flex:1;min-height:0;overflow:auto;background:
+     radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0/28px 28px, var(--paper);}
+  .canvas{transform-origin:0 0;display:flex;align-items:flex-start;gap:38px;padding:34px 60px 80px}
+
+  .col{width:var(--col);flex:none;display:flex;flex-direction:column;gap:14px}
+  .phase-head{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:4px;padding:16px 18px;box-shadow:var(--shadow)}
+  .phase-head .kicker{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em}
+  .phase-head h2{font-family:var(--display);font-size:25px;margin:8px 0 4px;line-height:1.1}
+  .phase-head .lead{font-size:13.5px;color:var(--ink-2);margin:0}
+  .phase-head .q{margin-top:10px;font-family:var(--display);font-size:15px;color:var(--accent);letter-spacing:.02em}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:4px;padding:14px 16px;box-shadow:var(--shadow);cursor:pointer;transition:border-color .15s,transform .15s}
+  .card:hover{border-left-color:var(--accent);transform:translateY(-1px)}
+  .card[data-status="doing"]{border-left-color:var(--signal)}
+  .card[data-status="done"]{border-left-color:var(--good)}
+  .card[data-status="done"] .card-title{color:var(--ink-2)}
+  .card.dim{opacity:.42}
+  .card-top{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+  .card-id{font-family:var(--mono);font-size:11px;color:var(--accent);font-variant-numeric:tabular-nums}
+  .card-min{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto}
+  .statusbtn{width:16px;height:16px;border-radius:99px;border:2px solid var(--line-strong);background:none;cursor:pointer;flex:none;padding:0}
+  .statusbtn[data-status="doing"]{border-color:var(--signal);background:var(--signal)}
+  .statusbtn[data-status="done"]{border-color:var(--good);background:var(--good)}
+  .card-title{font-family:var(--display);font-size:18.5px;line-height:1.15;margin:0 0 6px}
+  .card-goal{font-size:13.5px;color:var(--ink-2);margin:0 0 10px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--signal);background:var(--signal-soft);padding:2px 6px;border-radius:2px;margin-bottom:8px}
+  .card ul{margin:0 0 10px;padding-left:16px;font-size:13.5px;color:var(--ink)}
+  .card li{margin:3px 0}
+  .praxis{background:var(--accent-soft);border-radius:3px;padding:9px 11px;font-size:13px;color:var(--ink);margin-bottom:10px}
+  .praxis b{font-family:var(--display);display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
+  .note{width:100%;min-height:56px;resize:vertical;background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:3px;padding:8px 10px;font-size:13.5px;font-family:var(--body)}
+  .note::placeholder{color:var(--ink-3)}
+  .note:focus{border-style:solid;background:var(--surface)}
+  .out{font-size:12px;color:var(--ink-3);margin:0 0 10px;font-style:italic}
+
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:14px 16px;box-shadow:var(--shadow)}
+  .tile h3{font-family:var(--display);font-size:17px;margin:0 0 10px}
+  .preview{pointer-events:none;user-select:none}
+
+  /* ---------- Widgets ---------- */
+  .grid2{position:relative;aspect-ratio:1/1;border:1px solid var(--line-strong);border-radius:3px;background:var(--surface-2);overflow:hidden}
+  .grid2 .quad{position:absolute;width:50%;height:50%;border:0}
+  .grid2 .quad:nth-child(1){top:0;left:0;border-right:1px dashed var(--line-strong);border-bottom:1px dashed var(--line-strong)}
+  .grid2 .quad:nth-child(2){top:0;right:0;border-bottom:1px dashed var(--line-strong)}
+  .grid2 .quad:nth-child(3){bottom:0;left:0;border-right:1px dashed var(--line-strong)}
+  .grid2 .quad:nth-child(4){bottom:0;right:0}
+  .quad-label{position:absolute;font-family:var(--display);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:7px 9px;max-width:48%;line-height:1.2}
+  .axis-x,.axis-y{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);text-align:center}
+  .axis-y{writing-mode:vertical-rl;transform:rotate(180deg)}
+  .fieldwrap{display:grid;grid-template-columns:18px 1fr;grid-template-rows:1fr 18px;gap:6px;align-items:center}
+  .sticky{position:absolute;transform:translate(-50%,-50%);background:#F4DF8E;color:#1b1a12;border-radius:2px;padding:5px 7px;font-size:11.5px;line-height:1.2;max-width:120px;cursor:grab;box-shadow:0 2px 5px rgba(0,0,0,.22);touch-action:none}
+  .sticky.s2{background:#B7DCE0;color:#0e2427}
+  .sticky.s3{background:#E9B8A0;color:#26140c}
+  .sticky:active{cursor:grabbing}
+  .tray{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;min-height:34px;padding:7px;border:1px dashed var(--line-strong);border-radius:3px;background:var(--surface-2)}
+  .tray .sticky{position:static;transform:none;box-shadow:none}
+  .addrow{display:flex;gap:6px;margin-top:9px}
+  .addrow input{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:7px 9px;font-size:13px}
+  .wtable{width:100%;border-collapse:collapse;font-size:13px}
+  .wtable th{font-family:var(--display);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .wtable td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .wtable textarea{width:100%;min-height:44px;border:1px solid var(--line);border-radius:3px;background:var(--surface-2);padding:6px 8px;font-size:13px;font-family:var(--body);resize:vertical}
+  .wtable select,.wtable input{width:100%;border:1px solid var(--line);border-radius:3px;background:var(--surface-2);padding:6px 8px;font-size:13px}
+  .num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+  .result{margin-top:10px;padding:10px 12px;background:var(--accent-soft);border-radius:3px;font-size:14px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .result strong{font-family:var(--display);font-size:20px}
+  .cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cols3 .lane{background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:8px}
+  .cols3 h4{font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+  .cols3 textarea{width:100%;min-height:90px;border:0;background:none;font-size:13px;font-family:var(--body);resize:vertical}
+
+  /* ---------- Focus ---------- */
+  .focus{position:fixed;inset:0;background:rgba(10,16,16,.55);backdrop-filter:blur(3px);display:flex;align-items:stretch;justify-content:center;padding:24px;z-index:40}
+  .focus[hidden]{display:none}
+  .fpanel{background:var(--surface);border:1px solid var(--line);border-radius:6px;width:min(1180px,100%);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 60px -20px rgba(0,0,0,.5)}
+  .fhead{padding:18px 26px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:16px}
+  .fhead .eyebrow{font-family:var(--mono);font-size:11.5px;color:var(--accent);letter-spacing:.1em;margin-bottom:6px}
+  .fhead h2{font-family:var(--display);font-size:34px;line-height:1.05;margin:0;text-wrap:balance}
+  .fhead .goal{margin:8px 0 0;font-size:16px;color:var(--ink-2);max-width:70ch}
+  .fclose{margin-left:auto;border:1px solid var(--line);background:var(--surface-2);border-radius:3px;width:34px;height:34px;cursor:pointer;flex:none;font-size:16px}
+  .fbody{padding:20px 26px 24px;overflow-y:auto;display:grid;grid-template-columns:1.15fr .85fr;gap:26px;align-items:start}
+  .fbody h3{font-family:var(--display);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+  .fq{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .fq li{display:flex;gap:11px;font-size:17px;line-height:1.4;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  .fq li:last-child{border-bottom:0}
+  .fq .bullet{font-family:var(--mono);font-size:12px;color:var(--accent);padding-top:5px}
+  .fpraxis{background:var(--accent-soft);border-radius:4px;padding:14px 16px;font-size:15px;line-height:1.5}
+  .fpraxis b{font-family:var(--display);display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:5px}
+  .fout{margin-top:14px;font-size:14px;color:var(--ink-2)}
+  .fout b{font-family:var(--display);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:4px}
+  .fnote{width:100%;min-height:150px;margin-top:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:12px 14px;font-size:16px;font-family:var(--body);resize:vertical}
+  .ffoot{border-top:1px solid var(--line);padding:12px 26px;display:flex;align-items:center;gap:10px;background:var(--surface-2)}
+  .ffoot .spacer{flex:1}
+  .statusgroup{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .statusgroup button{border:0;background:var(--surface);padding:8px 12px;cursor:pointer;font-size:13px}
+  .statusgroup button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+  .fwidget{grid-column:1/-1;border-top:1px solid var(--line);padding-top:18px}
+
+  .fz{padding:22px 26px 26px;overflow-y:auto}
+  .fz section{margin:0 0 26px}
+  .fz h3{font-family:var(--display);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .fz dl{margin:0;display:grid;grid-template-columns:190px minmax(0,1fr);gap:8px 18px}
+  .fz dt{font-family:var(--display);font-size:14px;color:var(--accent)}
+  .fz dd{margin:0;font-size:15px;white-space:pre-wrap}
+  .fz dd.empty{color:var(--ink-3);font-style:italic}
+  .fz ul{margin:0;padding-left:18px;font-size:15px}
+  .fz li{margin:5px 0}
+  .fz .rec{border-left:3px solid var(--signal);background:var(--signal-soft);padding:10px 13px;border-radius:0 3px 3px 0;margin:8px 0;font-size:15px}
+  .fz .ok{border-left:3px solid var(--good);background:var(--accent-soft);padding:10px 13px;border-radius:0 3px 3px 0;margin:8px 0;font-size:15px}
+  .fz table{width:100%;border-collapse:collapse;font-size:14.5px}
+  .fz th{font-family:var(--display);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+  .fz td{padding:6px 10px;border-bottom:1px solid var(--line)}
+  .fz td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:4px;font-size:14px;z-index:60;opacity:0;pointer-events:none;transition:opacity .25s}
+  .toast.show{opacity:1}
+
+  #print{display:none}
+  @media print{
+    .app,.focus,.toast{display:none !important}
+    #print{display:block;padding:0}
+    body{background:#fff;color:#000;font-size:11pt}
+    .p-h1{font-family:var(--display);font-size:24pt;margin:0 0 4pt}
+    .p-meta{font-size:10pt;color:#444;margin-bottom:18pt;border-bottom:1px solid #999;padding-bottom:8pt}
+    .p-phase{font-family:var(--display);font-size:16pt;margin:18pt 0 8pt;border-bottom:1px solid #999;page-break-after:avoid}
+    .p-st{margin:0 0 12pt;page-break-inside:avoid}
+    .p-st h4{font-size:12pt;margin:0 0 3pt}
+    .p-st .p-note{white-space:pre-wrap;border-left:2px solid #999;padding-left:8pt;margin-top:4pt}
+    .p-st .p-empty{color:#888;font-style:italic}
+  }
+  @media (max-width:1000px){
+    .app{grid-template-columns:1fr;height:auto}
+    .rail{border-right:0;border-bottom:1px solid var(--line)}
+    .board{height:72vh}
+    .fbody{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+
+
+<div class="app">
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="mark">Workshop-Board<span></span>Sektion 2</div>
+      <h1>KI-Strategie entwickeln</h1>
+      <p id="rail-sub">Von der Vision bis zur Stakeholder-Landkarte. Zum gemeinsamen Durchgehen und Mitschreiben.</p>
+    </div>
+
+    <div class="meta">
+      <div class="field"><label for="m-kunde">Unternehmen</label><input id="m-kunde" placeholder="Name des Kunden"></div>
+      <div class="field"><label for="m-datum">Datum</label><input id="m-datum" placeholder="TT.MM.JJJJ"></div>
+      <div class="field"><label for="m-teiln">Teilnehmende</label><input id="m-teiln" placeholder="Wer sitzt am Tisch?"></div>
+    </div>
+
+    <div class="cloud">
+      <div class="field"><label>Board in der Datenbank</label><div class="id" id="cloud-id">nicht verbunden</div></div>
+      <div class="btn-row">
+        <button class="btn" id="c-new">Neues Board</button>
+        <button class="btn" id="c-copy">Link kopieren</button>
+      </div>
+      <p class="hint" id="cloud-status">Läuft lokal, ohne Datenbank.</p>
+    </div>
+
+    <div class="prog">
+      <div class="prog-top"><strong id="prog-num">0 / 34</strong><span id="prog-time">— min</span></div>
+      <div class="bar"><i id="prog-bar"></i></div>
+      <div class="hint" id="prog-hint">Noch nichts abgehakt.</div>
+    </div>
+
+    <nav class="nav" id="nav"></nav>
+
+    <div class="acts">
+      <button class="btn primary" id="a-start">Durchgehen starten</button>
+      <button class="btn" id="a-fazit">Auswertung &amp; Fazit</button>
+      <div class="btn-row">
+        <button class="btn" id="a-md">Protokoll (.md)</button>
+        <button class="btn" id="a-print">Drucken</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="a-save">Sichern (.json)</button>
+        <button class="btn ghost" id="a-load">Laden</button>
+      </div>
+      <button class="btn ghost" id="a-reset">Board leeren</button>
+      <p class="hint">Notizen werden automatisch in diesem Browser gespeichert. Vor dem Termin einmal <b>Sichern</b> klicken — dann liegt der Stand als Datei bei dir.</p>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="topbar">
+      <div class="zoom">
+        <button id="z-out" title="Verkleinern">−</button>
+        <output id="z-val">100 %</output>
+        <button id="z-in" title="Vergrößern">+</button>
+        <button id="z-fit" title="Alles zeigen" style="width:auto;padding:0 10px;font-size:12.5px">Übersicht</button>
+      </div>
+      <div class="seg" role="group" aria-label="Umfang">
+        <button id="s-all" aria-pressed="true">Vollprogramm</button>
+        <button id="s-core" aria-pressed="false">Kernfassung (1 Tag)</button>
+      </div>
+      <div class="legend">
+        <span><i class="dot"></i>offen</span>
+        <span><i class="dot doing"></i>läuft</span>
+        <span><i class="dot done"></i>geklärt</span>
+        <span>Klick auf eine Station öffnet die große Ansicht</span>
+      </div>
+    </div>
+    <div class="board" id="board"><div class="canvas" id="canvas"></div></div>
+  </main>
+</div>
+
+<div class="focus" id="focus" hidden>
+  <div class="fpanel" role="dialog" aria-modal="true" aria-labelledby="f-title">
+    <div class="fhead">
+      <div>
+        <div class="eyebrow" id="f-eyebrow"></div>
+        <h2 id="f-title"></h2>
+        <p class="goal" id="f-goal"></p>
+      </div>
+      <button class="fclose" id="f-close" aria-label="Schließen">✕</button>
+    </div>
+    <div class="fbody">
+      <div>
+        <h3>Das gehen wir durch</h3>
+        <ul class="fq" id="f-questions"></ul>
+      </div>
+      <div>
+        <div class="fpraxis" id="f-praxis"></div>
+        <div class="fout" id="f-out"></div>
+        <h3 style="margin-top:18px">Notiz</h3>
+        <textarea class="fnote" id="f-note" placeholder="Was wurde gesagt? Was ist entschieden? Wer macht was?"></textarea>
+      </div>
+      <div class="fwidget" id="f-widget" hidden></div>
+    </div>
+    <div class="ffoot">
+      <div class="statusgroup" role="group" aria-label="Status">
+        <button data-s="open">offen</button>
+        <button data-s="doing">läuft</button>
+        <button data-s="done">geklärt</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="hint" id="f-pos"></span>
+      <button class="btn" id="f-prev">← Zurück</button>
+      <button class="btn primary" id="f-next">Weiter →</button>
+    </div>
+  </div>
+</div>
+
+<div class="focus" id="result" hidden>
+  <div class="fpanel" role="dialog" aria-modal="true" aria-labelledby="fz-title">
+    <div class="fhead">
+      <div>
+        <div class="eyebrow" id="fz-eyebrow">Auswertung</div>
+        <h2 id="fz-title">Fazit</h2>
+        <p class="goal" id="fz-sub"></p>
+      </div>
+      <button class="fclose" id="fz-close" aria-label="Schließen">✕</button>
+    </div>
+    <div class="fz" id="fz-body"></div>
+    <div class="ffoot">
+      <span class="hint" id="fz-hint"></span>
+      <span class="spacer"></span>
+      <button class="btn" id="fz-print">Drucken</button>
+      <button class="btn primary" id="fz-md">Fazit speichern (.md)</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="print"></div>
+<input type="file" id="filein" accept="application/json" hidden>
+
+<script>
+"use strict";
+
+/* =========================================================
+   INHALT — destilliert aus Sektion 2 „Eine KI-Strategie entwickeln"
+   (34 Lektionen: Texte, Checklisten und die Video-Transkripte).
+   „Aus der Praxis" = Erfahrungswissen, das nur im Video gesagt wird.
+   ========================================================= */
+
+const PHASES = [
+  {
+    n:1, key:"vision", name:"KI-Vision", q:"Wohin wollen wir?",
+    lead:"Das gemeinsame Zielbild in 3 Jahren — abgeleitet aus den Unternehmenszielen, nicht aus der Technologie.",
+    stations:[
+      { id:"1.1", t:"Unternehmensziele auf den Tisch", min:15, core:true,
+        goal:"Bevor irgendjemand über KI spricht: die zwei bis drei wichtigsten Unternehmensziele festhalten.",
+        q:["Welche zwei bis drei Ziele hat das Unternehmen für die nächsten Jahre — messbar formuliert?",
+           "Was ist der Zweck des Unternehmens, wo liegt das Right to Win?",
+           "Woran wird der Erfolg dieses Jahres gemessen (Umsatz, Durchlaufzeit, Qualität, Kosten)?"],
+        p:"Die KI-Vision ist kein eigenständiges Ziel, sie leitet sich aus der Unternehmensstrategie ab. Wer diesen Schritt überspringt, produziert später Budgets und Projekte, die dem Unternehmen nichts bringen.",
+        out:"2–3 messbare Unternehmensziele, schriftlich." },
+      { id:"1.2", t:"Zukunftsreise 2030", min:25, core:true,
+        goal:"Jeder im Raum beschreibt still für sich, wie das Unternehmen mit KI in drei Jahren arbeitet.",
+        q:["Was hat sich verändert? Welche Aufgabe, die früher mühsam war, erledigt sich fast von selbst?",
+           "Wie klingt ein typisches Gespräch im Team? Worüber beschwert sich niemand mehr?",
+           "Woran arbeitet ihr jetzt, wofür früher keine Zeit war?",
+           "Was war der Moment, in dem klar wurde: jetzt läuft es anders?"],
+        p:"10 bis 20 Minuten still arbeiten lassen, jeder schreibt auf Karten. Der Trainer-Erfahrungswert: bei 5 bis 20 Teilnehmenden entstehen fast immer dieselben sechs bis sieben Cluster — das ist das gemeinsame Zielbild, das die Organisation ohnehin schon in sich trägt.",
+        out:"Ein Stapel beschriebener Karten, pro Person 3–5." },
+      { id:"1.3", t:"Cluster bilden", min:20, core:false,
+        goal:"Karten ans Whiteboard, gemeinsame Themen zusammenschieben.",
+        q:["Welche Themen tauchen mehrfach auf?",
+           "Welche Cluster haben wir — Kunden, Produkt, Abläufe, Wissen?",
+           "Welches Cluster hat für die Unternehmensziele das größte Gewicht?"],
+        p:"Erst vorstellen lassen, dann clustern. Wer die Karten selbst sortiert, nimmt der Gruppe das Ergebnis weg — und damit die Verbindlichkeit, die später trägt, wenn es im Projekt anstrengend wird.",
+        out:"6–7 benannte Cluster am Board." },
+      { id:"1.4", t:"Vision formulieren", min:20, core:true,
+        goal:"Aus den Clustern einen Satz bauen — als Zustand, nicht als Absicht.",
+        q:["Formel: In [Zeitraum] [Zukunftsbild], indem KI [Beitrag leistet], sodass [Nutzen].",
+           "Beschreibt der Satz einen Zustand — oder nur den Vorsatz, KI zu benutzen?",
+           "Beispielmaß: „In drei Jahren bearbeiten wir Kundenanfragen in Stunden statt Tagen.“",
+           "Trägt jeder im Raum diesen Satz mit?"],
+        p:"„Wir wollen KI nutzen“ oder „KI ist in allen Prozessen integriert“ ist als Vision unbrauchbar: nicht messbar, kein wirtschaftlicher Impact, und motivieren tut es auch niemanden. Dafür brennt keiner. AI-First als Parole ist empirisch nachweislich nicht wirkungsvoll.",
+        out:"Ein Visionssatz mit Zeithorizont." },
+      { id:"1.5", t:"Alignment-Check", min:10, core:true,
+        goal:"Die Testfrage stellen, bevor es weitergeht.",
+        q:["Wenn diese Vision erreicht ist — sind wir den Unternehmenszielen näher?",
+           "Wenn nein: was muss an der Vision geändert werden?",
+           "Wie und an wen wird die Vision intern kommuniziert?"],
+        p:"Diesen Gegencheck wirklich machen. Eine Vision, die neben der Unternehmensstrategie steht, verbrennt Budget, Ressourcen und Zeit — und fällt erst nach Monaten auf.",
+        out:"Freigegebene Vision + Kommunikationsweg." }
+    ]
+  },
+  {
+    n:2, key:"mission", name:"KI-Mission", q:"Wodurch kommen wir dahin?",
+    lead:"Der Bauplan: die Lücke zwischen heute und der Vision — in vier Dimensionen, mit bewusst gewählten Hebeln.",
+    stations:[
+      { id:"2.1", t:"Ist-Zustand ehrlich beschreiben", min:15, core:false,
+        goal:"Wo steht das Unternehmen heute wirklich beim Thema KI?",
+        q:["Was wird heute schon eingesetzt — offiziell und inoffiziell?",
+           "Wer hat sich intern bereits Kompetenz angeeignet?",
+           "Was ist in den letzten zwölf Monaten versucht worden, und was ist daraus geworden?"],
+        p:"Fast immer gibt es Mitarbeitende, die sich still eigene KI-Kompetenz aufgebaut haben. Die sind wertvoll — und wenn man sie übersieht, werden genau sie später zu den Blockierern (siehe Phase 6).",
+        out:"Ehrliche Ist-Aufnahme, inkl. Schatten-IT." },
+      { id:"2.2", t:"Die Lücke in vier Dimensionen", min:30, core:true, w:"gap",
+        goal:"Was fehlt, um die Vision zu erreichen — sauber getrennt nach Kompetenz, Technologie/Daten, Prozesse/Strukturen, Kultur/Haltung.",
+        q:["Kompetenz: Was können die Mitarbeitenden heute, was muss aufgebaut werden?",
+           "Technologie & Daten: Welche Tools, Systeme, Datengrundlagen brauchen wir?",
+           "Prozesse & Strukturen: Welche Abläufe und Rollen müssen angepasst werden?",
+           "Kultur & Haltung: Sind die Leute bereit? Gibt es eine Lernkultur und Sicherheit zum Ausprobieren?",
+           "In welcher Dimension ist die Lücke am größten?"],
+        p:"Die größte Lücke liegt fast immer bei der Kompetenz. Auch bei einer reinen Einkaufsentscheidung braucht das Unternehmen genug eigene Kompetenz, um beurteilen zu können, ob das, was der Dienstleister baut, überhaupt sinnvoll ist.",
+        out:"Vier Lückenbeschreibungen, eine davon als größte markiert." },
+      { id:"2.3", t:"Hebel wählen: aufbauen, einkaufen, Partner", min:20, core:true,
+        goal:"Für jede Dimension bewusst entscheiden, wie die Lücke geschlossen wird.",
+        q:["Aufbauen und befähigen: interne Schulung, Champions als Multiplikatoren — langsamer, aber nachhaltig.",
+           "Einkaufen oder einstellen: schnell, teuer, und macht abhängig — ohne interne Kompetenz kann man die Lösung nie selbst weiterentwickeln.",
+           "Partner: Wissenstransfer plus Fachexpertise parallel — meistens der sinnvollste Weg.",
+           "Welche KI-Fähigkeiten müssen strategisch im Haus bleiben, was darf extern bezogen werden?"],
+        p:"Der Leitsatz aus dem Video: Tempo kommt von außen, Nachhaltigkeit und strategische Substanz kommen von innen. Und: Schulungen wirken nur rollenbasiert — Führungskräfte, Fachbereiche und IT brauchen unterschiedliche Inhalte.",
+        out:"Pro Dimension ein Hebel, begründet." },
+      { id:"2.4", t:"Mission formulieren", min:15, core:true,
+        goal:"Ein bis zwei Sätze, die den Weg beschreiben — plus messbare Meilensteine.",
+        q:["Wie schließen wir die Lücke zur Vision? (Beispiel: „Wir bauen interne KI-Kompetenz auf, führen DSGVO-konforme Tools ein und stabilisieren unsere Kernprozesse, um in drei Jahren eigenständig KI-Projekte umzusetzen.“)",
+           "Welche Meilensteine machen den Fortschritt sichtbar?",
+           "Wann wird geprüft, ob Mission und Vision noch zusammenpassen?"],
+        p:"Ohne Mission bleibt die Vision Orientierung ohne Weg — und die Organisation parallelisiert zu viele Ansätze gleichzeitig. Das kostet am Ende wieder Geld.",
+        out:"Missionssatz + Meilensteine + Review-Termin." },
+      { id:"2.5", t:"Architektur-Grundsatzentscheidung", min:10, core:false,
+        goal:"Wie viel Unabhängigkeit will das Unternehmen?",
+        q:["Eigene KI-Architektur aufbauen oder fertige Lösungen kaufen?",
+           "Wie abhängig wollen wir von einzelnen Softwareanbietern sein?",
+           "Gibt es Wissen, das das Haus nicht verlassen darf — brauchen wir lokale Modelle?",
+           "Wie viel Tempo ist gefordert, welches Budget und welches Risikoprofil haben wir?"],
+        p:"Diese Frage entscheidet später über jeden Use Case. Wer Datenschutz- oder Sicherheitsanforderungen hat, muss lokal hosten können — das ist eine strategische, keine technische Entscheidung.",
+        out:"Grundsatzentscheidung „Kern selbst / Standard einkaufen“." }
+    ]
+  },
+  {
+    n:3, key:"usecases", name:"Anwendungsfälle", q:"Was machen wir konkret?",
+    lead:"Use Cases kommen aus Engpässen — nie aus der Frage, was man Cooles mit KI machen könnte.",
+    stations:[
+      { id:"3.1", t:"Engpassanalyse strategisch", min:20, core:true,
+        goal:"Die eine Frage, die alles trägt: Wo hakt das Geschäft?",
+        q:["Was sorgt dafür, dass der Umsatz nicht steigt?",
+           "Was sorgt dafür, dass die Profitabilität nicht da ist?",
+           "Welcher Engpass kostet am meisten Zeit, Nerven oder Geld?",
+           "Welchen dieser Engpässe könnte KI lösen?"],
+        p:"Die Engpassfrage hat einen deutlich höheren Return als jede Ideensammlung. Nicht „wir wollen auch einen Voice-Bot / Avatar / Agenten“ — sondern: löse ich diesen Engpass, habe ich garantiert Impact auf das Geschäft.",
+        out:"Liste der geschäftskritischen Engpässe." },
+      { id:"3.2", t:"Engpässe je Abteilung", min:30, core:false,
+        goal:"Dieselbe Analyse eine Ebene tiefer, mit den operativen Leuten.",
+        q:["Was stört euch im Alltag? Wo verliert ihr Zeit?",
+           "Was kostet viel Nerven, was kostet viel Geld?",
+           "Was müsste verschwinden, damit die Arbeit leichter wird?"],
+        p:"Sehr starke Use Cases entstehen hier. Aber: einen Aufruf ins ganze Unternehmen zu geben („bringt eure KI-Ideen“) ohne Ideation-to-Creation-Prozess führt zu 50 unbrauchbaren Zetteln wie „KI im Vertrieb“. Der Filter darf nicht zu streng sein, sonst reicht niemand mehr etwas ein — aber er muss Rahmen setzen: betroffener Prozess, Mechanismus, erwarteter Return.",
+        out:"Abteilungs-Engpässe mit Mindestangaben." },
+      { id:"3.3", t:"Use Cases sammeln", min:25, core:true,
+        goal:"Aus den Engpässen konkrete Anwendungsfälle ableiten und benennen.",
+        q:["Welcher Anwendungsfall löst welchen Engpass?",
+           "Welcher Prozessschritt genau ist betroffen?",
+           "Wer ist der Auslöser, wer der Nutzer, was ist das Ergebnis?"],
+        p:"Bewertungsreihenfolge einhalten: erst der wirtschaftliche Sinn durch die Abteilungsleitung, dann der Aufwand durch das Technik-Team, dann ins Backlog. Wer sofort über Tools redet, verliert den Engpassbezug.",
+        out:"Benannte Use Cases (im Matrix-Widget der nächsten Station sammeln)." },
+      { id:"3.4", t:"Bewerten: Impact × Umsetzbarkeit", min:30, core:true, w:"matrix",
+        goal:"Jeden Use Case in die Matrix einordnen — und die Falle erkennen.",
+        q:["Impact: Wirkt der Fall auf Umsatz, Kosten oder Qualität — direkt, nicht über vier Ecken?",
+           "Umsetzbarkeit: Schaffen wir das mit den Ressourcen, die wir haben oder einkaufen können?",
+           "Welche Fälle sind Quick Wins (hoher Impact, gut machbar)?",
+           "Welche sind attraktiv, aber gefährlich (hoher Impact, kaum machbar)?"],
+        p:"Das Quadrat oben links ist der Klassiker, an dem sich Organisationen die Zähne ausbeißen: klingt logisch automatisierbar, braucht dann aber verlässliche Rechenwege, Datenbanken, externe Quellen — und am Ende steht viel Zeit, kein Ergebnis und ein frustriertes Team. Regel aus 20 Jahren Softwareprojekten: kleine Inkremente entlang der Wertschöpfungskette, jedes für sich schon mit Wert. Ersten Prozessschritt bauen, Wert prüfen, dann den nächsten.",
+        out:"Priorisierte Matrix mit 2–3 Quick Wins." },
+      { id:"3.5", t:"Machbarkeit hart prüfen", min:20, core:false,
+        goal:"Vier Fragen, die vor jedem Business Case beantwortet sein müssen.",
+        q:["Sind die Daten überhaupt da und brauchbar?",
+           "Gibt es eine Standardlösung, oder erfinden wir hier etwas neu?",
+           "Welche Bestandssysteme sind betroffen (ERP, CRM, DMS) — gibt es Schnittstellen, kommen wir an die Daten?",
+           "Wie hoch ist das Fehlerrisiko, und was passiert, wenn es schiefgeht?"],
+        p:"Prozessautomatisierung heißt fast immer, Daten über bestehende Systemgrenzen zu schieben. Fehlt eine Schnittstelle, ist der ganze Fall entweder tot oder nur mit einem riesigen Workaround machbar — das entscheidet sich hier, nicht im Projekt.",
+        out:"Machbarkeitsurteil je Top-Fall." },
+      { id:"3.6", t:"Business Case rechnen", min:30, core:true, w:"bc",
+        goal:"Nutzen, Gesamtkosten, Payback — für jeden Fall in einem Satz sagbar.",
+        q:["Jährlicher Nutzen in Euro: Zeitersparnis, Kostensenkung, Umsatzsteigerung?",
+           "Gesamtkosten: Infrastruktur, Datenaufbereitung und Integration, Betrieb, Wartung, Monitoring, Schulung, API-Kosten und Lizenzen?",
+           "Payback: Wann ist die Investition amortisiert?",
+           "Was tun die Mitarbeitenden mit der gewonnenen Zeit?"],
+        p:"Zwei Dinge, die fast immer fehlen: die laufenden Betriebskosten (OpEx, auch im Jahr 2, 3, 4) und die Basis-Infrastruktur, auf der alle weiteren Fälle aufsetzen. Und die Führungsfrage: Zeitersparnis allein ist kein ROI. Wenn nicht geklärt ist, was mit der freien Zeit passiert, gibt es keinen Return. Am Anfang nur Fälle wählen, die sich in 12 Monaten amortisieren, besser in 6.",
+        out:"Business Case je Top-Fall, mit Payback." }
+    ]
+  },
+  {
+    n:4, key:"roadmap", name:"Umsetzung & Roadmap", q:"Wann passiert was?",
+    lead:"Priorisieren ist Führungsarbeit, keine Demokratie. Und die Roadmap beginnt mit der nächsten Woche.",
+    stations:[
+      { id:"4.1", t:"Priorisieren nach fünf Kriterien", min:25, core:true,
+        goal:"Aus der Liste eine Reihenfolge machen — nachvollziehbar.",
+        q:["Umsetzbarkeit: Ist die Kompetenz da, oder wissen wir, wo wir sie einkaufen und wie wir sie steuern?",
+           "Strategischer Beitrag: Zahlt der Fall direkt auf Vision und Unternehmensziele ein?",
+           "Fundament-Effekt: Baut der Fall Infrastruktur auf, auf der spätere Fälle aufsetzen?",
+           "Signalwirkung: Spürt es das ganze Haus, oder nur drei Leute?",
+           "Aufwand: Wie viele Ressourcen bindet er?"],
+        p:"Gerade am Anfang zählt die Signalwirkung oft mehr als der wirtschaftliche Effekt — die Leute müssen sehen, dass etwas passiert. Und: es ist keine Demokratie und nicht der Lauteste gewinnt. Wer jeder Abteilung einen Use Case gibt, erzeugt maximale Überforderung, lauter halbe Sachen, nichts geht live — und demotiviert damit genau die, die man motivieren wollte.",
+        out:"Priorisierte Liste mit Begründung." },
+      { id:"4.2", t:"Absagen sauber kommunizieren", min:10, core:false,
+        goal:"Nicht priorisierte Fälle so behandeln, dass die Einreicher dranbleiben.",
+        q:["Sind die Auswahlkriterien für alle transparent?",
+           "Ist klar formuliert: nicht „nie“, sondern „nicht jetzt, weil X“?",
+           "Liegen die übrigen Fälle in einem sichtbaren Backlog?",
+           "Werden Einreicher an der Umsetzung beteiligt?"],
+        p:"Ohne transparente Kriterien entsteht die Stimmung, das Projektteam mache nur die Projekte seiner Freunde. Diese Stimmung will man in der Organisation nicht — sie kostet später mehr als jede Priorisierungsdiskussion.",
+        out:"Backlog + Kommunikationslinie." },
+      { id:"4.3", t:"90 Tage — und nächste Woche", min:25, core:true, w:"plan90",
+        goal:"Den Quick Win terminieren und die ersten Schritte festnageln.",
+        q:["Welcher Quick Win ist in 90 Tagen sicher erreichbar?",
+           "Was passiert konkret nächste Woche — wer, was, bis wann?",
+           "Welche Puffer sind eingeplant? (Es dauert immer länger als gedacht.)",
+           "Wer stellt sicher, dass nach dem Workshop wirklich etwas passiert?"],
+        p:"Das ist der Punkt, an dem Strategieprozesse sterben: alle sind zufrieden, die Strategie steht, man lehnt sich zurück — und dann passiert nichts, weil jetzt erst die Arbeit anfängt. Deshalb am Ende des Tages nicht über zehn Jahre reden, sondern über die nächste Woche.",
+        out:"90-Tage-Ziel + Aufgaben für nächste Woche." },
+      { id:"4.4", t:"Gateways und Exit-Kriterien", min:15, core:true,
+        goal:"Vorher festlegen, wann weitergemacht und wann gestoppt wird.",
+        q:["Welches Ergebnis muss zu welchem Zeitpunkt erreicht sein?",
+           "Was ist Go, was ist No-Go?",
+           "Wer entscheidet, wenn die Kosten höher werden als geplant?",
+           "Wann steigen wir bewusst aus?"],
+        p:"Ohne Gateways entstehen Zombie-Piloten: Projekte, über die niemand mehr sprechen will, die aber auch keiner stoppt — und die die ganze Zeit Geld kosten. Gibt es zuhauf.",
+        out:"Gateway-Kriterien je Pilot." },
+      { id:"4.5", t:"Warnzeichen prüfen", min:10, core:false,
+        goal:"Die sechs typischen Fehler in der Roadmap abklopfen.",
+        q:["Läuft zu vieles parallel und unabgestimmt?",
+           "Arbeiten Leute an Use Cases, bevor Architektur und KI-Richtlinie stehen?",
+           "Fehlen realistische Puffer?",
+           "Werden Abhängigkeiten ignoriert (IT-Security-Policies, NIS2, freigegebene Tools)?",
+           "Sind Annahmen aus dem Business Case ungeprüft übernommen?",
+           "Ist der Nutzenverlauf ein Hockeystick — lange nichts, dann angeblich viel?"],
+        p:"Die Erwartungshaltung „das bringt sofort etwas“ und die anschließende Enttäuschung sorgen für schlechte Stimmung gegenüber dem ganzen KI-Thema. Lieber am Anfang realistisch planen als schnell begeistern.",
+        out:"Abgehakte Warnliste." },
+      { id:"4.6", t:"Review-Takt festlegen", min:5, core:false,
+        goal:"Die Roadmap als lebendes Dokument aufsetzen.",
+        q:["Wann wird die Planung angepasst — quartalsweise?",
+           "Wer führt das Review durch, wer entscheidet über Kursänderungen?",
+           "Wie werden Erfahrungen aus den ersten Piloten eingearbeitet?"],
+        p:"Nach zwei Monaten sieht die Welt in einem Unternehmen, das KI ernsthaft einführt, komplett anders aus — weil so viel Erfahrung entstanden ist. Kursänderungen sind zwingend, aber nicht täglich: sonst kann man die Planung gleich sein lassen.",
+        out:"Fester Review-Rhythmus mit Verantwortlichem." }
+    ]
+  },
+  {
+    n:5, key:"governance", name:"Governance", q:"Nach welchen Regeln?",
+    lead:"Kein Bürokratie-Thema, sondern der Beschleuniger: einmal geklärt, muss nicht bei jedem Use Case neu diskutiert werden.",
+    stations:[
+      { id:"5.1", t:"Rote Linien und Rechtsrahmen", min:15, core:false,
+        goal:"Klären, was erlaubt ist, was tabu — und was das Gesetz ohnehin vorgibt.",
+        q:["Welche Anwendungen sind nach EU AI Act verboten oder hochreguliert?",
+           "Was gibt die DSGVO vor, was NIS2 oder DORA, falls einschlägig?",
+           "Welche Tools und Cloud-Dienste sind freigegeben, welche nicht?",
+           "Wo verlaufen unsere eigenen roten Linien, unabhängig vom Gesetz?"],
+        p:"Man kann nicht verlangen, dass Mitarbeitende täglich Gesetzestexte lesen. Führungsaufgabe ist, die Regeln in eine lebbare KI-Richtlinie zu übersetzen. Die Rechtsabteilung einbinden und um Standards bitten, statt alles selbst zu lösen.",
+        out:"Liste erlaubter Tools + rote Linien." },
+      { id:"5.2", t:"Risikoklassen je Anwendung", min:15, core:true,
+        goal:"Jede geplante Anwendung einstufen — und den Aufwand danach bemessen.",
+        q:["Welche Anwendung ist harmlos (öffentliche Daten, öffentliches Tool)?",
+           "Welche ist mittel, welche hochriskant?",
+           "Wo werden Daten über Menschen oder Entscheidungen über Kunden verarbeitet?"],
+        p:"Risikoproportionalität: nicht überall das volle Programm. Wer für eine wöchentliche Wettbewerbsrecherche in einem öffentlichen Tool das große Governance-Fass aufmacht, verschreckt die Leute — und dann interessiert sich niemand mehr für Governance, weil sie als unnötige Bremse wahrgenommen wird.",
+        out:"Risikoklasse je geplanter Anwendung." },
+      { id:"5.3", t:"Rollen, Freigabe, Aufsicht", min:15, core:false,
+        goal:"Festlegen, wer entscheidet, wer verantwortet, wer hinschaut.",
+        q:["Wer gibt eine KI-Anwendung frei?",
+           "Wer trägt die Verantwortung im laufenden Betrieb?",
+           "Wie wird protokolliert, was die KI tut (Logging)?",
+           "Wie erkennen wir Drift — dass sich Ergebnisse verändern, ohne dass wir etwas geändert haben?"],
+        p:"Ohne diese Klärung ist im Fehlerfall niemand zuständig: der, der es gebaut hat, der, der die Infrastruktur stellt, der, der freigegeben hat? Und Drift ist real — was gestern gut funktioniert hat, liefert morgen andere Ergebnisse.",
+        out:"Rollenmodell mit Namen." },
+      { id:"5.4", t:"Was nie delegiert wird", min:20, core:true,
+        goal:"Die fünf Entscheidungen benennen, die bei der Führung bleiben.",
+        q:["Welche Risikotoleranz haben wir — welche Fehlerquote nehmen wir für welche Produktivität in Kauf?",
+           "Heikle Anwendungen: dürfen wir das (DSGVO, EU AI Act) — und wollen wir das?",
+           "An welchen Stellen bleibt ein Human in the Loop zwingend?",
+           "Wie reagieren wir auf Vorfälle?",
+           "Welche Entscheidung würden wir niemals an eine KI delegieren?"],
+        p:"Aufgaben lassen sich delegieren, die Verantwortung nicht. Governance ist die Kontrolle darüber, wie Mitarbeitende an KI delegieren — also eine ursprüngliche Managementaufgabe. Wer nachweisen kann, dass er Richtlinien und Kontrollen etabliert hat, ist im Ernstfall aus der groben Fahrlässigkeit raus (keine Rechtsberatung, aber betriebliche Übung).",
+        out:"Liste nicht delegierbarer Entscheidungen + HITL-Punkte." },
+      { id:"5.5", t:"KI-Richtlinie schlank halten", min:10, core:false,
+        goal:"Governance so gestalten, dass sie benutzt wird.",
+        q:["Passt die Richtlinie auf wenige Seiten?",
+           "Ist sie als Service formuliert, der Entscheidungen erleichtert?",
+           "Wer erklärt sie, wer aktualisiert sie?"],
+        p:"Zwanzig Aktenordner perfekte Compliance, die niemanden tangiert und die niemand anwendet, sind wertlos. Was zählt: schlank, gelebt, mit Wirkung.",
+        out:"Entwurf/Auftrag für die KI-Richtlinie." }
+    ]
+  },
+  {
+    n:6, key:"stakeholder", name:"Stakeholder", q:"Wen nehmen wir mit?",
+    lead:"Rund die Hälfte des Erfolgs einer KI-Einführung hängt am Change Management, nicht an der Technik.",
+    stations:[
+      { id:"6.1", t:"Stakeholder-Landkarte", min:25, core:true, w:"stake",
+        goal:"Alle Beteiligten nach Einfluss und Haltung einordnen.",
+        q:["Wer hat berechtigtes Interesse an diesem Vorhaben?",
+           "Wie groß ist der Einfluss dieser Person oder Gruppe?",
+           "Wie ist die Haltung heute — Unterstützer, neutral, Blockierer?",
+           "Wer sind die Meinungsbildner, um die sich andere scharen?"],
+        p:"50 Prozent des Aufwands sind Menschen mitnehmen, nicht an Technologie arbeiten. Eine fachlich perfekte Strategie funktioniert trotzdem nicht, wenn die Leute nicht mitziehen.",
+        out:"Ausgefüllte Landkarte mit markierten Blockierern." },
+      { id:"6.2", t:"Wünsche und Ängste je Gruppe", min:20, core:false,
+        goal:"Pro Gruppe festhalten, was sie will — und wovor sie Angst hat.",
+        q:["Geschäftsführung: will Rendite und Fortschritt, fürchtet versenktes Geld und Unruhe.",
+           "Mittleres Management: will Kontrolle und Anschluss, fürchtet Status- und Kontrollverlust.",
+           "Mitarbeitende: wollen einfachere Arbeit und weniger Stress, fürchten Jobverlust und Überforderung.",
+           "IT: will sichere, stabile Systeme, fürchtet Security- und Stabilitätsrisiken.",
+           "Betriebsrat: will Mitbestimmung und Information, fürchtet Übergangenwerden.",
+           "Was gilt davon hier im Haus konkret, und für wen?"],
+        p:"Wollen und Angst sind die beiden Hauptmotivationstreiber. Je genauer man beides pro Person kennt, desto besser lässt sich das Projekt so ausrichten, dass die Leute mitmachen.",
+        out:"Wunsch/Angst-Tabelle je Gruppe." },
+      { id:"6.3", t:"Aktiver und passiver Widerstand", min:10, core:false,
+        goal:"Unterscheiden, welche Art von Widerstand vorliegt.",
+        q:["Wer argumentiert offen dagegen? (Das ist der gute Fall.)",
+           "Wo wird genickt und dann nichts getan?",
+           "Wie offen ist die Unternehmenskultur für Kritik?",
+           "Woran würden wir passive Nicht-Adoption überhaupt merken?"],
+        p:"Lauter Widerstand ist wünschenswert — dann weiß man, woran man arbeiten muss. Passive Nicht-Adoption ist gefährlicher: sie blockiert im Verborgenen, und man muss erst wieder Vertrauen aufbauen, um überhaupt zu hören, worum es geht.",
+        out:"Einschätzung je Blockierer: aktiv oder passiv." },
+      { id:"6.4", t:"Betriebsrat früh einbinden", min:10, core:false,
+        goal:"Den rechtlichen und den partnerschaftlichen Weg klären.",
+        q:["Gibt es einen Betriebsrat, und wie ist das Verhältnis?",
+           "Wann wird er informiert — vor oder nach den ersten Fakten?",
+           "Welche Themen sind mitbestimmungspflichtig (IT-Systeme, § 90 BetrVG, neue Stellen)?"],
+        p:"Der größte Fehler ist, den Betriebsrat erst vor vollendete Tatsachen zu stellen. Dann entstehen eigene Wahrheiten („die wollen uns alle kündigen“), die sich in der Organisation verteilen — und man hat sofort ein Vertrauensproblem.",
+        out:"Termin und Kommunikationsplan für den Betriebsrat." },
+      { id:"6.5", t:"Blockierer drehen", min:15, core:true,
+        goal:"Aus den einflussreichsten Gegnern Mitgestalter machen.",
+        q:["Mit wem muss zuerst gesprochen werden?",
+           "Worum geht es dieser Person wirklich, was fürchtet sie?",
+           "Was muss passieren, damit sie mitträgt?",
+           "Welche Verantwortung, welches Teilprojekt kann sie bekommen?"],
+        p:"Blockierer mit Einfluss sind oft fachlich sehr gute Leute, die schon mehrfach nicht gehört wurden und deshalb das Scheitern schon im Kopf haben. Wer ihnen ernsthaft zuhört und Verantwortung überträgt, macht aus Betroffenen Beteiligte — und ein überzeugter Skeptiker ist einer der glaubwürdigsten Multiplikatoren in der Organisation. Übergehen macht aus stillem Zweifel aktiven Widerstand.",
+        out:"Gesprächsliste mit Rollenangebot." },
+      { id:"6.6", t:"Ängste proaktiv adressieren", min:10, core:false,
+        goal:"Die drei Standardängste ansprechen, bevor sie jemand formulieren muss.",
+        q:["„Ich werde ersetzt.“ — KI übernimmt Teilaufgaben, nicht ganze Stellen.",
+           "„Ich werde überwacht.“ — KI ist Werkzeug, kein Überwachungsinstrument; das ist auch nicht erlaubt.",
+           "„Ich muss jetzt programmieren lernen.“ — Nein, es wird einfacher, nicht komplizierter.",
+           "Welche Ängste gibt es hier im Haus zusätzlich, wörtlich als Ich-Aussage?"],
+        p:"Diese Sätze aktiv aussprechen, bevor sie in der Kaffeeküche entstehen. Ängste sind keine Schwäche, sondern ein Signal — und wer sie früh ernst nimmt, verhindert stillen Widerstand.",
+        out:"Kommunikationsbotschaften für die Belegschaft." }
+    ]
+  }
+];
+
+const CLOSING = {
+  n:7, key:"abschluss", name:"Abschluss", q:"Was gilt ab morgen?",
+  lead:"Ergebnis sichern, Verantwortlichkeiten festhalten, Termin für das nächste Review setzen.",
+  stations:[
+    { id:"7.1", t:"Ergebnisse zusammenfassen", min:15, core:true,
+      goal:"Vision, Mission, Top-Use-Cases, Quick Win, Governance-Rahmen und Stakeholder-Plan in einem Bild.",
+      q:["Vision in einem Satz?","Mission in einem Satz?","Die zwei bis drei priorisierten Use Cases?","Der 90-Tage-Quick-Win?","Die drei wichtigsten Governance-Festlegungen?","Die drei wichtigsten Stakeholder-Maßnahmen?"],
+      p:"Am Ende des Tages muss jeder im Raum dieselben Sätze sagen können. Was nicht in einem Satz sagbar ist, wird die Organisation nicht tragen.",
+      out:"Ergebnisprotokoll (Button „Protokoll (.md)“ links)." },
+    { id:"7.2", t:"Wer macht was bis wann", min:15, core:true,
+      goal:"Konkrete Aufgaben mit Namen und Datum.",
+      q:["Welche Aufgabe fällt an, wer übernimmt sie, bis wann?","Wer treibt das Vorhaben zwischen den Terminen?","Wann ist der nächste gemeinsame Termin?"],
+      p:"Ohne Namen und Datum passiert nichts. Der wichtigste Punkt der Roadmap ist immer die nächste Woche.",
+      out:"Maßnahmenliste mit Verantwortlichen und Terminen." }
+  ]
+};
+
+const ALL_PHASES = PHASES.concat([CLOSING]);
+const STATIONS = [];
+ALL_PHASES.forEach(function(ph){ ph.stations.forEach(function(s){ s.phase = ph; STATIONS.push(s); }); });
+
+/* =========================== State =========================== */
+let BOARD = new URLSearchParams(location.search).get("b");
+let lastEdit = 0, cloudRev = 0, pushTimer = null, pushing = false;
+const KEY = "ki-strategie-board-v1" + (BOARD ? ":" + BOARD : "");
+const DIMS = ["Kompetenz","Technologie & Daten","Prozesse & Strukturen","Kultur & Haltung"];
+const LEVERS = ["— offen —","aufbauen (intern)","einkaufen / einstellen","Partner"];
+
+const defaults = {
+  meta:{kunde:"",datum:"",teiln:""},
+  notes:{}, status:{},
+  gap:{ texts:["","","",""], levers:[0,0,0,0], biggest:-1 },
+  matrix:{ items:[] },
+  bc:{ rows:[{n:"",nutzen:"",aufbau:"",betrieb:""},{n:"",nutzen:"",aufbau:"",betrieb:""},{n:"",nutzen:"",aufbau:"",betrieb:""}] },
+  plan90:{ w1:"", d30:"", d90:"", gate:"" },
+  stake:{ items:[
+    {id:"s1",label:"Geschäftsführung",x:78,y:22},
+    {id:"s2",label:"Mittleres Management",x:70,y:64},
+    {id:"s3",label:"Mitarbeitende",x:34,y:52},
+    {id:"s4",label:"IT",x:58,y:44},
+    {id:"s5",label:"Betriebsrat",x:46,y:70}
+  ]},
+  zoom:1, mode:"all"
+};
+
+const STORAGE_OK = (function(){
+  try{ localStorage.setItem("__t","1"); localStorage.removeItem("__t"); return true; }catch(e){ return false; }
+})();
+
+let state = load();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return JSON.parse(JSON.stringify(defaults));
+    const parsed = JSON.parse(raw);
+    return Object.assign(JSON.parse(JSON.stringify(defaults)), parsed);
+  }catch(e){ return JSON.parse(JSON.stringify(defaults)); }
+}
+let saveTimer = null;
+function save(){
+  lastEdit = Date.now();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  }, 250);
+  cloudPush();
+}
+
+/* =========================== Helpers =========================== */
+function el(tag, cls, txt){ const n=document.createElement(tag); if(cls) n.className=cls; if(txt!=null) n.textContent=txt; return n; }
+function q(sel){ return document.querySelector(sel); }
+function toast(msg){
+  const t=q("#toast"); t.textContent=msg; t.classList.add("show");
+  setTimeout(function(){ t.classList.remove("show"); }, 1900);
+}
+function statusOf(id){ return state.status[id] || "open"; }
+function money(v){
+  const n = parseFloat(String(v).replace(/\./g,"").replace(",","."));
+  return isFinite(n) ? n : 0;
+}
+function fmtEuro(n){
+  return n.toLocaleString("de-DE",{maximumFractionDigits:0}) + " €";
+}
+
+/* =========================== Board =========================== */
+const canvas = q("#canvas");
+
+function renderBoard(){
+  canvas.innerHTML = "";
+  ALL_PHASES.forEach(function(ph){
+    const col = el("div","col");
+    const head = el("div","phase-head");
+    const kick = el("div","kicker");
+    kick.appendChild(el("span",null,"Phase " + ph.n));
+    const mins = ph.stations.reduce(function(a,s){ return a+s.min; },0);
+    kick.appendChild(el("span",null, ph.stations.length + " Stationen · " + mins + " min"));
+    head.appendChild(kick);
+    head.appendChild(el("h2",null, ph.name));
+    head.appendChild(el("p","lead", ph.lead));
+    head.appendChild(el("div","q", ph.q));
+    col.appendChild(head);
+
+    ph.stations.forEach(function(s){
+      col.appendChild(renderCard(s));
+      if(s.w){
+        const tile = el("div","tile");
+        tile.appendChild(el("h3",null, widgetTitle(s.w)));
+        const prev = el("div","preview");
+        prev.appendChild(buildWidget(s.w, false));
+        tile.appendChild(prev);
+        const btn = el("button","btn ghost","Im Vollbild bearbeiten");
+        btn.style.marginTop="10px"; btn.style.width="100%";
+        btn.addEventListener("click", function(){ openFocus(STATIONS.indexOf(s)); });
+        tile.appendChild(btn);
+        col.appendChild(tile);
+      }
+    });
+    canvas.appendChild(col);
+  });
+  applyMode();
+  updateProgress();
+}
+
+function renderCard(s){
+  const c = el("article","card");
+  c.dataset.id = s.id;
+  c.dataset.status = statusOf(s.id);
+
+  const top = el("div","card-top");
+  const sb = el("button","statusbtn");
+  sb.dataset.status = statusOf(s.id);
+  sb.title = "Status wechseln";
+  sb.setAttribute("aria-label","Status von Station " + s.id);
+  sb.addEventListener("click", function(ev){ ev.stopPropagation(); cycleStatus(s.id); });
+  top.appendChild(sb);
+  top.appendChild(el("span","card-id", s.id));
+  top.appendChild(el("span","card-min", s.min + " min"));
+  c.appendChild(top);
+
+  c.appendChild(el("h3","card-title", s.t));
+  if(s.core) c.appendChild(el("span","tag","Kern"));
+  c.appendChild(el("p","card-goal", s.goal));
+
+  const ul = el("ul");
+  s.q.slice(0,3).forEach(function(x){ ul.appendChild(el("li",null,x)); });
+  if(s.q.length>3) ul.appendChild(el("li",null,"… " + (s.q.length-3) + " weitere in der großen Ansicht"));
+  c.appendChild(ul);
+
+  const pr = el("div","praxis");
+  pr.appendChild(el("b",null,"Aus der Praxis"));
+  pr.appendChild(document.createTextNode(s.p));
+  c.appendChild(pr);
+
+  c.appendChild(el("p","out","Ergebnis: " + s.out));
+
+  const ta = el("textarea","note");
+  ta.placeholder = "Notiz …";
+  ta.value = state.notes[s.id] || "";
+  ta.addEventListener("click", function(ev){ ev.stopPropagation(); });
+  ta.addEventListener("input", function(){
+    state.notes[s.id] = ta.value; save();
+    const f = q("#f-note");
+    if(focusIndex>=0 && STATIONS[focusIndex].id===s.id && f) f.value = ta.value;
+  });
+  c.appendChild(ta);
+
+  c.addEventListener("click", function(){ openFocus(STATIONS.indexOf(s)); });
+  return c;
+}
+
+function cycleStatus(id){
+  const order = ["open","doing","done"];
+  const next = order[(order.indexOf(statusOf(id))+1) % 3];
+  setStatus(id, next);
+}
+function setStatus(id, st){
+  state.status[id] = st; save();
+  const card = canvas.querySelector('.card[data-id="' + id + '"]');
+  if(card){ card.dataset.status = st; card.querySelector(".statusbtn").dataset.status = st; }
+  if(focusIndex>=0 && STATIONS[focusIndex].id===id) paintFocusStatus(st);
+  updateProgress();
+}
+
+function updateProgress(){
+  const done = STATIONS.filter(function(s){ return statusOf(s.id)==="done"; });
+  const total = STATIONS.length;
+  q("#prog-num").textContent = done.length + " / " + total;
+  q("#prog-bar").style.width = (done.length/total*100) + " %";
+  const openMin = STATIONS.filter(function(s){ return statusOf(s.id)!=="done"; }).reduce(function(a,s){ return a+s.min; },0);
+  q("#prog-time").textContent = "noch ~" + Math.round(openMin/60*10)/10 + " h";
+  const doing = STATIONS.filter(function(s){ return statusOf(s.id)==="doing"; });
+  q("#prog-hint").textContent = doing.length ? ("Läuft gerade: " + doing.map(function(s){return s.id;}).join(", "))
+    : (done.length ? "Zuletzt geklärt: " + done[done.length-1].id : "Noch nichts abgehakt.");
+  renderNav();
+}
+
+function renderNav(){
+  const nav = q("#nav");
+  nav.innerHTML = "";
+  ALL_PHASES.forEach(function(ph){
+    const b = el("button");
+    b.appendChild(el("span","n", String(ph.n)));
+    b.appendChild(el("span","t", ph.name));
+    const d = ph.stations.filter(function(s){ return statusOf(s.id)==="done"; }).length;
+    b.appendChild(el("span","c", d + "/" + ph.stations.length));
+    b.addEventListener("click", function(){
+      const idx = ALL_PHASES.indexOf(ph);
+      const cols = canvas.querySelectorAll(".col");
+      if(cols[idx]) q("#board").scrollTo({ left: cols[idx].offsetLeft*state.zoom - 40, behavior:"smooth" });
+    });
+    nav.appendChild(b);
+  });
+}
+
+/* =========================== Widgets =========================== */
+function widgetTitle(w){
+  return { gap:"Die Lücke in vier Dimensionen", matrix:"Impact × Umsetzbarkeit",
+           bc:"Business Case", plan90:"90-Tage-Plan", stake:"Stakeholder-Landkarte" }[w] || "";
+}
+
+function buildWidget(w, live){
+  if(w==="gap") return wGap(live);
+  if(w==="matrix") return wMatrix(live);
+  if(w==="bc") return wBC(live);
+  if(w==="plan90") return wPlan(live);
+  if(w==="stake") return wStake(live);
+  return el("div");
+}
+
+function wGap(live){
+  const wrap = el("div");
+  const tbl = el("table","wtable");
+  const thead = el("thead");
+  const tr = el("tr");
+  ["Dimension","Was fehlt?","Hebel","Größte Lücke"].forEach(function(h){ tr.appendChild(el("th",null,h)); });
+  thead.appendChild(tr); tbl.appendChild(thead);
+  const tb = el("tbody");
+  DIMS.forEach(function(d,i){
+    const r = el("tr");
+    r.appendChild(el("td",null,d));
+    const c2 = el("td");
+    const ta = el("textarea"); ta.value = state.gap.texts[i]; ta.placeholder="…";
+    if(live) ta.addEventListener("input", function(){ state.gap.texts[i]=ta.value; save(); refreshPreviews("gap"); });
+    c2.appendChild(ta); r.appendChild(c2);
+    const c3 = el("td");
+    const sel = el("select");
+    LEVERS.forEach(function(l,li){ const o=el("option",null,l); o.value=li; sel.appendChild(o); });
+    sel.value = state.gap.levers[i];
+    if(live) sel.addEventListener("change", function(){ state.gap.levers[i]=parseInt(sel.value,10); save(); refreshPreviews("gap"); });
+    c3.appendChild(sel); r.appendChild(c3);
+    const c4 = el("td");
+    const rb = el("input"); rb.type="radio"; rb.name="gapbig"; rb.checked = state.gap.biggest===i; rb.style.width="auto";
+    if(live) rb.addEventListener("change", function(){ state.gap.biggest=i; save(); refreshPreviews("gap"); });
+    c4.appendChild(rb); r.appendChild(c4);
+    tb.appendChild(r);
+  });
+  tbl.appendChild(tb); wrap.appendChild(tbl);
+  const hint = el("p","hint","Leitsatz: Tempo kommt von außen, Nachhaltigkeit von innen. Schulungen nur rollenbasiert planen.");
+  hint.style.marginTop="10px"; wrap.appendChild(hint);
+  return wrap;
+}
+
+function wMatrix(live){
+  const wrap = el("div");
+  const fw = el("div","fieldwrap");
+  const ay = el("div","axis-y","Impact auf das Geschäft");
+  const field = el("div","grid2");
+  const quads = [
+    ["Attraktiv, aber gefährlich","Quick Win"],
+    ["Weglassen","Nett, aber egal"]
+  ];
+  [0,1,2,3].forEach(function(i){ field.appendChild(el("div","quad")); });
+  const labels = [
+    {t:"Attraktiv, aber gefährlich", s:{top:"0",left:"0"}},
+    {t:"Quick Win", s:{top:"0",right:"0",textAlign:"right"}},
+    {t:"Weglassen", s:{bottom:"0",left:"0"}},
+    {t:"Nett, aber egal", s:{bottom:"0",right:"0",textAlign:"right"}}
+  ];
+  labels.forEach(function(l){
+    const n = el("div","quad-label", l.t);
+    Object.keys(l.s).forEach(function(k){ n.style[k]=l.s[k]; });
+    field.appendChild(n);
+  });
+
+  state.matrix.items.filter(function(it){ return it.x!=null; }).forEach(function(it){
+    const s = el("div","sticky s2", it.label);
+    s.style.left = it.x + "%"; s.style.top = it.y + "%";
+    if(live) makeDraggable(s, field, it, "matrix");
+    field.appendChild(s);
+  });
+
+  fw.appendChild(ay); fw.appendChild(field);
+  fw.appendChild(el("div"));
+  fw.appendChild(el("div","axis-x","Umsetzbarkeit →"));
+  wrap.appendChild(fw);
+
+  const tray = el("div","tray");
+  const trayItems = state.matrix.items.filter(function(it){ return it.x==null; });
+  if(!trayItems.length) tray.appendChild(el("span","hint","Use Cases hier eintragen, dann in die Matrix ziehen."));
+  trayItems.forEach(function(it){
+    const s = el("div","sticky s2", it.label);
+    if(live) makeDraggable(s, field, it, "matrix", tray);
+    tray.appendChild(s);
+  });
+  wrap.appendChild(tray);
+
+  if(live){
+    const row = el("div","addrow");
+    const inp = el("input"); inp.placeholder = "Use Case benennen …";
+    const add = el("button","btn","Hinzufügen");
+    function addItem(){
+      const v = inp.value.trim(); if(!v) return;
+      state.matrix.items.push({ id:"m"+Date.now(), label:v, x:null, y:null });
+      inp.value=""; save(); rerenderWidget("matrix");
+    }
+    add.addEventListener("click", addItem);
+    inp.addEventListener("keydown", function(e){ if(e.key==="Enter") addItem(); });
+    row.appendChild(inp); row.appendChild(add);
+    wrap.appendChild(row);
+    const del = el("p","hint","Doppelklick auf einen Zettel löscht ihn.");
+    del.style.marginTop="8px"; wrap.appendChild(del);
+  }
+  return wrap;
+}
+
+function wStake(live){
+  const wrap = el("div");
+  const fw = el("div","fieldwrap");
+  const ay = el("div","axis-y","Einfluss");
+  const field = el("div","grid2");
+  [0,1,2,3].forEach(function(){ field.appendChild(el("div","quad")); });
+  [
+    {t:"Blockierer mit Macht — zuerst sprechen", s:{top:"0",left:"0"}},
+    {t:"Treiber — als Multiplikator einsetzen", s:{top:"0",right:"0",textAlign:"right"}},
+    {t:"Skeptiker — informieren, zuhören", s:{bottom:"0",left:"0"}},
+    {t:"Unterstützer — beteiligen", s:{bottom:"0",right:"0",textAlign:"right"}}
+  ].forEach(function(l){
+    const n = el("div","quad-label", l.t);
+    Object.keys(l.s).forEach(function(k){ n.style[k]=l.s[k]; });
+    field.appendChild(n);
+  });
+  state.stake.items.filter(function(it){ return it.x!=null; }).forEach(function(it){
+    const s = el("div","sticky s3", it.label);
+    s.style.left = it.x + "%"; s.style.top = it.y + "%";
+    if(live) makeDraggable(s, field, it, "stake");
+    field.appendChild(s);
+  });
+  fw.appendChild(ay); fw.appendChild(field);
+  fw.appendChild(el("div"));
+  fw.appendChild(el("div","axis-x","Haltung: dagegen → dafür"));
+  wrap.appendChild(fw);
+
+  const tray = el("div","tray");
+  const trayItems = state.stake.items.filter(function(it){ return it.x==null; });
+  trayItems.forEach(function(it){
+    const s = el("div","sticky s3", it.label);
+    if(live) makeDraggable(s, field, it, "stake", tray);
+    tray.appendChild(s);
+  });
+  if(!trayItems.length) tray.appendChild(el("span","hint","Weitere Personen unten ergänzen — Namen sind besser als Rollen."));
+  wrap.appendChild(tray);
+
+  if(live){
+    const row = el("div","addrow");
+    const inp = el("input"); inp.placeholder = "Person oder Gruppe …";
+    const add = el("button","btn","Hinzufügen");
+    function addItem(){
+      const v = inp.value.trim(); if(!v) return;
+      state.stake.items.push({ id:"s"+Date.now(), label:v, x:null, y:null });
+      inp.value=""; save(); rerenderWidget("stake");
+    }
+    add.addEventListener("click", addItem);
+    inp.addEventListener("keydown", function(e){ if(e.key==="Enter") addItem(); });
+    row.appendChild(inp); row.appendChild(add);
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+function makeDraggable(node, field, item, coll, tray){
+  node.addEventListener("dblclick", function(){
+    const arr = state[coll].items;
+    const i = arr.indexOf(item);
+    if(i>-1){ arr.splice(i,1); save(); rerenderWidget(coll); }
+  });
+  node.addEventListener("pointerdown", function(ev){
+    ev.preventDefault();
+    const rect = field.getBoundingClientRect();
+    node.setPointerCapture(ev.pointerId);
+    if(item.x==null){
+      node.style.position="absolute"; node.style.transform="translate(-50%,-50%)";
+      field.appendChild(node);
+    }
+    function move(e){
+      const x = Math.min(100, Math.max(0, (e.clientX-rect.left)/rect.width*100));
+      const y = Math.min(100, Math.max(0, (e.clientY-rect.top)/rect.height*100));
+      item.x = Math.round(x*10)/10; item.y = Math.round(y*10)/10;
+      node.style.left = item.x + "%"; node.style.top = item.y + "%";
+    }
+    function up(e){
+      node.releasePointerCapture(ev.pointerId);
+      node.removeEventListener("pointermove", move);
+      node.removeEventListener("pointerup", up);
+      save(); refreshPreviews(coll);
+    }
+    move(ev);
+    node.addEventListener("pointermove", move);
+    node.addEventListener("pointerup", up);
+  });
+}
+
+function wBC(live){
+  const wrap = el("div");
+  const tbl = el("table","wtable");
+  const thead = el("thead"); const tr = el("tr");
+  ["Use Case","Nutzen € / Jahr","Aufbau €","Betrieb € / Jahr","Payback"].forEach(function(h){ tr.appendChild(el("th",null,h)); });
+  thead.appendChild(tr); tbl.appendChild(thead);
+  const tb = el("tbody");
+  state.bc.rows.forEach(function(row,i){
+    const r = el("tr");
+    ["n","nutzen","aufbau","betrieb"].forEach(function(k){
+      const td = el("td");
+      const inp = el("input");
+      inp.value = row[k];
+      inp.placeholder = k==="n" ? "Name" : "0";
+      if(k!=="n"){ inp.className="num"; inp.inputMode="decimal"; }
+      if(live) inp.addEventListener("input", function(){ row[k]=inp.value; save(); updateBC(tbl); refreshPreviews("bc"); });
+      td.appendChild(inp); r.appendChild(td);
+    });
+    const pb = el("td","num"); pb.dataset.pb = String(i); r.appendChild(pb);
+    tb.appendChild(r);
+  });
+  tbl.appendChild(tb); wrap.appendChild(tbl);
+  updateBC(tbl);
+  const hint = el("p","hint","Gesamtkosten heißt: Infrastruktur, Datenaufbereitung, Betrieb, Wartung, Monitoring, Schulung, Lizenzen. Ziel am Anfang: Amortisation unter 12 Monaten, besser unter 6. Und: Zeitersparnis ist erst dann Nutzen, wenn geklärt ist, was mit der Zeit passiert.");
+  hint.style.marginTop="10px"; wrap.appendChild(hint);
+  return wrap;
+}
+function updateBC(tbl){
+  state.bc.rows.forEach(function(row,i){
+    const cell = tbl.querySelector('[data-pb="' + i + '"]');
+    if(!cell) return;
+    const netto = money(row.nutzen) - money(row.betrieb);
+    const aufbau = money(row.aufbau);
+    if(!aufbau || netto<=0){ cell.textContent = netto<=0 && (row.nutzen||row.betrieb) ? "kein Payback" : "—"; return; }
+    const months = aufbau/netto*12;
+    cell.textContent = (Math.round(months*10)/10).toString().replace(".",",") + " Mon.";
+    cell.style.color = months<=12 ? "var(--good)" : "var(--crit)";
+  });
+}
+
+function wPlan(live){
+  const wrap = el("div");
+  const cols = el("div","cols3");
+  [["w1","Nächste Woche"],["d30","30 Tage"],["d90","90 Tage — Quick Win"]].forEach(function(p){
+    const lane = el("div","lane");
+    lane.appendChild(el("h4",null,p[1]));
+    const ta = el("textarea"); ta.value = state.plan90[p[0]]; ta.placeholder = "…";
+    if(live) ta.addEventListener("input", function(){ state.plan90[p[0]]=ta.value; save(); refreshPreviews("plan90"); });
+    lane.appendChild(ta); cols.appendChild(lane);
+  });
+  wrap.appendChild(cols);
+  const g = el("div"); g.style.marginTop="10px";
+  g.appendChild(el("h4",null,"Gateway: wann geht es weiter, wann wird gestoppt?"));
+  g.querySelector("h4").style.cssText="font-family:var(--display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 6px";
+  const ta = el("textarea"); ta.value = state.plan90.gate; ta.placeholder="Go/No-Go-Kriterien …";
+  ta.style.cssText="width:100%;min-height:60px;border:1px solid var(--line);border-radius:3px;background:var(--surface-2);padding:8px 10px;font-family:var(--body);font-size:13px";
+  if(live) ta.addEventListener("input", function(){ state.plan90.gate=ta.value; save(); refreshPreviews("plan90"); });
+  g.appendChild(ta); wrap.appendChild(g);
+  return wrap;
+}
+
+function refreshPreviews(w){
+  const s = STATIONS.filter(function(x){ return x.w===w; })[0];
+  if(!s) return;
+  const cards = canvas.querySelectorAll(".tile");
+  cards.forEach(function(t){
+    if(t.querySelector("h3") && t.querySelector("h3").textContent === widgetTitle(w)){
+      const prev = t.querySelector(".preview");
+      prev.innerHTML = ""; prev.appendChild(buildWidget(w,false));
+    }
+  });
+}
+function rerenderWidget(w){
+  const host = q("#f-widget");
+  if(host && !host.hidden){ host.innerHTML=""; host.appendChild(buildWidget(w,true)); }
+  refreshPreviews(w);
+}
+
+/* =========================== Focus mode =========================== */
+let focusIndex = -1;
+function openFocus(i){
+  if(i<0 || i>=STATIONS.length) return;
+  focusIndex = i;
+  const s = STATIONS[i];
+  q("#f-eyebrow").textContent = "Phase " + s.phase.n + " · " + s.phase.name + " · Station " + s.id + " · " + s.min + " min" + (s.core ? " · Kern" : "");
+  q("#f-title").textContent = s.t;
+  q("#f-goal").textContent = s.goal;
+  const ul = q("#f-questions"); ul.innerHTML="";
+  s.q.forEach(function(x,idx){
+    const li = el("li");
+    li.appendChild(el("span","bullet", String(idx+1).padStart(2,"0")));
+    li.appendChild(el("span",null,x));
+    ul.appendChild(li);
+  });
+  const pr = q("#f-praxis"); pr.innerHTML="";
+  pr.appendChild(el("b",null,"Aus der Praxis"));
+  pr.appendChild(document.createTextNode(s.p));
+  const out = q("#f-out"); out.innerHTML="";
+  out.appendChild(el("b",null,"Ergebnis dieser Station"));
+  out.appendChild(document.createTextNode(s.out));
+  const note = q("#f-note");
+  note.value = state.notes[s.id] || "";
+  note.oninput = function(){
+    state.notes[s.id] = note.value; save();
+    const ta = canvas.querySelector('.card[data-id="' + s.id + '"] .note');
+    if(ta) ta.value = note.value;
+  };
+  const host = q("#f-widget");
+  if(s.w){ host.hidden=false; host.innerHTML=""; host.appendChild(el("h3",null,widgetTitle(s.w))); host.appendChild(buildWidget(s.w,true)); }
+  else { host.hidden=true; host.innerHTML=""; }
+  paintFocusStatus(statusOf(s.id));
+  q("#f-pos").textContent = (i+1) + " von " + STATIONS.length;
+  q("#focus").hidden = false;
+  setTimeout(function(){ note.focus({preventScroll:true}); }, 30);
+}
+function paintFocusStatus(st){
+  q("#focus").querySelectorAll(".statusgroup button").forEach(function(b){
+    b.setAttribute("aria-pressed", String(b.dataset.s===st));
+  });
+}
+function closeFocus(){ q("#focus").hidden = true; focusIndex=-1; }
+
+q("#f-close").addEventListener("click", closeFocus);
+q("#focus").addEventListener("click", function(e){ if(e.target===q("#focus")) closeFocus(); });
+q("#f-prev").addEventListener("click", function(){ openFocus(focusIndex-1); });
+q("#f-next").addEventListener("click", function(){
+  if(focusIndex < STATIONS.length-1) openFocus(focusIndex+1); else { closeFocus(); toast("Durchgang beendet."); }
+});
+q("#focus").querySelectorAll(".statusgroup button").forEach(function(b){
+  b.addEventListener("click", function(){ setStatus(STATIONS[focusIndex].id, b.dataset.s); });
+});
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape" && !q("#result").hidden){ q("#result").hidden = true; return; }
+  if(q("#focus").hidden) return;
+  const tag = (e.target.tagName||"").toLowerCase();
+  if(e.key==="Escape"){ closeFocus(); return; }
+  if(tag==="textarea" || tag==="input" || tag==="select") return;
+  if(e.key==="ArrowRight") openFocus(focusIndex+1);
+  if(e.key==="ArrowLeft") openFocus(focusIndex-1);
+});
+
+/* =========================== Zoom / mode =========================== */
+function setZoom(z){
+  state.zoom = Math.min(1.4, Math.max(0.35, Math.round(z*100)/100));
+  canvas.style.transform = "scale(" + state.zoom + ")";
+  const w = canvas.scrollWidth * state.zoom;
+  const h = canvas.scrollHeight * state.zoom;
+  canvas.style.marginRight = (canvas.scrollWidth*(state.zoom-1)) + "px";
+  canvas.style.marginBottom = (canvas.scrollHeight*(state.zoom-1)) + "px";
+  q("#z-val").textContent = Math.round(state.zoom*100) + " %";
+  save();
+}
+q("#z-in").addEventListener("click", function(){ setZoom(state.zoom+0.1); });
+q("#z-out").addEventListener("click", function(){ setZoom(state.zoom-0.1); });
+q("#z-fit").addEventListener("click", function(){
+  const avail = q("#board").clientWidth - 40;
+  setZoom(avail / canvas.scrollWidth);
+});
+
+function applyMode(){
+  const core = state.mode === "core";
+  q("#s-all").setAttribute("aria-pressed", String(!core));
+  q("#s-core").setAttribute("aria-pressed", String(core));
+  canvas.querySelectorAll(".card").forEach(function(c){
+    const s = STATIONS.filter(function(x){ return x.id===c.dataset.id; })[0];
+    c.classList.toggle("dim", core && s && !s.core);
+  });
+}
+const CORE = STATIONS.filter(function(s){ return s.core; });
+const CORE_H = Math.round(CORE.reduce(function(a,s){ return a+s.min; },0)/60*10)/10;
+const ALL_H = Math.round(STATIONS.reduce(function(a,s){ return a+s.min; },0)/60*10)/10;
+q("#rail-sub").textContent = PHASES.length + " Phasen, " + STATIONS.length + " Stationen (~" +
+  String(ALL_H).replace(".",",") + " h) — von der Vision bis zur Stakeholder-Landkarte. Kernfassung: " +
+  CORE.length + " Stationen, ~" + String(CORE_H).replace(".",",") + " h.";
+q("#s-all").addEventListener("click", function(){ state.mode="all"; save(); applyMode(); });
+q("#s-core").addEventListener("click", function(){ state.mode="core"; save(); applyMode();
+  toast("Kernfassung: " + CORE.length + " Stationen, rund " + String(CORE_H).replace(".",",") + " Stunden."); });
+
+/* =========================== Meta fields =========================== */
+[["m-kunde","kunde"],["m-datum","datum"],["m-teiln","teiln"]].forEach(function(p){
+  const inp = q("#" + p[0]);
+  inp.value = state.meta[p[1]] || "";
+  inp.addEventListener("input", function(){ state.meta[p[1]] = inp.value; save(); });
+});
+
+/* =========================== Export =========================== */
+function blobDownload(name, text, type){
+  const blob = new Blob([text], {type: type || "text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+function download(name, text, type){
+  if(window.claude && window.claude.downloads){
+    window.claude.downloads.save({filename:name, data:text}).then(function(){
+      toast("Gespeichert: " + name);
+    }).catch(function(err){
+      const code = err && err.code;
+      if(code === "declined") return;
+      if(code === "rate_limited"){ toast("Kurz warten, dann noch einmal klicken."); return; }
+      blobDownload(name, text, type);
+    });
+    return;
+  }
+  blobDownload(name, text, type);
+}
+
+/* =========================== Auswertung & Fazit =========================== */
+function noteOf(id){ return (state.notes[id]||"").trim(); }
+function quadrant(it){
+  if(it.x==null) return "unsortiert";
+  if(it.y<50) return it.x>=50 ? "quickwin" : "gefaehrlich";
+  return it.x>=50 ? "nett" : "weglassen";
+}
+function paybackOf(r){
+  const netto = money(r.nutzen) - money(r.betrieb), auf = money(r.aufbau);
+  if(!auf || netto<=0) return null;
+  return auf/netto*12;
+}
+function fmtM(m){ return (Math.round(m*10)/10).toString().replace(".",",") + " Monate"; }
+function fmtMd(m){ return (Math.round(m*10)/10).toString().replace(".",",") + " Monaten"; }
+
+function fazitData(){
+  const coreMissing = STATIONS.filter(function(s){ return s.core && !noteOf(s.id); });
+  const answered = STATIONS.filter(function(s){ return noteOf(s.id); }).length;
+  const items = state.matrix.items;
+  const qw = items.filter(function(i){ return quadrant(i)==="quickwin"; });
+  const risky = items.filter(function(i){ return quadrant(i)==="gefaehrlich"; });
+  const unsorted = items.filter(function(i){ return quadrant(i)==="unsortiert"; });
+  const bc = state.bc.rows
+    .filter(function(r){ return (r.n||"").trim() || r.nutzen || r.aufbau || r.betrieb; })
+    .map(function(r){ return { n:(r.n||"ohne Namen"), pb:paybackOf(r), nutzen:money(r.nutzen), aufbau:money(r.aufbau), betrieb:money(r.betrieb) }; })
+    .sort(function(a,b){ return (a.pb==null?99999:a.pb) - (b.pb==null?99999:b.pb); });
+  const blocker = state.stake.items.filter(function(i){ return i.x!=null && i.y<50 && i.x<50; });
+  const recs = [];
+  function warn(s){ recs.push({t:"rec", s:s}); }
+  function ok(s){ recs.push({t:"ok", s:s}); }
+
+  if(!noteOf("1.4")) warn("Die Vision ist nicht formuliert (Station 1.4). Alles Weitere misst sich an diesem Satz — ohne ihn bleibt die Roadmap beliebig.");
+  if(!noteOf("2.4")) warn("Die Mission fehlt (Station 2.4). Damit ist offen, wie die Lücke zur Vision geschlossen wird.");
+  if(state.gap.biggest < 0) warn("Die größte Lücke ist nicht markiert (Station 2.2). Genau sie bestimmt, wo zuerst investiert wird.");
+  if(!qw.length) warn("Kein Quick Win in der Matrix. Ohne einen sicheren Erfolg in 90 Tagen verliert das Vorhaben intern den Rückhalt.");
+  else ok("Quick Win steht: " + qw.map(function(x){return x.label;}).join(", ") + ". Damit anfangen.");
+  if(risky.length) warn("Attraktiv, aber gefährlich: " + risky.map(function(x){return x.label;}).join(", ") + ". Nicht als erstes Projekt — erst nach dem ersten sichtbaren Erfolg.");
+  if(unsorted.length) warn(unsorted.length + " Use Case(s) sind noch nicht in die Matrix eingeordnet.");
+  if(!bc.length) warn("Kein Business Case gerechnet. Ohne Nutzen, Gesamtkosten und Payback bleibt die Priorisierung Bauchgefühl.");
+  bc.forEach(function(r){
+    if(r.pb == null) return;
+    if(r.pb > 12) warn(r.n + " amortisiert sich erst nach " + fmtMd(r.pb) + ". Nach hinten schieben, bis die teure Voraussetzung geklärt ist.");
+    else if(r.pb <= 6) ok(r.n + " zahlt sich in " + fmtMd(r.pb) + " zurück — das ist die Größenordnung, mit der man startet.");
+  });
+  if(!(state.plan90.w1||"").trim()) warn("Für nächste Woche ist nichts festgelegt. Genau hier sterben Strategietage.");
+  if(!(state.plan90.gate||"").trim()) warn("Keine Gateway-Kriterien. Ohne Abbruchbedingung entsteht ein Zombie-Pilot.");
+  if(!noteOf("5.4")) warn("Die nicht delegierbaren Entscheidungen sind offen (Station 5.4). Das ist eine Führungs-, keine IT-Frage.");
+  if(blocker.length) warn("Zuerst sprechen mit: " + blocker.map(function(x){return x.label;}).join(", ") + " — hoher Einfluss bei ablehnender Haltung.");
+  if(coreMissing.length) warn(coreMissing.length + " Kernstation(en) ohne Notiz: " + coreMissing.map(function(s){return s.id;}).join(", ") + ".");
+  else ok("Alle Kernstationen sind beantwortet.");
+  return { answered:answered, coreMissing:coreMissing, qw:qw, risky:risky, unsorted:unsorted, bc:bc, blocker:blocker, recs:recs };
+}
+
+function renderFazit(){
+  const d = fazitData();
+  const body = q("#fz-body"); body.innerHTML = "";
+  q("#fz-sub").textContent = (state.meta.kunde || "ohne Firmenangabe") + " · " + (state.meta.datum || "ohne Datum") +
+    " · " + d.answered + " von " + STATIONS.length + " Stationen beantwortet";
+  q("#fz-hint").textContent = d.coreMissing.length ? (d.coreMissing.length + " Kernstationen fehlen noch") : "Vollständig";
+
+  function sec(title){ const s = el("section"); s.appendChild(el("h3",null,title)); body.appendChild(s); return s; }
+  function dlPair(parent, label, value){
+    let dl = parent.querySelector("dl");
+    if(!dl){ dl = el("dl"); parent.appendChild(dl); }
+    dl.appendChild(el("dt",null,label));
+    dl.appendChild(el("dd", value ? null : "empty", value || "noch offen"));
+  }
+
+  const s1 = sec("Das steht fest");
+  dlPair(s1,"Vision", noteOf("1.4"));
+  dlPair(s1,"Mission", noteOf("2.4"));
+  dlPair(s1,"Größte Lücke", state.gap.biggest>=0 ? (DIMS[state.gap.biggest] + " — Hebel: " + LEVERS[state.gap.levers[state.gap.biggest]]) : "");
+  dlPair(s1,"Quick Wins", d.qw.map(function(x){return x.label;}).join(", "));
+  dlPair(s1,"Nächste Woche", (state.plan90.w1||"").trim());
+  dlPair(s1,"90 Tage", (state.plan90.d90||"").trim());
+  dlPair(s1,"Gateway", (state.plan90.gate||"").trim());
+  dlPair(s1,"Risikoklassen", noteOf("5.2"));
+  dlPair(s1,"Nie delegieren", noteOf("5.4"));
+
+  if(d.bc.length){
+    const s2 = sec("Wirtschaftlichkeit, sortiert nach Payback");
+    const t = el("table");
+    const th = el("tr");
+    ["Use Case","Nutzen €/Jahr","Aufbau €","Betrieb €/Jahr","Payback"].forEach(function(h){ th.appendChild(el("th",null,h)); });
+    t.appendChild(th);
+    d.bc.forEach(function(r){
+      const tr = el("tr");
+      tr.appendChild(el("td",null,r.n));
+      tr.appendChild(el("td","num", r.nutzen?fmtEuro(r.nutzen):"—"));
+      tr.appendChild(el("td","num", r.aufbau?fmtEuro(r.aufbau):"—"));
+      tr.appendChild(el("td","num", r.betrieb?fmtEuro(r.betrieb):"—"));
+      const pb = el("td","num", r.pb==null ? "kein Payback" : fmtM(r.pb));
+      if(r.pb!=null) pb.style.color = r.pb<=12 ? "var(--good)" : "var(--crit)";
+      tr.appendChild(pb);
+      t.appendChild(tr);
+    });
+    s2.appendChild(t);
+  }
+
+  if(state.stake.items.length){
+    const s3 = sec("Stakeholder");
+    const ul = el("ul");
+    ["Zuerst sprechen (hoher Einfluss, dagegen)","Als Multiplikator einsetzen (hoher Einfluss, dafür)"].forEach(function(lbl,i){
+      const list = state.stake.items.filter(function(it){
+        return it.x!=null && it.y<50 && (i===0 ? it.x<50 : it.x>=50);
+      });
+      if(list.length) ul.appendChild(el("li",null, lbl + ": " + list.map(function(x){return x.label;}).join(", ")));
+    });
+    if(!ul.children.length) ul.appendChild(el("li",null,"Keine einflussreichen Personen eingeordnet."));
+    s3.appendChild(ul);
+  }
+
+  const s4 = sec("Empfehlung");
+  d.recs.forEach(function(r){ s4.appendChild(el("div", r.t==="ok" ? "ok" : "rec", r.s)); });
+
+  q("#result").hidden = false;
+}
+
+function fazitMarkdown(){
+  const d = fazitData();
+  let o = "# Fazit — KI-Strategie\n\n";
+  o += (state.meta.kunde||"—") + " · " + (state.meta.datum||"—") + " · " + (state.meta.teiln||"—") + "\n\n";
+  o += d.answered + " von " + STATIONS.length + " Stationen beantwortet.\n\n## Das steht fest\n\n";
+  o += "- **Vision:** " + (noteOf("1.4")||"offen") + "\n";
+  o += "- **Mission:** " + (noteOf("2.4")||"offen") + "\n";
+  o += "- **Größte Lücke:** " + (state.gap.biggest>=0 ? DIMS[state.gap.biggest] + " (Hebel: " + LEVERS[state.gap.levers[state.gap.biggest]] + ")" : "offen") + "\n";
+  o += "- **Quick Wins:** " + (d.qw.map(function(x){return x.label;}).join(", ")||"keine") + "\n";
+  o += "- **Nächste Woche:** " + ((state.plan90.w1||"").trim()||"offen") + "\n";
+  o += "- **90 Tage:** " + ((state.plan90.d90||"").trim()||"offen") + "\n";
+  o += "- **Gateway:** " + ((state.plan90.gate||"").trim()||"offen") + "\n";
+  o += "- **Nie delegieren:** " + (noteOf("5.4")||"offen") + "\n";
+  if(d.bc.length){
+    o += "\n## Wirtschaftlichkeit\n\n| Use Case | Nutzen €/Jahr | Aufbau € | Betrieb €/Jahr | Payback |\n|---|---|---|---|---|\n";
+    d.bc.forEach(function(r){
+      o += "| " + r.n + " | " + (r.nutzen||"—") + " | " + (r.aufbau||"—") + " | " + (r.betrieb||"—") + " | " + (r.pb==null?"kein Payback":fmtM(r.pb)) + " |\n";
+    });
+  }
+  o += "\n## Empfehlung\n\n";
+  d.recs.forEach(function(r){ o += (r.t==="ok" ? "- ✅ " : "- ⚠️ ") + r.s + "\n"; });
+  o += "\n_Automatisch aus den Board-Einträgen abgeleitet, ohne Bewertung durch eine KI._\n";
+  return o;
+}
+
+q("#a-fazit").addEventListener("click", renderFazit);
+q("#fz-close").addEventListener("click", function(){ q("#result").hidden = true; });
+q("#result").addEventListener("click", function(e){ if(e.target===q("#result")) q("#result").hidden = true; });
+q("#fz-md").addEventListener("click", function(){
+  download("KI-Strategie-Fazit" + (state.meta.kunde ? "-" + state.meta.kunde.replace(/[^\wäöüÄÖÜß-]+/g,"_") : "") + ".md",
+           fazitMarkdown(), "text/markdown;charset=utf-8");
+});
+q("#fz-print").addEventListener("click", function(){ printMode = "fazit"; buildPrint(); window.print(); });
+
+function buildMarkdown(){
+  const m = state.meta;
+  let out = "# KI-Strategie — Workshop-Protokoll\n\n";
+  out += "**Unternehmen:** " + (m.kunde||"—") + "  \n";
+  out += "**Datum:** " + (m.datum||"—") + "  \n";
+  out += "**Teilnehmende:** " + (m.teiln||"—") + "\n\n";
+  const done = STATIONS.filter(function(s){ return statusOf(s.id)==="done"; }).length;
+  out += "Bearbeitet: " + done + " von " + STATIONS.length + " Stationen.\n\n---\n";
+  ALL_PHASES.forEach(function(ph){
+    out += "\n## Phase " + ph.n + ": " + ph.name + " — " + ph.q + "\n";
+    ph.stations.forEach(function(s){
+      const st = statusOf(s.id);
+      const mark = st==="done" ? "[x]" : (st==="doing" ? "[~]" : "[ ]");
+      out += "\n### " + mark + " " + s.id + " " + s.t + "\n";
+      const n = (state.notes[s.id]||"").trim();
+      out += n ? n + "\n" : "_keine Notiz_\n";
+    });
+  });
+  out += "\n---\n\n## Lücke in vier Dimensionen\n\n";
+  DIMS.forEach(function(d,i){
+    out += "- **" + d + "**" + (state.gap.biggest===i ? " (größte Lücke)" : "") + ": " +
+           (state.gap.texts[i]||"—") + " — Hebel: " + LEVERS[state.gap.levers[i]] + "\n";
+  });
+  out += "\n## Use-Case-Matrix\n\n";
+  if(!state.matrix.items.length) out += "_keine Einträge_\n";
+  state.matrix.items.forEach(function(it){
+    let quad = "nicht eingeordnet";
+    if(it.x!=null) quad = (it.y<50 ? (it.x<50 ? "attraktiv, aber gefährlich" : "Quick Win") : (it.x<50 ? "weglassen" : "nett, aber egal"));
+    out += "- " + it.label + " — " + quad + "\n";
+  });
+  out += "\n## Business Case\n\n| Use Case | Nutzen €/Jahr | Aufbau € | Betrieb €/Jahr | Payback |\n|---|---|---|---|---|\n";
+  state.bc.rows.forEach(function(r){
+    const netto = money(r.nutzen)-money(r.betrieb);
+    const pb = (money(r.aufbau)>0 && netto>0) ? (Math.round(money(r.aufbau)/netto*12*10)/10 + " Mon.") : "—";
+    out += "| " + (r.n||"—") + " | " + (r.nutzen||"—") + " | " + (r.aufbau||"—") + " | " + (r.betrieb||"—") + " | " + pb + " |\n";
+  });
+  out += "\n## Roadmap\n\n";
+  out += "**Nächste Woche:** " + (state.plan90.w1||"—") + "\n\n";
+  out += "**30 Tage:** " + (state.plan90.d30||"—") + "\n\n";
+  out += "**90 Tage (Quick Win):** " + (state.plan90.d90||"—") + "\n\n";
+  out += "**Gateway-Kriterien:** " + (state.plan90.gate||"—") + "\n";
+  out += "\n## Stakeholder-Landkarte\n\n";
+  state.stake.items.forEach(function(it){
+    let pos = "nicht eingeordnet";
+    if(it.x!=null){
+      const einfluss = it.y<50 ? "hoher Einfluss" : "geringer Einfluss";
+      const haltung = it.x<50 ? "eher dagegen" : "eher dafür";
+      pos = einfluss + ", " + haltung;
+    }
+    out += "- " + it.label + " — " + pos + "\n";
+  });
+  out += "\n---\nQuelle der Inhalte: Neurawork AI Leadership, Sektion 2 „Eine KI-Strategie entwickeln“ (36 Lektionen inkl. Video-Inhalte).\n";
+  return out;
+}
+
+q("#a-md").addEventListener("click", function(){
+  const name = "KI-Strategie-Protokoll" + (state.meta.kunde ? "-" + state.meta.kunde.replace(/[^\wäöüÄÖÜß-]+/g,"_") : "") + ".md";
+  download(name, buildMarkdown(), "text/markdown;charset=utf-8");
+  toast("Protokoll heruntergeladen.");
+});
+q("#a-save").addEventListener("click", function(){
+  download("ki-strategie-board.json", JSON.stringify(state,null,2), "application/json");
+  toast("Stand gesichert.");
+});
+q("#a-load").addEventListener("click", function(){ q("#filein").click(); });
+q("#filein").addEventListener("change", function(e){
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = function(){
+    try{
+      state = Object.assign(JSON.parse(JSON.stringify(defaults)), JSON.parse(r.result));
+      save(); location.reload();
+    }catch(err){ toast("Datei konnte nicht gelesen werden."); }
+  };
+  r.readAsText(f);
+});
+q("#a-reset").addEventListener("click", function(){
+  if(!confirm("Alle Notizen, Status und Einträge auf diesem Board löschen?")) return;
+  state = JSON.parse(JSON.stringify(defaults));
+  localStorage.removeItem(KEY);
+  location.reload();
+});
+q("#a-start").addEventListener("click", function(){
+  const next = STATIONS.filter(function(s){ return statusOf(s.id)!=="done"; })[0];
+  openFocus(next ? STATIONS.indexOf(next) : 0);
+});
+
+/* =========================== Print =========================== */
+let printMode = "protokoll";
+function buildPrint(){
+  const p = q("#print");
+  p.innerHTML = "";
+  if(printMode === "fazit"){
+    const md = fazitMarkdown();
+    const h1 = el("div","p-h1","Fazit — KI-Strategie");
+    const meta = el("div","p-meta", (state.meta.kunde||"—") + " · " + (state.meta.datum||"—") + " · " + (state.meta.teiln||"—"));
+    p.appendChild(h1); p.appendChild(meta);
+    const pre = el("div");
+    pre.style.cssText = "white-space:pre-wrap;font-size:11pt;line-height:1.5";
+    pre.textContent = md.split("\n").slice(3).join("\n").replace(/\*\*/g,"").replace(/^#+ /gm,"");
+    p.appendChild(pre);
+    return;
+  }
+  const h = el("div");
+  h.innerHTML = "";
+  const h1 = el("div","p-h1","KI-Strategie — Workshop-Protokoll");
+  const meta = el("div","p-meta");
+  meta.textContent = (state.meta.kunde||"—") + " · " + (state.meta.datum||"—") + " · " + (state.meta.teiln||"—");
+  p.appendChild(h1); p.appendChild(meta);
+  ALL_PHASES.forEach(function(ph){
+    p.appendChild(el("div","p-phase","Phase " + ph.n + ": " + ph.name + " — " + ph.q));
+    ph.stations.forEach(function(s){
+      const box = el("div","p-st");
+      const st = statusOf(s.id);
+      box.appendChild(el("h4",null,(st==="done"?"✓ ":(st==="doing"?"› ":"◦ ")) + s.id + "  " + s.t));
+      const n = (state.notes[s.id]||"").trim();
+      const note = el("div", n ? "p-note" : "p-note p-empty", n || "keine Notiz");
+      box.appendChild(note);
+      p.appendChild(box);
+    });
+  });
+}
+q("#a-print").addEventListener("click", function(){ printMode = "protokoll"; buildPrint(); window.print(); });
+window.addEventListener("beforeprint", buildPrint);
+
+/* =========================== Boot =========================== */
+if(!STORAGE_OK){
+  const warn = el("p","hint");
+  warn.style.cssText = "color:var(--signal);border:1px solid var(--signal);border-radius:3px;padding:8px 10px";
+  warn.textContent = "Dieser Browser speichert hier nichts automatisch. Notizen vor dem Schließen mit „Sichern (.json)“ ablegen — oder die HTML-Datei lokal öffnen, dann wird automatisch gespeichert.";
+  const acts = document.querySelector(".acts");
+  acts.insertBefore(warn, acts.firstChild);
+}
+renderBoard();
+setZoom(state.zoom || 1);
+applyMode();
+
+/* =========================== Cloud-Sync (Supabase) =========================== */
+const SB_URL = "https://quukdepnvzcmejokyvwz.supabase.co/rest/v1/rpc";
+const SB_KEY = "sb_publishable_sF2fhAgCq4XnAZcU7S2hSw_D7GYzYAi";
+const SB_KIND = "roadmap";
+
+function rpc(fn, body){
+  return fetch(SB_URL + "/" + fn, {
+    method:"POST",
+    headers:{ apikey:SB_KEY, Authorization:"Bearer " + SB_KEY, "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ throw new Error(t); });
+    return r.text().then(function(t){ return t ? JSON.parse(t) : null; });
+  });
+}
+function row1(res){ return Array.isArray(res) ? res[0] : res; }
+function hhmm(){ const d = new Date(); return ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2); }
+function cloudStatus(msg, tone){
+  const n = q("#cloud-status"); if(!n) return;
+  n.textContent = msg;
+  n.style.color = tone === "err" ? "var(--signal)" : (tone === "ok" ? "var(--good)" : "var(--ink-3)");
+}
+function cloudPush(){
+  if(!BOARD) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(function(){
+    if(pushing){ cloudPush(); return; }
+    pushing = true;
+    cloudStatus("speichert …");
+    rpc("ws_save", { p_board:BOARD, p_doc:state, p_title: state.meta.kunde || null }).then(function(res){
+      const r = row1(res); if(r) cloudRev = r.rev;
+      cloudStatus("gespeichert " + hhmm(), "ok");
+    }).catch(function(){
+      cloudStatus("nicht gespeichert — offline? Stand liegt lokal.", "err");
+    }).then(function(){ pushing = false; });
+  }, 1200);
+}
+function applyRemote(doc){
+  state = Object.assign(JSON.parse(JSON.stringify(defaults)), doc || {});
+  [["m-kunde","kunde"],["m-datum","datum"],["m-teiln","teiln"]].forEach(function(p){
+    const i = q("#" + p[0]); if(i) i.value = state.meta[p[1]] || "";
+  });
+  renderBoard(); setZoom(state.zoom || 1); applyMode();
+}
+function cloudPull(initial){
+  if(!BOARD) return;
+  rpc("ws_load", { p_board: BOARD }).then(function(res){
+    const r = row1(res);
+    if(!r){ cloudStatus("Board nicht gefunden — Link prüfen.", "err"); return; }
+    if(initial){
+      cloudRev = r.rev;
+      if(r.doc && Object.keys(r.doc).length){ applyRemote(r.doc); cloudStatus("geladen · Stand " + hhmm(), "ok"); }
+      else { cloudStatus("neues Board — Stand wird gesichert"); cloudPush(); }
+    } else if(r.rev > cloudRev && Date.now() - lastEdit > 8000 && !pushing){
+      cloudRev = r.rev; applyRemote(r.doc);
+      cloudStatus("aktualisiert " + hhmm(), "ok");
+    }
+  }).catch(function(){
+    cloudStatus("offline — Änderungen liegen lokal", "err");
+  });
+}
+function rememberBoard(){
+  if(!BOARD) return;
+  try{
+    const l = JSON.parse(localStorage.getItem("ws-recent") || "[]").filter(function(x){ return x.id !== BOARD; });
+    l.unshift({ id:BOARD, kind:SB_KIND, title:(state.meta.kunde || "Workshop"), seen:Date.now(), page:location.pathname.split("/").pop() });
+    localStorage.setItem("ws-recent", JSON.stringify(l.slice(0,12)));
+  }catch(e){}
+}
+q("#c-new").addEventListener("click", function(){
+  cloudStatus("legt Board an …");
+  rpc("ws_create", { p_kind:SB_KIND, p_title: state.meta.kunde || null }).then(function(id){
+    const newId = typeof id === "string" ? id : row1(id);
+    location.href = location.pathname + "?b=" + newId;
+  }).catch(function(){ cloudStatus("Anlegen fehlgeschlagen — Internet?", "err"); });
+});
+q("#c-copy").addEventListener("click", function(){
+  const url = location.origin + location.pathname + (BOARD ? "?b=" + BOARD : "");
+  if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){ toast("Link kopiert"); }, function(){ prompt("Link:", url); });
+  else prompt("Link:", url);
+});
+
+if(BOARD){
+  q("#cloud-id").textContent = BOARD;
+  cloudPull(true);
+  setInterval(function(){ cloudPull(false); }, 20000);
+  setInterval(rememberBoard, 15000);
+  rememberBoard();
+} else {
+  cloudStatus("Läuft lokal, ohne Datenbank. Mit „Neues Board“ verbinden.");
+}
+</script>
+
+</body>
+</html>
