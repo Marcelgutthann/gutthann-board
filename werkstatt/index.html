@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>KI-Strategie Werkstatt</title>
+<style>
+  :root{
+    --paper:#EDF0EC; --surface:#FFFFFF; --surface-2:#F6F8F4; --surface-3:#E7EBE5;
+    --ink:#15191A; --ink-2:#4C5657; --ink-3:#7C8886;
+    --line:#D2D8D1; --line-strong:#B4BDB3;
+    --accent:#1C5B63; --accent-2:#2E8189; --accent-soft:#DBEAE9; --on-accent:#FFFFFF;
+    --signal:#BC5619; --signal-soft:#F6E2D3; --good:#2E7048;
+    --display:Bahnschrift,"DIN Alternate","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+    --body:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0E1213; --surface:#161B1C; --surface-2:#1C2223; --surface-3:#232A2B;
+      --ink:#E7EDEA; --ink-2:#A3AFAD; --ink-3:#7C8886;
+      --line:#2A3233; --line-strong:#3A4445;
+      --accent:#6BC3C8; --accent-2:#8FD6DA; --accent-soft:#16383B; --on-accent:#0E1213;
+      --signal:#E2914F; --signal-soft:#3A2718; --good:#6FBF8B;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:54px 26px 90px}
+  .mark{font-family:var(--display);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .mark span{flex:1;height:1px;background:var(--line-strong)}
+  h1{font-family:var(--display);font-size:clamp(38px,6vw,60px);line-height:1;margin:0 0 14px;text-wrap:balance}
+  .lead{font-size:19px;color:var(--ink-2);max-width:60ch;margin:0 0 34px}
+  h2{font-family:var(--display);font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:44px 0 14px;border-bottom:1px solid var(--line);padding-bottom:7px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:5px;padding:20px 22px;display:flex;flex-direction:column;gap:10px}
+  .card h3{font-family:var(--display);font-size:23px;margin:0;line-height:1.1}
+  .card p{margin:0;font-size:14.5px;color:var(--ink-2);flex:1}
+  .card .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-strong);background:var(--surface-2);color:var(--ink);border-radius:3px;padding:10px 14px;cursor:pointer;font-size:14px;text-decoration:none;font-family:var(--body)}
+  .btn:hover{background:var(--surface-3)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-family:var(--display);letter-spacing:.03em;font-size:15px}
+  .btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+  .boards{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .board{background:var(--surface);padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .board .t{font-family:var(--display);font-size:17px;flex:1;min-width:180px}
+  .board .id{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+  .board .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:2px}
+  .empty{background:var(--surface);border:1px dashed var(--line-strong);border-radius:4px;padding:16px;color:var(--ink-3);font-size:14.5px}
+  .open{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .open input{flex:1;min-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:10px 12px;font-family:var(--mono);font-size:13px;color:var(--ink)}
+  .note{background:var(--accent-soft);border-radius:4px;padding:14px 17px;font-size:14.5px;margin-top:34px;max-width:74ch}
+  .note b{font-family:var(--display);display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+  .warn{border-left:3px solid var(--signal);background:var(--signal-soft);border-radius:0 4px 4px 0;padding:14px 17px;font-size:14.5px;margin-top:12px;max-width:74ch}
+  .warn b{font-family:var(--display);display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--signal);margin-bottom:4px}
+  footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-3)}
+  :focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mark">KI-Strategie<span></span>Werkstatt</div>
+  <h1>Strategie-Werkstatt</h1>
+  <p class="lead">Drei Arbeitsflächen für den Kundentermin: die leere Roadmap zum gemeinsamen Ausfüllen, der durchgespielte Musterfall zum Verstehen der Fragen, und die technische Analyse zu facilioo. Jedes Board liegt in der Datenbank — der Stand ist auf jedem Gerät derselbe.</p>
+
+  <h2>Arbeitsflächen</h2>
+  <div class="cards">
+    <div class="card">
+      <span class="tag">Live im Termin</span>
+      <h3>Roadmap</h3>
+      <p>Sechs Phasen, 35 Stationen. Leer zum gemeinsamen Durchgehen, mit Matrix, Business Case, 90-Tage-Plan und Auswertung am Ende.</p>
+      <div class="row">
+        <button class="btn primary" data-new="roadmap" data-page="roadmap.html">Neues Board anlegen</button>
+        <a class="btn" href="roadmap.html">Ohne Datenbank öffnen</a>
+      </div>
+    </div>
+    <div class="card">
+      <span class="tag">Zur Vorbereitung</span>
+      <h3>Musterfall Tegernsee</h3>
+      <p>Dasselbe Board, komplett ausgefüllt am Beispiel einer jungen Hausverwaltung — mit Beispielantworten, Übersetzung auf Kleinstfirmen und der Frage, die im Termin gestellt wird.</p>
+      <div class="row">
+        <button class="btn primary" data-new="musterfall" data-page="musterfall.html">Als Board anlegen</button>
+        <a class="btn" href="musterfall.html">Nur ansehen</a>
+      </div>
+    </div>
+    <div class="card">
+      <span class="tag">Nachschlagen</span>
+      <h3>facilioo-Analyse</h3>
+      <p>API, Authentifizierung, Datenmodell, Webhooks, ERP-Konnektoren, eingebaute KI — plus Risiken und die Fragenliste an den Anbieter.</p>
+      <div class="row"><a class="btn primary" href="analyse.html">Analyse öffnen</a></div>
+    </div>
+  </div>
+
+  <h2>Meine Boards auf diesem Gerät</h2>
+  <div id="boards"></div>
+  <div class="open">
+    <input id="bid" placeholder="Board-ID einfügen (z. B. 74438f78-99db-…)" spellcheck="false">
+    <button class="btn" id="bopen">Öffnen</button>
+  </div>
+
+  <div class="note"><b>Wie der Zugriff funktioniert</b>Jedes Board hat eine lange, nicht erratbare ID. Wer den Link hat, kann das Board lesen und bearbeiten — wer ihn nicht hat, kommt nicht heran, auch nicht über Umwege in die Datenbank. Behandle den Link wie ein Passwort.</div>
+  <div class="warn"><b>Vor dem Termin</b>Board vorher einmal anlegen und öffnen, damit du die ID hast. Fällt vor Ort das Internet aus, arbeitest du im Board einfach weiter — der Stand liegt zusätzlich im Browser und wird nachgeschoben, sobald die Verbindung wieder da ist.</div>
+
+  <footer>Daten liegen in einer Postgres-Datenbank (Supabase, Region EU). Kein Tracking, keine Anmeldung, keine Weitergabe.</footer>
+</div>
+
+<script>
+"use strict";
+const SB_URL = "https://quukdepnvzcmejokyvwz.supabase.co/rest/v1/rpc";
+const SB_KEY = "sb_publishable_sF2fhAgCq4XnAZcU7S2hSw_D7GYzYAi";
+
+function rpc(fn, body){
+  return fetch(SB_URL + "/" + fn, {
+    method:"POST",
+    headers:{ apikey:SB_KEY, Authorization:"Bearer " + SB_KEY, "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ throw new Error(t); });
+    return r.text().then(function(t){ return t ? JSON.parse(t) : null; });
+  });
+}
+
+document.querySelectorAll("[data-new]").forEach(function(b){
+  b.addEventListener("click", function(){
+    const old = b.textContent;
+    b.textContent = "legt an …"; b.disabled = true;
+    rpc("ws_create", { p_kind: b.dataset.new, p_title: null }).then(function(id){
+      const newId = typeof id === "string" ? id : (Array.isArray(id) ? id[0] : id);
+      location.href = b.dataset.page + "?b=" + newId;
+    }).catch(function(){
+      b.textContent = old; b.disabled = false;
+      alert("Board konnte nicht angelegt werden. Internetverbindung prüfen.");
+    });
+  });
+});
+
+function renderBoards(){
+  let list = [];
+  try{ list = JSON.parse(localStorage.getItem("ws-recent") || "[]"); }catch(e){}
+  const host = document.getElementById("boards");
+  host.innerHTML = "";
+  if(!list.length){
+    const d = document.createElement("div");
+    d.className = "empty";
+    d.textContent = "Noch keine Boards geöffnet. Oben eines anlegen — die ID merkt sich dieser Browser dann automatisch.";
+    host.appendChild(d);
+    return;
+  }
+  const box = document.createElement("div");
+  box.className = "boards";
+  list.forEach(function(x){
+    const row = document.createElement("div"); row.className = "board";
+    const k = document.createElement("span"); k.className = "k"; k.textContent = x.kind === "musterfall" ? "Musterfall" : "Roadmap";
+    const t = document.createElement("span"); t.className = "t"; t.textContent = x.title || "Workshop";
+    const id = document.createElement("span"); id.className = "id"; id.textContent = String(x.id).slice(0,8) + "…";
+    const a = document.createElement("a"); a.className = "btn"; a.textContent = "Öffnen";
+    a.href = (x.page || (x.kind === "musterfall" ? "musterfall.html" : "roadmap.html")) + "?b=" + x.id;
+    const c = document.createElement("button"); c.className = "btn"; c.textContent = "Link kopieren";
+    c.addEventListener("click", function(){
+      const url = location.origin + location.pathname.replace(/[^/]*$/, "") + a.getAttribute("href");
+      if(navigator.clipboard) navigator.clipboard.writeText(url); else prompt("Link:", url);
+      c.textContent = "kopiert"; setTimeout(function(){ c.textContent = "Link kopieren"; }, 1500);
+    });
+    row.appendChild(k); row.appendChild(t); row.appendChild(id); row.appendChild(a); row.appendChild(c);
+    box.appendChild(row);
+  });
+  host.appendChild(box);
+}
+renderBoards();
+
+document.getElementById("bopen").addEventListener("click", function(){
+  const v = document.getElementById("bid").value.trim();
+  if(!/^[0-9a-f-]{36}$/i.test(v)){ alert("Das sieht nicht nach einer Board-ID aus."); return; }
+  rpc("ws_load", { p_board: v }).then(function(res){
+    const r = Array.isArray(res) ? res[0] : res;
+    if(!r){ alert("Zu dieser ID gibt es kein Board."); return; }
+    location.href = (r.kind === "musterfall" ? "musterfall.html" : "roadmap.html") + "?b=" + v;
+  }).catch(function(){ alert("Konnte nicht nachsehen — Internetverbindung prüfen."); });
+});
+</script>
+</body>
+</html>
