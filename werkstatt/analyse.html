@@ -1,0 +1,368 @@
+﻿<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>facilioo — technische Analyse (API, Schnittstellen, KI-Anknüpfung)</title>
+<style>
+  :root{
+    --paper:#EDF0EC; --surface:#FFFFFF; --surface-2:#F6F8F4; --surface-3:#E7EBE5;
+    --ink:#15191A; --ink-2:#4C5657; --ink-3:#7C8886;
+    --line:#D2D8D1; --line-strong:#B4BDB3;
+    --accent:#1C5B63; --accent-2:#2E8189; --accent-soft:#DBEAE9; --on-accent:#FFFFFF;
+    --signal:#BC5619; --signal-soft:#F6E2D3;
+    --good:#2E7048; --warn:#9C7218; --crit:#9C382C;
+    --display:Bahnschrift,"DIN Alternate","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+    --body:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0E1213; --surface:#161B1C; --surface-2:#1C2223; --surface-3:#232A2B;
+      --ink:#E7EDEA; --ink-2:#A3AFAD; --ink-3:#7C8886;
+      --line:#2A3233; --line-strong:#3A4445;
+      --accent:#6BC3C8; --accent-2:#8FD6DA; --accent-soft:#16383B; --on-accent:#0E1213;
+      --signal:#E2914F; --signal-soft:#3A2718;
+      --good:#6FBF8B; --warn:#D6B05C; --crit:#E08277;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E1213; --surface:#161B1C; --surface-2:#1C2223; --surface-3:#232A2B;
+    --ink:#E7EDEA; --ink-2:#A3AFAD; --ink-3:#7C8886;
+    --line:#2A3233; --line-strong:#3A4445;
+    --accent:#6BC3C8; --accent-2:#8FD6DA; --accent-soft:#16383B; --on-accent:#0E1213;
+    --signal:#E2914F; --signal-soft:#3A2718;
+    --good:#6FBF8B; --warn:#D6B05C; --crit:#E08277;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.62}
+  .wrap{display:grid;grid-template-columns:270px minmax(0,1fr);gap:0;max-width:1360px;margin:0 auto}
+
+  /* Rail */
+  .toc{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:34px 24px 30px;border-right:1px solid var(--line);background:var(--surface)}
+  .mark{font-family:var(--display);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .mark span{flex:1;height:1px;background:var(--line-strong)}
+  .toc h2{font-family:var(--display);font-size:24px;line-height:1.1;margin:0 0 6px}
+  .toc .sub{font-size:12.5px;color:var(--ink-2);margin:0 0 20px}
+  .toc ol{list-style:none;margin:0;padding:0;counter-reset:s}
+  .toc li{counter-increment:s;margin:0 0 1px}
+  .toc a{display:flex;gap:9px;text-decoration:none;color:var(--ink);font-size:13.5px;padding:6px 8px;border-radius:3px;line-height:1.3}
+  .toc a:hover{background:var(--surface-2)}
+  .toc a::before{content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:11px;color:var(--accent);padding-top:2px}
+  .stamp{margin-top:22px;padding:10px 11px;border:1px dashed var(--line-strong);border-radius:3px;font-size:11.5px;color:var(--ink-2);line-height:1.45}
+
+  /* Content */
+  main{padding:40px 52px 100px;min-width:0}
+  .hero{border-bottom:1px solid var(--line);padding-bottom:26px;margin-bottom:34px}
+  .hero .kicker{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.09em;margin-bottom:10px}
+  h1{font-family:var(--display);font-size:clamp(34px,4.4vw,52px);line-height:1.02;margin:0 0 14px;letter-spacing:.005em;text-wrap:balance}
+  .lead{font-size:19px;line-height:1.5;color:var(--ink-2);max-width:62ch;margin:0}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;background:var(--surface);border-radius:4px;overflow:hidden;margin-top:26px}
+  .fact{background:var(--surface);padding:13px 15px;box-shadow:0 0 0 1px var(--line)}
+  .fact dt{font-family:var(--display);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px}
+  .fact dd{margin:0;font-size:14px;line-height:1.35}
+  code{font-family:var(--mono);font-size:.88em;background:var(--surface-3);padding:1px 5px;border-radius:2px;word-break:break-word}
+  section{margin:0 0 46px;scroll-margin-top:24px}
+  h2{font-family:var(--display);font-size:29px;line-height:1.12;margin:0 0 6px;display:flex;align-items:baseline;gap:12px}
+  h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);flex:none}
+  .sechint{color:var(--ink-2);font-size:15px;margin:0 0 18px;max-width:64ch}
+  h3{font-family:var(--display);font-size:19px;margin:26px 0 8px}
+  p{max-width:68ch}
+  ul,ol{max-width:68ch;padding-left:20px}
+  li{margin:5px 0}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);margin:16px 0}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:560px}
+  th{font-family:var(--display);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.num{font-variant-numeric:tabular-nums;font-family:var(--mono);white-space:nowrap}
+  .note,.warnbox,.unknown{border-radius:4px;padding:14px 17px;margin:18px 0;max-width:70ch}
+  .note{background:var(--accent-soft)}
+  .warnbox{background:var(--signal-soft);border-left:3px solid var(--signal)}
+  .unknown{border:1px dashed var(--line-strong);color:var(--ink-2)}
+  .note b,.warnbox b,.unknown b{font-family:var(--display);display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:5px}
+  .note b{color:var(--accent)} .warnbox b{color:var(--signal)} .unknown b{color:var(--ink-3)}
+  .qlist{counter-reset:q;list-style:none;padding:0;max-width:74ch}
+  .qlist li{counter-increment:q;display:flex;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .qlist li::before{content:"F" counter(q,decimal-leading-zero);font-family:var(--mono);font-size:12px;color:var(--signal);padding-top:4px;flex:none}
+  .src{font-size:13.5px;color:var(--ink-2)}
+  .src a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--line-strong);word-break:break-word}
+  .src a:hover{border-bottom-color:var(--accent)}
+  .src li{margin:6px 0}
+  a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:2px;background:var(--surface-3);color:var(--ink-2);white-space:nowrap}
+  .pill.ok{background:var(--accent-soft);color:var(--accent)}
+  .pill.risk{background:var(--signal-soft);color:var(--signal)}
+
+  @media (max-width:960px){
+    .wrap{grid-template-columns:1fr}
+    .toc{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+    main{padding:28px 22px 70px}
+  }
+  @media print{
+    .toc{display:none} .wrap{display:block} main{padding:0}
+    body{background:#fff;color:#000;font-size:10.5pt}
+    section{page-break-inside:auto} h2{page-break-after:avoid}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<nav class="toc">
+  <div class="mark">Technische Analyse<span></span>13.08.26</div>
+  <h2>facilioo</h2>
+  <p class="sub">API, Schnittstellen, ERP-Anbindung und was davon für eine kleine Hausverwaltung nutzbar ist.</p>
+  <ol>
+    <li><a href="#einordnung">Was facilioo ist — und was nicht</a></li>
+    <li><a href="#api">Die API auf einen Blick</a></li>
+    <li><a href="#auth">Authentifizierung</a></li>
+    <li><a href="#modell">Datenmodell</a></li>
+    <li><a href="#lesen">Lesen: Suche, Filter, Seiten</a></li>
+    <li><a href="#webhooks">Webhooks</a></li>
+    <li><a href="#versammlung">Eigentümerversammlung</a></li>
+    <li><a href="#erp">ERP-Anbindung</a></li>
+    <li><a href="#gen1">Gen1 → Gen2</a></li>
+    <li><a href="#ki">Eingebaute KI-Funktionen</a></li>
+    <li><a href="#bauen">Was man real bauen kann</a></li>
+    <li><a href="#risiken">Risiken und Lücken</a></li>
+    <li><a href="#fragen">Fragen an den Anbieter</a></li>
+    <li><a href="#quellen">Quellen</a></li>
+  </ol>
+  <div class="stamp">Stand 13.08.2026. Alles aus öffentlich zugänglicher Doku, nichts gegen ein Live-Konto geprüft. Wo etwas nicht belegt ist, steht das ausdrücklich dabei.</div>
+</nav>
+
+<main>
+  <header class="hero">
+    <div class="kicker">Produkt- und Schnittstellenanalyse · facilioo GmbH, Berlin</div>
+    <h1>facilioo technisch betrachtet</h1>
+    <p class="lead">facilioo hat eine ordentlich dokumentierte REST-API der zweiten Generation, Webhooks, ERP-Konnektoren und inzwischen eigene KI-Funktionen. Für eine Automatisierung von außen ist die Plattform brauchbar — mit drei Einschränkungen, die man vorher kennen sollte.</p>
+    <dl class="facts">
+      <div class="fact"><dt>API-Stil</dt><dd>REST, JSON, flache Entitäten mit ID-Referenzen</dd></div>
+      <div class="fact"><dt>Basis-URL</dt><dd><code>https://api.facilioo.de/api/</code></dd></div>
+      <div class="fact"><dt>Auth</dt><dd>JWT (RS256), Access + Refresh Token</dd></div>
+      <div class="fact"><dt>Ereignisse</dt><dd>Webhooks: created, updated, deleted</dd></div>
+      <div class="fact"><dt>Referenz</dt><dd>Swagger + Developer Hub, öffentlich</dd></div>
+      <div class="fact"><dt>Agenten-Index</dt><dd><code>/llms.txt</code> vorhanden</dd></div>
+    </dl>
+  </header>
+
+  <section id="einordnung">
+    <h2><span class="n">01</span> Was facilioo ist — und was nicht</h2>
+    <p class="sechint">Die Einordnung entscheidet über alles Weitere, weil sie festlegt, welche Daten überhaupt in der Plattform liegen.</p>
+    <p>facilioo ist eine <b>Kommunikations- und Vorgangsplattform</b> für Hausverwaltungen, kein ERP und keine Buchhaltung. Die Module: digitaler Eingang und Vorgangsmanagement, Eigentümerversammlung (analog, digital, hybrid), Dokumentenmanagement mit Text- und Bilderkennung, Portal und App für Eigentümer und Mieter, Handwerkersteuerung, Zeiterfassung sowie KI-Funktionen.</p>
+    <p>Die Stammdaten — Objekte, Einheiten, Verträge, Eigentümer, Mieter — <b>entstehen nicht in facilioo</b>, sondern werden aus der Verwaltersoftware synchronisiert. Wer also über eine Anbindung nachdenkt, hat es faktisch mit zwei Systemen zu tun: dem ERP als Datenquelle und facilioo als Kommunikations- und Prozessschicht darüber.</p>
+    <div class="note"><b>Konsequenz für die Beratung</b>Die WEG-Abrechnung, die Buchhaltung und die Belegprüfung liegen weiter im ERP. Alles, was mit Eigentümerkommunikation, Tickets, Dienstleistern, Dokumentenverteilung und Versammlung zu tun hat, liegt in facilioo — und genau dort ist die API interessant.</p></div>
+  </section>
+
+  <section id="api">
+    <h2><span class="n">02</span> Die API auf einen Blick</h2>
+    <p class="sechint">Gen2 ist eine saubere, ressourcenorientierte REST-API mit öffentlicher Referenz — das ist in diesem Marktsegment nicht selbstverständlich.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Umgebung</th><th>Basis-URL</th><th>Eigenschaft</th></tr></thead>
+      <tbody>
+        <tr><td>Produktion</td><td><code>https://api.facilioo.de/api/</code></td><td>Echtbetrieb</td></tr>
+        <tr><td>Staging</td><td><code>https://stage-api.facilioo.de/api/</code></td><td>Spiegel der Produktionsdaten, bis zu zwei Wochen alt</td></tr>
+        <tr><td>Development</td><td><code>https://dev-api.facilioo.de/api/</code></td><td>eigener Zugang nötig</td></tr>
+      </tbody>
+    </table></div>
+    <p>Antworten sind JSON und seitenweise paginiert, es gelten normale HTTP-Statuscodes. Die Entitäten sind flach: verwandte Objekte hängen als ID-Feld dran (etwa <code>entranceId</code>), nicht verschachtelt. Wer den Eigentümer zu einer Einheit braucht, holt ihn in einem zweiten Request — die API ist ausdrücklich auf viele kleine, parallele Anfragen ausgelegt, nicht auf wenige große.</p>
+    <p>Interaktive Referenz: <code>developers.facilioo.de/reference</code>. Swagger-UI: <code>api.facilioo.de/swagger/index.html</code>, die <code>swagger.json</code> lässt sich direkt in Postman importieren. Bemerkenswert: facilioo veröffentlicht unter <code>/llms.txt</code> einen maschinenlesbaren Index der gesamten Doku samt OpenAPI — die Plattform ist also bewusst für KI-Agenten erschlossen.</p>
+    <div class="warnbox"><b>Kleine Unstimmigkeit in der Doku</b>Die Übersichtsseite nennt Staging als <code>stage-api.facilioo.de</code>, das Quick-Start-Beispiel verwendet <code>staging-api.facilioo.de</code>. Beim Einrichten schlicht beides testen, statt lange zu suchen.</div>
+  </section>
+
+  <section id="auth">
+    <h2><span class="n">03</span> Authentifizierung</h2>
+    <p class="sechint">Kontobasiert, nicht schlüsselbasiert — das ist der erste Punkt, der Konsequenzen für den Betrieb hat.</p>
+    <p>Angemeldet wird sich per <code>POST /api/auth/login</code> mit <code>email</code>, <code>password</code> und optional <code>skipMultiFactorAuthentication</code>. Zurück kommt ein JWT (RS256 signiert) plus Refresh-Token. Der Access-Token geht als <code>Authorization</code>-Header mit, bei <code>401</code> wird über <code>POST /api/auth/refresh</code> ein neues Paar geholt — der neue Refresh-Token muss gespeichert werden. Öffentliche Schlüssel zur Token-Prüfung gibt es für alle drei Umgebungen.</p>
+    <p>Die Rechte hängen am <b>Party-Typ</b> des Kontos: Hausverwaltung, Dienstleister, Nutzer. Er steckt im Token und entscheidet, welche Ressourcen sichtbar sind. Für eine Integration heißt das: es braucht ein eigenes Konto mit der richtigen Rolle, technisch also ein Servicekonto.</p>
+    <div class="warnbox"><b>Kein dokumentierter API-Key</b>Es gibt in der Doku keine reinen Maschinen-Zugangsdaten, sondern Benutzername und Passwort eines Kontos. Ein Passwortwechsel oder eine erzwungene MFA-Richtlinie legt damit potenziell die Integration lahm. Die Wiederherstellungs-Endpunkte sind bereits als veraltet markiert, weil ein externer Identity Provider kommen soll — hier wird sich in absehbarer Zeit etwas ändern.</div>
+  </section>
+
+  <section id="modell">
+    <h2><span class="n">04</span> Datenmodell</h2>
+    <p class="sechint">Wer die sechs zentralen Entitäten kennt, kann den Rest der API erraten.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Entität</th><th>Bedeutung</th><th>Für Automatisierung relevant, weil…</th></tr></thead>
+      <tbody>
+        <tr><td><b>Property / Entrance / Unit</b></td><td>Objekt, Eingang, Einheit</td><td>jeder Vorgang und jedes Dokument hängt daran</td></tr>
+        <tr><td><b>Parties &amp; Accounts</b></td><td>Beteiligte (Verwaltung, Dienstleister, Nutzer) und ihre Logins</td><td>Rechte und Sichtbarkeiten leiten sich daraus ab</td></tr>
+        <tr><td><b>Inquiry</b></td><td>Anliegen, das ein Nutzer einreicht</td><td>der digitale Eingang — Einstiegspunkt jeder Anfrage</td></tr>
+        <tr><td><b>Process</b></td><td>Vorgang mit Feed, Beteiligten und Dokumenten</td><td>das Arbeitsobjekt: hier läuft die Bearbeitung</td></tr>
+        <tr><td><b>Document / Document Group</b></td><td>Datei plus Metadaten, in verschachtelbaren Gruppen</td><td>Freigaben je Zielgruppe (Eigentümer, Mieter, Beirat)</td></tr>
+        <tr><td><b>Conference</b></td><td>Eigentümerversammlung samt Beschlüssen und Abstimmungen</td><td>Protokoll- und Beschlussdaten maschinell abrufbar</td></tr>
+      </tbody>
+    </table></div>
+    <p>Dazu kommen Zähler und Ablesungen (<code>Consumption Meters &amp; Readings</code>), frei definierbare Attribute und Attributgruppen, Bankkonten, Buchungskonten und -posten, Anwesenheiten, Anrufprotokolle sowie die Chatbot- und ChatGPT-Einstellungen.</p>
+    <h3>Inquiry und Process im Detail</h3>
+    <p>Eine <b>Inquiry</b> verbindet drei Dinge: die betroffene Einheit, die empfangende Partei (die Verwaltung) und die Partei, für die die Anfrage gestellt wird. Inhalt sind Bericht, optionale Kategorie und Anhänge. Die Verwaltung antwortet mit einer Completion- oder Rejection-Response. <b>Nur Konten vom Typ „User" können Inquiries anlegen</b> — das Token bestimmt den Ersteller. Eine Integration, die im Namen der Verwaltung läuft, kann also keine Anfragen simulieren, sondern nur bearbeiten.</p>
+    <p>Ein <b>Process</b> ist der Arbeitsvorgang dazu: gebunden an die Verwaltung, mit Nutzern, Dienstleistern und Einheiten als Beteiligten. Kernstück ist der Process Feed — ein Thread aus Nachrichten, Dokumenten und Statusmeldungen. Konten wirken darin als Editor Clerk (schreibend) oder Spectator Clerk (lesend).</p>
+  </section>
+
+  <section id="lesen">
+    <h2><span class="n">05</span> Lesen: Suche, Filter, Seiten</h2>
+    <p class="sechint">Hier steckt die praktisch wichtigste Einschränkung der gesamten API.</p>
+    <p>Gefiltert wird nicht über Query-Parameter, sondern über <code>POST /api/&lt;entity&gt;/search</code> mit JSON-Body. Standardparameter sind <code>searchTerm</code> (Freitext über Kernfelder), <code>ids</code>, sowie Zeitfilter <code>changedSince</code>, <code>createdFrom</code> / <code>createdUntil</code>, <code>lastModifiedFrom</code> / <code>lastModifiedUntil</code>. Sortiert wird über <code>orderBy</code>, geblättert über <code>pageNumber</code> und <code>pageSize</code>.</p>
+    <div class="warnbox"><b>Alle Bedingungen sind UND-verknüpft, und es wird exakt verglichen</b>Keine Wildcards, keine Teiltreffer, keine Zahlenbereiche (größer, kleiner), kein ODER über verschiedene Felder. Wer „alle offenen Vorgänge über 500 € aus Objekt A oder B" braucht, muss mehrere Abfragen absetzen und im eigenen Code zusammenführen. Für einen Agenten heißt das: die Filterlogik gehört auf die eigene Seite, die API liefert nur Rohmengen.</div>
+    <p>Der Parameter <code>changedSince</code> ist der wichtigste der Liste: er macht einen inkrementellen Abgleich möglich, ohne jedes Mal alles zu ziehen. Für einen nächtlichen Sync oder einen Agenten, der alle 15 Minuten schaut, ist das der Standardweg.</p>
+  </section>
+
+  <section id="webhooks">
+    <h2><span class="n">06</span> Webhooks</h2>
+    <p class="sechint">Es gibt sie, sie sind gut durchdacht — und sie haben klar benannte Lücken.</p>
+    <p>Registriert wird eine <code>WebhookRegistration</code> mit Ziel-URL, Authentifizierungsverfahren und abonnierten Ereignissen. Ereignistypen sind derzeit <b>Created, Updated und Deleted</b>; Beziehungsereignisse fehlen noch. Die Zustellung erfolgt als POST mit der vollständig serialisierten Entität, dem Ereignis (Typ und Entitätsname) sowie <code>initiatorPartyId</code> und <code>initiatorAccountId</code>.</p>
+    <p>Zur Absicherung stehen vier Verfahren bereit: keine Authentifizierung, Basic Auth, ein von der Plattform signierter Bearer-Token (im Header oder im Body) oder ein Token der Ziel-API. Fehlgeschlagene Zustellungen werden <b>siebenmal mit exponentiell wachsendem Abstand</b> wiederholt, von sofort bis 24 Stunden. Zusammengehörige Nachrichten lassen sich gruppieren, sodass die Reihenfolge erhalten bleibt.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Einschränkung</th><th>Auswirkung in der Praxis</th></tr></thead>
+      <tbody>
+        <tr><td>Nur Konten vom Typ <code>PropertyManagementCompany</code></td><td>Dienstleister können keine Ereignisse abonnieren</td></tr>
+        <tr><td>Registrierungen sind nicht änderbar</td><td>Löschen und neu anlegen — bei Deployments einplanen</td></tr>
+        <tr><td>Keine URL-Prüfung, keine Dublettenerkennung</td><td>Tippfehler fallen erst im Betrieb auf, doppelte Registrierung liefert doppelt</td></tr>
+        <tr><td>Entitätsabdeckung lückenhaft (u. a. Accounts, Tenants, Properties, Inquiries)</td><td>für manche Fälle bleibt nur Polling über <code>changedSince</code></td></tr>
+        <tr><td><span class="pill risk">nur Produktion</span> kein Staging</td><td>Ereignisstrecken lassen sich nicht gefahrlos testen — der wichtigste Punkt dieser Tabelle</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="versammlung">
+    <h2><span class="n">07</span> Eigentümerversammlung: Beschlüsse maschinell auslesen</h2>
+    <p class="sechint">Der interessanteste Spezialfall, weil er direkt auf das Protokoll einzahlt.</p>
+    <p>Abstimmungsergebnisse sind verfügbar, sobald die Versammlung im Status <code>InReview</code> oder besser <code>Completed</code> ist. Der Ablauf: Abstimmungsgruppen über <code>/conferences/{id}/voting-groups</code> holen, dann die Voting Sessions der Konferenz — jede trägt eine <code>resolutionId</code> zur zugehörigen Beschlussvorlage. Die Stimmen liegen in zwei Formen vor: <code>/voting-sessions/{id}/votes</code> für Einzelstimmen und <code>/voting-sessions/{id}/voting-group-votes</code> für Gruppenstimmen. Das Ergebnis entsteht durch Summieren der Stimmgewichte je Gruppe.</p>
+    <div class="note"><b>Wichtiges Detail</b>Für das protokollarische Ergebnis zählen ausschließlich die <b>VotingGroupVotes</b>; die Einzelstimmen sind nur Referenz. Wer ein Protokoll automatisiert erzeugt und die falsche Quelle summiert, produziert formal falsche Beschlussergebnisse — ein Fehler mit rechtlicher Wirkung, kein Schönheitsfehler.</div>
+  </section>
+
+  <section id="erp">
+    <h2><span class="n">08</span> ERP-Anbindung: drei Wege</h2>
+    <p class="sechint">Wie die Stammdaten überhaupt in die Plattform kommen — und was das für eine Zwei-Personen-Firma bedeutet.</p>
+    <h3>facilioo Connect</h3>
+    <p>Ein Schnittstellenprogramm, das <b>als Dienst auf dem eigenen Server</b> installiert wird und Objekte, Einheiten, Bewohner, Firmen samt Adressen, Kontaktdaten und Vertragsnummern synchronisiert. Die Variante <b>Connect Enterprise</b> überträgt zusätzlich Dokumente aus dem ERP in genau der dortigen Struktur.</p>
+    <h3>Konnektoren der ERP-Hersteller</h3>
+    <p>Über <b>Aareon Connect</b> wird die Integration im ERP aktiviert; nötig sind die facilioo-API-Zugangsdaten (Benutzername, Passwort, Umgebung). Synchronisiert werden Wirtschaftseinheiten, Gebäude, Verwaltungseinheiten, Mietverträge und Parteien, dazu optional Ordner und Dokumente; das Intervall ist einstellbar. Analog gibt es <b>DOMUS Cloud Connect</b> sowie Verbindungen zu Gfad Haussoft, Scalara, Impower, DocuWare und SharePoint. Insgesamt wirbt facilioo mit über 75 Schnittstellen.</p>
+    <div class="warnbox"><b>Stolperstein aus der Konnektor-Doku</b>Über Aareon Connect werden <b>nur Mieter mit hinterlegter E-Mail-Adresse</b> synchronisiert — Mietverträge ohne Mailadresse kommen gar nicht erst an. Wer den Datenbestand nicht vorher aufräumt, wundert sich später über Lücken, die niemand meldet.</div>
+    <h3>External IDs als Klammer</h3>
+    <p>Damit beide Systeme dieselben Objekte meinen, kennt facilioo <b>External IDs</b>. Eine Konferenz bekommt ihre Fremd-ID direkt per <code>PATCH /conferences/42</code>, Parteien können mehrere Fremd-IDs tragen (<code>GET</code> bzw. <code>PUT /&lt;entities&gt;/{id}/external-ids</code>) — etwa wenn derselbe Hausmeister bei zwei Verwaltungen mit unterschiedlichen ERP-Nummern geführt wird. Für jede Eigenentwicklung ist das der Schlüssel, um Datensätze wiederzufinden, ohne auf Namen zu matchen.</p>
+  </section>
+
+  <section id="gen1">
+    <h2><span class="n">09</span> Gen1 → Gen2</h2>
+    <p class="sechint">Es gibt zwei API-Generationen auf demselben Datenbestand. Wer neu baut, baut auf Gen2.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Bereich</th><th>Gen1 (Legacy)</th><th>Gen2 (aktuell)</th></tr></thead>
+      <tbody>
+        <tr><td>Authentifizierung</td><td>Token, begrenzte Scopes</td><td>OAuth2-konformes Tokensystem mit Scopes</td></tr>
+        <tr><td>Routing</td><td>direkt unter <code>/</code></td><td>unter <code>/api/</code></td></tr>
+        <tr><td>Muster</td><td>viewbasiert</td><td>ressourcenorientiert</td></tr>
+        <tr><td>Paginierung</td><td>teilweise, manuell</td><td>überall Standard</td></tr>
+        <tr><td>Filterung</td><td>uneinheitlich per Query</td><td>einheitlich per <code>POST /search</code></td></tr>
+        <tr><td>Benennung</td><td><code>objects</code>, <code>flats</code></td><td><code>Property</code>, <code>Unit</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>Tokens der beiden Generationen sind nicht austauschbar, ein paralleler Übergangsbetrieb ist aber vorgesehen. <span class="pill">Kein Abschaltdatum dokumentiert</span> — das gehört auf die Fragenliste, wenn irgendwo noch eine Gen1-Integration läuft.</p>
+  </section>
+
+  <section id="ki">
+    <h2><span class="n">10</span> Eingebaute KI-Funktionen</h2>
+    <p class="sechint">Der Punkt, der die Make-or-Buy-Frage in der KI-Strategie verschiebt.</p>
+    <p>facilioo hat KI nicht nur als Marketingzeile, sondern als Produktbestandteil: einen <b>Chatbot</b> (mit eigenen Endpunkten für Konfigurationen, Konversationen und Nachrichten), <b>Dokumentenverarbeitung mit Text- und Bilderkennung</b>, <b>ChatGPT-Einstellungen</b> als eigene Ressource und einen <b>KI-Telefonassistenten</b>: Der nimmt Anrufe an, erkennt Anrufer, Objekt und Einheit, dokumentiert das Anliegen und legt es als Eingang oder als Verlaufseintrag in einem bestehenden Vorgang ab, inklusive Kategorisierung und Doppelticket-Erkennung.</p>
+    <div class="note"><b>Was das für die Beratung heißt</b>Wenn eine Verwaltung facilioo einsetzt, ist „Anfragen automatisch erfassen und vorsortieren" <b>keine Eigenentwicklung mehr, sondern ein Modul</b>. Die sinnvolle Frage lautet dann nicht mehr „was bauen wir", sondern „was ist im Produkt schon drin, was kostet es extra, und wo bleibt eine echte Lücke". Eigenbau lohnt sich erst dort, wo der Anbieter nichts hat: fachliche Antwortentwürfe mit Bezug auf Beschlusslage und Altbestände, Auswertungen über mehrere Objekte hinweg, Übergaben ins ERP.</div>
+  </section>
+
+  <section id="bauen">
+    <h2><span class="n">11</span> Was man real bauen kann</h2>
+    <p class="sechint">Vier Anbindungen, die mit der dokumentierten API tatsächlich funktionieren — mit ehrlicher Aufwandsschätzung.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Vorhaben</th><th>Weg über die API</th><th>Aufwand</th><th>Haken</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Vorgangs-Radar</b><br>Täglicher Überblick über offene Vorgänge, Liegenbleiber, Eskalationen</td>
+          <td><code>POST /processes/search</code> mit <code>changedSince</code>, dazu Feed und Beteiligte</td>
+          <td><span class="pill ok">gering</span></td>
+          <td>Filterlogik muss im eigenen Code liegen (kein ODER, keine Bereiche)</td>
+        </tr>
+        <tr>
+          <td><b>Antwortentwürfe zu Anfragen</b><br>Eingang lesen, Entwurf erzeugen, als Feed-Eintrag zurückschreiben</td>
+          <td>Inquiries lesen, Process-Feed schreiben; Auslöser per Webhook oder Polling</td>
+          <td><span class="pill">mittel</span></td>
+          <td>Webhook-Abdeckung für Inquiries ist lückenhaft; kein Test in Staging möglich</td>
+        </tr>
+        <tr>
+          <td><b>Beschluss- und Protokollauszug</b><br>Nach der Versammlung Ergebnisse strukturiert herausziehen</td>
+          <td>Voting Groups, Voting Sessions, <code>voting-group-votes</code>, Gewichte summieren</td>
+          <td><span class="pill">mittel</span></td>
+          <td>nur VotingGroupVotes sind protokollrelevant — Fehlerquelle mit Rechtsfolge</td>
+        </tr>
+        <tr>
+          <td><b>Dokumenten-Wissensbasis</b><br>Verträge, Protokolle, Abrechnungen durchsuchbar machen</td>
+          <td>Documents und Document Groups je Property/Unit/Party abziehen</td>
+          <td><span class="pill risk">hoch</span></td>
+          <td>Freigabelogik der Gruppen muss im Index nachgebaut werden, sonst sieht jemand Fremddokumente</td>
+        </tr>
+      </tbody>
+    </table></div>
+    <p>Für alle vier gilt dasselbe Muster: Servicekonto anlegen, inkrementell über <code>changedSince</code> synchronisieren, Fremdschlüssel über External IDs führen, und die Fachlogik außerhalb von facilioo halten.</p>
+  </section>
+
+  <section id="risiken">
+    <h2><span class="n">12</span> Risiken und Lücken</h2>
+    <p class="sechint">Was die Doku nicht hergibt, ist genauso wichtig wie das, was drinsteht.</p>
+    <div class="unknown"><b>Öffentlich nicht belegt</b>
+      <ul>
+        <li><b>Rate Limits und Drosselung</b> — nirgends dokumentiert. Bei einer API, die ausdrücklich zu vielen parallelen Requests einlädt, ist das eine offene Flanke.</li>
+        <li><b>Preise und Editionen</b> — keine öffentliche Preisliste; unklar, ob API-Zugang und Webhooks in allen Paketen enthalten sind oder Enterprise-Funktionen.</li>
+        <li><b>Hosting, Zertifizierungen, SLA</b> — kein öffentlicher Nachweis zu Serverstandort, ISO 27001, Verfügbarkeitszusagen oder Auftragsverarbeitungsvertrag gefunden.</li>
+        <li><b>Abschaltdatum für Gen1</b> — nicht genannt.</li>
+      </ul>
+    </div>
+    <div class="warnbox"><b>Datenschutzpunkt, der leicht übersehen wird</b>Die Staging-Umgebung ist ein <b>Spiegel der Produktionsdaten</b>, bis zu zwei Wochen alt. Wer dort entwickelt, arbeitet mit echten Eigentümer- und Mieterdaten. Das gehört in die Verarbeitungsübersicht und in jeden Vertrag mit einem Dienstleister, der dort testet — und es ist der Grund, warum „wir probieren das mal in der Testumgebung" hier keine harmlose Aussage ist.</div>
+    <p>Dazu die bereits genannten technischen Lücken: Webhooks nur in Produktion, nur für Verwaltungskonten, Registrierungen nicht änderbar; Filter ohne ODER und ohne Bereiche; Authentifizierung über Benutzerkonto statt Maschinenschlüssel, mit angekündigtem Wechsel auf einen externen Identity Provider.</p>
+  </section>
+
+  <section id="fragen">
+    <h2><span class="n">13</span> Fragen an den Anbieter</h2>
+    <p class="sechint">Diese Liste beantwortet keine Doku — die muss facilioo oder der Vertrieb beantworten.</p>
+    <ol class="qlist">
+      <li>Ist der API-Zugang in unserem Paket enthalten, oder ist er an eine bestimmte Edition gebunden? Was kostet er?</li>
+      <li>Welche Rate Limits gelten pro Konto und pro Minute — und was passiert bei Überschreitung?</li>
+      <li>Gibt es echte Maschinen-Zugangsdaten (Client Credentials), oder läuft jede Integration über ein Benutzerkonto mit Passwort?</li>
+      <li>Wann kommt der angekündigte externe Identity Provider, und was ändert sich dadurch an bestehenden Integrationen?</li>
+      <li>Wann wird Gen1 abgeschaltet?</li>
+      <li>Für welche Entitäten sind Webhooks vollständig implementiert — und wann sind Inquiries und Properties lückenlos dabei?</li>
+      <li>Warum gibt es Webhooks nicht in Staging, und wie testet man Ereignisstrecken ohne Produktivdaten?</li>
+      <li>Wo werden die Daten gehostet, gibt es ISO 27001 oder vergleichbare Nachweise, und wie sieht der Auftragsverarbeitungsvertrag aus?</li>
+      <li>Wie ist die Staging-Umgebung datenschutzrechtlich eingeordnet, wenn sie Produktionsdaten spiegelt?</li>
+      <li>Welche unserer Verwaltersoftware-Versionen wird von facilioo Connect unterstützt, und braucht Connect zwingend einen eigenen Server im Haus?</li>
+      <li>Welche KI-Funktionen (Chatbot, Telefonassistent, Dokumentenerkennung) sind inklusive, welche kosten extra, und mit welchem Modellanbieter werden sie betrieben?</li>
+      <li>Können wir unsere Daten vollständig und selbst initiiert exportieren, wenn wir wechseln wollen?</li>
+    </ol>
+  </section>
+
+  <section id="quellen">
+    <h2><span class="n">14</span> Quellen</h2>
+    <p class="sechint">Alles öffentlich abrufbar, Stand 13.08.2026.</p>
+    <ul class="src">
+      <li><a href="https://developers.facilioo.de/">facilioo Developer Hub</a> — Einstieg, Guides, API-Referenz</li>
+      <li><a href="https://developers.facilioo.de/docs/facilioo-api">facilioo API (Guide)</a> — Architektur, Umgebungen, Basis-URLs</li>
+      <li><a href="https://developers.facilioo.de/reference/authentication">Authentication</a> — Login, JWT, Refresh, Party-Typen</li>
+      <li><a href="https://developers.facilioo.de/reference/filtering">Filtering</a> — Suchendpunkte, Parameter, Grenzen</li>
+      <li><a href="https://developers.facilioo.de/reference/webhooks">Webhooks</a> — Ereignisse, Auth, Retry, Einschränkungen</li>
+      <li><a href="https://developers.facilioo.de/reference/inquiries">Inquiries</a> und <a href="https://developers.facilioo.de/reference/processes">Processes</a> — Vorgangsmodell</li>
+      <li><a href="https://developers.facilioo.de/reference/documents">Documents</a> und <a href="https://developers.facilioo.de/reference/external-ids">External IDs</a></li>
+      <li><a href="https://developers.facilioo.de/docs/obtaining-voting-results-after-a-conference">Obtaining Voting Results after a Conference</a></li>
+      <li><a href="https://developers.facilioo.de/docs/migrating-from-gen1">Migrating from Gen1</a></li>
+      <li><a href="https://developers.facilioo.de/llms.txt">llms.txt</a> — maschinenlesbarer Doku-Index</li>
+      <li><a href="https://facilioo.de/schnittstellen/">facilioo Schnittstellen</a> — Connect und Connect Enterprise</li>
+      <li><a href="https://facilioo.de/">facilioo Produktseite</a> — Module, Partner, Integrationen</li>
+      <li><a href="https://facilioo.de/ki-telefonassistent/">KI-Telefonassistent</a></li>
+      <li><a href="https://connect-docs-de.locoia.com/partner-and-apps/facilioo">Aareon Connect: facilioo-Integration</a> — Use Cases, Zugangsdaten, Einschränkungen</li>
+      <li><a href="https://www.domus-software.de/kennen-sie-domus-cloud-connect/">DOMUS Cloud Connect</a></li>
+    </ul>
+  </section>
+</main>
+</div>
+
+</body>
+</html>
