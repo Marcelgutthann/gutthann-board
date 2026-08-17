@@ -939,6 +939,10 @@ function renderCard(t) {
   // Redesign 10.08.: die Kachel zeigt nur Frist, Personen, Herkunft, Projekt — Zaehler
   // (Unterpunkte/Kommentare) und das ⌨-Icon stehen im Detail, nicht auf der Karte.
   if (t.quelle === 'voice') meta.append(el('span', { title: 'Per Anruf erstellt' }, '📞'));
+  // Poool-Klammer: die Karte ist zugleich ein Ticket im CRM und laeuft synchron.
+  if (t.poool_ticket_id) meta.append(el('span', {
+    class: 'pchip', title: 'Läuft synchron mit Poool-Ticket ' + (t.poool_nr || t.poool_ticket_id)
+  }, 'Poool ' + (t.poool_nr || '#' + t.poool_ticket_id)));
   if (due) meta.append(el('span', { class: 'due' + (due.urgent ? ' urgent' : '') }, due.txt));
   if ((t.zugewiesen || []).length) {
     const avs = el('span', { class: 'avs' });
