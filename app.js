@@ -341,12 +341,12 @@ function renderTerminplan() {
       el('div', { style: 'font-size:11.5px' }, 'Grundlage ist ein MS-Project-Export, der als eigene Datei hinterlegt wird.')));
     return;
   }
-  // Bewusst knapp gehalten (Marcels Befund 24.08.: alles zu ueberladen) — nur was
-  // man wissen MUSS: Probestand, Urheber, kein Speichern. Rest steht im Werkzeug.
+  // Bewusst knapp gehalten (Marcels Befund 24.08.: alles zu ueberladen). Seit dem
+  // Speicher-Einbau zeigt das Werkzeug seinen Speicherstand selbst rechts in der
+  // eigenen Leiste an — hier steht nur noch Probestand + Urheber.
   root.append(el('div', { class: 'terminhint' },
     el('span', { class: 'probe' }, 'PROBE'),
-    el('span', {}, 'Werkzeug von Benjamin Adam'),
-    el('span', { style: 'color:#8A2E2E' }, 'wird nicht gespeichert'),
+    el('span', {}, 'Werkzeug von Benjamin Adam · speichert in der Projekt-Datenbank'),
     el('a', { onclick: () => window.open(plan.datei, '_blank') }, 'eigenes Fenster')));
   // title macht den Rahmen fuer Screenreader auffindbar; sandbox erlaubt genau das,
   // was das Werkzeug braucht (Skripte + Download fuer den XML-Export).
