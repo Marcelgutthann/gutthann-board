@@ -241,12 +241,21 @@ async function ladeBoard() {
     const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (token !== ladeToken) return;
     // Frontend und Lotse gehen nie exakt gleichzeitig raus. Kennt der Lotse die
-    // Aktion noch nicht, soll niemand vor einer englischen Fehlermeldung stehen --
-    // dann eben das eigene Board, mit einem Wort dazu.
-    if (d.fehler && /unknown action/i.test(d.fehler) && S.liste?.boards?.length) {
-      const b0 = S.liste.boards[0];
-      uiHinweis('Das Dashboard ist noch nicht freigeschaltet — du bist auf deinem Board.');
-      await wechsle('board', b0.id, b0.name);
+    // Aktion noch nicht, soll niemand vor einer englischen Fehlermeldung stehen.
+    // Beim automatischen Start faellt die App aufs eigene Board zurueck -- wer aber
+    // BEWUSST auf "Mein Dashboard" klickt, wird nicht weggeschoben (das fuehlt sich
+    // wie ein Fehler an, Marcels Befund 24.08.), sondern liest, was noch fehlt.
+    if (d.fehler && /unknown action/i.test(d.fehler)) {
+      const hinweis = 'Das Dashboard ist noch nicht fertig freigeschaltet — der Server-Teil dazu '
+        + 'fehlt noch. Deine Aufgaben findest du solange auf den Boards links.';
+      if (!S.radarGeklickt && S.liste?.boards?.length) {
+        const b0 = S.liste.boards[0];
+        uiHinweis(hinweis);
+        await wechsle('board', b0.id, b0.name);
+        return;
+      }
+      S.radar = { fehler: hinweis }; S.board = null;
+      renderSidebar(); renderTopbar(); zeigeAnsicht('board'); renderRadar();
       return;
     }
     S.radar = d; S.board = null;
@@ -268,6 +277,7 @@ async function ladeBoard() {
 }
 async function wechsle(typ, id, name) {
   S.active = { typ, id, name }; S.board = null;
+  if (typ === 'radar') S.radarGeklickt = true;
   S.kal = null; // Kalender-Monat gehoert zum alten Projekt
   // Halboffene Neue-Karte-Zeile gehoert zum alten Board — sonst blockiert ihr
   // Poll-Guard den Auto-Refresh dauerhaft.
