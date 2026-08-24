@@ -128,7 +128,7 @@ async function lotse(action, body = {}, retried = false) {
     // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
     // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
     // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
-    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'kalender', 'agent_laeufe'];
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe'];
     if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
@@ -227,7 +227,9 @@ function closeCtx() { document.getElementById('ctx-root').innerHTML = ''; }
 async function ladeAlles() {
   const [liste, projs] = await Promise.all([lotse('board_liste'), lotse('projects')]);
   S.liste = liste; S.projects = projs.projects || [];
-  if (!S.active && liste.boards?.length) S.active = { typ: 'board', id: liste.boards[0].id, name: liste.boards[0].name };
+  // Startansicht ist "Mein Radar" (Wunsch der Mitarbeiter, 24.08.): erst sehen, was
+  // ueberall fuer mich offen ist -- dann hineinklicken. Die Boards bleiben, wo sie waren.
+  if (!S.active) S.active = { typ: 'radar', id: null, name: 'Mein Radar' };
   renderSidebar();
   await ladeBoard();
 }
@@ -235,6 +237,13 @@ let ladeToken = 0; // verwirft veraltete Antworten bei schnellem Board-Wechsel
 async function ladeBoard() {
   if (!S.active) return;
   const token = ++ladeToken;
+  if (S.active.typ === 'radar') {
+    const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
+    if (token !== ladeToken) return;
+    S.radar = d; S.board = null;
+    renderSidebar(); renderTopbar(); zeigeAnsicht('board'); renderRadar();
+    return;
+  }
   const b = S.active.typ === 'projekt'
     ? await lotse('board', { projekt: S.active.name })
     : await lotse('board', { board_id: S.active.id });
@@ -267,14 +276,17 @@ function zeigeAnsicht(welche) {
   const kal = document.getElementById('kal-root');
   const term = document.getElementById('termin-root');
   if (!dash || !board) return;
+  const radar = document.getElementById('radar-root');
   const istProjekt = S.active?.typ === 'projekt';
+  const istRadar = S.active?.typ === 'radar';
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
   const termAn = welche === 'termin' && istProjekt;
-  board.style.display = (dashAn || kalAn || termAn) ? 'none' : '';
+  board.style.display = (dashAn || kalAn || termAn || istRadar) ? 'none' : '';
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
   if (term) term.hidden = !termAn;
+  if (radar) radar.hidden = !istRadar;
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
@@ -282,10 +294,11 @@ function zeigeAnsicht(welche) {
 }
 
 // ---------- Terminplanung (Probeeinbau 24.08.) ----------
-// Julian Neuhoffs selbstgebautes Gantt-Werkzeug, unveraendert als eigene Datei im
-// Board-Repo. Es haengt bewusst an einer Datei je Projekt: bisher gibt es genau
-// einen Plan (Bauhof Pentling). Andere Projekte sehen einen ehrlichen Leerzustand
-// statt eines fremden Terminplans.
+// Benjamin Adams selbstgebautes Gantt-Werkzeug, unveraendert als eigene Datei im
+// Board-Repo. (Der im Plankopf genannte "Ersteller Julian Neuhoff" ist der Ersteller
+// des Bauzeitenplans, NICHT des Werkzeugs -- die beiden nicht verwechseln.)
+// Es haengt bewusst an einer Datei je Projekt: bisher gibt es genau einen Plan
+// (Bauhof Pentling). Andere Projekte sehen einen ehrlichen Leerzustand.
 const TERMINPLAENE = [
   { treffer: /pentling/i, datei: 'terminplan/3630-bauhof-pentling.html',
     quelle: '363020_Bauhof_Pentling_BZP.xml (WBS-Ast „AUSFÜHRUNG", 132 Vorgänge)' },
@@ -309,11 +322,13 @@ function renderTerminplan() {
       el('div', { style: 'font-size:11.5px' }, 'Grundlage ist ein MS-Project-Export, der als eigene Datei hinterlegt wird.')));
     return;
   }
+  // Bewusst knapp gehalten (Marcels Befund 24.08.: alles zu ueberladen) — nur was
+  // man wissen MUSS: Probestand, Urheber, kein Speichern. Rest steht im Werkzeug.
   root.append(el('div', { class: 'terminhint' },
-    el('span', { class: 'probe' }, 'PROBEEINBAU'),
-    el('span', {}, el('b', {}, 'Werkzeug von Julian Neuhoff'), ' · Basis: ' + plan.quelle),
-    el('span', { style: 'color:#8A2E2E' }, '⚠ Änderungen werden noch NICHT gespeichert — sie gehen beim Neuladen verloren. Zum Sichern im Werkzeug „Export → MS Project (.xml)" nutzen.'),
-    el('a', { onclick: () => window.open(plan.datei, '_blank') }, 'in eigenem Fenster öffnen')));
+    el('span', { class: 'probe' }, 'PROBE'),
+    el('span', {}, 'Werkzeug von Benjamin Adam'),
+    el('span', { style: 'color:#8A2E2E' }, 'wird nicht gespeichert'),
+    el('a', { onclick: () => window.open(plan.datei, '_blank') }, 'eigenes Fenster')));
   // title macht den Rahmen fuer Screenreader auffindbar; sandbox erlaubt genau das,
   // was das Werkzeug braucht (Skripte + Download fuer den XML-Export).
   const f = document.createElement('iframe');
@@ -384,6 +399,106 @@ async function renderKalender() {
   }
 }
 
+// ---------- Mein Radar (Startansicht) ----------
+// Zeigt alles, was fuer die angemeldete Person offen ist -- getrennt nach Bereich
+// (Projekt / Buero intern / privates Board). Welche Karte als "meine" gilt und in
+// welcher Reihenfolge sie steht, entscheidet db/103_mein_radar.sql. Von hier fuehrt
+// jede Zeile in die Karte, jeder Bereichskopf in das zugehoerige Board.
+const RADAR_ART = { projekt: 'Projekt', team: 'Büro intern', privat: 'Privat' };
+
+function radarZeile(k) {
+  const z = el('div', { class: 'rz', onclick: () => openCard(k.id) });
+  const t = el('div', { class: 'rzt' });
+  if (k.agent_status === 'wartet_info') t.append(el('span', { class: 'rchip rueck' }, 'Rückfrage'));
+  else if (k.zuarbeit) t.append(el('span', { class: 'rchip zu' }, 'Zuarbeit'));
+  else if (k.agent_status === 'fertig') t.append(el('span', { class: 'rchip fertig' }, 'Ergebnis da'));
+  if (k.neue_kommentare > 0) t.append(el('span', { class: 'rchip komm' },
+    k.neue_kommentare === 1 ? 'neuer Kommentar' : k.neue_kommentare + ' neue Kommentare'));
+  const f = k.faellig && fmtDatum(k.faellig);
+  if (f) t.append(el('span', { class: 'rchip frist' + (f.urgent ? '' : ' ruhig') }, f.txt));
+  t.append(k.titel);
+  z.append(t);
+  z.append(el('div', { class: 'rzm' }, [
+    k.spalte || null,
+    k.kommentar_von ? 'Kommentar von ' + (k.kommentar_von === 'agent' ? 'Agent' : personName(k.kommentar_von)) : null,
+    k.von ? 'von ' + personName(k.von) : null,
+    k.seit_tage > 0 ? 'seit ' + k.seit_tage + (k.seit_tage === 1 ? ' Tag' : ' Tagen') + ' offen' : 'heute angelegt',
+  ].filter(Boolean).join(' · ')));
+  return z;
+}
+
+function renderRadar() {
+  const root = document.getElementById('radar-root'); if (!root) return;
+  root.innerHTML = '';
+  const d = S.radar;
+  if (!d) { root.append(el('div', { class: 'rleer' }, 'Lade…')); return; }
+  if (d.fehler) { root.append(el('div', { class: 'rleer' }, d.fehler)); return; }
+  const kpi = d.kpi || {};
+  const bereiche = d.bereiche || [];
+  // Springt zur ersten Karte, auf die die Kachel zeigt -- eine Zahl ohne Weg dorthin
+  // ist im Board schon einmal untergegangen (Befund 10.08.).
+  const springe = (pruef) => () => {
+    for (const b of bereiche) { const k = (b.karten || []).find(pruef); if (k) { openCard(k.id); return; } }
+  };
+  const kachel = (zahl, label, warn, klick) => el('div', {
+    class: 'rkpi' + (warn ? ' warn' : '') + (klick ? ' klick' : ''),
+    onclick: klick || null,
+  }, el('div', { class: 'z' }, String(zahl)), el('div', { class: 'l' }, label));
+
+  const kpis = el('div', { class: 'rkpis' });
+  kpis.append(kachel(kpi.gesamt || 0, (kpi.gesamt === 1 ? 'Aufgabe' : 'Aufgaben') + ' offen'));
+  kpis.append(kachel(kpi.bereiche || 0, (kpi.bereiche === 1 ? 'Bereich' : 'Bereiche') + ' betroffen'));
+  // Nur zeigen, was es wirklich gibt -- drei Nullkacheln sagen nichts.
+  if (kpi.rueckfragen) kpis.append(kachel(kpi.rueckfragen,
+    kpi.rueckfragen === 1 ? 'Rückfrage an dich' : 'Rückfragen an dich', true,
+    springe((k) => k.agent_status === 'wartet_info')));
+  if (kpi.zuarbeiten) kpis.append(kachel(kpi.zuarbeiten,
+    kpi.zuarbeiten === 1 ? 'Zuarbeit vom Agenten' : 'Zuarbeiten vom Agenten', true,
+    springe((k) => k.zuarbeit)));
+  if (kpi.kommentiert) kpis.append(kachel(kpi.kommentiert,
+    kpi.kommentiert === 1 ? 'Karte neu kommentiert' : 'Karten neu kommentiert', true,
+    springe((k) => k.neue_kommentare > 0)));
+  if (kpi.ueberfaellig) kpis.append(kachel(kpi.ueberfaellig, 'überfällig', true, springe((k) => k.ueberfaellig)));
+  root.append(kpis);
+
+  if (!bereiche.length) {
+    root.append(el('div', { class: 'rleer' }, el('b', {}, 'Nichts offen.'),
+      'Für dich ist gerade nichts eingetragen — weder in einem Projekt noch auf einem internen Board. '
+      + 'Hier erscheint alles, was dir gehört oder was dir jemand zuweist.'));
+    return;
+  }
+
+  const grid = el('div', { class: 'rgrid' });
+  for (const b of bereiche) {
+    const box = el('div', { class: 'rbereich' });
+    box.append(el('div', {
+      class: 'rbh', title: (b.art === 'projekt' ? 'Zum Projekt' : 'Zum Board') + ' wechseln',
+      onclick: () => wechsle(b.art === 'projekt' ? 'projekt' : 'board',
+        b.art === 'projekt' ? b.projekt_id : b.board_id, b.name),
+    },
+      b.art === 'projekt' ? el('span', { class: 'pdot', style: 'background:' + projDot(b.name) }) : '',
+      el('span', { class: 'rbt' }, b.name),
+      el('span', { class: 'rbart' }, RADAR_ART[b.art] || ''),
+      b.kommentiert ? el('span', { class: 'rbneu', title: b.kommentiert + ' Karte(n) mit neuen Kommentaren' },
+        b.kommentiert + ' neu') : '',
+      el('span', { class: 'rbn' }, String(b.anzahl))));
+    const karten = b.karten || [];
+    const zeilen = el('div', {});
+    const mehr = el('button', { class: 'rmehr', onclick: () => zeige(karten.length) });
+    const zeige = (n) => {
+      zeilen.innerHTML = '';
+      for (const k of karten.slice(0, n)) zeilen.append(radarZeile(k));
+      const rest = karten.length - n;
+      mehr.style.display = rest > 0 ? '' : 'none';
+      if (rest > 0) mehr.textContent = rest === 1 ? '… und eine weitere anzeigen' : '… und ' + rest + ' weitere anzeigen';
+    };
+    box.append(zeilen, mehr);
+    zeige(5);
+    grid.append(box);
+  }
+  root.append(grid);
+}
+
 // ---------- Sidebar ----------
 function renderSidebar() {
   const sb = document.getElementById('sidebar'); sb.innerHTML = '';
@@ -392,6 +507,19 @@ function renderSidebar() {
     el('div', { class: 'sub' }, el('span', { class: 'dot' }), 'Digitaler Mitarbeiter aktiv')));
   const li = S.liste; if (!li) return;
   const grp = (label) => { const g = el('div', { class: 'sect' }); g.append(el('div', { class: 'lbl' }, label)); sb.append(g); return g; };
+
+  // Radar zuerst: der Einstieg, nicht ein Board unter vielen.
+  const gR = el('div', { class: 'sect' });
+  gR.append(el('div', {
+    class: 'row' + (S.active?.typ === 'radar' ? ' active' : ''),
+    onclick: () => wechsle('radar', null, 'Mein Radar'),
+  }, '◎ ', 'Mein Radar',
+    (S.radar?.kpi?.rueckfragen || 0) > 0
+      ? el('span', { class: 'badge', title: 'Rückfragen warten auf dich' }, String(S.radar.kpi.rueckfragen))
+      : (S.radar?.kpi?.gesamt || 0) > 0
+        ? el('span', { class: 'zahl', title: 'Offene Aufgaben, die dir gehören oder dir zugewiesen sind' }, String(S.radar.kpi.gesamt))
+        : ''));
+  sb.append(gR);
 
   const g1 = grp('Meine Boards');
   for (const b of li.boards || []) {
@@ -460,7 +588,8 @@ function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
   if (!S.active) return;
   tb.append(el('h2', {}, S.active.name));
-  const scope = S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
+  const scope = S.active.typ === 'radar' ? 'Alles, was für dich offen ist · über alle Projekte und Boards'
+    : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
   // Im Projekt: Aufgaben und Dashboard sind zwei Ansichten derselben Ebene
