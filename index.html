@@ -259,14 +259,59 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kalpille.zu{background:#FBF3E2;border-left:3px solid #E29A2E;border-radius:0 6px 6px 0}
 .kalpille.erl{opacity:.5;text-decoration:line-through}
 .kalhint{font-size:11.5px;color:#8A8A83;padding:10px 2px}
+
+/* ---- Mein Radar (Startansicht): alles Offene einer Person, nach Bereich ---- */
+#radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
+.rkpis{display:flex;gap:10px;flex-wrap:wrap;padding:2px 0 16px}
+.rkpi{background:#fff;border-radius:12px;padding:11px 15px;min-width:132px;box-shadow:0 1px 2px rgba(28,28,26,.06),0 2px 8px rgba(28,28,26,.05)}
+.rkpi .z{font-family:'Space Grotesk',sans-serif;font-size:23px;font-weight:700;line-height:1.1}
+.rkpi .l{font-size:11.5px;color:#75756E;margin-top:2px}
+.rkpi.warn{background:#FBF3E2}
+.rkpi.warn .z{color:#8A5606}
+.rkpi.klick{cursor:pointer}
+.rkpi.klick:hover{box-shadow:0 4px 16px rgba(28,28,26,.10)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;align-items:start}
+.rbereich{background:#fff;border-radius:16px;padding:12px 14px 10px;box-shadow:0 1px 2px rgba(28,28,26,.06),0 2px 8px rgba(28,28,26,.05)}
+.rbh{display:flex;align-items:center;gap:8px;padding:0 2px 9px;cursor:pointer}
+.rbh:hover .rbt{text-decoration:underline}
+.rbh .pdot{width:10px;height:10px;border-radius:3px;flex:none}
+.rbt{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbart{font-size:10.5px;color:#8A8A83;white-space:nowrap}
+.rbn{margin-left:auto;font-size:11.5px;font-weight:600;color:#75756E;background:rgba(28,28,26,.06);border-radius:10px;padding:1px 8px;flex:none}
+.rz{padding:7px 8px;border-radius:8px;cursor:pointer;border-top:1px solid rgba(28,28,26,.06)}
+.rz:hover{background:rgba(28,28,26,.045)}
+.rzt{font-size:12.5px;line-height:1.35}
+.rzm{font-size:11px;color:#8A8A83;margin-top:2px}
+.rchip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;margin-right:6px;white-space:nowrap}
+.rchip.rueck{background:#F7E3BE;color:#8A5606}
+.rchip.zu{background:#FBF3E2;color:#8A5606}
+.rchip.fertig{background:#E4EFD9;color:#3E5312}
+.rchip.frist{background:#F7DDD6;color:#8C2F1D}
+.rmehr{font-size:11.5px;color:#75756E;padding:7px 8px;border-radius:8px;width:100%;text-align:left}
+.rmehr:hover{background:rgba(28,28,26,.045);color:#1C1C1A}
+.rleer{background:#fff;border-radius:16px;padding:26px 22px;font-size:13px;color:#75756E;box-shadow:0 1px 2px rgba(28,28,26,.06)}
+.rleer b{display:block;font-family:'Space Grotesk',sans-serif;font-size:15px;color:#1C1C1A;margin-bottom:5px}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=msx72f4a">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt7bkcec">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
 #dash-root{flex:1;min-height:0;overflow:auto}
 #dash-root[hidden]{display:none}
 #dash-root .layout{min-height:0}
+/* Terminplanung (Probeeinbau): der iframe fuellt die Flaeche, der Hinweisstreifen
+   darueber sagt ehrlich, dass hier noch nichts gespeichert wird. */
+#termin-root{flex:1;min-height:0;display:flex;flex-direction:column}
+#termin-root[hidden]{display:none}
+#termin-root iframe{flex:1;min-height:0;width:100%;border:0;background:#fff}
+.terminhint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px;color:#4A4438;
+  background:#FBF6E9;border-bottom:1px solid #E5D9B4;padding:7px 28px}
+.terminhint b{color:#1C1C1A}
+.terminhint .probe{background:#1C1C1A;color:#fff;border-radius:5px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:.04em}
+.terminhint a{color:#1C1C1A;text-decoration:underline;cursor:pointer}
+.terminleer{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;color:#8A8A83;font-size:13px;text-align:center;padding:40px}
+.terminleer b{color:#1C1C1A;font-size:15px}
 /* Umschalter Board <-> Dashboard in der Topbar */
 .viewtabs{display:flex;gap:2px;background:rgba(28,28,26,.06);border-radius:8px;padding:2px}
 .viewtabs button{font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;color:#5C5C56}
@@ -289,6 +334,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
   <div class="main">
     <div class="topbar" id="topbar"></div>
     <div class="boardwrap" id="board"></div>
+    <!-- Mein Radar: persoenliche Startansicht ueber alle Bereiche (Migration 103) -->
+    <div id="radar-root" hidden></div>
     <!-- Projekt-Dashboard: eigener Container, damit die Dashboard-Styles (auf
          #dash-root gekapselt) das Board nicht anfassen. Die oberste Leiste des
          Dashboards bleibt verborgen -- Marke, Konto und Abmelden stehen in der
@@ -314,11 +361,16 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
     </div>
     <!-- Projekt-Kalender (dritter Tab; LOOP-PROAKTIVER-KOLLEGE Baustein E) -->
     <div id="kal-root" hidden></div>
+    <!-- Terminplanung (vierter Tab, Probeeinbau 24.08.): Julian Neuhoffs Gantt-Werkzeug
+         laeuft unveraendert im iframe. Bewusst KEINE Einbettung wie beim Dashboard:
+         seine Datei bringt eigene globale Styles fuer header/body/.toolbar mit, die
+         die Board-Huelle zerlegen wuerden -- der iframe spart das Scopen (scope_css.mjs). -->
+    <div id="termin-root" hidden></div>
   </div>
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=msx72f4a"></script>
-<script type="module" src="dashboard.js?v=msx72f4a"></script>
+<script src="app.js?v=mt7bkcec"></script>
+<script type="module" src="dashboard.js?v=mt7bkcec"></script>
 </body>
 </html>
