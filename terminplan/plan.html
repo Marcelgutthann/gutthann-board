@@ -3786,6 +3786,8 @@ async function planWechseln(zielId){
 }
 
 // Aktuellen Arbeitsstand als unveraenderliche Fassung kopieren (SOLL/Baseline).
+// Reihenfolge: Plan OHNE Frost-Stempel anlegen -> atomar befuellen -> DANN einfrieren.
+// So kann ein Abbruch mittendrin nie eine halbe "eingefrorene" Fassung hinterlassen.
 async function standEinfrieren(){
   if(SCHREIBSCHUTZ || !planId) return;
   const name = 'SOLL-Stand ' + new Date().toLocaleDateString('de-DE');
@@ -3796,10 +3798,11 @@ async function standEinfrieren(){
     const kopf = PLAN_LISTE.find(p=>p.id===planId);
     const neu = await db('termin_plaene', { method:'POST', headers:{ Prefer:'return=representation' },
       body: JSON.stringify([{ project_id: PROJEKT_ID, name, art: kopf?.art || 'bauzeitenplan',
-        basis_von: planId, eingefroren_am: new Date().toISOString(),
-        kalender_id: kopf?.kalender_id || null, erstellt_von: s?.email || null }]) });
+        basis_von: planId, kalender_id: kopf?.kalender_id || null, erstellt_von: s?.email || null }]) });
     const zielId = neu[0].id;
     await zeilenKopieren(planId, zielId);
+    await db('termin_plaene?id=eq.' + zielId, { method:'PATCH', headers:{ Prefer:'return=minimal' },
+      body: JSON.stringify({ eingefroren_am: new Date().toISOString() }) });
     await protokollSchreiben(planId, 'Stand eingefroren als „' + name + '"', { ziel_plan: zielId });
     await planListeLaden();
     document.getElementById('planWahl').value = planId;
@@ -3807,7 +3810,7 @@ async function standEinfrieren(){
   } catch(e){ saveStatus('Einfrieren fehlgeschlagen: ' + e.message, 'err'); }
 }
 
-// Eingefrorenen Stand zurueck in den Arbeitsstand kopieren.
+// Eingefrorenen Stand zurueck in den Arbeitsstand kopieren (atomar, Migration 108).
 async function standWiederherstellen(){
   const frost = PLAN_LISTE.find(p=>p.id===planId);
   const ziel = PLAN_LISTE.find(p=>!p.eingefroren_am);
@@ -3815,8 +3818,6 @@ async function standWiederherstellen(){
   if(!confirm('Der aktuelle Arbeitsstand wird durch „' + frost.name + '" ERSETZT. Fortfahren?')) return;
   saveStatus('stellt wieder her …');
   try {
-    await Promise.all(['termin_vorgaenge','termin_verknuepfungen','termin_sondertermine']
-      .map(t=> db(t + '?plan_id=eq.' + ziel.id, { method:'DELETE' })));
     await zeilenKopieren(planId, ziel.id);
     await protokollSchreiben(ziel.id, 'Arbeitsstand ersetzt durch eingefrorenen Stand „' + frost.name + '"',
       { quelle_plan: planId });
@@ -3825,22 +3826,18 @@ async function standWiederherstellen(){
   } catch(e){ saveStatus('Wiederherstellen fehlgeschlagen: ' + e.message, 'err'); }
 }
 
-// Alle Zeilen eines Plans in einen anderen kopieren (Vorgaenge, Kanten, Sondertermine).
+// Alle Zeilen eines Plans in einen anderen kopieren — ueber denselben atomaren
+// Speicheraufruf wie das normale Sichern: entweder kommt ALLES an oder nichts.
 async function zeilenKopieren(vonId, nachId){
   const [v,k,s] = await Promise.all([
     db('termin_vorgaenge?plan_id=eq.' + vonId + '&select=*&order=pos.asc'),
     db('termin_verknuepfungen?plan_id=eq.' + vonId + '&select=*'),
     db('termin_sondertermine?plan_id=eq.' + vonId + '&select=*'),
   ]);
-  const um = (zeilen)=> zeilen.map(z=>{ const n = { ...z }; delete n.id; n.plan_id = nachId; return n; });
-  const schreibe = async (tabelle, zeilen)=>{
-    for(let i=0; i<zeilen.length; i+=200)
-      await db(tabelle, { method:'POST', headers:{ Prefer:'return=minimal' },
-        body: JSON.stringify(zeilen.slice(i, i+200)) });
-  };
-  await schreibe('termin_vorgaenge', um(v));
-  await schreibe('termin_verknuepfungen', um(k));
-  await schreibe('termin_sondertermine', um(s));
+  const ohne = (zeilen)=> zeilen.map(z=>{ const n = { ...z }; delete n.id; delete n.plan_id; return n; });
+  await db('rpc/termin_plan_speichern', { method:'POST',
+    body: JSON.stringify({ p_plan: nachId, p_vorgaenge: ohne(v),
+      p_kanten: ohne(k), p_sonder: ohne(s), p_von: sitzung()?.email || null }) });
 }
 
 async function protokollSchreiben(zielPlanId, zusammenfassung, details){
@@ -3859,14 +3856,8 @@ async function planSpeichern(){
   // Aenderungsprotokoll VOR dem Schreiben ermitteln (danach ist der Vergleichsstand weg).
   const diff = standDiff();
   try {
-    // Ganzen Plan ersetzen: erst die drei Kindtabellen leeren, dann neu schreiben.
-    await Promise.all([
-      db('termin_vorgaenge?plan_id=eq.' + planId, { method:'DELETE' }),
-      db('termin_verknuepfungen?plan_id=eq.' + planId, { method:'DELETE' }),
-      db('termin_sondertermine?plan_id=eq.' + planId, { method:'DELETE' }),
-    ]);
     const vorgaenge = TASKS.map((t,i)=>({
-      plan_id: planId, uid: t.uid, pos: i, name: t.name, wbs: t.wbs || null,
+      uid: t.uid, pos: i, name: t.name, wbs: t.wbs || null,
       ebene: t.level || 1, start_datum: t.start, end_datum: t.finish,
       start_suffix: t.startSuffix || null, end_suffix: t.finishSuffix || null,
       ist_meilenstein: !!t.milestone, ist_sammelvorgang: !!t.summary,
@@ -3887,28 +3878,20 @@ async function planSpeichern(){
       const schluessel = e.from + '>' + e.to;
       if(gesehen.has(schluessel)) continue;
       gesehen.add(schluessel);
-      kanten.push({ plan_id: planId, von_uid: e.from, nach_uid: e.to, art: e.type,
+      kanten.push({ von_uid: e.from, nach_uid: e.to, art: e.type,
         versatz: e.lag|0, versatz_einheit: e.lagUnit || 'cd', versatz_wert: e.lagValue|0,
         harte_decke: !!e.hardCeiling });
     }
     // Kalendertage sind Anzeige-Gaeste aus termin_kalender_tage -- nie zurueckschreiben.
-    const sonder = SPECIAL_PERIODS.filter(p=>!p.ausKalender).map(p=>({ plan_id: planId, art: p.kind,
+    const sonder = SPECIAL_PERIODS.filter(p=>!p.ausKalender).map(p=>({ art: p.kind,
       bezeichnung: p.label || null, start_datum: p.start, end_datum: p.finish }));
-    // In Haeppchen schreiben -- 132 Vorgaenge gehen in einem Rutsch, mehr nicht unbedingt.
-    const schreibe = async (tabelle, zeilen)=>{
-      for(let i=0; i<zeilen.length; i+=200){
-        await db(tabelle, { method:'POST', headers:{ Prefer:'return=minimal' },
-          body: JSON.stringify(zeilen.slice(i, i+200)) });
-      }
-    };
-    await schreibe('termin_vorgaenge', vorgaenge);
-    await schreibe('termin_verknuepfungen', kanten);
-    await schreibe('termin_sondertermine', sonder);
+    // ATOMAR speichern (Migration 108): EIN Aufruf ersetzt den ganzen Plan in EINER
+    // Transaktion. Vorher waren es sieben einzelne Aufrufe — ein Verbindungsabbruch
+    // mittendrin hat am 24.08. real die 87 Verknuepfungen des Pentling-Plans gekostet.
     const s = sitzung();
-    await db('termin_plaene?id=eq.' + planId, { method:'PATCH',
-      headers:{ Prefer:'return=minimal' },
-      body: JSON.stringify({ stand: new Date().toISOString(),
-        geaendert_von: s?.email || null, geaendert_am: new Date().toISOString() }) });
+    await db('rpc/termin_plan_speichern', { method:'POST',
+      body: JSON.stringify({ p_plan: planId, p_vorgaenge: vorgaenge,
+        p_kanten: kanten, p_sonder: sonder, p_von: s?.email || null }) });
     if(diff) await protokollSchreiben(planId, diff.zusammenfassung, diff.details);
     standMerken();
     saveStatus('gespeichert ' + new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}), 'ok');
