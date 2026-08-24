@@ -265,16 +265,61 @@ function zeigeAnsicht(welche) {
   const dash = document.getElementById('dash-root');
   const board = document.getElementById('board');
   const kal = document.getElementById('kal-root');
+  const term = document.getElementById('termin-root');
   if (!dash || !board) return;
   const istProjekt = S.active?.typ === 'projekt';
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
-  board.style.display = (dashAn || kalAn) ? 'none' : '';
+  const termAn = welche === 'termin' && istProjekt;
+  board.style.display = (dashAn || kalAn || termAn) ? 'none' : '';
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
+  if (term) term.hidden = !termAn;
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
+  if (termAn) renderTerminplan();
   renderTopbar();
+}
+
+// ---------- Terminplanung (Probeeinbau 24.08.) ----------
+// Julian Neuhoffs selbstgebautes Gantt-Werkzeug, unveraendert als eigene Datei im
+// Board-Repo. Es haengt bewusst an einer Datei je Projekt: bisher gibt es genau
+// einen Plan (Bauhof Pentling). Andere Projekte sehen einen ehrlichen Leerzustand
+// statt eines fremden Terminplans.
+const TERMINPLAENE = [
+  { treffer: /pentling/i, datei: 'terminplan/3630-bauhof-pentling.html',
+    quelle: '363020_Bauhof_Pentling_BZP.xml (WBS-Ast „AUSFÜHRUNG", 132 Vorgänge)' },
+];
+function planFuer(name) {
+  return TERMINPLAENE.find((p) => p.treffer.test(name || '')) || null;
+}
+function renderTerminplan() {
+  const root = document.getElementById('termin-root');
+  if (!root || S.active?.typ !== 'projekt') return;
+  const plan = planFuer(S.active.name);
+  // Nur neu aufbauen, wenn ein anderes Projekt dran ist — sonst wuerde der Poll
+  // alle 60 s den iframe neu laden und die Arbeit im Plan wegwerfen.
+  if (root.dataset.projekt === String(S.active.id) && root.childElementCount) return;
+  root.dataset.projekt = String(S.active.id);
+  root.innerHTML = '';
+  if (!plan) {
+    root.append(el('div', { class: 'terminleer' },
+      el('b', {}, 'Für dieses Projekt liegt noch kein Terminplan vor'),
+      el('div', {}, 'Der Probeeinbau läuft zunächst nur für Bauhof Pentling.'),
+      el('div', { style: 'font-size:11.5px' }, 'Grundlage ist ein MS-Project-Export, der als eigene Datei hinterlegt wird.')));
+    return;
+  }
+  root.append(el('div', { class: 'terminhint' },
+    el('span', { class: 'probe' }, 'PROBEEINBAU'),
+    el('span', {}, el('b', {}, 'Werkzeug von Julian Neuhoff'), ' · Basis: ' + plan.quelle),
+    el('span', { style: 'color:#8A2E2E' }, '⚠ Änderungen werden noch NICHT gespeichert — sie gehen beim Neuladen verloren. Zum Sichern im Werkzeug „Export → MS Project (.xml)" nutzen.'),
+    el('a', { onclick: () => window.open(plan.datei, '_blank') }, 'in eigenem Fenster öffnen')));
+  // title macht den Rahmen fuer Screenreader auffindbar; sandbox erlaubt genau das,
+  // was das Werkzeug braucht (Skripte + Download fuer den XML-Export).
+  const f = document.createElement('iframe');
+  f.src = plan.datei;
+  f.title = 'Bauzeitenplan ' + S.active.name;
+  root.append(f);
 }
 
 // ---------- Projekt-Kalender (Loop proaktiver Kollege, Baustein E) ----------
@@ -422,7 +467,7 @@ function renderTopbar() {
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['board', 'Aufgaben'], ['kal', 'Kalender'], ['dash', 'Dashboard']]) {
+    for (const [key, label] of [['board', 'Aufgaben'], ['kal', 'Kalender'], ['dash', 'Dashboard'], ['termin', 'Terminplanung']]) {
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
     tb.append(tabs);
