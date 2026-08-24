@@ -312,47 +312,29 @@ function zeigeAnsicht(welche) {
   renderTopbar();
 }
 
-// ---------- Terminplanung (Probeeinbau 24.08.) ----------
-// Benjamin Adams selbstgebautes Gantt-Werkzeug, unveraendert als eigene Datei im
-// Board-Repo. (Der im Plankopf genannte "Ersteller Julian Neuhoff" ist der Ersteller
-// des Bauzeitenplans, NICHT des Werkzeugs -- die beiden nicht verwechseln.)
-// Es haengt bewusst an einer Datei je Projekt: bisher gibt es genau einen Plan
-// (Bauhof Pentling). Andere Projekte sehen einen ehrlichen Leerzustand.
-const TERMINPLAENE = [
-  { treffer: /pentling/i, datei: 'terminplan/3630-bauhof-pentling.html',
-    quelle: '363020_Bauhof_Pentling_BZP.xml (WBS-Ast „AUSFÜHRUNG", 132 Vorgänge)' },
-];
-function planFuer(name) {
-  return TERMINPLAENE.find((p) => p.treffer.test(name || '')) || null;
-}
+// ---------- Terminplanung (Vollausbau 24.08. abends) ----------
+// EINE generische Datei fuer ALLE Projekte: terminplan/plan.html bekommt das Projekt
+// per URL und holt seine Plaene aus der Datenbank (termin_plaene & Co., Migration 106/107).
+// Kein Plan vorhanden -> die Datei bietet selbst Vorlage / MS-Project-XML / leer an.
+// Werkzeug-Grundlage: Benjamin Adams Eigenbau. (Der im Pentling-Plankopf genannte
+// "Ersteller Julian Neuhoff" ist der Ersteller des BAUZEITENPLANS, nicht des Werkzeugs.)
 function renderTerminplan() {
   const root = document.getElementById('termin-root');
   if (!root || S.active?.typ !== 'projekt') return;
-  const plan = planFuer(S.active.name);
   // Nur neu aufbauen, wenn ein anderes Projekt dran ist — sonst wuerde der Poll
   // alle 60 s den iframe neu laden und die Arbeit im Plan wegwerfen.
   if (root.dataset.projekt === String(S.active.id) && root.childElementCount) return;
   root.dataset.projekt = String(S.active.id);
   root.innerHTML = '';
-  if (!plan) {
-    root.append(el('div', { class: 'terminleer' },
-      el('b', {}, 'Für dieses Projekt liegt noch kein Terminplan vor'),
-      el('div', {}, 'Der Probeeinbau läuft zunächst nur für Bauhof Pentling.'),
-      el('div', { style: 'font-size:11.5px' }, 'Grundlage ist ein MS-Project-Export, der als eigene Datei hinterlegt wird.')));
-    return;
-  }
-  // Bewusst knapp gehalten (Marcels Befund 24.08.: alles zu ueberladen). Seit dem
-  // Speicher-Einbau zeigt das Werkzeug seinen Speicherstand selbst rechts in der
-  // eigenen Leiste an — hier steht nur noch Probestand + Urheber.
+  const url = 'terminplan/plan.html?projekt=' + encodeURIComponent(S.active.id)
+    + '&name=' + encodeURIComponent(S.active.name);
   root.append(el('div', { class: 'terminhint' },
     el('span', { class: 'probe' }, 'PROBE'),
     el('span', {}, 'Werkzeug von Benjamin Adam · speichert in der Projekt-Datenbank'),
-    el('a', { onclick: () => window.open(plan.datei, '_blank') }, 'eigenes Fenster')));
-  // title macht den Rahmen fuer Screenreader auffindbar; sandbox erlaubt genau das,
-  // was das Werkzeug braucht (Skripte + Download fuer den XML-Export).
+    el('a', { onclick: () => window.open(url, '_blank') }, 'eigenes Fenster')));
   const f = document.createElement('iframe');
-  f.src = plan.datei;
-  f.title = 'Bauzeitenplan ' + S.active.name;
+  f.src = url;
+  f.title = 'Terminplan ' + S.active.name;
   root.append(f);
 }
 
