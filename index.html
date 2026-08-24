@@ -297,8 +297,41 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rmehr:hover{background:rgba(28,28,26,.045);color:#1C1C1A}
 .rleer{background:#fff;border-radius:16px;padding:26px 22px;font-size:13px;color:#75756E;box-shadow:0 1px 2px rgba(28,28,26,.06)}
 .rleer b{display:block;font-family:'Space Grotesk',sans-serif;font-size:15px;color:#1C1C1A;margin-bottom:5px}
+.rkopf{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.rkopf .rkpis{flex:1}
+.rwahlbtn{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:18px;margin:14px 0 0;white-space:nowrap}
+.rwahlbtn:hover{background:#33332F}
+.rgrid.fest{grid-template-columns:repeat(auto-fill,minmax(440px,1fr));margin-bottom:16px}
+.rbereich.fest{background:#FBFBFA;border:1px solid rgba(28,28,26,.10);box-shadow:none}
+.rbereich.fest .rbt{font-family:'Space Grotesk',sans-serif;font-size:14px}
+.rbh.klick{cursor:pointer}
+.rbh:not(.klick){cursor:default}
+.rzleer{font-size:12px;color:#8A8A83;padding:8px 8px 12px}
+.rausw{background:#FBFBFA;border-radius:18px;padding:20px 22px 16px;width:min(860px,94vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 18px 60px rgba(28,28,26,.28)}
+.rausw-t{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700}
+.rausw-s{font-size:12.5px;color:#75756E;margin:5px 0 14px;line-height:1.45}
+.rausw-listen{display:grid;grid-template-columns:1fr 1fr;gap:16px;overflow:auto;min-height:0}
+.rausw-sp{background:#fff;border-radius:12px;padding:10px 10px 12px}
+.rausw-h{font-size:10.5px;letter-spacing:.09em;color:#8A8A83;font-weight:600;text-transform:uppercase;padding:2px 6px 8px}
+.rausw-z{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:8px;font-size:12.5px}
+.rausw-z.klick{cursor:pointer}
+.rausw-z.klick:hover{background:rgba(28,28,26,.05)}
+.rausw-n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rausw-art{font-size:10px;color:#9A9A93;white-space:nowrap}
+.rausw-b{font-size:11px;color:#75756E;padding:2px 6px;border-radius:6px}
+.rausw-b:hover{background:rgba(28,28,26,.08);color:#1C1C1A}
+.rausw-b[disabled]{opacity:.25;cursor:default}
+.rausw-b.weg:hover{background:#F7DDD6;color:#8C2F1D}
+.rausw-plus{font-size:14px;color:#8A8A83}
+.rausw-leer{font-size:12px;color:#9A9A93;padding:6px 7px}
+.rausw-fuss{display:flex;align-items:center;gap:10px;padding-top:14px}
+.rausw-hint{font-size:11.5px;color:#8A8A83;margin-right:auto}
+.rausw-ab{font-size:12.5px;color:#55554F;padding:8px 14px;border-radius:18px}
+.rausw-ab:hover{background:rgba(28,28,26,.07)}
+.rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
+.rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt7cq76u">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt7d4gsh">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -376,7 +409,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt7cq76u"></script>
-<script type="module" src="dashboard.js?v=mt7cq76u"></script>
+<script src="app.js?v=mt7d4gsh"></script>
+<script type="module" src="dashboard.js?v=mt7d4gsh"></script>
 </body>
 </html>
