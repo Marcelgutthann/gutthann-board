@@ -229,7 +229,7 @@ async function ladeAlles() {
   S.liste = liste; S.projects = projs.projects || [];
   // Startansicht ist "Mein Radar" (Wunsch der Mitarbeiter, 24.08.): erst sehen, was
   // ueberall fuer mich offen ist -- dann hineinklicken. Die Boards bleiben, wo sie waren.
-  if (!S.active) S.active = { typ: 'radar', id: null, name: 'Mein Radar' };
+  if (!S.active) S.active = { typ: 'radar', id: null, name: 'Mein Dashboard' };
   renderSidebar();
   await ladeBoard();
 }
@@ -240,6 +240,15 @@ async function ladeBoard() {
   if (S.active.typ === 'radar') {
     const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (token !== ladeToken) return;
+    // Frontend und Lotse gehen nie exakt gleichzeitig raus. Kennt der Lotse die
+    // Aktion noch nicht, soll niemand vor einer englischen Fehlermeldung stehen --
+    // dann eben das eigene Board, mit einem Wort dazu.
+    if (d.fehler && /unknown action/i.test(d.fehler) && S.liste?.boards?.length) {
+      const b0 = S.liste.boards[0];
+      uiHinweis('Das Dashboard ist noch nicht freigeschaltet — du bist auf deinem Board.');
+      await wechsle('board', b0.id, b0.name);
+      return;
+    }
     S.radar = d; S.board = null;
     renderSidebar(); renderTopbar(); zeigeAnsicht('board'); renderRadar();
     return;
@@ -399,12 +408,14 @@ async function renderKalender() {
   }
 }
 
-// ---------- Mein Radar (Startansicht) ----------
-// Zeigt alles, was fuer die angemeldete Person offen ist -- getrennt nach Bereich
-// (Projekt / Buero intern / privates Board). Welche Karte als "meine" gilt und in
-// welcher Reihenfolge sie steht, entscheidet db/103_mein_radar.sql. Von hier fuehrt
-// jede Zeile in die Karte, jeder Bereichskopf in das zugehoerige Board.
-const RADAR_ART = { projekt: 'Projekt', team: 'Büro intern', privat: 'Privat' };
+// ---------- Mein Dashboard (Startansicht) ----------
+// Zeigt zuerst das eigene Pensum -- "Meine Aufgaben" und "Mir zugewiesen" stehen
+// immer da --, danach die Bereiche, die sich jeder selbst dazustellt. Diese Auswahl
+// IST die Pin-Liste der Seitenleiste (Migration 105): was hier steht, steht links
+// oben. Datenschnitt und Reihenfolge: db/105_radar_selbst_zusammenstellen.sql.
+const RADAR_ART = { projekt: 'Projekt', board: 'Büro intern' };
+const RADAR_FEST_N = 8;   // die festen Bloecke zeigen mehr -- sie sind das Pensum
+const RADAR_WAHL_N = 5;
 
 function radarZeile(k) {
   const z = el('div', { class: 'rz', onclick: () => openCard(k.id) });
@@ -419,12 +430,43 @@ function radarZeile(k) {
   t.append(k.titel);
   z.append(t);
   z.append(el('div', { class: 'rzm' }, [
-    k.spalte || null,
+    // Im festen Block zaehlt, WOHER die Karte kommt; im Projektblock weiss man das.
+    k.herkunft || k.spalte || null,
+    k.besitzer ? personName(k.besitzer) : null,
     k.kommentar_von ? 'Kommentar von ' + (k.kommentar_von === 'agent' ? 'Agent' : personName(k.kommentar_von)) : null,
-    k.von ? 'von ' + personName(k.von) : null,
     k.seit_tage > 0 ? 'seit ' + k.seit_tage + (k.seit_tage === 1 ? ' Tag' : ' Tagen') + ' offen' : 'heute angelegt',
   ].filter(Boolean).join(' · ')));
   return z;
+}
+
+function radarBlock(b) {
+  const box = el('div', { class: 'rbereich' + (b.fest ? ' fest' : '') });
+  const kopf = el('div', { class: 'rbh' + (b.fest ? '' : ' klick'),
+    title: b.fest ? '' : (b.art === 'projekt' ? 'Zum Projekt wechseln' : 'Zum Board wechseln') });
+  if (!b.fest) kopf.addEventListener('click', () => wechsle(
+    b.art === 'projekt' ? 'projekt' : 'board',
+    b.art === 'projekt' ? b.projekt_id : b.board_id, b.name));
+  kopf.append(
+    b.art === 'projekt' ? el('span', { class: 'pdot', style: 'background:' + projDot(b.name) }) : '',
+    el('span', { class: 'rbt' }, b.name),
+    el('span', { class: 'rbart' }, b.fest ? '' : (RADAR_ART[b.art] || '')),
+    b.kommentiert ? el('span', { class: 'rbneu', title: b.kommentiert + ' Karte(n) mit neuen Kommentaren' },
+      b.kommentiert + ' neu') : '',
+    el('span', { class: 'rbn' }, String(b.anzahl)));
+  box.append(kopf);
+  const karten = b.karten || [];
+  const zeilen = el('div', {});
+  const mehr = el('button', { class: 'rmehr', onclick: () => zeige(karten.length) });
+  const zeige = (n) => {
+    zeilen.innerHTML = '';
+    for (const k of karten.slice(0, n)) zeilen.append(radarZeile(k));
+    const rest = karten.length - n;
+    mehr.style.display = rest > 0 ? '' : 'none';
+    if (rest > 0) mehr.textContent = rest === 1 ? '… und eine weitere anzeigen' : '… und ' + rest + ' weitere anzeigen';
+  };
+  box.append(zeilen, mehr);
+  zeige(b.fest ? RADAR_FEST_N : RADAR_WAHL_N);
+  return box;
 }
 
 function renderRadar() {
@@ -434,21 +476,24 @@ function renderRadar() {
   if (!d) { root.append(el('div', { class: 'rleer' }, 'Lade…')); return; }
   if (d.fehler) { root.append(el('div', { class: 'rleer' }, d.fehler)); return; }
   const kpi = d.kpi || {};
-  const bereiche = d.bereiche || [];
+  const bloecke = d.bloecke || [];
   // Springt zur ersten Karte, auf die die Kachel zeigt -- eine Zahl ohne Weg dorthin
-  // ist im Board schon einmal untergegangen (Befund 10.08.).
+  // ist im Board schon einmal untergegangen (Befund 10.08.). Nur die festen Bloecke:
+  // die Kennzahlen zaehlen das eigene Pensum, nicht den Projektstand.
   const springe = (pruef) => () => {
-    for (const b of bereiche) { const k = (b.karten || []).find(pruef); if (k) { openCard(k.id); return; } }
+    for (const b of bloecke.filter((x) => x.fest)) {
+      const k = (b.karten || []).find(pruef); if (k) { openCard(k.id); return; }
+    }
   };
   const kachel = (zahl, label, warn, klick) => el('div', {
     class: 'rkpi' + (warn ? ' warn' : '') + (klick ? ' klick' : ''),
     onclick: klick || null,
   }, el('div', { class: 'z' }, String(zahl)), el('div', { class: 'l' }, label));
 
+  const kopf = el('div', { class: 'rkopf' });
   const kpis = el('div', { class: 'rkpis' });
-  kpis.append(kachel(kpi.gesamt || 0, (kpi.gesamt === 1 ? 'Aufgabe' : 'Aufgaben') + ' offen'));
-  kpis.append(kachel(kpi.bereiche || 0, (kpi.bereiche === 1 ? 'Bereich' : 'Bereiche') + ' betroffen'));
-  // Nur zeigen, was es wirklich gibt -- drei Nullkacheln sagen nichts.
+  kpis.append(kachel(kpi.gesamt || 0, (kpi.gesamt === 1 ? 'Aufgabe' : 'Aufgaben') + ' für dich offen'));
+  // Nur zeigen, was es wirklich gibt -- Nullkacheln sagen nichts.
   if (kpi.rueckfragen) kpis.append(kachel(kpi.rueckfragen,
     kpi.rueckfragen === 1 ? 'Rückfrage an dich' : 'Rückfragen an dich', true,
     springe((k) => k.agent_status === 'wartet_info')));
@@ -459,44 +504,105 @@ function renderRadar() {
     kpi.kommentiert === 1 ? 'Karte neu kommentiert' : 'Karten neu kommentiert', true,
     springe((k) => k.neue_kommentare > 0)));
   if (kpi.ueberfaellig) kpis.append(kachel(kpi.ueberfaellig, 'überfällig', true, springe((k) => k.ueberfaellig)));
-  root.append(kpis);
+  kopf.append(kpis);
+  kopf.append(el('button', { class: 'rwahlbtn', onclick: () => radarAuswahlDialog() },
+    '⊞ Dashboard zusammenstellen'));
+  root.append(kopf);
 
-  if (!bereiche.length) {
-    root.append(el('div', { class: 'rleer' }, el('b', {}, 'Nichts offen.'),
-      'Für dich ist gerade nichts eingetragen — weder in einem Projekt noch auf einem internen Board. '
-      + 'Hier erscheint alles, was dir gehört oder was dir jemand zuweist.'));
+  const fest = bloecke.filter((b) => b.fest);
+  const gewaehlt = bloecke.filter((b) => !b.fest);
+  const gfest = el('div', { class: 'rgrid fest' });
+  // Die beiden festen Bloecke stehen auch leer da -- sonst wirkt ein ruhiger Tag
+  // wie ein Fehler.
+  for (const art of ['meine', 'zugewiesen']) {
+    const b = fest.find((x) => x.art === art);
+    if (b) { gfest.append(radarBlock(b)); continue; }
+    gfest.append(el('div', { class: 'rbereich fest' },
+      el('div', { class: 'rbh' },
+        el('span', { class: 'rbt' }, art === 'meine' ? 'Meine Aufgaben' : 'Mir zugewiesen'),
+        el('span', { class: 'rbn' }, '0')),
+      el('div', { class: 'rzleer' }, art === 'meine'
+        ? 'Nichts, was dir selbst gehört.'
+        : 'Dir hat gerade niemand etwas zugewiesen.')));
+  }
+  root.append(gfest);
+
+  if (!gewaehlt.length) {
+    root.append(el('div', { class: 'rleer' }, el('b', {}, 'Noch nichts dazugestellt.'),
+      'Über „Dashboard zusammenstellen" wählst du die Projekte und internen Boards, die dich '
+      + 'gerade betreffen. Sie erscheinen hier untereinander — und in derselben Reihenfolge '
+      + 'oben in der Seitenleiste.'));
     return;
   }
-
   const grid = el('div', { class: 'rgrid' });
-  for (const b of bereiche) {
-    const box = el('div', { class: 'rbereich' });
-    box.append(el('div', {
-      class: 'rbh', title: (b.art === 'projekt' ? 'Zum Projekt' : 'Zum Board') + ' wechseln',
-      onclick: () => wechsle(b.art === 'projekt' ? 'projekt' : 'board',
-        b.art === 'projekt' ? b.projekt_id : b.board_id, b.name),
-    },
-      b.art === 'projekt' ? el('span', { class: 'pdot', style: 'background:' + projDot(b.name) }) : '',
-      el('span', { class: 'rbt' }, b.name),
-      el('span', { class: 'rbart' }, RADAR_ART[b.art] || ''),
-      b.kommentiert ? el('span', { class: 'rbneu', title: b.kommentiert + ' Karte(n) mit neuen Kommentaren' },
-        b.kommentiert + ' neu') : '',
-      el('span', { class: 'rbn' }, String(b.anzahl))));
-    const karten = b.karten || [];
-    const zeilen = el('div', {});
-    const mehr = el('button', { class: 'rmehr', onclick: () => zeige(karten.length) });
-    const zeige = (n) => {
-      zeilen.innerHTML = '';
-      for (const k of karten.slice(0, n)) zeilen.append(radarZeile(k));
-      const rest = karten.length - n;
-      mehr.style.display = rest > 0 ? '' : 'none';
-      if (rest > 0) mehr.textContent = rest === 1 ? '… und eine weitere anzeigen' : '… und ' + rest + ' weitere anzeigen';
-    };
-    box.append(zeilen, mehr);
-    zeige(5);
-    grid.append(box);
-  }
+  for (const b of gewaehlt) grid.append(radarBlock(b));
   root.append(grid);
+}
+
+// Auswahl: links, was drin ist (in Reihenfolge, verschiebbar), rechts der Rest.
+// Gespeichert wird die ganze Liste auf einmal -- die Reihenfolge ist die Aussage.
+function radarAuswahlDialog() {
+  const d = S.radar; if (!d) return;
+  const verf = d.verfuegbar || { projekte: [], boards: [] };
+  const alle = [].concat(
+    (verf.projekte || []).map((p) => ({ art: 'projekt', id: p.id, name: p.name })),
+    (verf.boards || []).map((b) => ({ art: 'board', id: b.id, name: b.name })));
+  let wahl = (d.auswahl || []).filter((a) => alle.some((x) => x.art === a.art && x.id === a.id))
+    .map((a) => ({ art: a.art, id: a.id, name: a.name }));
+
+  const ov = el('div', { class: 'overlay', onclick: (e) => { if (e.target === ov) ov.remove(); } });
+  const box = el('div', { class: 'rausw' });
+  const listen = el('div', { class: 'rausw-listen' });
+  const drin = el('div', { class: 'rausw-sp' });
+  const raus = el('div', { class: 'rausw-sp' });
+
+  const zeichne = () => {
+    drin.innerHTML = ''; raus.innerHTML = '';
+    drin.append(el('div', { class: 'rausw-h' }, 'In deinem Dashboard'));
+    if (!wahl.length) drin.append(el('div', { class: 'rausw-leer' }, 'Noch nichts gewählt.'));
+    wahl.forEach((w, i) => {
+      drin.append(el('div', { class: 'rausw-z' },
+        el('span', { class: 'rausw-n', title: w.name }, w.name),
+        el('span', { class: 'rausw-art' }, RADAR_ART[w.art] || ''),
+        el('button', { class: 'rausw-b', title: 'Nach oben', disabled: i === 0 ? '' : null,
+          onclick: () => { wahl.splice(i - 1, 0, wahl.splice(i, 1)[0]); zeichne(); } }, '▲'),
+        el('button', { class: 'rausw-b', title: 'Nach unten', disabled: i === wahl.length - 1 ? '' : null,
+          onclick: () => { wahl.splice(i + 1, 0, wahl.splice(i, 1)[0]); zeichne(); } }, '▼'),
+        el('button', { class: 'rausw-b weg', title: 'Entfernen',
+          onclick: () => { wahl.splice(i, 1); zeichne(); } }, '✕')));
+    });
+    raus.append(el('div', { class: 'rausw-h' }, 'Dazustellen'));
+    const offen = alle.filter((a) => !wahl.some((w) => w.art === a.art && w.id === a.id));
+    if (!offen.length) raus.append(el('div', { class: 'rausw-leer' }, 'Alles schon drin.'));
+    for (const a of offen) {
+      raus.append(el('div', { class: 'rausw-z klick', onclick: () => { wahl.push(a); zeichne(); } },
+        el('span', { class: 'rausw-n', title: a.name }, a.name),
+        el('span', { class: 'rausw-art' }, RADAR_ART[a.art] || ''),
+        el('span', { class: 'rausw-plus' }, '+')));
+    }
+  };
+  zeichne();
+  listen.append(drin, raus);
+
+  const fuss = el('div', { class: 'rausw-fuss' },
+    el('span', { class: 'rausw-hint' }, 'Die Reihenfolge gilt auch für die Seitenleiste.'),
+    el('button', { class: 'rausw-ab', onclick: () => ov.remove() }, 'Abbrechen'),
+    el('button', { class: 'rausw-ok', onclick: async () => {
+      ov.remove();
+      const r = await lotse('radar_auswahl', { ziele: wahl.map((w) => ({ art: w.art, id: w.id })) })
+        .catch(() => ({ fehler: 'Netzwerkfehler' }));
+      if (r.fehler) { uiHinweis(r.fehler); return; }
+      S.liste = await lotse('board_liste');
+      renderSidebar(); await ladeBoard();
+    } }, 'Übernehmen'));
+
+  box.append(el('div', { class: 'rausw-t' }, 'Dashboard zusammenstellen'),
+    el('div', { class: 'rausw-s' },
+      '„Meine Aufgaben" und „Mir zugewiesen" stehen immer oben. Was du hier dazustellst, '
+      + 'zeigt den vollständigen offenen Stand des Bereichs — auch Aufgaben von Kollegen.'),
+    listen, fuss);
+  ov.append(box);
+  document.getElementById('drawer-root').append(ov);
 }
 
 // ---------- Sidebar ----------
@@ -512,8 +618,8 @@ function renderSidebar() {
   const gR = el('div', { class: 'sect' });
   gR.append(el('div', {
     class: 'row' + (S.active?.typ === 'radar' ? ' active' : ''),
-    onclick: () => wechsle('radar', null, 'Mein Radar'),
-  }, '◎ ', 'Mein Radar',
+    onclick: () => wechsle('radar', null, 'Mein Dashboard'),
+  }, '◎ ', 'Mein Dashboard',
     (S.radar?.kpi?.rueckfragen || 0) > 0
       ? el('span', { class: 'badge', title: 'Rückfragen warten auf dich' }, String(S.radar.kpi.rueckfragen))
       : (S.radar?.kpi?.gesamt || 0) > 0
@@ -537,7 +643,8 @@ function renderSidebar() {
   g1.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('privat') }, '+ Neues Board'));
 
   const g2 = grp('Büro intern');
-  for (const b of li.team_boards || []) {
+  const bGepinnt = new Set((li.pins || []).filter((p) => p.art === 'board').map((p) => p.board_id));
+  for (const b of (li.team_boards || []).filter((b) => !bGepinnt.has(b.id))) {
     const aktiv = S.active?.typ === 'board' && S.active.id === b.id;
     g2.append(el('div', {
       class: 'row' + (aktiv ? ' active' : ''),
@@ -547,26 +654,46 @@ function renderSidebar() {
   }
   g2.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('team') }, '+ Neues Board'));
 
+  // Was im Dashboard steht, steht auch hier oben -- in derselben Reihenfolge
+  // (Migration 105). Ein Pin ist ein Projekt ODER ein internes Board.
   if ((li.pins || []).length) {
-    const g3 = grp('Angeheftet');
+    const g3 = grp('Im Dashboard');
     for (const p of li.pins) {
-      const aktiv = S.active?.typ === 'projekt' && S.active.name === p.name;
-      g3.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => wechsle('projekt', p.project_id, p.name) },
-        '⌖ ', p.name,
-        el('button', { class: 'pin', title: 'Lösen', onclick: async (e) => { e.stopPropagation(); await mut('pin',{ projekt: p.name, an: false }); S.liste = await lotse('board_liste'); renderSidebar(); } }, '✕')));
+      const istProjekt = p.art !== 'board';
+      const aktiv = istProjekt
+        ? (S.active?.typ === 'projekt' && S.active.name === p.name)
+        : (S.active?.typ === 'board' && S.active.id === p.board_id);
+      g3.append(el('div', { class: 'row' + (aktiv ? ' active' : ''),
+        onclick: () => wechsle(istProjekt ? 'projekt' : 'board',
+          istProjekt ? p.project_id : p.board_id, p.name) },
+        istProjekt ? el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }) : '▤ ',
+        p.name,
+        el('button', { class: 'pin', title: 'Aus dem Dashboard nehmen', onclick: async (e) => {
+          e.stopPropagation();
+          const rest = (li.pins || []).filter((x) => x !== p)
+            .map((x) => ({ art: x.art === 'board' ? 'board' : 'projekt', id: x.project_id || x.board_id }));
+          await lotse('radar_auswahl', { ziele: rest });
+          S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
+        } }, '✕')));
     }
   }
 
+  // Darunter der Rest -- was oben steht, steht hier nicht noch einmal.
   const g4 = grp('Projekte');
-  const gepinnt = new Set((li.pins || []).map((p) => p.name));
+  const gepinnt = new Set((li.pins || []).filter((p) => p.art !== 'board').map((p) => p.name));
   for (const p of S.projects) {
+    if (gepinnt.has(p.name)) continue;
     const aktiv = S.active?.typ === 'projekt' && S.active.name === p.name;
     g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => wechsle('projekt', p.id, p.name) },
       el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }), p.name,
-      gepinnt.has(p.name) ? '' :
-        el('button', { class: 'pin', title: 'An Sidebar anheften', onclick: async (e) => { e.stopPropagation(); await mut('pin',{ projekt: p.name, an: true }); S.liste = await lotse('board_liste'); renderSidebar(); } }, '⌖')));
+      el('button', { class: 'pin', title: 'Ins Dashboard aufnehmen', onclick: async (e) => {
+        e.stopPropagation();
+        await mut('pin', { projekt: p.name, an: true });
+        S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
+      } }, '⌖')));
   }
 }
+
 function boardMenu(e, b, letztes) {
   ctxMenu(e.clientX, e.clientY, [
     { txt: 'Umbenennen', do: async () => { const n = await uiEingabe('Neuer Name:', b.name); if (n?.trim()) { await mut('board_umbenennen',{ board_id: b.id, name: n.trim() }); await ladeAlles(); } } },
@@ -588,7 +715,7 @@ function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
   if (!S.active) return;
   tb.append(el('h2', {}, S.active.name));
-  const scope = S.active.typ === 'radar' ? 'Alles, was für dich offen ist · über alle Projekte und Boards'
+  const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
