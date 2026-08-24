@@ -31,6 +31,8 @@ button{cursor:pointer;background:none;border:none}
 .row.active{background:#E8DFC5;font-weight:600;color:#1C1C1A}
 .row .pdot{width:10px;height:10px;border-radius:3px;flex:none}
 .row .badge{margin-left:auto;background:#E29A2E;color:#231602;font-size:10.5px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.row .zahl{margin-left:auto;font-size:11px;font-weight:600;color:#75756E;background:rgba(28,28,26,.07);border-radius:9px;padding:1px 7px}
+.row.active .zahl{background:rgba(28,28,26,.10)}
 .row .pin{margin-left:auto;color:#9A9A93;font-size:12px;visibility:hidden;background:none}
 .row:hover .pin{visibility:visible}
 .row.addrow{color:#75756E}
@@ -287,12 +289,16 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rchip.zu{background:#FBF3E2;color:#8A5606}
 .rchip.fertig{background:#E4EFD9;color:#3E5312}
 .rchip.frist{background:#F7DDD6;color:#8C2F1D}
+.rchip.frist.ruhig{background:rgba(28,28,26,.07);color:#55554F}
+.rchip.komm{background:#E8DFC5;color:#5C4A16}
+.rbneu{margin-left:auto;font-size:10.5px;font-weight:700;color:#5C4A16;background:#E8DFC5;border-radius:9px;padding:1px 8px;white-space:nowrap;flex:none}
+.rbneu + .rbn{margin-left:6px}
 .rmehr{font-size:11.5px;color:#75756E;padding:7px 8px;border-radius:8px;width:100%;text-align:left}
 .rmehr:hover{background:rgba(28,28,26,.045);color:#1C1C1A}
 .rleer{background:#fff;border-radius:16px;padding:26px 22px;font-size:13px;color:#75756E;box-shadow:0 1px 2px rgba(28,28,26,.06)}
 .rleer b{display:block;font-family:'Space Grotesk',sans-serif;font-size:15px;color:#1C1C1A;margin-bottom:5px}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt7bkcec">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt7cq76u">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -361,7 +367,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
     </div>
     <!-- Projekt-Kalender (dritter Tab; LOOP-PROAKTIVER-KOLLEGE Baustein E) -->
     <div id="kal-root" hidden></div>
-    <!-- Terminplanung (vierter Tab, Probeeinbau 24.08.): Julian Neuhoffs Gantt-Werkzeug
+    <!-- Terminplanung (vierter Tab, Probeeinbau 24.08.): Benjamin Adams Gantt-Werkzeug
          laeuft unveraendert im iframe. Bewusst KEINE Einbettung wie beim Dashboard:
          seine Datei bringt eigene globale Styles fuer header/body/.toolbar mit, die
          die Board-Huelle zerlegen wuerden -- der iframe spart das Scopen (scope_css.mjs). -->
@@ -370,7 +376,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt7bkcec"></script>
-<script type="module" src="dashboard.js?v=mt7bkcec"></script>
+<script src="app.js?v=mt7cq76u"></script>
+<script type="module" src="dashboard.js?v=mt7cq76u"></script>
 </body>
 </html>
