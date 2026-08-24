@@ -198,8 +198,13 @@
   .legend{display:flex;gap:14px;align-items:center;font-size:11px;margin-left:10px;}
   .legend span{display:inline-flex;align-items:center;gap:4px;}
   .swatch{width:14px;height:10px;border-radius:2px;display:inline-block;}
-  /* --- Schlanke Leiste (24.08.): ersetzt Kopfbereich, Legende, Hinweissatz, Fusszeile --- */
-  .tb-titel{font-size:13px;color:var(--blue-dark);white-space:nowrap;}
+  /* --- Schlanke Leiste (24.08.): ersetzt Kopfbereich, Legende, Hinweissatz, Fusszeile ---
+     Massstab: EINE Zeile auf 1500px Breite (nachgemessen; bei 70px Hoehe war sie zweizeilig
+     und damit genau die Ueberladung, die raus sollte). */
+  .toolbar{gap:6px;padding-left:10px;padding-right:10px;}
+  .tb-titel{font-size:13px;color:var(--blue-dark);white-space:nowrap;max-width:150px;
+    overflow:hidden;text-overflow:ellipsis;}
+  #planWahl{max-width:150px;}
   .tb-trenner{width:1px;height:18px;background:var(--line);margin:0 2px;}
   .toolbar select{font-size:12px;padding:5px 8px;border-radius:4px;border:1px solid var(--line);background:#fff;}
   .tb-ic{background:#fff !important;color:var(--blue) !important;border:1px solid var(--line) !important;
@@ -223,6 +228,10 @@
   /* --- Vollausbau 24.08. abends: kritischer Pfad, Fortschritt, Planverwaltung --- */
   .bar.kritisch{box-shadow:0 0 0 2px #b91c1c;}
   .milestone.kritisch{outline:2px solid #b91c1c;outline-offset:1px;}
+  /* Gespiegelte Meilensteine (Anker zu einem anderen Plan): blauer Ring; weicht der
+     Partner-Termin ab, wird der Ring orange — das ist der Meilensteintrend-Blick. */
+  .milestone.anker{outline:2px dashed #2563eb;outline-offset:2px;}
+  .milestone.anker.anker-drift{outline:2px dashed #d97706;}
   .bar .fortschritt{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.32);
     border-radius:inherit;pointer-events:none;}
   #planWahl{max-width:220px;font-size:12px;padding:5px 8px;border-radius:4px;border:1px solid var(--line);background:#fff;}
@@ -240,9 +249,11 @@
   .anlage-zeile{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
   .anlage-zeile label{width:90px;color:#555;font-size:12px;}
   .anlage-zeile input,.anlage-zeile select{flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px;}
-  .anlage-quellen{display:flex;gap:12px;margin-top:14px;}
-  .anlage-quelle{flex:1;border:1px solid var(--line);border-radius:8px;padding:12px;
+  .anlage-quellen{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;}
+  .anlage-quelle{flex:1 1 200px;border:1px solid var(--line);border-radius:8px;padding:12px;
     display:flex;flex-direction:column;gap:8px;}
+  .anlage-ki{flex:1 1 100%;border-color:var(--blue);background:#f5f9ff;}
+  .anlage-ki .anlage-zeile label{width:80px;font-size:11px;}
   .anlage-quelle b{font-size:12.5px;}
   .anlage-quelle button{background:var(--blue);color:#fff;border:none;border-radius:4px;
     padding:7px 10px;cursor:pointer;font-size:12px;margin-top:auto;}
@@ -276,7 +287,13 @@
 <div class="toolbar">
   <b class="tb-titel" id="tbTitel">Terminplan</b>
   <select id="planWahl" title="Gespeicherte Pläne dieses Projekts" hidden></select>
-  <button id="btnEinfrieren" class="secondary" title="Aktuellen Stand als unveränderliche Fassung sichern (SOLL-Stand)" hidden>❄ Stand einfrieren</button>
+  <select id="blickWahl" title="Schicht des Plans: alle Schichten oder nur Planung / Vergabe / Ausführung — Verknüpfungen zwischen den Schichten bleiben dabei lebendig">
+    <option value="alle">Alle Schichten</option>
+    <option value="planung">Nur Planung</option>
+    <option value="vergabe">Nur Vergabe</option>
+    <option value="ausfuehrung">Nur Ausführung</option>
+  </select>
+  <button id="btnEinfrieren" class="secondary" title="Aktuellen Stand als unveränderliche SOLL-Fassung sichern" hidden>❄ Einfrieren</button>
   <span class="tb-trenner"></span>
   <div class="toolbar-dropdown-wrap">
     <button id="btnExport">⬇ Export ▾</button>
@@ -1372,7 +1389,24 @@ function duplicateTaskTree(uid){
 
 // Ist ein Vorgang aktuell sichtbar? (Sichtbar = kein übergeordneter Sammelvorgang, egal auf
 // welcher Ebene, ist zugeklappt.)
+// BLICK (Rahmenterminplan, 24.08. spaet): 'alle' | 'planung' | 'vergabe' | 'ausfuehrung'.
+// Der Vergabeterminplan ist kein eigenes Dokument, sondern der Vergabe-Blick auf den
+// einen Plan — gefiltert, aber mit lebenden Verknuepfungen. Reiner Anzeigezustand.
+let BLICK = 'alle';
+function blickErlaubt(t){
+  if(BLICK === 'alle') return true;
+  if((t.category || 'ausfuehrung') === BLICK) return true;
+  // Sammelvorgaenge bleiben sichtbar, wenn mindestens ein Kind zur Schicht gehoert —
+  // sonst verloere der Blick seine Gliederung.
+  if(t.summary){
+    const {start, end} = getSubtreeRange(t.uid);   // end = LETZTER Index des Teilbaums (inklusiv)
+    for(let i = start + 1; i <= end; i++)
+      if((TASKS[i].category || 'ausfuehrung') === BLICK) return true;
+  }
+  return false;
+}
 function isTaskVisible(t){
+  if(!blickErlaubt(t)) return false;
   let cur = t;
   while(true){
     const parentUid = findParentUid(cur.uid);
@@ -1942,6 +1976,9 @@ function openTaskContextMenu(uid, clientX, clientY){
   addItem('＋ Vorgang auf gleicher Ebene', ()=> neuAnlegen(false, false));
   addItem('＋ Untervorgang', ()=> neuAnlegen(true, false));
   addItem('＋ Meilenstein', ()=> neuAnlegen(false, true));
+  if(t.milestone && !SCHREIBSCHUTZ){
+    addItem('◇ In anderen Plan spiegeln …', ()=> meilensteinSpiegeln(uid));
+  }
   menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
 
   addItem('🗑 Vorgang löschen', ()=>{
@@ -2674,14 +2711,15 @@ function openVorlaufVergabeWizard(gewerkUid){
     einspruchsfrist: 14,
     grBekannt: null,   // true = Termin bekannt, false = noch unbekannt
     grDate: gewerk.start,
-    kalkulationszeit: 30
+    kalkulationszeit: 30,
+    planungAT: 20      // Schritt 5: Dauer Ausfuehrungsplanung + LV-Erstellung (Arbeitstage)
   };
 
   function stepLabelEl(n){
     const l = document.createElement('div');
     l.className = 'modal-section-title';
     l.style.marginTop = '4px';
-    l.textContent = `Schritt ${n} von 4`;
+    l.textContent = `Schritt ${n} von 5`;
     return l;
   }
   function questionEl(text){
@@ -2802,9 +2840,30 @@ function openVorlaufVergabeWizard(gewerkUid){
       stepBody.appendChild(row);
       stepBody.appendChild(navRow(
         ()=>{ step=3; renderStep(); },
+        'Weiter',
+        ()=>{ wiz.kalkulationszeit = Math.max(0, Number(inp.value)||0); step=5; renderStep(); }
+      ));
+    } else if(step===5){
+      // Schritt 5 (Rahmenterminplan-Ausbau): die PLANUNGS-Schicht vor der Vergabe.
+      // Die Veroeffentlichung des LV setzt fertige Ausfuehrungsplanung + LV voraus.
+      stepBody.appendChild(questionEl('Dauer Ausführungsplanung + LV-Erstellung?'));
+      const hinweis = document.createElement('div');
+      hinweis.className = 'newtaskdialog-hint';
+      hinweis.innerHTML = 'Legt einen Vorgang der Schicht <b>Planung</b> an, der 1 Tag vor „Veröffentlichung LV" endet. 0 eingeben = keinen Planungs-Vorgang anlegen.';
+      stepBody.appendChild(hinweis);
+      const row = document.createElement('div');
+      row.style.display='flex'; row.style.gap='6px'; row.style.alignItems='center'; row.style.marginTop='6px';
+      const inp = document.createElement('input');
+      inp.type='number'; inp.min='0'; inp.step='1'; inp.className='modal-input'; inp.value = wiz.planungAT;
+      row.appendChild(inp);
+      const unit = document.createElement('span'); unit.style.fontSize='11px'; unit.style.color='#666'; unit.textContent='Arbeitstage';
+      row.appendChild(unit);
+      stepBody.appendChild(row);
+      stepBody.appendChild(navRow(
+        ()=>{ step=4; renderStep(); },
         'Fertigstellen',
         ()=>{
-          wiz.kalkulationszeit = Math.max(0, Number(inp.value)||0);
+          wiz.planungAT = Math.max(0, Number(inp.value)||0);
           commitVorlaufVergabe(gewerkUid, wiz);
           overlay.remove();
           window.__openModal=null;
@@ -2887,6 +2946,21 @@ function commitVorlaufVergabe(gewerkUid, wiz){
   const insL = findInsertionAdjacent(msSubmission.uid, true);
   const msLV = createTask({ name:'Veröffentlichung LV', milestone:true, start:lvDate, finish:lvDate, level:insL.level, index:insL.index, category:'vergabe' });
   EDGES.push({ from: msLV.uid, to: msSubmission.uid, type:'EA', lag: wiz.kalkulationszeit, lagUnit:'cd', lagValue: wiz.kalkulationszeit });
+
+  // 5) Planungs-Schicht (Rahmenterminplan-Ausbau): Ausfuehrungsplanung + LV-Erstellung als
+  //    VORGANG der Kategorie 'planung', endet 1 KT vor der Veroeffentlichung. Die Dauer ist
+  //    in ARBEITSTAGEN gefragt (Planerkapazitaet), das Ende haengt per EA-Kante an der LV.
+  if(wiz.planungAT > 0){
+    const planEnde = fmtISO(addDays(parseISO(lvDate), -1));
+    // Anfang = planungAT Arbeitstage rueckwaerts (Ende zaehlt als erster Arbeitstag mit).
+    let rest = wiz.planungAT - 1, cur = parseISO(planEnde);
+    while(rest > 0){ cur = addDays(cur, -1); if(!istFreierTag(cur)) rest--; }
+    const planStart = fmtISO(cur);
+    const insP = findInsertionAdjacent(msLV.uid, true);
+    const vgPlanung = createTask({ name:'Ausführungsplanung + LV ' + gewerk.name, milestone:false,
+      start:planStart, finish:planEnde, level:insP.level, index:insP.index, category:'planung' });
+    EDGES.push({ from: vgPlanung.uid, to: msLV.uid, type:'EA', lag:1, lagUnit:'cd', lagValue:1 });
+  }
 
   resolveLockedConstraints();
   renderAll();
@@ -3138,6 +3212,15 @@ function renderBars(){
       const pM = PUFFER && PUFFER[t.uid];
       if(pM){ if(pM.kritisch) el.classList.add('kritisch');
         el.title = t.name + ' · Puffer: ' + (pM.puffer==null?'—':pM.puffer + ' KT'); }
+      // Gespiegelter Meilenstein: Verbindung + Abweichung zum Partnerplan anzeigen.
+      const ank = ANKER[t.uid];
+      if(ank){
+        el.classList.add('anker');
+        const drift = daysBetween(parseISO(ank.partnerDatum), parseISO(t.start));
+        if(drift !== 0) el.classList.add('anker-drift');
+        el.title = (el.title || t.name) + '\n◇ Gespiegelt mit „' + ank.partnerPlanName + '": '
+          + fmtDE(ank.partnerDatum) + (drift !== 0 ? ' (Abweichung ' + (drift>0?'+':'') + drift + ' KT)' : ' (deckungsgleich)');
+      }
       attachMilestoneDrag(el, t);
       attachLinkHighlight(el, t.uid);
       rowhit.appendChild(el);
@@ -3724,6 +3807,7 @@ async function planLaden(gewuenschtePlanId){
     start:r.start_datum, finish:r.end_datum }));
   _nextSpecialId = SPECIAL_PERIODS.length + 1;
   await kalenderLaden(eintrag.kalender_id);
+  await ankerLaden();
   standMerken();
   schreibschutzAnzeigen();
   return true;
@@ -3846,6 +3930,69 @@ async function protokollSchreiben(zielPlanId, zusammenfassung, details){
     body: JSON.stringify([{ plan_id: zielPlanId, geaendert_von: s?.email || null,
       zusammenfassung, details: details || null }]) }).catch(e=>console.warn('Protokoll:', e.message));
 }
+
+// ==================================================================================
+// MEILENSTEIN-SPIEGELUNG (Migration 109): Rahmenplan und Detailplaene verbinden sich
+// ueber gespiegelte Meilensteine, NICHT ueber planuebergreifende Kanten — keine Kaskade
+// schiebt ungefragt in den Plan eines anderen Bearbeiters. Weichen die Termine der
+// beiden Seiten ab, zeigt der Meilenstein die Abweichung (orange + Tooltip).
+// ==================================================================================
+let ANKER = {};   // uid (dieses Plans) -> { partnerPlanName, partnerDatum, partnerName }
+async function ankerLaden(){
+  ANKER = {};
+  try {
+    const zeilen = await db('termin_meilenstein_anker?or=(quelle_plan_id.eq.' + planId
+      + ',ziel_plan_id.eq.' + planId + ')&select=*');
+    if(!zeilen.length) return;
+    const partnerIds = [...new Set(zeilen.map(z =>
+      z.quelle_plan_id === planId ? z.ziel_plan_id : z.quelle_plan_id))];
+    const [partnerV, partnerP] = await Promise.all([
+      db('termin_vorgaenge?plan_id=in.(' + partnerIds.join(',') + ')&select=plan_id,uid,name,start_datum'),
+      db('termin_plaene?id=in.(' + partnerIds.join(',') + ')&select=id,name,eingefroren_am'),
+    ]);
+    for(const z of zeilen){
+      const hierUid = z.quelle_plan_id === planId ? z.quelle_uid : z.ziel_uid;
+      const dortPlan = z.quelle_plan_id === planId ? z.ziel_plan_id : z.quelle_plan_id;
+      const dortUid = z.quelle_plan_id === planId ? z.ziel_uid : z.quelle_uid;
+      const pv = partnerV.find(v => v.plan_id === dortPlan && v.uid === dortUid);
+      const pp = partnerP.find(p => p.id === dortPlan);
+      if(!pv || !pp) continue;
+      ANKER[hierUid] = { partnerPlanName: pp.name + (pp.eingefroren_am ? ' (eingefroren)' : ''),
+        partnerDatum: pv.start_datum, partnerName: pv.name };
+    }
+  } catch(e){ console.warn('Anker:', e.message); }
+}
+
+// Meilenstein in einen anderen Plan dieses Projekts spiegeln.
+async function meilensteinSpiegeln(uid){
+  const t = byUid[uid];
+  if(!t || !t.milestone) return;
+  const ziele = PLAN_LISTE.filter(p => p.id !== planId && !p.eingefroren_am);
+  if(!ziele.length){ uiInfo('Kein anderer (nicht eingefrorener) Plan in diesem Projekt vorhanden.'); return; }
+  const auswahl = ziele.length === 1 ? ziele[0]
+    : ziele[Number(prompt('In welchen Plan spiegeln?\n' + ziele.map((p,i)=>(i+1) + ') ' + p.name).join('\n'), '1')) - 1];
+  if(!auswahl) return;
+  try {
+    saveStatus('spiegelt …');
+    const dort = await db('termin_vorgaenge?plan_id=eq.' + auswahl.id + '&select=uid&order=uid.desc&limit=1');
+    const neueUid = (dort[0]?.uid || 0) + 1;
+    const anzahl = await db('termin_vorgaenge?plan_id=eq.' + auswahl.id + '&select=uid');
+    await db('termin_vorgaenge', { method:'POST', headers:{ Prefer:'return=minimal' },
+      body: JSON.stringify([{ plan_id: auswahl.id, uid: neueUid, pos: anzahl.length,
+        name: t.name, ebene: 1, start_datum: t.start, end_datum: t.start,
+        ist_meilenstein: true, kategorie: t.category || 'ausfuehrung',
+        quelle_text: 'Gespiegelt aus „' + (PLAN_LISTE.find(p=>p.id===planId)?.name || 'Plan') + '"' }]) });
+    await db('termin_meilenstein_anker', { method:'POST', headers:{ Prefer:'return=minimal' },
+      body: JSON.stringify([{ quelle_plan_id: planId, quelle_uid: uid,
+        ziel_plan_id: auswahl.id, ziel_uid: neueUid, angelegt_von: sitzung()?.email || null }]) });
+    await protokollSchreiben(auswahl.id, 'Meilenstein „' + t.name + '" aus anderem Plan gespiegelt',
+      { quelle_plan: planId, quelle_uid: uid });
+    await ankerLaden();
+    renderAll();
+    saveStatus('Meilenstein gespiegelt → ' + auswahl.name, 'ok');
+  } catch(e){ saveStatus('Spiegeln fehlgeschlagen: ' + e.message, 'err'); }
+}
+function uiInfo(text){ alert(text); }
 
 // ---- Schreiben ----
 async function planSpeichern(){
@@ -3991,9 +4138,10 @@ function anlageZeigen(){
   o.innerHTML = `
     <div class="anlage-box">
       <h2>Neuen Terminplan anlegen</h2>
-      <div class="anlage-zeile"><label>Name</label><input id="anName" value="Bauzeitenplan Ausführung"></div>
+      <div class="anlage-zeile"><label>Name</label><input id="anName" value="Terminplan"></div>
       <div class="anlage-zeile"><label>Planart</label>
         <select id="anArt">
+          <option value="rahmenterminplan">Rahmenterminplan (Planung + Vergabe + Ausführung)</option>
           <option value="bauzeitenplan">Bauzeitenplan (Ausführung)</option>
           <option value="planungsterminplan">Planungsterminplan</option>
           <option value="vergabeterminplan">Vergabeterminplan</option>
@@ -4001,6 +4149,15 @@ function anlageZeigen(){
         </select></div>
       <div class="anlage-zeile"><label>Startdatum</label><input id="anStart" type="date"></div>
       <div class="anlage-quellen">
+        <div class="anlage-quelle anlage-ki" id="anQuelleRahmen">
+          <b>🪄 Rahmenterminplan aus Projektdaten</b>
+          <div class="anlage-hint" id="anRahmenHint">liest die Terminprüfung des Projekts …</div>
+          <div class="anlage-zeile"><label>Genehmigung</label><input id="anGenehmigung" type="date"></div>
+          <div class="anlage-zeile"><label>Planung ab</label><input id="anPlanungAb" type="date"></div>
+          <div class="anlage-zeile"><label>Baubeginn</label><input id="anBaubeginn" type="date"></div>
+          <div class="anlage-zeile"><label>Übergabe</label><input id="anUebergabe" type="date"></div>
+          <button id="anLosRahmen">Rahmenterminplan erzeugen</button>
+        </div>
         <div class="anlage-quelle" id="anQuelleVorlage">
           <b>📐 Aus Vorlage</b>
           <select id="anVorlage"><option>lädt …</option></select>
@@ -4034,14 +4191,66 @@ function anlageZeigen(){
   document.getElementById('anLosLeer').onclick = ()=> anlegen('leer');
   document.getElementById('anLosVorlage').onclick = ()=> anlegen('vorlage');
   document.getElementById('anLosXml').onclick = ()=> anlegen('xml');
+  document.getElementById('anLosRahmen').onclick = ()=> anlegen('rahmen');
+
+  // Das KI-Feature: Eckdaten aus der Terminpruefung des Projekts (projects.termin_check,
+  // vom Termin-Agenten gepflegt) VORBELEGEN — der Mensch prueft und bestaetigt
+  // (Vorschlag-Freigabe-Prinzip, keine stillen Uebernahmen).
+  (async ()=>{
+    const hint = document.getElementById('anRahmenHint');
+    try {
+      const zeilen = await db('projects?id=eq.' + PROJEKT_ID + '&select=termin_check,lph');
+      const ph = zeilen[0]?.termin_check?.phasen || [];
+      const je = (n)=> ph.find(x=>x.lph===n) || {};
+      const gen = je(4).soll_ende, bau = je(8).soll_start, ueb = je(8).soll_ende, plab = je(5).soll_start;
+      if(gen) document.getElementById('anGenehmigung').value = gen;
+      if(plab) document.getElementById('anPlanungAb').value = plab;
+      if(bau) document.getElementById('anBaubeginn').value = bau;
+      if(ueb) document.getElementById('anUebergabe').value = ueb;
+      const quellen = [];
+      if(gen) quellen.push('Genehmigung = Soll-Ende LPH 4');
+      if(plab) quellen.push('Planung ab = Soll-Start LPH 5');
+      if(bau) quellen.push('Baubeginn = Soll-Start LPH 8');
+      if(ueb) quellen.push('Übergabe = Soll-Ende LPH 8');
+      hint.textContent = quellen.length
+        ? 'Vorbelegt aus der Terminprüfung: ' + quellen.join(' · ') + ' — bitte prüfen.'
+        : 'Keine Soll-Termine in der Terminprüfung gefunden — bitte von Hand eintragen.';
+      // Ueberholte Solls NIE stillschweigend uebernehmen: liegt das vorbelegte
+      // Genehmigungsdatum in der Vergangenheit, ist es Papierstand, kein Plan —
+      // deutlich warnen, der Mensch setzt ein realistisches Datum.
+      const heuteIso = fmtISO(new Date());
+      if(gen && gen < heuteIso){
+        const warn = document.createElement('div');
+        warn.style.cssText = 'color:#b45309;font-size:11px;font-weight:600;';
+        warn.textContent = '⚠ Das Soll-Genehmigungsdatum (' + fmtDE(gen) + ') liegt in der Vergangenheit — bitte realistisches Datum eintragen, sonst zeigt der Plan eine bereits verpasste Genehmigung.';
+        hint.after(warn);
+      }
+    } catch(e){ hint.textContent = 'Terminprüfung nicht lesbar (' + e.message + ') — bitte von Hand eintragen.'; }
+  })();
 
   async function anlegen(quelle){
     try {
-      const name = document.getElementById('anName').value.trim() || 'Terminplan';
-      const art = document.getElementById('anArt').value;
+      let name = document.getElementById('anName').value.trim() || 'Terminplan';
+      let art = document.getElementById('anArt').value;
       const startTag = document.getElementById('anStart').value || fmtISO(new Date());
       let tasks = [], edges = [], quelleText = quelle, quelleXml = null;
-      if(quelle === 'leer'){
+      if(quelle === 'rahmen'){
+        if(typeof erzeugeRahmenplan !== 'function') return fehler('Rahmenplan-Baustein fehlt in dieser Fassung.');
+        const gen = document.getElementById('anGenehmigung').value;
+        const bau = document.getElementById('anBaubeginn').value;
+        const ueb = document.getElementById('anUebergabe').value;
+        if(!gen || !bau || !ueb) return fehler('Bitte Genehmigung, Baubeginn und Übergabe angeben.');
+        if(!(gen <= bau && bau < ueb)) return fehler('Reihenfolge prüfen: Genehmigung ≤ Baubeginn < Übergabe.');
+        const plab = document.getElementById('anPlanungAb').value || null;
+        const erg = erzeugeRahmenplan({ genehmigung: gen, baubeginn: bau, uebergabe: ueb,
+          planungStart: plab || undefined });
+        tasks = erg.tasks;
+        edges = erg.edges;
+        quelleText = 'Rahmenplan-Generator (Eckdaten aus Terminprüfung, bestätigt)';
+        art = 'rahmenterminplan';
+        if(name === 'Terminplan') name = 'Rahmenterminplan';
+        if(erg.warnungen.length) console.warn('Rahmenplan:', erg.warnungen.join(' | '));
+      } else if(quelle === 'leer'){
         tasks = [{ uid:1, name:'Neuer Vorgang', wbs:'1', level:1, start:startTag,
           finish: fmtISO(addDays(parseISO(startTag), 5)), milestone:false, summary:false }];
       } else if(quelle === 'vorlage'){
@@ -4136,6 +4345,14 @@ document.getElementById('planWahl').addEventListener('change', (ev)=>{
   planWechseln(ev.target.value);
 });
 document.getElementById('btnEinfrieren').addEventListener('click', standEinfrieren);
+// Blick-Wechsel ist reiner Anzeigezustand: kein pushUndo, kein Speichern — nur neu zeichnen.
+document.getElementById('blickWahl').addEventListener('change', (ev)=>{
+  BLICK = ev.target.value;
+  const merkeLade = ladeVorgang;
+  ladeVorgang = true;            // Neuzeichnen darf keinen Speicherlauf anstossen
+  renderAll();
+  ladeVorgang = merkeLade;
+});
 
 async function planStart(){
   ladeVorgang = true;           // waehrend des Ladens nichts zurueckschreiben
@@ -4511,6 +4728,342 @@ function parseMspdi(xmlText) {
       var lag = (zehntel < 0 ? -Math.round(-zehntel / 4800) : Math.round(zehntel / 4800)) || 0;
       edges.push({ from: von, to: zielUid, type: typ, lag: lag });
     }
+  }
+
+  return { tasks: tasks, edges: edges, warnungen: warnungen };
+}
+
+// ---------- Baustein: rahmenplan_generator.js (geprueft, Tests unter _bausteine/) ----------
+// =============================================================================
+// rahmenplan_generator.js — Baustein Rahmenterminplan (Generalablauf)
+// -----------------------------------------------------------------------------
+// Erzeugt aus wenigen Eckterminen (Genehmigung, Baubeginn, Übergabe) einen
+// kompletten Rahmenterminplan mit drei Schichten:
+//   PLANUNG     Ausführungsplanung + LV je Vergabeeinheit
+//   VERGABE     Rückwärtskette je Vergabeeinheit bis zur Beauftragung
+//   AUSFÜHRUNG  Gewerke-Balken anteilig über die Bauzeit
+//
+// Browser-Baustein: reine Funktionsdeklarationen, keine imports/exports,
+// keine DOM- oder Node-APIs. Datumsrechnung ausschließlich über Date.UTC und
+// die getUTC*-Lesefunktionen (Zeitzonenfalle!). Datumsformat 'YYYY-MM-DD'.
+//
+// Konventionen:
+// - Dauer d in Kalendertagen (KT): finish = start + d Tage.
+//   Meilenstein: d = 0, also start === finish.
+// - Arbeitstage-Dauer (Mo-Fr): das halboffene Intervall [start, finish)
+//   enthält genau so viele Werktage wie die Dauer verlangt — dieselbe
+//   "finish minus start"-Logik wie bei den KT-Dauern.
+// - Kanten-Semantik 'EA' (Ende-Anfang) mit lag L: Nachfolger.start =
+//   Vorgänger.finish + L Tage.
+// - Kantenarten sind IMMER die Kürzel-Strings 'EA' | 'AA' | 'EE' | 'AE',
+//   NIEMALS Zahlencodes (harte Lehre aus einem Integrationsfehler).
+// =============================================================================
+
+// --- Datums-Helfer (nur Date.UTC + getUTC*) ----------------------------------
+
+// 'YYYY-MM-DD' -> UTC-Millisekunden
+function rpParseDatum(iso) {
+  var teile = iso.split('-');
+  return Date.UTC(Number(teile[0]), Number(teile[1]) - 1, Number(teile[2]));
+}
+
+// UTC-Millisekunden + n Tage (n darf negativ sein)
+function rpPlusTage(ms, tage) {
+  return ms + tage * 86400000;
+}
+
+// UTC-Millisekunden -> 'YYYY-MM-DD'
+function rpFormatDatum(ms) {
+  var d = new Date(ms);
+  var monat = d.getUTCMonth() + 1;
+  var tag = d.getUTCDate();
+  return d.getUTCFullYear() + '-' + (monat < 10 ? '0' + monat : '' + monat) + '-' + (tag < 10 ? '0' + tag : '' + tag);
+}
+
+// Samstag oder Sonntag?
+function rpIstWochenende(ms) {
+  var wochentag = new Date(ms).getUTCDay();
+  return wochentag === 6 || wochentag === 0;
+}
+
+// Wochenend-Snap: Samstag -> +2 Tage, Sonntag -> +1 Tag (nächster Montag).
+// Bewusst einfacher Snap OHNE Feiertagskalender — das erledigt später die App.
+function rpSnapAufMontag(ms) {
+  var wochentag = new Date(ms).getUTCDay();
+  if (wochentag === 6) { return rpPlusTage(ms, 2); }
+  if (wochentag === 0) { return rpPlusTage(ms, 1); }
+  return ms;
+}
+
+// Start so, dass das halboffene Intervall [start, ende) genau `arbeitstage`
+// Werktage (Mo-Fr) enthält. Zählt vom exklusiven Ende rückwärts; der
+// gefundene Start ist immer selbst ein Werktag.
+function rpStartFuerArbeitstage(endeMs, arbeitstage) {
+  var cursor = endeMs;
+  var rest = arbeitstage;
+  while (rest > 0) {
+    cursor = rpPlusTage(cursor, -1);
+    if (!rpIstWochenende(cursor)) { rest -= 1; }
+  }
+  return cursor;
+}
+
+// --- Defaults ----------------------------------------------------------------
+
+// Default-Vergabeeinheiten kommunaler Hochbau: Lage des Ausführungsbeginns
+// (startAnteil) und Dauer (dauerAnteil) jeweils als Anteil 0..1 der Bauzeit.
+function rpDefaultVergabeeinheiten() {
+  return [
+    { name: 'Baumeister/Rohbau', startAnteil: 0.00, dauerAnteil: 0.40 },
+    { name: 'Zimmerer+Dach', startAnteil: 0.28, dauerAnteil: 0.18 },
+    { name: 'Fenster+Fassade', startAnteil: 0.38, dauerAnteil: 0.22 },
+    { name: 'Elektro (ELT)', startAnteil: 0.45, dauerAnteil: 0.40 },
+    { name: 'Heizung/Lüftung/Sanitär (HLS)', startAnteil: 0.45, dauerAnteil: 0.40 },
+    { name: 'Trockenbau', startAnteil: 0.55, dauerAnteil: 0.25 },
+    { name: 'Estrich+Böden', startAnteil: 0.68, dauerAnteil: 0.18 },
+    { name: 'Maler+Endausbau', startAnteil: 0.80, dauerAnteil: 0.15 }
+  ];
+}
+
+// Default-Kettenglieder (alle Werte in Kalendertagen, ausser lvErstellungAT)
+function rpDefaultKette() {
+  return {
+    einspruchKT: 14,
+    grPlatzhalterKT: 28,
+    vorschlagVorlaufKT: 7,
+    submissionVorlaufKT: 14,
+    kalkulationKT: 30,
+    lvErstellungAT: 20
+  };
+}
+
+// --- Hauptfunktion -----------------------------------------------------------
+
+// param:
+//   genehmigung  'YYYY-MM-DD'  Meilenstein "Baugenehmigung (erwartet)"
+//   baubeginn    'YYYY-MM-DD'  Beginn Ausführung
+//   uebergabe    'YYYY-MM-DD'  Soll-Ende, Meilenstein wird fixiert
+//   planungStart 'YYYY-MM-DD'  optional, Default = genehmigung
+//   vergabeeinheiten            optional [{name, startAnteil, dauerAnteil}]
+//   kette                       optional, Einzelwerte überschreiben Defaults
+// Ergebnis: { tasks, edges, warnungen }
+function erzeugeRahmenplan(param) {
+  var genehmigungMs = rpParseDatum(param.genehmigung);
+  var baubeginnMs = rpParseDatum(param.baubeginn);
+  var uebergabeMs = rpParseDatum(param.uebergabe);
+  var planungStartIso = param.planungStart ? param.planungStart : param.genehmigung;
+  var planungStartMs = rpParseDatum(planungStartIso);
+
+  var einheiten = param.vergabeeinheiten || rpDefaultVergabeeinheiten();
+
+  // Kette: Defaults, einzeln überschreibbar (null zählt NICHT als Wert —
+  // Lehre aus der Lovable-null-statt-Default-Falle)
+  var kette = rpDefaultKette();
+  var uebergeben = param.kette || {};
+  for (var schluessel in uebergeben) {
+    if (uebergeben[schluessel] !== undefined && uebergeben[schluessel] !== null) {
+      kette[schluessel] = uebergeben[schluessel];
+    }
+  }
+
+  // Bauzeit in Kalendertagen zwischen Baubeginn und Übergabe
+  var bauzeitKT = Math.round((uebergabeMs - baubeginnMs) / 86400000);
+
+  var warnungen = [];
+  var tasks = [];
+  var edges = [];
+
+  // Bauzeit 0 oder negativ (Übergabe nicht nach Baubeginn): weiterrechnen
+  // (kein Crash), aber warnen — die Anteils-Rechnung liefert dann Balken
+  // mit Dauer 0 bzw. rückwärts laufende Balken.
+  if (bauzeitKT <= 0) {
+    warnungen.push('Bauzeit nicht positiv (' + bauzeitKT + ' KT): Uebergabe liegt nicht nach dem Baubeginn');
+  }
+
+  // Vorgang anlegen; uid fortlaufend ab 1 in Push-Reihenfolge.
+  // felder.lock setzt lockStart UND lockFinish (kommt hier nur paarweise vor).
+  function neueTask(felder) {
+    var t = {
+      uid: tasks.length + 1,
+      name: felder.name,
+      wbs: felder.wbs,
+      level: felder.level,
+      start: rpFormatDatum(felder.startMs),
+      finish: rpFormatDatum(felder.finishMs),
+      milestone: felder.milestone === true,
+      summary: felder.summary === true,
+      category: felder.category,
+      isGewerk: felder.isGewerk === true,
+      lockStart: felder.lock === true,
+      lockFinish: felder.lock === true,
+      grAnchor: felder.grAnchor === true
+    };
+    tasks.push(t);
+    return t;
+  }
+
+  // Kante anlegen — type ist IMMER der Kürzel-String 'EA'
+  function neueKante(vonUid, nachUid, lagKT, hardCeiling) {
+    edges.push({
+      from: vonUid,
+      to: nachUid,
+      type: 'EA',
+      lag: lagKT,
+      lagUnit: 'cd',
+      lagValue: lagKT,
+      hardCeiling: hardCeiling === true
+    });
+  }
+
+  // --- Schritt 1: alle Termine je Vergabeeinheit rechnen ---------------------
+  var daten = [];
+  for (var i = 0; i < einheiten.length; i++) {
+    var einheit = einheiten[i];
+
+    // AUSFÜHRUNG: Lage + Dauer anteilig an der Bauzeit; Start ggf. auf Montag
+    var gewerkStartMs = rpSnapAufMontag(rpPlusTage(baubeginnMs, Math.round(einheit.startAnteil * bauzeitKT)));
+    var gewerkFinishMs = rpPlusTage(gewerkStartMs, Math.round(einheit.dauerAnteil * bauzeitKT));
+
+    // VERGABE: Rückwärtskette vom (ggf. gesnappten) Ausführungsbeginn A
+    var beauftragungMs = rpPlusTage(gewerkStartMs, -kette.einspruchKT);
+    var grEndeMs = rpPlusTage(beauftragungMs, -1); // endet 1 KT vor Beauftragung
+    var grStartMs = rpPlusTage(grEndeMs, -kette.grPlatzhalterKT);
+    var vorschlagMs = rpPlusTage(grStartMs, -kette.vorschlagVorlaufKT);
+    var submissionMs = rpPlusTage(vorschlagMs, -kette.submissionVorlaufKT);
+    var veroeffentlichungMs = rpPlusTage(submissionMs, -kette.kalkulationKT);
+
+    // PLANUNG: endet 1 KT vor Veröffentlichung LV, Dauer in Arbeitstagen
+    var planungEndeMs = rpPlusTage(veroeffentlichungMs, -1);
+    var planungBeginnMs = rpStartFuerArbeitstage(planungEndeMs, kette.lvErstellungAT);
+
+    // Die Wahrheit zeigen, nicht verbiegen: Termine bleiben stehen,
+    // Konflikte werden nur als Warnung gemeldet.
+    if (veroeffentlichungMs < genehmigungMs) {
+      warnungen.push('Vergabekette ' + einheit.name + ' beginnt vor der Genehmigung');
+    }
+    if (planungBeginnMs < planungStartMs) {
+      warnungen.push('Planung ' + einheit.name + ' muesste vor ' + planungStartIso + ' beginnen');
+    }
+    if (gewerkFinishMs < gewerkStartMs) {
+      warnungen.push('Gewerk ' + einheit.name + ' hat negative Dauer (Finish vor Start)');
+    }
+
+    daten.push({
+      name: einheit.name,
+      gewerkStartMs: gewerkStartMs,
+      gewerkFinishMs: gewerkFinishMs,
+      beauftragungMs: beauftragungMs,
+      grStartMs: grStartMs,
+      grEndeMs: grEndeMs,
+      vorschlagMs: vorschlagMs,
+      submissionMs: submissionMs,
+      veroeffentlichungMs: veroeffentlichungMs,
+      planungBeginnMs: planungBeginnMs,
+      planungEndeMs: planungEndeMs
+    });
+  }
+
+  // --- Schritt 2: Vorgänge in fester Reihenfolge anlegen ---------------------
+
+  // Ebene-1-Meilensteine
+  neueTask({ name: 'Baugenehmigung (erwartet)', wbs: '1', level: 1, startMs: genehmigungMs, finishMs: genehmigungMs, milestone: true, category: 'planung' });
+  neueTask({ name: 'Baubeginn', wbs: '2', level: 1, startMs: baubeginnMs, finishMs: baubeginnMs, milestone: true, category: 'ausfuehrung' });
+  neueTask({ name: 'Übergabe (Soll)', wbs: '3', level: 1, startMs: uebergabeMs, finishMs: uebergabeMs, milestone: true, category: 'ausfuehrung', lock: true });
+
+  // Leere Vergabeeinheiten-Liste (leeres Array ist truthy, umgeht also den
+  // Default oben): keine Schichten möglich — nur Ecktermine plus Warnung,
+  // statt unten an daten[0] zu crashen.
+  if (daten.length === 0) {
+    warnungen.push('Keine Vergabeeinheiten uebergeben: nur Ecktermine erzeugt');
+    return { tasks: tasks, edges: edges, warnungen: warnungen };
+  }
+
+  // Spannen der drei Schichten = min/max ihrer Kinder
+  var planungVon = daten[0].planungBeginnMs;
+  var planungBis = daten[0].planungEndeMs;
+  var vergabeVon = daten[0].veroeffentlichungMs;
+  var vergabeBis = daten[0].beauftragungMs;
+  var ausfuehrungVon = daten[0].gewerkStartMs;
+  var ausfuehrungBis = daten[0].gewerkFinishMs;
+  for (var s = 1; s < daten.length; s++) {
+    if (daten[s].planungBeginnMs < planungVon) { planungVon = daten[s].planungBeginnMs; }
+    if (daten[s].planungEndeMs > planungBis) { planungBis = daten[s].planungEndeMs; }
+    if (daten[s].veroeffentlichungMs < vergabeVon) { vergabeVon = daten[s].veroeffentlichungMs; }
+    if (daten[s].beauftragungMs > vergabeBis) { vergabeBis = daten[s].beauftragungMs; }
+    if (daten[s].gewerkStartMs < ausfuehrungVon) { ausfuehrungVon = daten[s].gewerkStartMs; }
+    if (daten[s].gewerkFinishMs > ausfuehrungBis) { ausfuehrungBis = daten[s].gewerkFinishMs; }
+  }
+
+  // Schicht PLANUNG. Zusaetzlich zu den LV-bezogenen Vorgaengen je Einheit gibt es
+  // EINEN durchgehenden Werkplanungs-Balken ab planungStart: Die Ausfuehrungsplanung
+  // (LPH 5) laeuft real ab Planungsfreigabe baubegleitend weiter — ohne diesen Balken
+  // begaenne die Schicht PLANUNG erst mit dem ersten LV und saehe aus, als ruhe die
+  // Planung bis dahin (Befund der Architekten-Durchsicht 24.08.).
+  var werkplanung = null;
+  if (planungStartMs < planungBis) {
+    if (planungStartMs < planungVon) { planungVon = planungStartMs; }
+    werkplanung = true;
+  }
+  neueTask({ name: 'PLANUNG', wbs: '4', level: 1, startMs: planungVon, finishMs: planungBis, summary: true, category: 'planung' });
+  if (werkplanung) {
+    neueTask({ name: 'Werk- und Detailplanung (durchgehend)', wbs: '4.1', level: 2,
+      startMs: planungStartMs, finishMs: planungBis, category: 'planung' });
+  }
+  var planungWbsBasis = werkplanung ? 1 : 0;
+  for (var p = 0; p < daten.length; p++) {
+    daten[p].planungTask = neueTask({
+      name: 'Ausführungsplanung + LV ' + daten[p].name,
+      wbs: '4.' + (p + 1 + planungWbsBasis),
+      level: 2,
+      startMs: daten[p].planungBeginnMs,
+      finishMs: daten[p].planungEndeMs,
+      category: 'planung'
+    });
+  }
+
+  // Schicht VERGABE mit Rückwärtskette je Einheit
+  neueTask({ name: 'VERGABE', wbs: '5', level: 1, startMs: vergabeVon, finishMs: vergabeBis, summary: true, category: 'vergabe' });
+  for (var v = 0; v < daten.length; v++) {
+    var d = daten[v];
+    var basisWbs = '5.' + (v + 1);
+    neueTask({ name: 'Vergabe ' + d.name, wbs: basisWbs, level: 2, startMs: d.veroeffentlichungMs, finishMs: d.beauftragungMs, summary: true, category: 'vergabe' });
+
+    var tLv = neueTask({ name: 'Veröffentlichung LV', wbs: basisWbs + '.1', level: 3, startMs: d.veroeffentlichungMs, finishMs: d.veroeffentlichungMs, milestone: true, category: 'vergabe' });
+    var tSub = neueTask({ name: 'Submission', wbs: basisWbs + '.2', level: 3, startMs: d.submissionMs, finishMs: d.submissionMs, milestone: true, category: 'vergabe' });
+    var tVor = neueTask({ name: 'Vergabevorschlag', wbs: basisWbs + '.3', level: 3, startMs: d.vorschlagMs, finishMs: d.vorschlagMs, milestone: true, category: 'vergabe' });
+    // GR-Sitzung ist ein Vorgang (KEIN Meilenstein): fixierter Platzhalter, Anker
+    var tGr = neueTask({ name: 'GR-Sitzung', wbs: basisWbs + '.4', level: 3, startMs: d.grStartMs, finishMs: d.grEndeMs, category: 'vergabe', lock: true, grAnchor: true });
+    var tBea = neueTask({ name: 'Beauftragung', wbs: basisWbs + '.5', level: 3, startMs: d.beauftragungMs, finishMs: d.beauftragungMs, milestone: true, category: 'vergabe' });
+
+    neueKante(tLv.uid, tSub.uid, kette.kalkulationKT, false);
+    neueKante(tSub.uid, tVor.uid, kette.submissionVorlaufKT, false);
+    neueKante(tVor.uid, tGr.uid, kette.vorschlagVorlaufKT, false);
+    neueKante(tGr.uid, tBea.uid, 1, false);
+
+    d.beauftragungTask = tBea;
+    d.veroeffentlichungTask = tLv;
+  }
+
+  // Schicht AUSFÜHRUNG
+  neueTask({ name: 'AUSFÜHRUNG', wbs: '6', level: 1, startMs: ausfuehrungVon, finishMs: ausfuehrungBis, summary: true, category: 'ausfuehrung' });
+  for (var g = 0; g < daten.length; g++) {
+    daten[g].gewerkTask = neueTask({
+      name: daten[g].name,
+      wbs: '6.' + (g + 1),
+      level: 2,
+      startMs: daten[g].gewerkStartMs,
+      finishMs: daten[g].gewerkFinishMs,
+      category: 'ausfuehrung',
+      isGewerk: true
+    });
+  }
+
+  // --- Schritt 3: schichtübergreifende Kanten --------------------------------
+  for (var q = 0; q < daten.length; q++) {
+    // Beauftragung -> Gewerk: Einspruchsfrist als harte Obergrenze
+    neueKante(daten[q].beauftragungTask.uid, daten[q].gewerkTask.uid, kette.einspruchKT, true);
+    // Planung -> Veröffentlichung LV (Planung endet 1 KT davor)
+    neueKante(daten[q].planungTask.uid, daten[q].veroeffentlichungTask.uid, 1, false);
   }
 
   return { tasks: tasks, edges: edges, warnungen: warnungen };
