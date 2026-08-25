@@ -21,6 +21,7 @@ const S = {
   ansicht: 'board', // im Projekt: 'board' (Aufgaben) oder 'dash' (Projekt-Dashboard)
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
+  chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
 };
 
 // ---------- Dialoge ----------
@@ -1495,12 +1496,51 @@ function renderCard(t) {
 async function openCard(id) {
   // Frisch angelegte Karten tragen bis zur Antwort des Servers eine Platzhalter-Kennung.
   if (!id || String(id).startsWith('neu-')) return;
+  if (S.detail?.id !== id) S.komEntwurf = ''; // Entwurf gehoert zu SEINER Karte
   try {
     S.detail = await lotse('todo_detail', { todo_id: id });
     renderDrawer();
+    chatTakt(id);
   } catch (e) { console.error('openCard:', e); }
 }
-function closeDrawer() { S.detail = null; document.getElementById('drawer-root').innerHTML = ''; }
+
+// Waehrend der Agent an der offenen Karte arbeitet, laeuft ein schneller Takt nur fuer
+// diesen Kartenschnitt. Noetig, weil der 60s-Poll des Boards pausiert, solange ein Drawer
+// offen ist (sonst raeumt er Eingaben weg) -- ohne den Takt sieht man die Antwort erst,
+// wenn man die Karte schliesst und wieder oeffnet. Genau das nimmt dem Zuruf das
+// Chat-Gefuehl. Neu gezeichnet wird nur, wenn sich wirklich etwas geaendert hat.
+function kartenFinger(d) {
+  return [d?.agent_status || '', (d?.kommentare || []).length, (d?.unterpunkte || []).length,
+    (d?.anhaenge || []).length, (d?.kommentare || []).at(-1)?.text?.length || 0].join('|');
+}
+function chatTakt(id) {
+  clearInterval(S.chatPoll); S.chatPoll = null;
+  if (statusVon(S.detail) !== 'arbeitet') return;
+  const bis = Date.now() + 5 * 60000; // Notbremse: kein Dauertakt, wenn ein Lauf haengt
+  S.chatPoll = setInterval(async () => {
+    if (!S.detail || S.detail.id !== id || Date.now() > bis) { clearInterval(S.chatPoll); S.chatPoll = null; return; }
+    let neu;
+    try { neu = await lotse('todo_detail', { todo_id: id }); } catch { return; }
+    if (!neu || neu.fehler || !S.detail || S.detail.id !== id) return;
+    const anders = kartenFinger(neu) !== kartenFinger(S.detail);
+    const fertig = statusVon(neu) !== 'arbeitet';
+    S.detail = neu;
+    if (anders) {
+      // Wer gerade tippt, darf durch das Neuzeichnen weder Text noch Cursor verlieren.
+      const warFokus = document.activeElement?.id === 'kom-inp';
+      renderDrawer();
+      if (warFokus) {
+        const n = document.getElementById('kom-inp');
+        if (n) { n.focus(); n.selectionStart = n.selectionEnd = n.value.length; }
+      }
+    }
+    if (fertig) {
+      clearInterval(S.chatPoll); S.chatPoll = null;
+      ladeBoard().catch(() => {}); // Karte traegt jetzt "Ergebnis da" -- Board nachziehen
+    }
+  }, 2500);
+}
+function closeDrawer() { clearInterval(S.chatPoll); S.chatPoll = null; S.detail = null; S.komEntwurf = ''; document.getElementById('drawer-root').innerHTML = ''; }
 
 function renderDrawer() {
   const root = document.getElementById('drawer-root'); root.innerHTML = '';
@@ -1785,10 +1825,23 @@ function renderDrawer() {
     }
     sk.append(el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text)));
   }
+  // Solange der Agent an der Karte schreibt, steht das hier -- sonst wirkt der Zuruf,
+  // als waere er ins Leere gegangen (die Antwort kommt Sekunden spaeter von selbst).
+  if (statusVon(d) === 'arbeitet') sk.append(el('div', { class: 'agenttippt' },
+    el('span', { class: 'punkte' }, '•••'), 'Agent schreibt…'));
   const addK = el('div', { class: 'inline-add' });
-  const kInp = el('input', { placeholder: 'Kommentar…  @ erwähnt jemanden' });
+  const senden = async () => {
+    const txt = kInp.value.trim(); if (!txt) return;
+    kInp.value = ''; S.komEntwurf = '';
+    await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
+    await openCard(d.id); await ladeBoard();
+  };
+  const kInp = el('input', { id: 'kom-inp', placeholder: 'Kommentar…  @ erwähnt jemanden, @agent fragt den Agenten',
+    oninput: () => { S.komEntwurf = kInp.value; },
+    onkeydown: (e) => { if (e.key === 'Enter' && !document.querySelector('.mention')) { e.preventDefault(); senden(); } } });
+  kInp.value = S.komEntwurf || '';
   mentionHilfe(kInp);
-  addK.append(kInp, el('button', { class: 'btn', onclick: async () => { if (kInp.value.trim()) { await mut('kommentar_anlegen',{ todo_id: d.id, text: kInp.value.trim() }); await openCard(d.id); await ladeBoard(); } } }, 'Senden'));
+  addK.append(kInp, el('button', { class: 'btn', onclick: senden }, 'Senden'));
   sk.append(addK); dr.append(sk);
 
   // Verlauf
