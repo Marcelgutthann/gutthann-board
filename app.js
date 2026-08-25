@@ -22,6 +22,7 @@ const S = {
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
+  zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
 };
 
 // ---------- Dialoge ----------
@@ -1496,7 +1497,7 @@ function renderCard(t) {
 async function openCard(id) {
   // Frisch angelegte Karten tragen bis zur Antwort des Servers eine Platzhalter-Kennung.
   if (!id || String(id).startsWith('neu-')) return;
-  if (S.detail?.id !== id) S.komEntwurf = ''; // Entwurf gehoert zu SEINER Karte
+  if (S.detail?.id !== id) { S.komEntwurf = ''; if (S.zuruf?.todoId !== id) S.zuruf = null; } // Entwurf und Anzeige gehoeren zu IHRER Karte
   try {
     S.detail = await lotse('todo_detail', { todo_id: id });
     renderDrawer();
@@ -1515,7 +1516,9 @@ function kartenFinger(d) {
 }
 function chatTakt(id) {
   clearInterval(S.chatPoll); S.chatPoll = null;
-  if (statusVon(S.detail) !== 'arbeitet') return;
+  // Auch takten, solange nur die Bestaetigung steht: agent_status setzt erst der Server,
+  // wenn er den Auftrag eingereiht hat -- bis dahin waere die Anzeige sonst eingefroren.
+  if (statusVon(S.detail) !== 'arbeitet' && !(S.zuruf && S.zuruf.todoId === id)) return;
   const bis = Date.now() + 5 * 60000; // Notbremse: kein Dauertakt, wenn ein Lauf haengt
   S.chatPoll = setInterval(async () => {
     if (!S.detail || S.detail.id !== id || Date.now() > bis) { clearInterval(S.chatPoll); S.chatPoll = null; return; }
@@ -1524,6 +1527,12 @@ function chatTakt(id) {
     if (!neu || neu.fehler || !S.detail || S.detail.id !== id) return;
     const anders = kartenFinger(neu) !== kartenFinger(S.detail);
     const fertig = statusVon(neu) !== 'arbeitet';
+    // Antwort da (oder Rueckfrage gestellt) -> Bestaetigung verschwindet.
+    const letzter = (neu.kommentare || []).at(-1);
+    if (S.zuruf && S.zuruf.todoId === id
+        && ((letzter && letzter.von === 'agent'
+             && (neu.kommentare || []).length > (S.detail.kommentare || []).length)
+            || Date.now() - S.zuruf.seit > 5 * 60000)) S.zuruf = null;
     S.detail = neu;
     if (anders) {
       // Wer gerade tippt, darf durch das Neuzeichnen weder Text noch Cursor verlieren.
@@ -1534,13 +1543,13 @@ function chatTakt(id) {
         if (n) { n.focus(); n.selectionStart = n.selectionEnd = n.value.length; }
       }
     }
-    if (fertig) {
+    if (fertig && !S.zuruf) {
       clearInterval(S.chatPoll); S.chatPoll = null;
       ladeBoard().catch(() => {}); // Karte traegt jetzt "Ergebnis da" -- Board nachziehen
     }
   }, 2500);
 }
-function closeDrawer() { clearInterval(S.chatPoll); S.chatPoll = null; S.detail = null; S.komEntwurf = ''; document.getElementById('drawer-root').innerHTML = ''; }
+function closeDrawer() { clearInterval(S.chatPoll); S.chatPoll = null; S.detail = null; S.komEntwurf = ''; S.zuruf = null; document.getElementById('drawer-root').innerHTML = ''; }
 
 function renderDrawer() {
   const root = document.getElementById('drawer-root'); root.innerHTML = '';
@@ -1825,14 +1834,31 @@ function renderDrawer() {
     }
     sk.append(el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text)));
   }
-  // Solange der Agent an der Karte schreibt, steht das hier -- sonst wirkt der Zuruf,
-  // als waere er ins Leere gegangen (die Antwort kommt Sekunden spaeter von selbst).
-  if (statusVon(d) === 'arbeitet') sk.append(el('div', { class: 'agenttippt' },
-    el('span', { class: 'punkte' }, '•••'), 'Agent schreibt…'));
+  // Empfangsbestaetigung. Anforderung von Marcel: wenn ich den Agenten anschreibe,
+  // muss DIREKT etwas kommen, damit ich weiss, dass er was macht. Die Zeile steht
+  // sofort beim Absenden da -- also bevor der Server geantwortet hat -- und benennt
+  // danach den echten Stand. Bewusst KEIN gespeicherter Kommentar: ein "bin dran"
+  // in jedem Strang waere nach einer Woche nur noch Muell in der Historie.
+  const zurufOffen = S.zuruf && S.zuruf.todoId === d.id;
+  if (zurufOffen || statusVon(d) === 'arbeitet') {
+    const wartet = Math.round((Date.now() - (S.zuruf?.seit || Date.now())) / 1000);
+    const was = d.agent_status === 'laeuft' ? 'schreibt gerade…'
+      : d.agent_status === 'wartet_info' ? 'hat eine Rückfrage an dich — siehe oben'
+      : d.agent_status === 'wartet' ? 'hat den Auftrag angenommen und fängt gleich an'
+      : wartet > 25 ? 'nimmt den Auftrag an — dauert heute länger als sonst'
+      : 'hat deinen Zuruf bekommen';
+    sk.append(el('div', { class: 'agenttippt' },
+      el('span', { class: 'punkte' }, '•••'),
+      el('span', {}, 'Agent ' + was),
+      wartet > 3 ? el('small', { style: 'color:#9A9A93' }, ' ' + wartet + ' Sek.') : ''));
+  }
   const addK = el('div', { class: 'inline-add' });
   const senden = async () => {
     const txt = kInp.value.trim(); if (!txt) return;
     kInp.value = ''; S.komEntwurf = '';
+    // Erst die Bestaetigung zeichnen, dann zum Server: ein Zuruf darf sich nie
+    // anfuehlen, als waere er ins Leere gegangen.
+    if (/@agent\b/i.test(txt)) { S.zuruf = { todoId: d.id, seit: Date.now() }; renderDrawer(); }
     await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
     await openCard(d.id); await ladeBoard();
   };
@@ -1962,12 +1988,30 @@ async function ladeDateienHoch(dateien, todoId) {
     n++;
     if (box) box.textContent = `Lädt hoch (${n}/${liste.length}): ${f.name}`;
     const pfad = `${todoId}/${Date.now()}_${++anhangZaehler}_${f.name.replace(/[^\w.\-äöüÄÖÜß ]/g, '_')}`;
+    // Der Upload laeuft am Lotsen VORBEI direkt in den Speicher — und war darum der
+    // einzige Weg ohne Token-Erneuerung. Ein Supabase-Zugangstoken laeuft nach einer
+    // Stunde ab: wer das Board lange offen hat, konnte weiter Karten und Kommentare
+    // schreiben (lotse() erneuert selbst), aber keine Datei mehr anhaengen. Die Meldung
+    // dazu nannte keinen Grund. Beides ist hier behoben.
+    const hochladen = () => fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${encodeURI(pfad)}`, {
+      method: 'POST',
+      headers: { apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || ''),
+        'x-upsert': 'true', 'Content-Type': f.type || 'application/octet-stream' },
+      body: f });
     let up;
     try {
-      up = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${pfad}`, {
-        method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token }, body: f });
-    } catch { up = { ok: false }; }
-    if (!up.ok) { if (box) box.textContent = ''; uiHinweis('Upload fehlgeschlagen: ' + f.name); return; }
+      up = await hochladen();
+      if (up.status === 401 || up.status === 403) { if (await authRefresh()) up = await hochladen(); }
+    } catch (e) { up = { ok: false, status: 0, text: async () => e.message || 'Netzwerkfehler' }; }
+    if (!up.ok) {
+      let grund = '';
+      try { const j = JSON.parse(await up.text()); grund = j.message || j.error || ''; } catch {}
+      if (box) box.textContent = '';
+      uiHinweis(`Upload fehlgeschlagen: ${f.name}`
+        + (up.status ? ` (${up.status}${grund ? ' — ' + grund : ''})` : ' — keine Verbindung')
+        + (up.status === 401 || up.status === 403 ? '. Bitte einmal neu anmelden.' : ''));
+      return;
+    }
     await mut('anhang_registrieren', { todo_id: todoId, pfad, name: f.name, groesse: f.size });
   }
   if (box) box.textContent = '';
