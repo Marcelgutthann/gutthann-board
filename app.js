@@ -1980,6 +1980,17 @@ function anhangGross(a) {
 }
 // Hochladen: mehrere Dateien am Stueck, mit Fortschritt unter der Dateiliste.
 let anhangZaehler = 0;
+// Datei -> base64. FileReader statt btoa(String.fromCharCode(...)): letzteres sprengt
+// bei groesseren Dateien den Aufrufstapel.
+function dateiAlsBase64(f) {
+  return new Promise((fertig, schief) => {
+    const r = new FileReader();
+    r.onload = () => fertig(String(r.result).split(',')[1] || '');
+    r.onerror = () => schief(new Error('Datei liess sich nicht lesen'));
+    r.readAsDataURL(f);
+  });
+}
+
 async function ladeDateienHoch(dateien, todoId) {
   const liste = Array.from(dateien || []); if (!liste.length) return;
   const box = document.getElementById('anh-status');
@@ -2004,12 +2015,23 @@ async function ladeDateienHoch(dateien, todoId) {
       if (up.status === 401 || up.status === 403) { if (await authRefresh()) up = await hochladen(); }
     } catch (e) { up = { ok: false, status: 0, text: async () => e.message || 'Netzwerkfehler' }; }
     if (!up.ok) {
+      // Rueckfallweg: ueber den Lotsen, der mit dem Dienstschluessel arbeitet und
+      // deshalb nicht davon abhaengt, wie alt die Browser-Sitzung gerade ist.
+      if (f.size <= 12 * 1024 * 1024) {
+        if (box) box.textContent = `Zweiter Versuch (${n}/${liste.length}): ${f.name}`;
+        try {
+          const b64 = await dateiAlsBase64(f);
+          const r2 = await lotse('anhang_upload', { todo_id: todoId, name: f.name, mime: f.type || '', base64: b64 });
+          if (r2 && !r2.fehler) { if (box) box.textContent = ''; continue; }
+          var lotseFehler = r2 && r2.fehler;
+        } catch (e) { var lotseFehler = e.message; }
+      }
       let grund = '';
       try { const j = JSON.parse(await up.text()); grund = j.message || j.error || ''; } catch {}
       if (box) box.textContent = '';
       uiHinweis(`Upload fehlgeschlagen: ${f.name}`
         + (up.status ? ` (${up.status}${grund ? ' — ' + grund : ''})` : ' — keine Verbindung')
-        + (up.status === 401 || up.status === 403 ? '. Bitte einmal neu anmelden.' : ''));
+        + (typeof lotseFehler === 'string' && lotseFehler ? ` — auch über den Lotsen nicht: ${lotseFehler}` : ''));
       return;
     }
     await mut('anhang_registrieren', { todo_id: todoId, pfad, name: f.name, groesse: f.size });
