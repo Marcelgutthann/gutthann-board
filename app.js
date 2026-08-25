@@ -477,29 +477,38 @@ function renderRadar() {
       const k = (b.karten || []).find(pruef); if (k) { openCard(k.id); return; }
     }
   };
-  // Ton je Kachel: die Gesamtzahl traegt dunkel, alles Dringliche hat eine eigene
-  // Farbkante. Ohne Unterscheidung sah die Zeile wie vier gleiche Kaestchen aus
-  // (Marcels Befund 25.08.).
-  const kachel = (zahl, label, ton, klick) => el('div', {
+  // Kennzahl im Datum-Muster (agentic-os/app/dashboard.css, .kpi): weisse Karte,
+  // Label oben, grosse Zahl darunter, Unterzeile fuer den Bezug. Farbe steckt NUR
+  // in der Zahl ('warn'/'alert') -- keine farbigen Flaechen, keine Kanten.
+  const kachel = (zahl, label, sub, ton, klick) => el('div', {
     class: 'rkpi' + (ton ? ' ' + ton : '') + (klick ? ' klick' : ''),
     onclick: klick || null,
-  }, el('div', { class: 'z' }, String(zahl)), el('div', { class: 'l' }, label));
+  }, el('div', { class: 'l' }, label),
+     el('div', { class: 'z' }, String(zahl)),
+     sub ? el('div', { class: 's' }, sub) : '');
 
   const kopf = el('div', { class: 'rkopf' });
   const kpis = el('div', { class: 'rkpis' });
-  kpis.append(kachel(kpi.gesamt || 0, (kpi.gesamt === 1 ? 'Aufgabe' : 'Aufgaben') + ' für dich offen', 'haupt'));
+  const nMeine = (bloecke.find((b) => b.art === 'meine') || {}).anzahl || 0;
+  const nZug = (bloecke.find((b) => b.art === 'zugewiesen') || {}).anzahl || 0;
+  kpis.append(kachel(kpi.gesamt || 0, 'Für dich offen',
+    nMeine + ' aus deinem Bereich · ' + nZug + ' zugewiesen'));
   // Nur zeigen, was es wirklich gibt -- Nullkacheln sagen nichts.
   if (kpi.rueckfragen) kpis.append(kachel(kpi.rueckfragen,
-    kpi.rueckfragen === 1 ? 'Rückfrage an dich' : 'Rückfragen an dich', 'rueck',
+    kpi.rueckfragen === 1 ? 'Rückfrage an dich' : 'Rückfragen an dich',
+    'der Agent wartet auf deine Antwort', 'warn',
     springe((k) => k.agent_status === 'wartet_info')));
   if (kpi.zuarbeiten) kpis.append(kachel(kpi.zuarbeiten,
-    kpi.zuarbeiten === 1 ? 'Zuarbeit vom Agenten' : 'Zuarbeiten vom Agenten', 'zu',
+    kpi.zuarbeiten === 1 ? 'Zuarbeit vom Agenten' : 'Zuarbeiten vom Agenten',
+    'liegt zur Durchsicht bei dir', 'warn',
     springe((k) => k.zuarbeit)));
   if (kpi.kommentiert) kpis.append(kachel(kpi.kommentiert,
-    kpi.kommentiert === 1 ? 'Karte neu kommentiert' : 'Karten neu kommentiert', 'komm',
+    kpi.kommentiert === 1 ? 'Karte neu kommentiert' : 'Karten neu kommentiert',
+    'seit deinem letzten Blick', null,
     springe((k) => k.neue_kommentare > 0)));
   if (kpi.ueberfaellig) kpis.append(kachel(kpi.ueberfaellig,
-    kpi.ueberfaellig === 1 ? 'Aufgabe überfällig' : 'Aufgaben überfällig', 'spaet',
+    kpi.ueberfaellig === 1 ? 'Aufgabe überfällig' : 'Aufgaben überfällig',
+    'Frist ist verstrichen', 'alert',
     springe((k) => k.ueberfaellig)));
   kopf.append(kpis);
   kopf.append(el('button', { class: 'rwahlbtn', onclick: () => radarAuswahlDialog() },
