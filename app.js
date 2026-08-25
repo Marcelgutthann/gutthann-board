@@ -498,7 +498,7 @@ function renderRadar() {
   if (kpi.ueberfaellig) kpis.append(kachel(kpi.ueberfaellig, 'überfällig', true, springe((k) => k.ueberfaellig)));
   kopf.append(kpis);
   kopf.append(el('button', { class: 'rwahlbtn', onclick: () => radarAuswahlDialog() },
-    '⊞ Dashboard zusammenstellen'));
+    '⊞ Dashboard konfigurieren'));
   root.append(kopf);
 
   const fest = bloecke.filter((b) => b.fest);
@@ -521,7 +521,7 @@ function renderRadar() {
 
   if (!gewaehlt.length) {
     root.append(el('div', { class: 'rleer' }, el('b', {}, 'Noch nichts dazugestellt.'),
-      'Über „Dashboard zusammenstellen" wählst du die Projekte und internen Boards, die dich '
+      'Über „Dashboard konfigurieren" wählst du die Projekte und internen Boards, die dich '
       + 'gerade betreffen. Sie erscheinen hier untereinander — und in derselben Reihenfolge '
       + 'oben in der Seitenleiste.'));
     return;
@@ -588,7 +588,7 @@ function radarAuswahlDialog() {
       renderSidebar(); await ladeBoard();
     } }, 'Übernehmen'));
 
-  box.append(el('div', { class: 'rausw-t' }, 'Dashboard zusammenstellen'),
+  box.append(el('div', { class: 'rausw-t' }, 'Dashboard konfigurieren'),
     el('div', { class: 'rausw-s' },
       '„Meine Aufgaben" und „Mir zugewiesen" stehen immer oben. Was du hier dazustellst, '
       + 'zeigt den vollständigen offenen Stand des Bereichs — auch Aufgaben von Kollegen.'),
@@ -1507,9 +1507,27 @@ function renderDrawer() {
   // Kommentare
   const sk = el('div', { class: 'dsec' });
   if (d.kommentare.length) sk.append(el('div', { class: 'slbl' }, 'Kommentare'));
-  for (const k of d.kommentare) sk.append(el('div', { class: 'kom' },
-    el('div', { class: 'von' }, `${k.von} · ${new Date(k.am).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`),
-    el('div', { class: 'txt' }, k.text)));
+  for (const k of d.kommentare) {
+    const zeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const kopf = el('div', { class: 'von' }, `${k.von} · ${zeit(k.am)}` + (k.bearbeitet ? ` · bearbeitet ${zeit(k.bearbeitet)}` : ''));
+    // Eigene Kommentare korrigieren und wegnehmen. Stift und Kreuz stehen wie das ✕ an
+    // den Unterpunkten am Zeilenende und erscheinen erst beim Hovern (Marcel, 25.08.).
+    // Sie tragen ein title, damit die Bedeutung nicht am Symbol allein haengt.
+    if (k.meiner) {
+      kopf.append(el('button', { class: 'edit', title: 'Kommentar bearbeiten', onclick: async () => {
+        const neu = await uiEingabe('Kommentar bearbeiten:', k.text);
+        if (neu === null || !neu.trim() || neu.trim() === k.text) return;
+        const r = await mut('kommentar_bearbeiten', { kommentar_id: k.id, text: neu.trim() });
+        if (r && r.ok) await openCard(d.id);
+      } }, '✎'));
+      kopf.append(el('button', { class: 'del', title: 'Kommentar löschen', onclick: async () => {
+        if (!await uiFrage('Diesen Kommentar löschen?')) return;
+        const r = await mut('kommentar_loeschen', { kommentar_id: k.id });
+        if (r && r.ok) { await openCard(d.id); await ladeBoard(); }
+      } }, '✕'));
+    }
+    sk.append(el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text)));
+  }
   const addK = el('div', { class: 'inline-add' });
   const kInp = el('input', { placeholder: 'Kommentar…' });
   addK.append(kInp, el('button', { class: 'btn', onclick: async () => { if (kInp.value.trim()) { await mut('kommentar_anlegen',{ todo_id: d.id, text: kInp.value.trim() }); await openCard(d.id); await ladeBoard(); } } }, 'Senden'));
