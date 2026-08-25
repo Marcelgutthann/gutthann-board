@@ -28,15 +28,20 @@ const S = {
 // app.js (klassisches Skript), damit auch dashboard.js (Modul) sie sieht.
 function uiEsc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
-function uiModal(inhalt, fertig) {
+function uiModal(inhalt, fertig, breit) {
   const o = document.createElement('div');
   o.className = 'uidlg';
-  o.innerHTML = '<div class="uidlg-karte">' + inhalt + '</div>';
+  o.innerHTML = '<div class="uidlg-karte' + (breit ? ' breit' : '') + '">' + inhalt + '</div>';
   document.body.appendChild(o);
   const schliessen = (wert) => { document.removeEventListener('keydown', taste, true); o.remove(); fertig(wert); };
   const taste = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); schliessen(null); }
-    else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); o.querySelector('[data-ui="ok"]').click(); }
+    else if (e.key === 'Enter') {
+      // In einem mehrzeiligen Feld gehoert Enter dem Text — sonst liesse sich kein
+      // Absatz setzen und der Dialog schloesse beim ersten Umbruch. Strg+Enter uebernimmt.
+      if (e.target && e.target.tagName === 'TEXTAREA' && !(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault(); e.stopPropagation(); o.querySelector('[data-ui="ok"]').click();
+    }
   };
   document.addEventListener('keydown', taste, true);
   o.onclick = (e) => { if (e.target === o) schliessen(null); };
@@ -67,15 +72,27 @@ function uiEingabe(text, vorbelegt, opt) {
   return new Promise(fertig => {
     const { o, schliessen } = uiModal(
       '<div class="uidlg-t">' + uiEsc(text) + '</div>' +
-      '<input class="uidlg-i" value="' + uiEsc(vorbelegt || '') + '">' +
+      (opt.mehrzeilig
+        ? '<textarea class="uidlg-i uidlg-ta">' + uiEsc(vorbelegt || '') + '</textarea>' +
+          '<div class="uidlg-hint">Strg+Enter übernimmt · Esc bricht ab</div>'
+        : '<input class="uidlg-i" value="' + uiEsc(vorbelegt || '') + '">') +
       '<div class="uidlg-akt">' +
       '<button class="uidlg-b hell" data-ui="nein">Abbrechen</button>' +
       '<button class="uidlg-b" data-ui="ok">' + uiEsc(opt.ok || 'Übernehmen') + '</button>' +
-      '</div>', w => fertig(w));
+      '</div>', w => fertig(w), opt.mehrzeilig);
     const f = o.querySelector('.uidlg-i');
     o.querySelector('[data-ui="ok"]').onclick = () => schliessen(f.value);
     o.querySelector('[data-ui="nein"]').onclick = () => schliessen(null);
-    f.focus(); f.select();
+    if (opt.mehrzeilig) {
+      // Das Feld ist beim Oeffnen so hoch wie sein Inhalt — man soll den ganzen Text
+      // sehen, ohne im Feld zu scrollen (Marcel, 25.08.). Gedeckelt bei 60 % der
+      // Fensterhoehe, damit Ueberschrift und Knoepfe sichtbar bleiben.
+      const wachse = () => { f.style.height = 'auto'; f.style.height = Math.min(f.scrollHeight, Math.round(innerHeight * 0.6)) + 'px'; };
+      f.addEventListener('input', wachse); wachse();
+      // Cursor ans Ende statt alles markieren: ein Tastendruck soll nicht den
+      // ganzen Bestandstext loeschen, den man gerade korrigieren will.
+      f.focus(); f.setSelectionRange(f.value.length, f.value.length);
+    } else { f.focus(); f.select(); }
   });
 }
 
@@ -1529,7 +1546,7 @@ function renderDrawer() {
     // Sie tragen ein title, damit die Bedeutung nicht am Symbol allein haengt.
     if (k.meiner) {
       kopf.append(el('button', { class: 'edit', title: 'Kommentar bearbeiten', onclick: async () => {
-        const neu = await uiEingabe('Kommentar bearbeiten:', k.text);
+        const neu = await uiEingabe('Kommentar bearbeiten:', k.text, { mehrzeilig: true });
         if (neu === null || !neu.trim() || neu.trim() === k.text) return;
         const r = await mut('kommentar_bearbeiten', { kommentar_id: k.id, text: neu.trim() });
         if (r && r.ok) await openCard(d.id);
