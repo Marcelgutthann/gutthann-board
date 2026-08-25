@@ -822,16 +822,21 @@ function renderBoard() {
     const inSpalte = (b.todos || []).filter((t) =>
       (t.spalte_id === sp.id || (sp.id === erste && !t.spiegel && (!t.spalte_id || !bekannt(t.spalte_id)))) &&
       (sp.ist_erledigt ? t.status === 'erledigt' : t.status !== 'erledigt'));
+    // Reihenfolge (Marcels Befund 25.08.): aelteste oben, neu Angelegtes unten — die
+    // Karte bleibt dort stehen, wo sie angelegt wurde, statt nach oben zu springen.
+    // Nur die Erledigt-Spalte bleibt neueste zuerst; dort ist das Letzte das Interessante.
+    inSpalte.sort((x, y) => (sp.ist_erledigt ? -1 : 1) * String(x.erstellt || '').localeCompare(String(y.erstellt || '')));
+    const cntEl = el('span', { class: 'cnt' }, String(inSpalte.length));
     const colEl = el('div', {
       class: 'col',
-      ondragover: (e) => { e.preventDefault(); colEl.classList.add('dragover'); },
+      // Nur Karten annehmen — eine hierher gezogene Datei gehoert ins Karten-Detail.
+      ondragover: (e) => { if (!S.drag) return; e.preventDefault(); colEl.classList.add('dragover'); },
       ondragleave: () => colEl.classList.remove('dragover'),
-      ondrop: async (e) => {
+      ondrop: (e) => {
         e.preventDefault(); colEl.classList.remove('dragover');
         if (!S.drag) return;
         const id = S.drag; S.drag = null;
-        await mut('todo_verschieben', { todo_id: id, spalte_id: sp.id });
-        await ladeBoard();
+        verschiebeKarte(id, sp); // bewusst ohne await: die Karte rutscht sofort hinueber
       },
     });
     colEl.append(el('div', { class: 'colhead' },
@@ -843,7 +848,7 @@ function renderBoard() {
         class: 'autochip', title: 'Automatik: ' + (sp.automatik.auftrag || '').slice(0, 200),
         onclick: (e) => { e.stopPropagation(); spalteAutomatikDialog(sp); },
       }, '⚙ Auto') : '',
-      el('span', { class: 'cnt' }, String(inSpalte.length)),
+      cntEl,
       sp.ist_erledigt ? el('span', { class: 'cnt' }, '✓') : '',
       el('button', { class: 'menu', onclick: (e) => { e.stopPropagation(); spaltenMenu(e, sp, spalten.length); } }, '···')));
     const cardsEl = el('div', { class: 'cards' });
@@ -855,24 +860,14 @@ function renderBoard() {
       const inp = el('input', {
         class: 'newinput', placeholder: 'Titel der Aufgabe…',
         oninput: () => { S.newCardText = inp.value; },
-        onkeydown: async (e) => {
-          if (e.key === 'Escape') { S.newCardCol = null; S.newCardText = ''; renderBoard(); }
+        onkeydown: (e) => {
+          if (e.key === 'Escape') { S.newCardCol = null; S.newCardText = ''; renderBoard(); ladeBoard(); }
           if (e.key === 'Enter' && inp.value.trim()) {
+            // Die Karte steht sofort unten in DIESER Spalte, der Server faehrt hinterher.
+            // Die Zeile bleibt offen — mehrere Aufgaben lassen sich am Stueck tippen.
             const titel = inp.value.trim();
-            inp.disabled = true;
-            let r;
-            try { r = await lotse('todo_create', { titel, projekt: S.active.typ === 'projekt' ? S.active.name : null }); }
-            catch (err) { r = { fehler: err.message }; }
-            if (!r || !r.todo_id) {
-              // Nicht gespeichert: Eingabe stehen lassen und sagen, was los ist.
-              inp.disabled = false; inp.focus();
-              uiHinweis('Nicht gespeichert: ' + ((r && (r.fehler || r.error)) || 'keine Antwort vom Server') + '\nDer Text bleibt stehen — bitte nochmal Enter.');
-              return;
-            }
-            // mut wirft nie — der State-Reset laeuft auch, wenn das Einsortieren
-            // fehlschlaegt (die Karte existiert dann bereits in Spalte 1).
-            if (!sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
-            S.newCardCol = null; S.newCardText = ''; await ladeBoard();
+            inp.value = ''; S.newCardText = '';
+            legeKarteAn(titel, sp, cardsEl, cntEl, inp);
           }
         },
       });
@@ -892,6 +887,94 @@ function renderBoard() {
     if (r.fehler) uiHinweis(r.fehler);
     await ladeBoard();
   } }, '+ Spalte'));
+}
+
+// ---------- Bewegung ohne Wartezeit (Marcels Befund 25.08.) ----------
+// Bisher wartete jede Karte auf den Server, bevor sie sich bewegte — das fuehlte sich
+// zaeh und abgehackt an. Jetzt aendert sich das Bild sofort, der Server faehrt hinterher.
+// Dafuer merken wir uns vor dem Neu-Aufbau, wo jede Karte lag (FLIP): danach starten
+// die Karten optisch an ihrem alten Platz und gleiten an den neuen.
+function kartenPositionen() {
+  const m = new Map();
+  for (const c of document.querySelectorAll('#board .card[data-id]')) m.set(c.dataset.id, c.getBoundingClientRect());
+  return m;
+}
+function kartenGleiten(vorher, gewandert) {
+  if (!vorher || !vorher.size) return;
+  for (const c of document.querySelectorAll('#board .card[data-id]')) {
+    const alt = vorher.get(c.dataset.id); if (!alt) continue;
+    const neu = c.getBoundingClientRect();
+    const dx = alt.left - neu.left, dy = alt.top - neu.top;
+    if (!dx && !dy) continue;
+    if (c.dataset.id === gewandert) {
+      // Spaltenwechsel: die Spalten scrollen fuer sich, eine wandernde Karte wuerde an
+      // ihrem Rand abgeschnitten. Deshalb fliegt eine freie Kopie ueber das Board; die
+      // echte Karte wird erst sichtbar, wenn die Kopie angekommen ist.
+      const kopie = c.cloneNode(true);
+      kopie.classList.add('fliegt');
+      kopie.style.cssText += `;position:fixed;margin:0;left:${alt.left}px;top:${alt.top}px;width:${alt.width}px;z-index:70;pointer-events:none;transition:transform .26s cubic-bezier(.2,.75,.3,1)`;
+      document.body.append(kopie);
+      c.style.visibility = 'hidden';
+      requestAnimationFrame(() => { kopie.style.transform = `translate(${-dx}px,${-dy}px)`; });
+      setTimeout(() => { kopie.remove(); c.style.visibility = ''; }, 290);
+    } else {
+      c.style.transition = 'none';
+      c.style.transform = `translate(${dx}px,${dy}px)`;
+      requestAnimationFrame(() => {
+        c.style.transition = 'transform .26s cubic-bezier(.2,.75,.3,1)';
+        c.style.transform = '';
+        setTimeout(() => { c.style.transition = ''; }, 320);
+      });
+    }
+  }
+}
+// Karte in eine andere Spalte legen: sofort sichtbar, Server danach. Geht es schief,
+// springt die Karte zurueck und sagt warum.
+async function verschiebeKarte(id, sp) {
+  const t = (S.board?.todos || []).find((x) => x.id === id);
+  if (!t || t.spalte_id === sp.id) return;
+  const altSpalte = t.spalte_id, altStatus = t.status;
+  const vorher = kartenPositionen();
+  t.spalte_id = sp.id;
+  // Der Server setzt beim Verschieben auch den Status (Migration 78) — lokal genauso,
+  // sonst stuende die Karte fuer einen Moment in der falschen Spalte.
+  t.status = sp.ist_erledigt ? 'erledigt' : 'offen';
+  renderBoard();
+  kartenGleiten(vorher, id);
+  const r = await mut('todo_verschieben', { todo_id: id, spalte_id: sp.id });
+  if (r && r.fehler) { t.spalte_id = altSpalte; t.status = altStatus; renderBoard(); return; }
+  // Nachladen erst, wenn die Bewegung durch ist — sonst zuckt das Board mittendrin.
+  setTimeout(() => { if (!S.newCardCol && !S.detail && !S.drag) ladeBoard(); }, 320);
+}
+// Karte anlegen: sie steht sofort unten in ihrer Spalte, mit halber Deckkraft, bis der
+// Server sie bestaetigt hat. Kein Neu-Aufbau des Boards — die Eingabezeile behaelt den
+// Fokus, sodass sich mehrere Aufgaben am Stueck tippen lassen.
+async function legeKarteAn(titel, sp, cardsEl, cntEl, inp) {
+  const tmp = {
+    id: 'neu-' + Math.random().toString(36).slice(2), titel, status: 'offen', spalte_id: sp.id,
+    erstellt: new Date().toISOString().slice(0, 19), zugewiesen: [],
+  };
+  if (!S.board.todos) S.board.todos = [];
+  S.board.todos.push(tmp);
+  const knoten = renderCard(tmp);
+  knoten.classList.add('pending');
+  cardsEl.append(knoten);
+  if (cntEl) cntEl.textContent = String(Number(cntEl.textContent || 0) + 1);
+  knoten.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const misslungen = (grund) => {
+    knoten.remove();
+    S.board.todos = (S.board.todos || []).filter((x) => x !== tmp);
+    if (cntEl) cntEl.textContent = String(Math.max(0, Number(cntEl.textContent || 1) - 1));
+    if (inp && !inp.value) { inp.value = titel; S.newCardText = titel; inp.focus(); }
+    uiHinweis('Nicht gespeichert: ' + grund + ' — der Text steht wieder in der Zeile, bitte nochmal Enter.');
+  };
+  let r;
+  try { r = await lotse('todo_create', { titel, projekt: S.active.typ === 'projekt' ? S.active.name : null }); }
+  catch (err) { r = { fehler: err.message }; }
+  if (!r || !r.todo_id) { misslungen((r && (r.fehler || r.error)) || 'keine Antwort vom Server'); return; }
+  tmp.id = r.todo_id; knoten.dataset.id = r.todo_id; knoten.classList.remove('pending');
+  // mut wirft nie — schlaegt das Einsortieren fehl, existiert die Karte trotzdem (Spalte 1).
+  if (!sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
 }
 
 function spaltenMenu(e, sp, nSpalten) {
@@ -1234,10 +1317,17 @@ function renderCard(t) {
   const c = el('div', {
     class: 'card' + (st === 'arbeitet' ? ' aura' : '') + (st === 'rueckfrage' ? ' rf' : ''),
     draggable: 'true',
-    ondragstart: () => { S.drag = t.id; },
+    'data-id': t.id,
+    ondragstart: (e) => {
+      S.drag = t.id;
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      // Erst im naechsten Bild blass werden — sonst nimmt der Browser die halb
+      // durchsichtige Karte als Ziehbild und am Mauszeiger haengt fast nichts mehr.
+      requestAnimationFrame(() => c.classList.add('dragging'));
+    },
     // Ohne dragend blieb S.drag nach einem abgebrochenen Drag (Esc, daneben fallen
     // gelassen) haengen — und der 60s-Auto-Refresh war fuer den Rest der Sitzung tot.
-    ondragend: () => { S.drag = null; },
+    ondragend: () => { S.drag = null; c.classList.remove('dragging'); },
     onclick: () => openCard(t.id),
     oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); kartenMenu(e, t); },
   });
@@ -1284,6 +1374,8 @@ function renderCard(t) {
 
 // ---------- Drawer ----------
 async function openCard(id) {
+  // Frisch angelegte Karten tragen bis zur Antwort des Servers eine Platzhalter-Kennung.
+  if (!id || String(id).startsWith('neu-')) return;
   try {
     S.detail = await lotse('todo_detail', { todo_id: id });
     renderDrawer();
@@ -1296,7 +1388,17 @@ function renderDrawer() {
   const d = S.detail; if (!d || d.fehler) { if (d?.fehler) uiHinweis(d.fehler); return; }
   const st = statusVon(d); const chip = st && CHIPS[st];
   const ov = el('div', { class: 'overlay', onclick: (e) => { if (e.target === ov) closeDrawer(); } });
-  const dr = el('div', { class: 'drawer' });
+  const dr = el('div', {
+    class: 'drawer dropzone',
+    // Dateien lassen sich irgendwo auf das Blatt fallen — nicht nur auf die Ablage unten.
+    ondragover: (e) => { if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return; e.preventDefault(); dr.classList.add('filedrag'); },
+    ondragleave: (e) => { if (!dr.contains(e.relatedTarget)) dr.classList.remove('filedrag'); },
+    ondrop: (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+      e.preventDefault(); e.stopPropagation(); dr.classList.remove('filedrag');
+      ladeDateienHoch(e.dataTransfer.files, d.id);
+    },
+  });
 
   // Kopf
   const head = el('div', { class: 'dsec dhead' });
@@ -1516,24 +1618,29 @@ function renderDrawer() {
     ctxMenu(e.clientX, e.clientY, kandidaten.map((p) => ({ txt: p.name, do: async () => { await mut('todo_zuweisen',{ todo_id: d.id, person: p.kurz, an: true }); await openCard(d.id); await ladeBoard(); } })));
   } }, '+ Person')); dr.append(sp2);
 
-  // Anhaenge
+  // Anhaenge — Bild und PDF zeigen sich als Vorschau, statt erst nach dem Herunterladen
+  // (Marcel, 25.08.). Ablegen geht per Drag&Drop auf das ganze Blatt.
   const sa = el('div', { class: 'dsec' });
-  if (d.anhaenge.length) sa.append(el('div', { class: 'slbl' }, 'Dateien'));
+  sa.append(el('div', { class: 'slbl' }, 'Dateien'));
+  const vorschaubar = d.anhaenge.filter((a) => istBild(a.name) || istPdf(a.name));
+  if (vorschaubar.length) {
+    const grid = el('div', { class: 'anhgrid' });
+    for (const a of vorschaubar) grid.append(anhangKachel(a));
+    sa.append(grid);
+  }
   for (const a of d.anhaenge) sa.append(el('div', { class: 'sub' },
-    el('a', { href: '#', style: 'color:#1C1C1A;font-weight:500', onclick: async (e) => { e.preventDefault(); await downloadAnhang(a); } }, '📎 ' + a.name),
+    el('a', { href: '#', style: 'color:#1C1C1A;font-weight:500', onclick: async (e) => {
+      e.preventDefault();
+      if (istBild(a.name) || istPdf(a.name)) anhangGross(a); else await downloadAnhang(a);
+    } }, (istBild(a.name) ? '🖼 ' : istPdf(a.name) ? '📄 ' : '📎 ') + a.name),
     el('span', { style: 'color:#9A9A93;font-size:11.5px' }, a.groesse ? Math.round(a.groesse / 1024) + ' KB' : ''),
     el('button', { class: 'del', onclick: async () => { await mut('anhang_loeschen',{ anhang_id: a.id }); await openCard(d.id); } }, '✕')));
-  const fileInp = el('input', { type: 'file', style: 'display:none', onchange: async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    const pfad = `${d.id}/${Date.now()}_${f.name.replace(/[^\w.\-äöüÄÖÜß ]/g, '_')}`;
-    const up = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${pfad}`, {
-      method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token }, body: f,
-    });
-    if (!up.ok) { uiHinweis('Upload fehlgeschlagen'); return; }
-    await mut('anhang_registrieren',{ todo_id: d.id, pfad, name: f.name, groesse: f.size });
-    await openCard(d.id); await ladeBoard();
-  } });
-  sa.append(fileInp, el('button', { class: 'btn ghost', style: 'font-size:12px;padding:5px 11px', onclick: () => fileInp.click() }, 'Anhängen')); dr.append(sa);
+  const fileInp = el('input', { type: 'file', multiple: '', style: 'display:none',
+    onchange: (e) => { const dateien = e.target.files; e.target.value = ''; ladeDateienHoch(dateien, d.id); } });
+  sa.append(fileInp,
+    el('div', { class: 'ablage', onclick: () => fileInp.click() }, 'Dateien hierher ziehen oder klicken zum Auswählen'),
+    el('div', { id: 'anh-status', style: 'font-size:11.5px;color:#75756E;margin-top:6px' }));
+  dr.append(sa);
 
   // Kommentare
   const sk = el('div', { class: 'dsec' });
@@ -1625,6 +1732,75 @@ async function oeffneAnhaenge(liste) {
   }
 }
 
+// ---------- Dateien: Vorschau und Ablegen (25.08.) ----------
+function istBild(n) { return /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(String(n || '')); }
+function istPdf(n) { return /\.pdf$/i.test(String(n || '')); }
+// Die Storage will den Anmelde-Kopf sehen, den ein <img src="…"> nicht mitschicken kann.
+// Also holen wir die Datei einmal und merken uns ihre Blob-Adresse fuer diese Sitzung.
+const anhangUrls = new Map();
+async function anhangUrl(a) {
+  if (anhangUrls.has(a.pfad)) return anhangUrls.get(a.pfad);
+  const r = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${a.pfad}`, {
+    headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token } });
+  if (!r.ok) throw new Error('Datei nicht abrufbar');
+  const typ = istPdf(a.name) ? 'application/pdf' : (r.headers.get('content-type') || 'application/octet-stream');
+  const u = URL.createObjectURL(new Blob([await r.arrayBuffer()], { type: typ }));
+  anhangUrls.set(a.pfad, u);
+  return u;
+}
+function anhangKachel(a) {
+  const vs = el('div', { class: 'vs' }, el('span', { class: 'lade' }, 'lädt…'));
+  const k = el('div', { class: 'anhkachel', title: a.name, onclick: () => anhangGross(a) },
+    vs, el('div', { class: 'nm' }, a.name));
+  anhangUrl(a).then((u) => {
+    vs.innerHTML = '';
+    vs.append(istBild(a.name)
+      ? el('img', { src: u, alt: a.name })
+      : el('iframe', { src: u + '#toolbar=0&navpanes=0&scrollbar=0&view=FitH', tabindex: '-1' }));
+  }).catch(() => { vs.innerHTML = ''; vs.append(el('span', { class: 'lade' }, 'Vorschau nicht möglich')); });
+  return k;
+}
+// Grosse Ansicht ueber dem Karten-Detail: Bild als Bild, PDF im Betrachter des Browsers.
+function anhangGross(a) {
+  const inhalt = el('div', { class: 'lbinhalt' }, 'Lädt…');
+  const zu = () => { removeEventListener('keydown', taste, true); ov.remove(); };
+  const taste = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); zu(); } };
+  const ov = el('div', { class: 'overlay lightbox', onclick: (e) => { if (e.target === ov) zu(); } },
+    el('div', { class: 'lbbox' },
+      el('div', { class: 'lbkopf' },
+        el('span', { class: 'nm' }, a.name),
+        el('button', { class: 'btn ghost', onclick: () => downloadAnhang(a) }, 'Herunterladen'),
+        el('button', { class: 'btn ghost', onclick: zu }, 'Schließen')),
+      inhalt));
+  document.body.append(ov);
+  addEventListener('keydown', taste, true);
+  anhangUrl(a).then((u) => {
+    inhalt.innerHTML = '';
+    inhalt.append(istBild(a.name) ? el('img', { src: u, alt: a.name }) : el('iframe', { src: u }));
+  }).catch((e) => { inhalt.textContent = 'Konnte nicht geladen werden: ' + e.message; });
+}
+// Hochladen: mehrere Dateien am Stueck, mit Fortschritt unter der Dateiliste.
+let anhangZaehler = 0;
+async function ladeDateienHoch(dateien, todoId) {
+  const liste = Array.from(dateien || []); if (!liste.length) return;
+  const box = document.getElementById('anh-status');
+  let n = 0;
+  for (const f of liste) {
+    n++;
+    if (box) box.textContent = `Lädt hoch (${n}/${liste.length}): ${f.name}`;
+    const pfad = `${todoId}/${Date.now()}_${++anhangZaehler}_${f.name.replace(/[^\w.\-äöüÄÖÜß ]/g, '_')}`;
+    let up;
+    try {
+      up = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${pfad}`, {
+        method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token }, body: f });
+    } catch { up = { ok: false }; }
+    if (!up.ok) { if (box) box.textContent = ''; uiHinweis('Upload fehlgeschlagen: ' + f.name); return; }
+    await mut('anhang_registrieren', { todo_id: todoId, pfad, name: f.name, groesse: f.size });
+  }
+  if (box) box.textContent = '';
+  await openCard(todoId); await ladeBoard();
+}
+
 async function downloadAnhang(a) {
   const r = await fetch(`${SUPA}/storage/v1/object/todo-anhaenge/${a.pfad}`, {
     headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token } });
@@ -1673,6 +1849,15 @@ async function doLogin() {
     await authLogin(document.getElementById('li-mail').value.trim(), document.getElementById('li-pw').value);
     await start();
   } catch (e) { err.textContent = e.message; }
+}
+// Eine Datei daneben fallen zu lassen oeffnete sie bisher im Browser — die App war weg.
+// Ausserhalb der Ablagezonen passiert jetzt nichts mehr.
+for (const ereignis of ['dragover', 'drop']) {
+  addEventListener(ereignis, (e) => {
+    if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+    if (e.target && e.target.closest && e.target.closest('.dropzone')) return;
+    e.preventDefault();
+  });
 }
 addEventListener('unhandledrejection', (e) => console.error('unhandled:', e.reason));
 loadSession();
