@@ -477,25 +477,30 @@ function renderRadar() {
       const k = (b.karten || []).find(pruef); if (k) { openCard(k.id); return; }
     }
   };
-  const kachel = (zahl, label, warn, klick) => el('div', {
-    class: 'rkpi' + (warn ? ' warn' : '') + (klick ? ' klick' : ''),
+  // Ton je Kachel: die Gesamtzahl traegt dunkel, alles Dringliche hat eine eigene
+  // Farbkante. Ohne Unterscheidung sah die Zeile wie vier gleiche Kaestchen aus
+  // (Marcels Befund 25.08.).
+  const kachel = (zahl, label, ton, klick) => el('div', {
+    class: 'rkpi' + (ton ? ' ' + ton : '') + (klick ? ' klick' : ''),
     onclick: klick || null,
   }, el('div', { class: 'z' }, String(zahl)), el('div', { class: 'l' }, label));
 
   const kopf = el('div', { class: 'rkopf' });
   const kpis = el('div', { class: 'rkpis' });
-  kpis.append(kachel(kpi.gesamt || 0, (kpi.gesamt === 1 ? 'Aufgabe' : 'Aufgaben') + ' für dich offen'));
+  kpis.append(kachel(kpi.gesamt || 0, (kpi.gesamt === 1 ? 'Aufgabe' : 'Aufgaben') + ' für dich offen', 'haupt'));
   // Nur zeigen, was es wirklich gibt -- Nullkacheln sagen nichts.
   if (kpi.rueckfragen) kpis.append(kachel(kpi.rueckfragen,
-    kpi.rueckfragen === 1 ? 'Rückfrage an dich' : 'Rückfragen an dich', true,
+    kpi.rueckfragen === 1 ? 'Rückfrage an dich' : 'Rückfragen an dich', 'rueck',
     springe((k) => k.agent_status === 'wartet_info')));
   if (kpi.zuarbeiten) kpis.append(kachel(kpi.zuarbeiten,
-    kpi.zuarbeiten === 1 ? 'Zuarbeit vom Agenten' : 'Zuarbeiten vom Agenten', true,
+    kpi.zuarbeiten === 1 ? 'Zuarbeit vom Agenten' : 'Zuarbeiten vom Agenten', 'zu',
     springe((k) => k.zuarbeit)));
   if (kpi.kommentiert) kpis.append(kachel(kpi.kommentiert,
-    kpi.kommentiert === 1 ? 'Karte neu kommentiert' : 'Karten neu kommentiert', true,
+    kpi.kommentiert === 1 ? 'Karte neu kommentiert' : 'Karten neu kommentiert', 'komm',
     springe((k) => k.neue_kommentare > 0)));
-  if (kpi.ueberfaellig) kpis.append(kachel(kpi.ueberfaellig, 'überfällig', true, springe((k) => k.ueberfaellig)));
+  if (kpi.ueberfaellig) kpis.append(kachel(kpi.ueberfaellig,
+    kpi.ueberfaellig === 1 ? 'Aufgabe überfällig' : 'Aufgaben überfällig', 'spaet',
+    springe((k) => k.ueberfaellig)));
   kopf.append(kpis);
   kopf.append(el('button', { class: 'rwahlbtn', onclick: () => radarAuswahlDialog() },
     '⊞ Dashboard konfigurieren'));
