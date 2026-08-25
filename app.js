@@ -20,6 +20,7 @@ const S = {
   active: null, // {typ:'board'|'projekt', id, name}
   ansicht: 'board', // im Projekt: 'board' (Aufgaben) oder 'dash' (Projekt-Dashboard)
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
+  melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
 };
 
 // ---------- Dialoge ----------
@@ -145,7 +146,7 @@ async function lotse(action, body = {}, retried = false) {
     // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
     // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
     // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
-    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe'];
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen'];
     if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
@@ -254,6 +255,7 @@ let ladeToken = 0; // verwirft veraltete Antworten bei schnellem Board-Wechsel
 async function ladeBoard() {
   if (!S.active) return;
   const token = ++ladeToken;
+  ladeMeldungen(); // blockiert nichts; zeichnet die Topbar selbst nach
   if (S.active.typ === 'radar') {
     const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (token !== ladeToken) return;
@@ -733,6 +735,115 @@ async function neuesBoard(typ) {
   await ladeAlles();
 }
 
+// ---------- Glocke ----------
+// Der Ereignisstrom aus Migration 113. Das Radar zeigt einen ZUSTAND ("da liegt was
+// fuer dich"), die Glocke ein EREIGNIS ("das ist gerade passiert") -- beides braucht
+// es, weil eine Zuweisung oder ein Abhaken im Radar nur stillschweigend die Liste
+// veraendert und darum niemandem auffaellt.
+const MELDE_ICO = { erwaehnung: '@', zuweisung: '\u25CE', kommentar: '\u2709', aenderung: '\u270E' };
+
+async function ladeMeldungen() {
+  const r = await lotse('benachrichtigungen', { anzahl: 30 }).catch(() => null);
+  // Kennt der Lotse die Aktion noch nicht (aeltere Function-Version), bleibt die
+  // Glocke einfach weg, statt eine englische Fehlermeldung zu zeigen.
+  if (!r || r.fehler) return;
+  S.melde = r;
+  renderTopbar();
+}
+
+function meldeZeit(iso) {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return 'gerade eben';
+  if (min < 60) return min + ' min';
+  if (min < 60 * 24) return Math.round(min / 60) + ' h';
+  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+
+function meldeZeile(m, panel) {
+  const wer = m.von ? (m.von === 'agent' ? 'Agent' : personName(m.von)) : 'automatisch';
+  return el('div', { class: 'bmeld' + (m.gelesen ? ' gelesen' : ''), onclick: async () => {
+    panel.remove();
+    if (!m.gelesen) await lotse('benachrichtigung_gelesen', { ids: [m.id] }).catch(() => {});
+    if (m.todo_id) await openCard(m.todo_id); // stempelt die Karte ohnehin als gesehen
+    await ladeMeldungen();
+  } },
+    el('span', { class: 'bico' }, MELDE_ICO[m.art] || '\u2022'),
+    el('div', { class: 'btxt' },
+      el('div', { class: 'bwas' }, wer + ' · ' + m.text),
+      el('div', { class: 'btitel' }, m.titel || 'Karte gelöscht')),
+    el('span', { class: 'bzeit' }, meldeZeit(m.am)));
+}
+
+function meldePanel(anker) {
+  const schon = document.getElementById('bell-panel');
+  if (schon) { schon.remove(); return; } // zweiter Klick schliesst wieder
+  const p = el('div', { class: 'bellpanel', id: 'bell-panel' });
+  const kopf = el('div', { class: 'bkopf' }, el('b', {}, 'Benachrichtigungen'));
+  if ((S.melde?.offen || 0) > 0) kopf.append(el('button', { class: 'balle', onclick: async () => {
+    await lotse('benachrichtigung_gelesen', {}).catch(() => {});
+    await ladeMeldungen();
+  } }, 'Alle als gelesen'));
+  p.append(kopf);
+  const eintraege = S.melde?.eintraege || [];
+  if (!eintraege.length) p.append(el('div', { class: 'bleer' },
+    'Nichts Neues. Hier landet, wo dich jemand mit @ erwähnt, was dir zugewiesen wird '
+    + 'und was auf deinen Karten passiert.'));
+  for (const m of eintraege) p.append(meldeZeile(m, p));
+  document.body.appendChild(p);
+  const r = anker.getBoundingClientRect();
+  p.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - p.offsetHeight - 8)) + 'px';
+  p.style.left = Math.max(8, Math.min(r.right - p.offsetWidth, innerWidth - p.offsetWidth - 8)) + 'px';
+  // Wie die Kontextmenues: der naechste Klick irgendwohin schliesst wieder.
+  setTimeout(() => addEventListener('click', () => p.remove(), { once: true }));
+}
+
+// @-Vorschlag im Kommentarfeld. Erwaehnungen laufen ueber die Kuerzel (adam, gross,
+// ...) -- die kennt niemand auswendig, und eine Erwaehnung, die kein Kuerzel trifft,
+// benachrichtigt lautlos niemanden.
+function mentionHilfe(inp) {
+  let box = null;
+  const zu = () => { if (box) { box.remove(); box = null; } };
+  const auf = () => {
+    const bis = inp.selectionStart ?? inp.value.length;
+    const m = inp.value.slice(0, bis).match(/(?:^|[^A-Za-z0-9_@])@([A-Za-z]*)$/);
+    zu();
+    if (!m) return;
+    const treffer = personListe().filter((p) => p.kurz.startsWith(m[1].toLowerCase())).slice(0, 6);
+    if (!treffer.length) return;
+    box = el('div', { class: 'mention' });
+    treffer.forEach((p, i) => box.append(el('button', { class: i === 0 ? 'an' : '',
+      // mousedown statt click: sonst nimmt der Fokusverlust die Liste weg, bevor der Klick ankommt.
+      onmousedown: (e) => {
+        e.preventDefault();
+        const vor = inp.value.slice(0, bis - m[1].length);
+        inp.value = vor + p.kurz + ' ' + inp.value.slice(bis);
+        zu(); inp.focus();
+        inp.selectionStart = inp.selectionEnd = vor.length + p.kurz.length + 1;
+      } }, p.name, el('small', {}, '@' + p.kurz))));
+    document.body.appendChild(box);
+    const r = inp.getBoundingClientRect();
+    box.style.left = Math.max(8, Math.min(r.left, innerWidth - box.offsetWidth - 8)) + 'px';
+    box.style.top = Math.max(8, r.top - box.offsetHeight - 6) + 'px';
+  };
+  inp.addEventListener('input', auf);
+  inp.addEventListener('blur', () => setTimeout(zu, 120));
+  inp.addEventListener('keydown', (e) => {
+    if (!box) return;
+    const btns = [...box.querySelectorAll('button')];
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); zu(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      box.querySelector('button.an')?.dispatchEvent(new MouseEvent('mousedown', { cancelable: true }));
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      let i = btns.findIndex((b) => b.classList.contains('an'));
+      btns[i]?.classList.remove('an');
+      i = ((i < 0 ? 0 : i) + (e.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length;
+      btns[i].classList.add('an');
+    }
+  });
+}
+
 // ---------- Topbar + Board ----------
 function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
@@ -764,6 +875,14 @@ function renderTopbar() {
     else setTimeout(() => { rufBtn.textContent = alt; rufBtn.disabled = false; }, 20000);
   } }, '📞 Ruf mich an');
   tb.append(rufBtn);
+  // Glocke direkt neben dem Anruf-Knopf: die eine Stelle, an der alles auflaeuft,
+  // was mich betrifft -- unabhaengig davon, welches Board gerade offen ist.
+  const offen = S.melde?.offen || 0;
+  const bell = el('button', { class: 'bellbtn',
+    title: offen ? offen + (offen === 1 ? ' neue Benachrichtigung' : ' neue Benachrichtigungen') : 'Benachrichtigungen',
+    onclick: (e) => { e.stopPropagation(); meldePanel(bell); } },
+    '\u{1F514}', offen ? el('span', { class: 'cnt' }, offen > 99 ? '99+' : String(offen)) : '');
+  tb.append(bell);
   const rf = (S.board?.todos || []).filter((t) => statusVon(t) === 'rueckfrage');
   if (rf.length) tb.append(el('button', {
     class: 'alertbtn', onclick: () => openCard(rf[0].id),
@@ -1667,7 +1786,8 @@ function renderDrawer() {
     sk.append(el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text)));
   }
   const addK = el('div', { class: 'inline-add' });
-  const kInp = el('input', { placeholder: 'Kommentar…' });
+  const kInp = el('input', { placeholder: 'Kommentar…  @ erwähnt jemanden' });
+  mentionHilfe(kInp);
   addK.append(kInp, el('button', { class: 'btn', onclick: async () => { if (kInp.value.trim()) { await mut('kommentar_anlegen',{ todo_id: d.id, text: kInp.value.trim() }); await openCard(d.id); await ladeBoard(); } } }, 'Senden'));
   sk.append(addK); dr.append(sk);
 
