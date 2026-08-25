@@ -185,7 +185,10 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .pill{display:inline-flex;align-items:center;gap:5px;background:rgba(28,28,26,.07);border-radius:12px;padding:3px 10px;font-size:12px;margin:0 6px 6px 0}
 .kom{margin-bottom:10px}
 .kom .von{font-size:11.5px;color:#75756E;margin-bottom:2px;display:flex;align-items:center;gap:8px}
-.kom .von .edit{margin-left:auto;color:#5A6E1E;font-weight:600}
+.kom .von .edit{margin-left:auto;color:#9A9A93;visibility:hidden}
+.kom .von .del{color:#9A9A93;visibility:hidden}
+.kom:hover .von .edit,.kom:hover .von .del{visibility:visible}
+.kom .von .edit:hover,.kom .von .del:hover{color:#1C1C1A}
 .kom .txt{font-size:13px;background:#fff;border:1px solid rgba(28,28,26,.08);border-radius:8px;padding:7px 10px}
 .vrow{display:flex;gap:10px;font-size:12.5px;color:#75756E;padding:3px 0}
 .inline-add{display:flex;gap:7px;margin-top:8px}
@@ -266,13 +269,25 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 /* ---- Mein Radar (Startansicht): alles Offene einer Person, nach Bereich ---- */
 #radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
 .rkpis{display:flex;gap:10px;flex-wrap:wrap;padding:2px 0 16px}
-.rkpi{background:#fff;border-radius:12px;padding:11px 15px;min-width:132px;box-shadow:0 1px 2px rgba(28,28,26,.06),0 2px 8px rgba(28,28,26,.05)}
-.rkpi .z{font-family:'Space Grotesk',sans-serif;font-size:23px;font-weight:700;line-height:1.1}
-.rkpi .l{font-size:11.5px;color:#75756E;margin-top:2px}
-.rkpi.warn{background:#FBF3E2}
-.rkpi.warn .z{color:#8A5606}
+.rkpi{background:#fff;border-radius:14px;padding:13px 18px 14px;min-width:152px;border-left:5px solid rgba(28,28,26,.12);box-shadow:0 1px 2px rgba(28,28,26,.06),0 2px 8px rgba(28,28,26,.05)}
+.rkpi .z{font-family:'Space Grotesk',sans-serif;font-size:31px;font-weight:700;line-height:1.05;letter-spacing:-.02em}
+.rkpi .l{font-size:12px;font-weight:500;color:#75756E;margin-top:3px}
+/* Die Gesamtzahl traegt: dunkel, damit das Auge zuerst dort landet. */
+.rkpi.haupt{background:#1C1C1A;border-left-color:#1C1C1A}
+.rkpi.haupt .z{color:#F7F7F5}
+.rkpi.haupt .l{color:#A5A59D}
+/* Dringliches: eigene Kante, eigener Ton -- unterscheidbar auf einen Blick. */
+.rkpi.rueck{background:#FBF3E2;border-left-color:#E29A2E}
+.rkpi.rueck .z{color:#8A5606}
+.rkpi.zu{background:#FBF3E2;border-left-color:#B8862B}
+.rkpi.zu .z{color:#8A5606}
+.rkpi.komm{background:#F3EFE2;border-left-color:#A98E3C}
+.rkpi.komm .z{color:#5C4A16}
+.rkpi.spaet{background:#F9E5DF;border-left-color:#C2543D}
+.rkpi.spaet .z{color:#8C2F1D}
 .rkpi.klick{cursor:pointer}
-.rkpi.klick:hover{box-shadow:0 4px 16px rgba(28,28,26,.10)}
+.rkpi.klick:hover{box-shadow:0 5px 18px rgba(28,28,26,.13);transform:translateY(-1px)}
+.rkpi{transition:box-shadow .15s ease,transform .15s ease}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;align-items:start}
 .rbereich{background:#fff;border-radius:16px;padding:12px 14px 10px;box-shadow:0 1px 2px rgba(28,28,26,.06),0 2px 8px rgba(28,28,26,.05)}
 .rbh{display:flex;align-items:center;gap:8px;padding:0 2px 9px;cursor:pointer}
@@ -332,7 +347,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt8e4duj">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt8elca6">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -410,7 +425,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt8e4duj"></script>
-<script type="module" src="dashboard.js?v=mt8e4duj"></script>
+<script src="app.js?v=mt8elca6"></script>
+<script type="module" src="dashboard.js?v=mt8elca6"></script>
 </body>
 </html>
