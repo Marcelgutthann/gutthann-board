@@ -216,23 +216,24 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .lbinhalt iframe{width:100%;height:100%;border:0}
 
 .overlay{position:fixed;inset:0;background:rgba(28,28,26,.32);display:flex;justify-content:center;align-items:center;padding:3vh 0;z-index:50}
-/* Karten-Detail (Redesign 26.08., Feedback-Meeting): der Agent soll seine ganze
-   Umgebung im Chat kennen statt ueber Kanban-Spalten gesteuert zu werden -- der Chat
-   wird darum eine eigene, gleichberechtigte Spalte statt eines Abschnitts unter vielen.
-   Das Sheet ist deutlich groesser (fast bildschirmfuellend) und in zwei Spalten geteilt:
-   links der Chat (dchat, feste Breite, eigener Verlauf-Scroll + fest angedockte
-   Eingabe), rechts die Aufgabe wie gehabt (dinfo, eigenstaendig scrollend). Der Kopf
-   (dkopf) spannt oben ueber beide, weil Titel/Frist/Projekt zu beiden Seiten gehoeren. */
-.drawer{width:min(1440px,97vw);height:92vh;background:#FCFCFB;overflow:hidden;border-radius:20px;box-shadow:0 24px 64px rgba(28,28,26,.25);display:flex;flex-direction:column}
-.drawer-kopf{flex:none;padding:26px 32px 18px;border-bottom:1px solid rgba(28,28,26,.09)}
+/* Karten-Detail (Redesign 26.08., Feedback-Meeting; Korrektur noch am selben Tag nach
+   Marcels erstem Blick: Seiten getauscht, Chat-Spalte wirkte bei kurzen Verlaeufen wie
+   toter Platz). Die Aufgabe (dinfo) ist die primaere, breitere linke Spalte -- ihr
+   Inhalt ist der Grund, warum die Karte ueberhaupt aufgeht. Der Chat (dchat) sitzt
+   rechts als schmalere, feste Seitenleiste. Der Kopf spannt oben ueber beide. */
+.drawer{width:min(1320px,96vw);height:90vh;background:#FCFCFB;overflow:hidden;border-radius:20px;box-shadow:0 24px 64px rgba(28,28,26,.25);display:flex;flex-direction:column}
+.drawer-kopf{flex:none;padding:20px 30px 14px;border-bottom:1px solid rgba(28,28,26,.09)}
 .dbody{flex:1;min-height:0;display:flex}
-.dchat{width:min(46%,600px);flex:none;display:flex;flex-direction:column;min-height:0;background:#F7F7F5;border-right:1px solid rgba(28,28,26,.09)}
-.dinfo{flex:1;min-width:0;overflow-y:auto;padding-bottom:8px}
-.dchat-kopf{flex:none;display:flex;align-items:baseline;gap:10px;padding:18px 26px 14px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#1C1C1A}
-.dchat-hinweis{font-family:'Hanken Grotesk',sans-serif;font-size:11.5px;font-weight:500;color:#9A9A93}
-.dchat-verlauf{flex:1;min-height:0;overflow-y:auto;padding:4px 26px 14px;display:flex;flex-direction:column}
-.dchat-leer{font-size:13px;color:#8A8A83;line-height:1.6;padding:18px 2px;max-width:42ch}
-.dchat-eingabe{flex:none;display:flex;gap:9px;padding:16px 26px 22px;border-top:1px solid rgba(28,28,26,.08);background:#F7F7F5}
+.dinfo{flex:1;min-width:0;overflow-y:auto;padding-bottom:8px;border-right:1px solid rgba(28,28,26,.09)}
+.dchat{width:min(38%,460px);flex:none;display:flex;flex-direction:column;min-height:0;background:#F7F7F5}
+.dchat-kopf{flex:none;display:flex;align-items:baseline;gap:10px;padding:16px 22px 12px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#1C1C1A}
+.dchat-hinweis{font-family:'Hanken Grotesk',sans-serif;font-size:11px;font-weight:500;color:#9A9A93}
+/* justify-content:flex-end verankert einen kurzen Verlauf unten am Eingabefeld, statt
+   ihn oben stehen zu lassen und darunter Leere zu zeigen (Marcels Befund: "sieht
+   verschwendet aus"). Ueberlaufende Verlaeufe scrollen wie gewohnt von oben. */
+.dchat-verlauf{flex:1;min-height:0;overflow-y:auto;padding:4px 22px 14px;display:flex;flex-direction:column;justify-content:flex-end}
+.dchat-leer{font-size:13px;color:#8A8A83;line-height:1.6;padding:18px 2px;max-width:34ch;margin-top:auto;margin-bottom:auto}
+.dchat-eingabe{flex:none;display:flex;gap:8px;padding:14px 22px 18px;border-top:1px solid rgba(28,28,26,.08);background:#F7F7F5}
 .dchat-eingabe input{flex:1;padding:10px 13px;border:1px solid rgba(28,28,26,.18);border-radius:10px;background:#fff;font-size:13.5px}
 .dchat-eingabe input:focus{outline:2px solid rgba(124,169,40,.45);outline-offset:-1px;border-color:rgba(124,169,40,.5)}
 .dchat-eingabe .btn{padding:10px 18px}
@@ -259,8 +260,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
   .drawer{width:98vw;height:96vh}
   .drawer-kopf{padding:18px 18px 14px}
   .dbody{flex-direction:column;overflow-y:auto}
-  .dchat{width:auto;height:46vh;border-right:none;border-bottom:1px solid rgba(28,28,26,.09)}
-  .dinfo{overflow-y:visible}
+  .dinfo{overflow-y:visible;border-right:none;border-bottom:1px solid rgba(28,28,26,.09)}
+  .dchat{width:auto;height:42vh}
 }
 .modalbox{width:470px;max-width:92vw;background:#FCFCFB;border-radius:14px;box-shadow:0 18px 48px rgba(28,28,26,.28);padding:18px 20px;max-height:88vh;overflow-y:auto}
 .modalbox .slbl{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin-bottom:7px}
@@ -453,7 +454,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt9uyjt5">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt9v8b2w">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -531,7 +532,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt9uyjt5"></script>
-<script type="module" src="dashboard.js?v=mt9uyjt5"></script>
+<script src="app.js?v=mt9v8b2w"></script>
+<script type="module" src="dashboard.js?v=mt9v8b2w"></script>
 </body>
 </html>
