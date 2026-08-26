@@ -1832,7 +1832,32 @@ function renderDrawer() {
         if (r && r.ok) { await openCard(d.id); await ladeBoard(); }
       } }, '✕'));
     }
-    sk.append(el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text)));
+    const komZeile = el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text));
+    // Vorschlag mit Klick-Bestaetigung (Migration 115/116): eine Frist AENDERT eine
+    // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
+    // schlaegt vor, ein Mensch entscheidet mit einem Klick. Einmal entschieden bleibt
+    // die Zeile stehen (ausgegraut), damit der Verlauf nachvollziehbar bleibt.
+    if (k.vorschlag_art === 'frist' && k.vorschlag?.datum) {
+      const datumTxt = new Date(k.vorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE');
+      if (!k.vorschlag_status) {
+        const zeile = el('div', { class: 'vorschlagzeile' },
+          el('span', {}, '📅 Frist ' + datumTxt + ' übernehmen?'));
+        const entscheiden = async (annehmen) => {
+          zeile.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+          const r = await mut('vorschlag_entscheiden', { kommentar_id: k.id, annehmen });
+          if (r && r.ok) { await openCard(d.id); await ladeBoard(); }
+          else zeile.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+        };
+        zeile.append(
+          el('button', { class: 'btn', style: 'padding:3px 11px;font-size:12px', onclick: () => entscheiden(true) }, 'Übernehmen'),
+          el('button', { class: 'btn ghost', style: 'padding:3px 11px;font-size:12px', onclick: () => entscheiden(false) }, 'Ablehnen'));
+        komZeile.append(zeile);
+      } else {
+        komZeile.append(el('div', { class: 'vorschlagzeile entschieden' },
+          el('span', {}, '📅 Frist ' + datumTxt + ' — ' + (k.vorschlag_status === 'angenommen' ? 'übernommen ✓' : 'abgelehnt'))));
+      }
+    }
+    sk.append(komZeile);
   }
   // Empfangsbestaetigung. Anforderung von Marcel: wenn ich den Agenten anschreibe,
   // muss DIREKT etwas kommen, damit ich weiss, dass er was macht. Die Zeile steht
