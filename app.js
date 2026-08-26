@@ -214,6 +214,18 @@ function fmtDatum(iso) {
   if (diff < 0) return { txt: d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' überfällig', urgent: true };
   return { txt: d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }), urgent: false };
 }
+// Papierkorb einer aussortierten VgV-Karte (Migration 120): 24 Stunden sichtbar.
+// Liefert null (nicht im Papierkorb), 'abgelaufen' oder den Reststunden-Text.
+function papierkorbRest(t) {
+  const ab = t && t.vgv_papierkorb;
+  if (!ab) return null;
+  const weg = Date.parse(String(ab)) + 24 * 3600 * 1000;
+  if (!Number.isFinite(weg)) return null;
+  const stunden = Math.floor((weg - Date.now()) / 3600000);
+  if (stunden < 0) return 'abgelaufen';
+  return stunden >= 1 ? 'noch ' + stunden + ' h' : 'nur noch Minuten';
+}
+
 // Abgabefrist einer VgV-Karte ('JJJJ-MM-TT HH:MM' oder ISO) -> Kachel-Text + Dringlichkeit
 function vgvRest(frist) {
   if (!frist) return null;
@@ -990,7 +1002,11 @@ function renderBoard() {
     const bekannt = (id) => spalten.some((s2) => s2.id === id);
     const inSpalte = (b.todos || []).filter((t) =>
       (t.spalte_id === sp.id || (sp.id === erste && !t.spiegel && (!t.spalte_id || !bekannt(t.spalte_id)))) &&
-      (sp.ist_erledigt ? t.status === 'erledigt' : t.status !== 'erledigt'));
+      (sp.ist_erledigt ? t.status === 'erledigt' : t.status !== 'erledigt') &&
+      // Papierkorb (Migration 120): eine aussortierte Karte steht 24 Stunden zum
+      // Zurueckholen da — danach ist sie aus dem Blick, auch wenn der Runner sie
+      // erst beim naechsten Lauf endgueltig wegraeumt.
+      papierkorbRest(t) !== 'abgelaufen');
     // Reihenfolge (Marcels Befund 25.08.): aelteste oben, neu Angelegtes unten — die
     // Karte bleibt dort stehen, wo sie angelegt wurde, statt nach oben zu springen.
     // Nur die Erledigt-Spalte bleibt neueste zuerst; dort ist das Letzte das Interessante.
@@ -1173,6 +1189,83 @@ function spaltenMenu(e, sp, nSpalten) {
   if (sp.ist_erledigt) items.push({ note: 'Erledigt-Spalte – Rolle über andere Spalte ändern' });
   if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Löschen – Karten wandern in erste Spalte', danger: true, do: async () => { const r = await lotse('spalte_loeschen', { spalte_id: sp.id }); if (r.fehler) uiHinweis(r.fehler); await ladeBoard(); } });
   ctxMenu(e.clientX, e.clientY, items);
+}
+
+// ---------- Aussortieren mit Gedaechtnis (Marcels Auftrag 26.08., Migration 120) ----------
+// Eine VgV-Karte verschwindet nie mehr wortlos: Der Ausgang und der Grund werden gefragt,
+// beides landet in vgv_lernen und wird beim naechsten aehnlichen Verfahren wieder gelesen.
+// Danach liegt die Karte 24 Stunden in "Absage" — genug Zeit, sie zurueckzuziehen.
+const AUSGAENGE = [
+  ['aussortiert', 'Wir bewerben uns nicht'],
+  ['absage_phase1', 'Absage nach Teilnahmeantrag'],
+  ['absage_phase2', 'Absage nach Präsentation'],
+  ['zurueckgezogen', 'Bewerbung zurückgezogen'],
+];
+const LERN_GRUENDE = [
+  ['referenz_fehlt', 'Referenz fehlt'],
+  ['zu_weit_weg', 'zu weit weg'],
+  ['zu_klein', 'zu klein'],
+  ['zu_gross', 'zu groß'],
+  ['falsche_leistung', 'nicht unser Fach'],
+  ['frist_zu_kurz', 'Frist zu kurz'],
+  ['kapazitaet', 'keine Kapazität'],
+  ['eignung_umsatz_personal', 'Eignung (Umsatz/Personal)'],
+  ['honorar_unattraktiv', 'Honorar unattraktiv'],
+  ['unterlagen_unvollstaendig', 'Unterlagen nicht beschaffbar'],
+  ['punkte_zu_wenig', 'zu wenig Punkte'],
+  ['bewerberfeld_zu_stark', 'Bewerberfeld zu stark'],
+  ['kein_interesse', 'kein Interesse'],
+];
+function aussortierDialog(t, danach) {
+  const root = document.getElementById('ctx-root'); root.innerHTML = '';
+  const zu = () => { root.innerHTML = ''; };
+  const ov = el('div', { class: 'overlay', style: 'justify-content:center;align-items:center', onclick: (e) => { if (e.target === ov) zu(); } });
+  const box = el('div', { class: 'modalbox' });
+  box.append(el('div', { style: 'font-size:15px;font-weight:700;margin-bottom:2px' }, 'Aussortieren — „' + String(t.titel).slice(0, 60) + '“'));
+  box.append(el('div', { style: 'font-size:12px;color:#75756E;margin-bottom:12px' },
+    'Die Karte liegt danach 24 Stunden in „Absage" und ist dann weg; der Verfahrensordner wandert ins Archiv. Was du hier einträgst, bleibt — der Agent liest es beim nächsten ähnlichen Verfahren mit.'));
+
+  box.append(el('div', { class: 'slbl' }, 'Was ist passiert?'));
+  let ausgang = 'aussortiert';
+  const agRow = el('div', { style: 'display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 4px' });
+  const agBtns = {};
+  for (const [k, label] of AUSGAENGE) {
+    const b = el('button', { class: 'lernchip' + (k === ausgang ? ' an' : ''), onclick: () => {
+      ausgang = k;
+      for (const [k2, b2] of Object.entries(agBtns)) b2.classList.toggle('an', k2 === k);
+    } }, label);
+    agBtns[k] = b; agRow.append(b);
+  }
+  box.append(agRow);
+
+  box.append(el('div', { class: 'slbl', style: 'margin-top:12px' }, 'Warum? (mehrere möglich)'));
+  const gewaehlt = new Set();
+  const gRow = el('div', { style: 'display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 4px' });
+  for (const [k, label] of LERN_GRUENDE) {
+    const b = el('button', { class: 'lernchip', onclick: () => {
+      if (gewaehlt.has(k)) gewaehlt.delete(k); else gewaehlt.add(k);
+      b.classList.toggle('an', gewaehlt.has(k));
+    } }, label);
+    gRow.append(b);
+  }
+  box.append(gRow);
+
+  box.append(el('div', { class: 'slbl', style: 'margin-top:12px' }, 'Was sollen wir daraus lernen?'));
+  const ta = el('textarea', { class: 'autota', style: 'min-height:74px',
+    placeholder: 'Im Klartext, wie du es einem Kollegen sagen würdest. Z. B.: „Holzbau-Referenz fehlt uns — wir brauchen Lauterbach als Referenzblatt, sonst fallen wir bei Holzbau-Verfahren immer durch."' });
+  box.append(ta);
+
+  const row = el('div', { style: 'display:flex;gap:9px;margin-top:16px;flex-wrap:wrap' });
+  row.append(el('button', { class: 'btn lime', onclick: async () => {
+    const r = await mut('vgv_aussortieren', { todo_id: t.id, ausgang,
+      gruende: Array.from(gewaehlt), notiz: ta.value.trim() || null });
+    if (r && r.fehler) return;
+    zu(); if (danach) await danach(); await ladeBoard();
+  } }, 'Aussortieren'));
+  row.append(el('button', { class: 'btn ghost', onclick: zu }, 'Abbrechen'));
+  box.append(row);
+  ov.append(box); root.append(ov);
+  setTimeout(() => ta.focus());
 }
 
 function spalteAutomatikDialog(sp) {
@@ -1473,6 +1566,11 @@ function kartenMenu(e, t) {
     items.push({ txt: '⌖ ' + (t.projekt_name ? 'Projekt ändern…' : 'Projekt zuweisen…'), do: () => setTimeout(() => projektMenu(x, y, t.id)) });
     if (t.projekt_name) items.push({ txt: '⌖ Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
   }
+  // Auf dem VgV-Radar ist Aussortieren der normale Weg — das endgueltige Loeschen bleibt
+  // daneben stehen, fuer Karten, die gar kein Verfahren sind (Notizen, Fehleintraege).
+  if (S.active?.name === 'VgV-Radar' && !t.vgv_papierkorb) {
+    items.push({ txt: '🗑 Aussortieren…', do: () => aussortierDialog(t) });
+  }
   items.push({ txt: 'Löschen…', danger: true, do: async () => {
     if (!await uiFrage(`Karte "${t.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
     await mut('todo_loeschen', { todo_id: t.id }); await ladeBoard();
@@ -1513,6 +1611,10 @@ function renderCard(t) {
     el('span', { class: 'cdot', style: `background:${chip.dot}` }),
     chip.txt, st === 'fertig' && t.anhaenge_n ? ' 📎' : ''));
   c.append(el('div', { class: 't' }, t.titel));
+  // Aussortiert: was hier steht, ist gleich weg — Restzeit und Grund gehoeren aufs Deckblatt.
+  const pk = papierkorbRest(t);
+  if (pk) c.append(el('div', { class: 'chip', style: 'background:#E8DFC5;color:#4A3B14' },
+    '🗑 ' + pk + ' zum Zurückholen'));
   // Zielbild-Pflicht (Marcels Regel): das WOFUER steht sichtbar VOR der Bitte.
   if (t.zuarbeit && t.zielbild) c.append(el('div', { class: 'wofuer' }, el('b', {}, 'Wofür: '), t.zielbild));
   // VgV-Karte: Empfehlung + Abgabefrist direkt auf der Kachel (Radar-Board)
@@ -2034,6 +2136,11 @@ function renderDrawer() {
       await mut('todo_complete', { todo_id: d.id, kommentar: 'NICHT RELEVANT: ' + grund.trim() });
       closeDrawer(); await ladeBoard();
     } }, 'Nicht relevant…'));
+  }
+  // VgV-Verfahren werden aussortiert, nicht geloescht: der Grund ist das Wertvolle daran.
+  if (S.active?.name === 'VgV-Radar' && d.vgv && !d.vgv.papierkorb_ab) {
+    sf.append(el('button', { class: 'btn ghost', onclick: () => aussortierDialog(
+      { id: d.id, titel: d.titel }, async () => { closeDrawer(); }) }, '🗑 Aussortieren…'));
   }
   sf.append(el('button', { class: 'btn ghost gefahr', style: 'margin-left:auto', onclick: async () => {
     if (!await uiFrage(`Karte "${d.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
