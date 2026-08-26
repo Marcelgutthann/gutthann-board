@@ -88,8 +88,9 @@ button{cursor:pointer;background:none;border:none}
 /* Spaltengruppen (Migration 119): Spalten mit gleichem Band stehen als ein Block unter
    einer Ueberschrift — im VgV-Radar die Phasen. Zwischen zwei Baendern ist der Abstand
    groesser als zwischen den Spalten eines Bandes; das ist die eigentliche Abtrennung. */
-.phase{flex:none;display:flex;flex-direction:column;gap:8px;height:100%;min-height:0}
-.phase+.phase{margin-left:26px}
+.phase{flex:none;display:flex;flex-direction:column;gap:8px;height:100%;min-height:0;position:relative}
+.phase+.phase{margin-left:48px}
+.phase+.phase::before{content:'';position:absolute;left:-24px;top:0;bottom:0;width:1px;background:rgba(28,28,26,.18)}
 .phasehead{flex:none;display:flex;align-items:center;gap:9px;padding:0 4px 0 8px}
 .phasehead .pname{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#75756E;white-space:nowrap}
 .phasehead .pcnt{font-size:11px;font-weight:600;color:#8A8A83;background:rgba(28,28,26,.06);border-radius:10px;padding:1px 8px}
@@ -492,7 +493,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mta3cio9">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mta3qk86">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -570,7 +571,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mta3cio9"></script>
-<script type="module" src="dashboard.js?v=mta3cio9"></script>
+<script src="app.js?v=mta3qk86"></script>
+<script type="module" src="dashboard.js?v=mta3qk86"></script>
 </body>
 </html>
