@@ -85,6 +85,16 @@ button{cursor:pointer;background:none;border:none}
 .mention button small{color:#8A8A83;margin-left:6px}
 .boardwrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:12px 28px 24px;display:flex;gap:20px;align-items:flex-start}
 .col{width:352px;flex:none;display:flex;flex-direction:column;background:rgba(28,28,26,.055);border:none;border-radius:16px;max-height:100%;transition:background .16s ease,box-shadow .16s ease}
+/* Spaltengruppen (Migration 119): Spalten mit gleichem Band stehen als ein Block unter
+   einer Ueberschrift — im VgV-Radar die Phasen. Zwischen zwei Baendern ist der Abstand
+   groesser als zwischen den Spalten eines Bandes; das ist die eigentliche Abtrennung. */
+.phase{flex:none;display:flex;flex-direction:column;gap:8px;height:100%;min-height:0}
+.phase+.phase{margin-left:26px}
+.phasehead{flex:none;display:flex;align-items:center;gap:9px;padding:0 4px 0 8px}
+.phasehead .pname{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#75756E;white-space:nowrap}
+.phasehead .pcnt{font-size:11px;font-weight:600;color:#8A8A83;background:rgba(28,28,26,.06);border-radius:10px;padding:1px 8px}
+.phasehead .pline{flex:1;height:1px;background:rgba(28,28,26,.13)}
+.phasecols{flex:1;min-height:0;display:flex;gap:14px;align-items:flex-start}
 .col.dragover{background:rgba(163,213,66,.16);box-shadow:inset 0 0 0 2px rgba(124,169,40,.55)}
 .colhead{padding:14px 14px 10px 16px;display:flex;align-items:center;gap:7px;flex:none}
 .colhead .name{font-size:13px;font-weight:600;letter-spacing:.01em}
@@ -482,7 +492,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mta111p1">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mta3cio9">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -560,7 +570,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mta111p1"></script>
-<script type="module" src="dashboard.js?v=mta111p1"></script>
+<script src="app.js?v=mta3cio9"></script>
+<script type="module" src="dashboard.js?v=mta3cio9"></script>
 </body>
 </html>
