@@ -22,8 +22,9 @@ const S = {
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
-  tags: null, // Tag-Liste (Migration 121), einmal geholt und bis zur naechsten Aenderung behalten
+  tags: null, // Tag-Liste (Migration 123), einmal geholt und bis zur naechsten Aenderung behalten
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
+  zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
 };
 
 // ---------- Dialoge ----------
@@ -1010,6 +1011,9 @@ function renderBoard() {
   if (b.fehler) { bw.append(el('div', { class: 'empty', style: 'padding:20px' }, b.fehler)); return; }
   const spalten = b.spalten || [];
   const erste = spalten[0]?.id;
+  // Erstes Phasenband = die Sichtung. Nur dort heisst eine verstrichene Abgabefrist, dass
+  // die Sache vorbei ist; ab der Bewerbungsphase ist sie der Normalfall (Antrag ist raus).
+  const sichtungBand = spalten[0]?.gruppe || null;
   // Spaltengruppen (Marcels Auftrag 26.08., Migration 119): aufeinanderfolgende Spalten mit
   // demselben Band stehen in einem Block mit Ueberschrift — im VgV-Radar sind das die Phasen.
   // Spalten ohne Band (alle uebrigen Boards) haengen wie bisher direkt im Board.
@@ -1038,7 +1042,16 @@ function renderBoard() {
     // Karte bleibt dort stehen, wo sie angelegt wurde, statt nach oben zu springen.
     // Nur die Erledigt-Spalte bleibt neueste zuerst; dort ist das Letzte das Interessante.
     inSpalte.sort((x, y) => (sp.ist_erledigt ? -1 : 1) * String(x.erstellt || '').localeCompare(String(y.erstellt || '')));
-    const cntEl = el('span', { class: 'cnt' }, String(inSpalte.length));
+    // Abgelaufen in der Sichtung (Marcels Regel 26.08.): so ein Verfahren ist entschieden
+    // und steht nur im Weg. Weggeworfen wird nichts — es klappt am Fuss der Spalte auf.
+    const istSichtung = !!sichtungBand && sp.gruppe === sichtungBand && !sp.ist_erledigt;
+    // Ausnahme: eine offene Rueckfrage oder ein laufender Agent bleibt sichtbar — sonst
+    // verschwindet eine Frage an dich hinter einer Klapp-Zeile.
+    const wegDamit = (t) => fristVorbei(t.vgv_frist)
+      && statusVon(t) !== 'rueckfrage' && statusVon(t) !== 'arbeitet';
+    const abgelaufen = istSichtung ? inSpalte.filter(wegDamit) : [];
+    const sichtbar = abgelaufen.length ? inSpalte.filter((t) => !wegDamit(t)) : inSpalte;
+    const cntEl = el('span', { class: 'cnt' }, String(sichtbar.length));
     const colEl = el('div', {
       class: 'col',
       // Nur Karten annehmen — eine hierher gezogene Datei gehoert ins Karten-Detail.
@@ -1064,7 +1077,15 @@ function renderBoard() {
       sp.ist_erledigt ? el('span', { class: 'cnt' }, '✓') : '',
       el('button', { class: 'menu', onclick: (e) => { e.stopPropagation(); spaltenMenu(e, sp, spalten.length); } }, '···')));
     const cardsEl = el('div', { class: 'cards' });
-    for (const t of inSpalte) cardsEl.append(renderCard(t));
+    for (const t of sichtbar) cardsEl.append(renderCard(t));
+    if (abgelaufen.length) {
+      if (S.zeigeAlt[sp.id]) for (const t of abgelaufen) cardsEl.append(renderCard(t));
+      cardsEl.append(el('button', {
+        class: 'altbtn',
+        onclick: (e) => { e.stopPropagation(); S.zeigeAlt[sp.id] = !S.zeigeAlt[sp.id]; renderBoard(); },
+      }, S.zeigeAlt[sp.id] ? '▴ abgelaufene wieder ausblenden'
+        : `▾ ${abgelaufen.length} mit abgelaufener Frist`));
+    }
     colEl.append(cardsEl);
     if (S.newCardCol === sp.id) {
       // Getippter Text lebt in S.newCardText, damit ein Neu-Aufbau des Boards (Poll, Drag,
@@ -1096,7 +1117,7 @@ function renderBoard() {
     // sammelt ALLE je abgehakten Karten ein (auch verworfene Radar-Vorschlaege) — die
     // gehoeren nicht in die Zahl ueber dem Ergebnis-Block.
     if (band) {
-      band.n += inSpalte.filter((t) => t.status !== 'erledigt').length;
+      band.n += sichtbar.filter((t) => t.status !== 'erledigt').length;
       band.cnt.textContent = String(band.n);
     }
   }
@@ -1604,7 +1625,8 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
   }
   rechts.append(liste);
   if (abgelaufen) rechts.append(el('div', { class: 'dnote' },
-    `${abgelaufen} Verfahren mit abgelaufener Abgabefrist sind ausgeblendet — sie stehen weiter auf dem Board.`));
+    `${abgelaufen} Verfahren mit abgelaufener Abgabefrist sind ausgeblendet. Verloren ist nichts: `
+    + `auf dem Board stehen sie am Fuß ihrer Spalte unter „mit abgelaufener Frist".`));
   grid.append(rechts);
 }
 
@@ -1678,7 +1700,7 @@ function projektMenu(x, y, todoId, danach) {
   } })));
 }
 
-// ---------- Tags (Migration 121) ----------
+// ---------- Tags (Migration 123) ----------
 // Zwei Arten: System-Tags sind vorgegeben und nicht loeschbar (ARGE, Eignungsleihe,
 // Eigene Referenzen reichen, Referenz fehlt), freie legt jeder selbst an. Tags mit
 // Firmenfeld tragen an der Karte zusaetzlich den Partnernamen ("ARGE · Musterplan GmbH").
@@ -1784,7 +1806,7 @@ function renderCard(t) {
     }
     c.append(row);
   }
-  // Tags (Migration 121): ARGE-Partner und Referenzlage sind auf der Kachel zu sehen,
+  // Tags (Migration 123): ARGE-Partner und Referenzlage sind auf der Kachel zu sehen,
   // ohne die Karte zu oeffnen.
   if ((t.tags || []).length) {
     const tr = el('div', { class: 'tagrow' });
@@ -1956,7 +1978,7 @@ function renderDrawer() {
   meta.append(fristBtn);
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta);
-  // Tags (Migration 121): setzen, abnehmen, neue anlegen — alles von Hand.
+  // Tags (Migration 123): setzen, abnehmen, neue anlegen — alles von Hand.
   {
     const danach = async () => { await openCard(d.id); await ladeBoard(); };
     const zeile = el('div', { class: 'tagrow drawer' });
