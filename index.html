@@ -72,6 +72,12 @@ button{cursor:pointer;background:none;border:none}
 .agenttippt .punkte{letter-spacing:2px;color:#7CA928;animation:tippt 1.4s ease-in-out infinite}
 @keyframes tippt{0%,100%{opacity:.35}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.agenttippt .punkte{animation:none;opacity:.7}}
+/* Vorschlag mit Klick-Bestaetigung (Migration 115/116) — eine Frist AENDERT eine
+   bestehende Eigenschaft der Karte, darum wirkt sie nie sofort. Sandfarbe wie die
+   Zielbild-/Zuarbeit-Chips, damit "hier entscheidest du" optisch konsistent bleibt. */
+.vorschlagzeile{display:flex;align-items:center;gap:9px;margin-top:8px;padding:7px 11px;border-radius:9px;background:#E8DFC5;font-size:12.5px}
+.vorschlagzeile.entschieden{background:transparent;border:1px solid rgba(28,28,26,.10);color:#75756E}
+.vorschlagzeile button:disabled{opacity:.5;cursor:default}
 /* @-Vorschlag im Kommentarfeld — ohne ihn kennt niemand die Kuerzel. */
 .mention{position:fixed;z-index:70;background:#FBFBFA;border:1px solid rgba(28,28,26,.12);border-radius:10px;box-shadow:0 10px 28px rgba(28,28,26,.16);padding:4px;min-width:196px}
 .mention button{display:block;width:100%;text-align:left;padding:6px 9px;border-radius:6px;font-size:12.5px;white-space:nowrap}
@@ -403,7 +409,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt8nfwta">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt9u6l0u">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -481,7 +487,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt8nfwta"></script>
-<script type="module" src="dashboard.js?v=mt8nfwta"></script>
+<script src="app.js?v=mt9u6l0u"></script>
+<script type="module" src="dashboard.js?v=mt9u6l0u"></script>
 </body>
 </html>
