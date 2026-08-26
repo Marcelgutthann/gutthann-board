@@ -851,6 +851,9 @@ function mentionHilfe(inp) {
         inp.value = vor + p.kurz + ' ' + inp.value.slice(bis);
         zu(); inp.focus();
         inp.selectionStart = inp.selectionEnd = vor.length + p.kurz.length + 1;
+        // Direktes Setzen von .value loest kein input-Ereignis aus -- ohne das bliebe
+        // der Entwurf ungespeichert und die mitwachsende Hoehe stuende auf altem Stand.
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
       } }, p.name, el('small', {}, '@' + p.kurz))));
     document.body.appendChild(box);
     const r = inp.getBoundingClientRect();
@@ -1929,7 +1932,10 @@ function renderDrawer() {
   const zurufOffen = S.zuruf && S.zuruf.todoId === d.id;
   if (zurufOffen || statusVon(d) === 'arbeitet') {
     const wartet = Math.round((Date.now() - (S.zuruf?.seit || Date.now())) / 1000);
-    const was = d.agent_status === 'laeuft' ? 'schreibt gerade…'
+    // "arbeitet" statt "schreibt" (Marcel, 26.08.): der Agent liest und sucht die meiste
+    // Zeit -- geschrieben wird erst ganz am Ende. "schreibt" verspricht eine Antwort in
+    // der naechsten Sekunde und laesst 40s Wartezeit wie einen Fehler aussehen.
+    const was = d.agent_status === 'laeuft' ? 'arbeitet…'
       : d.agent_status === 'wartet_info' ? 'hat eine Rückfrage an dich — siehe oben'
       : d.agent_status === 'wartet' ? 'hat den Auftrag angenommen und fängt gleich an'
       : wartet > 25 ? 'nimmt den Auftrag an — dauert heute länger als sonst'
@@ -1943,18 +1949,34 @@ function renderDrawer() {
   const senden = async () => {
     const txt = kInp.value.trim(); if (!txt) return;
     kInp.value = ''; S.komEntwurf = '';
+    kInp.style.height = 'auto';   // mitgewachsenes Feld wieder auf eine Zeile
     // Erst die Bestaetigung zeichnen, dann zum Server: ein Zuruf darf sich nie
     // anfuehlen, als waere er ins Leere gegangen.
     if (/@agent\b/i.test(txt)) { S.zuruf = { todoId: d.id, seit: Date.now() }; renderDrawer(); }
     await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
     await openCard(d.id); await ladeBoard();
   };
-  const kInp = el('input', { id: 'kom-inp', placeholder: 'Kommentar…  @ erwähnt jemanden, @agent fragt den Agenten',
-    oninput: () => { S.komEntwurf = kInp.value; },
-    onkeydown: (e) => { if (e.key === 'Enter' && !document.querySelector('.mention')) { e.preventDefault(); senden(); } } });
+  // Mehrzeiliges Eingabefeld, das mitwaechst (Marcel, 26.08.: "passt sich nicht der
+  // Masse an Text an, ich muss mit der Pfeiltaste durchzippen"). Aufgebaut wie das
+  // Claude-Chatfenster: Enter sendet, Shift+Enter macht einen Absatz, die Hoehe folgt
+  // dem Text bis zu einer Deckelung -- danach scrollt das Feld selbst, statt den
+  // halben Chat zu verdraengen.
+  const kInp = el('textarea', { id: 'kom-inp', rows: '1',
+    placeholder: 'Nachricht…  @ erwähnt jemanden, @agent fragt den Agenten',
+    oninput: () => { S.komEntwurf = kInp.value; hoeheAnpassen(); },
+    onkeydown: (e) => {
+      // Waehrend die @-Vorschlagsliste offen ist, gehoert Enter der Auswahl.
+      if (e.key === 'Enter' && !e.shiftKey && !document.querySelector('.mention')) { e.preventDefault(); senden(); }
+    } });
+  const hoeheAnpassen = () => {
+    kInp.style.height = 'auto';                       // erst zurueck, sonst waechst es nur
+    kInp.style.height = Math.min(kInp.scrollHeight, 180) + 'px';
+  };
   kInp.value = S.komEntwurf || '';
   mentionHilfe(kInp);
-  addK.append(kInp, el('button', { class: 'btn', onclick: senden }, 'Senden'));
+  addK.append(kInp, el('button', { class: 'btn', title: 'Senden (Enter) · Shift+Enter macht einen Absatz', onclick: senden }, 'Senden'));
+  // Nach dem Einhaengen messen: vorher ist scrollHeight 0.
+  setTimeout(hoeheAnpassen);
   dchat.append(el('div', { class: 'dchat-kopf' }, 'Chat',
     el('span', { class: 'dchat-hinweis' }, '@agent fragt den Agenten')), sk, addK);
 
