@@ -221,14 +221,17 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
    toter Platz). Die Aufgabe (dinfo) ist die primaere, breitere linke Spalte -- ihr
    Inhalt ist der Grund, warum die Karte ueberhaupt aufgeht. Der Chat (dchat) sitzt
    rechts als schmalere, feste Seitenleiste. Der Kopf spannt oben ueber beide. */
-/* 26.08.: Fenster breiter, damit der Chat wachsen kann OHNE der Aufgabe Platz zu nehmen
-   (Marcels Bedingung). 1320 -> 1600px und 96 -> 98vw; der Zugewinn geht komplett an die
-   Chat-Spalte (unten 460 -> 560px), dinfo behaelt dadurch seine bisherige Breite. */
-.drawer{width:min(1600px,98vw);height:92vh;background:#FCFCFB;overflow:hidden;border-radius:20px;box-shadow:0 24px 64px rgba(28,28,26,.25);display:flex;flex-direction:column}
+/* 26.08.: KEINE feste Deckelung mehr. Zuerst stand hier min(1600px,98vw) -- auf einem
+   breiten Bildschirm blieb das Fenster dadurch bei 1600px stehen, obwohl Platz da war
+   (Marcel: "das ganze Fenster muss gleich mit groesser werden"). Jetzt fuellt es den
+   Bildschirm; beide Spalten wachsen prozentual mit. */
+.drawer{width:97vw;height:94vh;background:#FCFCFB;overflow:hidden;border-radius:20px;box-shadow:0 24px 64px rgba(28,28,26,.25);display:flex;flex-direction:column}
 .drawer-kopf{flex:none;padding:20px 30px 14px;border-bottom:1px solid rgba(28,28,26,.09)}
 .dbody{flex:1;min-height:0;display:flex}
 .dinfo{flex:1;min-width:0;overflow-y:auto;padding-bottom:8px;border-right:1px solid rgba(28,28,26,.09)}
-.dchat{width:min(42%,560px);flex:none;display:flex;flex-direction:column;min-height:0;background:#F7F7F5}
+/* Prozentual statt gedeckelt, damit der Chat auf breiten Bildschirmen wirklich
+   mitwaechst. Untergrenze 420px, sonst wird er auf kleinen Laptops zu schmal. */
+.dchat{width:clamp(420px,36%,760px);flex:none;display:flex;flex-direction:column;min-height:0;background:#F7F7F5}
 .dchat-kopf{flex:none;display:flex;align-items:baseline;gap:10px;padding:16px 22px 12px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#1C1C1A}
 .dchat-hinweis{font-family:'Hanken Grotesk',sans-serif;font-size:11px;font-weight:500;color:#9A9A93}
 /* KORREKTUR 26.08. (Marcel, zweiter Blick): justify-content:flex-end verankerte kurze
@@ -479,7 +482,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mta0dap2">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mta111p1">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -557,7 +560,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mta0dap2"></script>
-<script type="module" src="dashboard.js?v=mta0dap2"></script>
+<script src="app.js?v=mta111p1"></script>
+<script type="module" src="dashboard.js?v=mta111p1"></script>
 </body>
 </html>
