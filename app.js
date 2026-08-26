@@ -802,6 +802,36 @@ function meldePanel(anker) {
 // @-Vorschlag im Kommentarfeld. Erwaehnungen laufen ueber die Kuerzel (adam, gross,
 // ...) -- die kennt niemand auswendig, und eine Erwaehnung, die kein Kuerzel trifft,
 // benachrichtigt lautlos niemanden.
+// Chat-Nachricht als Text-Block. Der Agent formatiert seine Antworten seit 26.08.
+// bewusst strukturiert (Listen, Fettes, Zwischenueberschriften) -- ohne diese Umsetzung
+// stuenden die Markdown-Zeichen als Rohtext da und die Antwort waere ein Fliesstext-Klotz.
+// BEWUSST NUR VIER DINGE, kein Markdown-Parser: Zwischenueberschrift, Aufzaehlung,
+// **fett**, Absatz. Alles andere bleibt Text. Escaping laeuft ueber uiEsc, bevor
+// irgendetwas als HTML gesetzt wird -- Kommentartext kommt von Menschen UND vom Agenten
+// und darf nie als Markup wirken.
+function chatText(roh) {
+  const box = el('div', { class: 'txt' });
+  const zeilen = String(roh ?? '').split('\n');
+  let liste = null;
+  const fett = (s) => uiEsc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  for (const z of zeilen) {
+    const t = z.trim();
+    const li = t.match(/^[-*•]\s+(.*)$/);
+    if (li) {
+      if (!liste) { liste = el('ul', { class: 'txt-liste' }); box.append(liste); }
+      const punkt = el('li', {}); punkt.innerHTML = fett(li[1]); liste.append(punkt);
+      continue;
+    }
+    liste = null;
+    if (!t) continue;
+    const h = t.match(/^#{1,4}\s+(.*)$/);
+    if (h) { const e = el('div', { class: 'txt-kopf' }); e.innerHTML = fett(h[1]); box.append(e); continue; }
+    const p = el('p', {}); p.innerHTML = fett(t); box.append(p);
+  }
+  if (!box.childNodes.length) box.textContent = String(roh ?? '');
+  return box;
+}
+
 function mentionHilfe(inp) {
   let box = null;
   const zu = () => { if (box) { box.remove(); box = null; } };
@@ -1552,7 +1582,20 @@ function chatTakt(id) {
 function closeDrawer() { clearInterval(S.chatPoll); S.chatPoll = null; S.detail = null; S.komEntwurf = ''; S.zuruf = null; document.getElementById('drawer-root').innerHTML = ''; }
 
 function renderDrawer() {
-  const root = document.getElementById('drawer-root'); root.innerHTML = '';
+  const root = document.getElementById('drawer-root');
+  // Jeder Re-Render (Senden, Chat-Takt, Board-Poll) baute die Karte komplett neu auf und
+  // riss beide Spalten auf Scroll-Position 0 zurueck -- Marcels Befund: "nach jeder
+  // Nachricht ganz nach oben geschickt". Fix: Positionen VOR dem Wegwerfen sichern, nach
+  // dem Neuaufbau wiederherstellen. Die Aufgaben-Spalte bekommt exakt ihre alte Position
+  // zurueck; die Chat-Spalte bleibt unten, wenn sie schon unten war (oder beim ersten
+  // Oeffnen) -- so sieht man die eigene gerade gesendete Nachricht bzw. die Antwort, ohne
+  // beim Lesen aelterer Nachrichten weggerissen zu werden.
+  const altDinfo = root.querySelector('.dinfo');
+  const altChat = root.querySelector('.dchat-verlauf');
+  const dinfoScroll = altDinfo ? altDinfo.scrollTop : null;
+  const chatWarUnten = !altChat || (altChat.scrollHeight - altChat.scrollTop - altChat.clientHeight < 48);
+  const chatScroll = altChat ? altChat.scrollTop : null;
+  root.innerHTML = '';
   const d = S.detail; if (!d || d.fehler) { if (d?.fehler) uiHinweis(d.fehler); return; }
   const st = statusVon(d); const chip = st && CHIPS[st];
   const ov = el('div', { class: 'overlay', onclick: (e) => { if (e.target === ov) closeDrawer(); } });
@@ -1845,7 +1888,7 @@ function renderDrawer() {
     // Eigene Nachrichten rechtsbuendig, alle anderen (Kollegen wie Agent) linksbuendig --
     // das gibt dem Chat sein Richtungsgefuehl. k.meiner traegt die App schon lange.
     const komKlasse = 'kom' + (k.von === 'agent' ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '');
-    const komZeile = el('div', { class: komKlasse }, kopf, el('div', { class: 'txt' }, k.text));
+    const komZeile = el('div', { class: komKlasse }, kopf, chatText(k.text));
     // Vorschlag mit Klick-Bestaetigung (Migration 115/116): eine Frist AENDERT eine
     // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
     // schlaegt vor, ein Mensch entscheidet mit einem Klick. Einmal entschieden bleibt
@@ -1959,6 +2002,11 @@ function renderDrawer() {
   dbody.append(dinfo, dchat);
   dr.append(dkopf, dbody);
   ov.append(dr); root.append(ov);
+  // Scroll-Positionen zurueckgeben (siehe oben). Erst NACH dem Einhaengen ins Dokument,
+  // vorher sind scrollHeight/clientHeight noch 0.
+  if (dinfoScroll) dinfo.scrollTop = dinfoScroll;
+  if (chatWarUnten) sk.scrollTop = sk.scrollHeight;
+  else if (chatScroll) sk.scrollTop = chatScroll;
 }
 
 // HTML-Anhaenge im neuen Tab ANZEIGEN statt herunterladen (VgV-Analyse-Dateien). Fenster
