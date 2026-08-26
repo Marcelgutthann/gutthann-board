@@ -228,11 +228,15 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dchat{width:min(38%,460px);flex:none;display:flex;flex-direction:column;min-height:0;background:#F7F7F5}
 .dchat-kopf{flex:none;display:flex;align-items:baseline;gap:10px;padding:16px 22px 12px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#1C1C1A}
 .dchat-hinweis{font-family:'Hanken Grotesk',sans-serif;font-size:11px;font-weight:500;color:#9A9A93}
-/* justify-content:flex-end verankert einen kurzen Verlauf unten am Eingabefeld, statt
-   ihn oben stehen zu lassen und darunter Leere zu zeigen (Marcels Befund: "sieht
-   verschwendet aus"). Ueberlaufende Verlaeufe scrollen wie gewohnt von oben. */
-.dchat-verlauf{flex:1;min-height:0;overflow-y:auto;padding:4px 22px 14px;display:flex;flex-direction:column;justify-content:flex-end}
-.dchat-leer{font-size:13px;color:#8A8A83;line-height:1.6;padding:18px 2px;max-width:34ch;margin-top:auto;margin-bottom:auto}
+/* KORREKTUR 26.08. (Marcel, zweiter Blick): justify-content:flex-end verankerte kurze
+   Verlaeufe unten -- bei mehr als 1-2 Nachrichten in einer hohen Spalte wanderte die
+   Leere dadurch nur nach OBEN (Luecke zwischen Chat-Kopf und erster Nachricht), was wie
+   ein Fehler statt wie ein normaler Chat aussah. Echte Vorbilder (Slack, WhatsApp)
+   lassen Nachrichten immer von OBEN fliessen; Leerraum UNTEN vor dem Eingabefeld ist
+   dort normal und wird nie als kaputt wahrgenommen. overflow-y:auto sorgt weiterhin
+   fuer eine echte Scrollbar, sobald der Verlauf die Spalte sprengt. */
+.dchat-verlauf{flex:1;min-height:0;overflow-y:auto;padding:4px 22px 14px;display:flex;flex-direction:column}
+.dchat-leer{font-size:13px;color:#8A8A83;line-height:1.6;padding:18px 2px;max-width:34ch}
 .dchat-eingabe{flex:none;display:flex;gap:8px;padding:14px 22px 18px;border-top:1px solid rgba(28,28,26,.08);background:#F7F7F5}
 .dchat-eingabe input{flex:1;padding:10px 13px;border:1px solid rgba(28,28,26,.18);border-radius:10px;background:#fff;font-size:13.5px}
 .dchat-eingabe input:focus{outline:2px solid rgba(124,169,40,.45);outline-offset:-1px;border-color:rgba(124,169,40,.5)}
@@ -454,7 +458,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt9v8b2w">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt9wq4pd">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -532,7 +536,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt9v8b2w"></script>
-<script type="module" src="dashboard.js?v=mt9v8b2w"></script>
+<script src="app.js?v=mt9wq4pd"></script>
+<script type="module" src="dashboard.js?v=mt9wq4pd"></script>
 </body>
 </html>
