@@ -305,6 +305,11 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .modalbox{width:470px;max-width:92vw;background:#FCFCFB;border-radius:14px;box-shadow:0 18px 48px rgba(28,28,26,.28);padding:18px 20px;max-height:88vh;overflow-y:auto}
 .modalbox .slbl{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin-bottom:7px}
 .autota{width:100%;min-height:96px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;resize:vertical}
+/* Aussortier-Dialog (Migration 120): Ausgang und Gruende als anklickbare Chips — schneller
+   als eine Liste mit Kaestchen, und die gewaehlten sind auf einen Blick zu sehen. */
+.lernchip{font-size:12px;padding:5px 11px;border-radius:14px;background:rgba(28,28,26,.06);color:#33332F;border:1px solid transparent;white-space:nowrap}
+.lernchip:hover{background:rgba(28,28,26,.11)}
+.lernchip.an{background:#E8F5C4;color:#3C5D1E;border-color:rgba(124,169,40,.55);font-weight:600}
 .autosel{width:100%;padding:7px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px}
 .dsec{padding:14px 28px;border-bottom:none}
 .dsec:first-child{padding-top:22px}
@@ -493,7 +498,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mta3qk86">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mta4k4rr">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -571,7 +576,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mta3qk86"></script>
-<script type="module" src="dashboard.js?v=mta3qk86"></script>
+<script src="app.js?v=mta4k4rr"></script>
+<script type="module" src="dashboard.js?v=mta4k4rr"></script>
 </body>
 </html>
