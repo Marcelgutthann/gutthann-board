@@ -84,7 +84,7 @@ button{cursor:pointer;background:none;border:none}
 .mention button:hover,.mention button.an{background:#E8DFC5}
 .mention button small{color:#8A8A83;margin-left:6px}
 .boardwrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:12px 28px 24px;display:flex;gap:20px;align-items:flex-start}
-.col{width:352px;flex:none;display:flex;flex-direction:column;background:rgba(28,28,26,.055);border:none;border-radius:16px;max-height:100%;transition:background .16s ease,box-shadow .16s ease}
+.col{width:392px;flex:none;display:flex;flex-direction:column;background:rgba(28,28,26,.055);border:none;border-radius:16px;max-height:100%;transition:background .16s ease,box-shadow .16s ease}
 /* Spaltengruppen (Migration 119): Spalten mit gleichem Band stehen als ein Block unter
    einer Ueberschrift — im VgV-Radar die Phasen. Zwischen zwei Baendern ist der Abstand
    groesser als zwischen den Spalten eines Bandes; das ist die eigentliche Abtrennung. */
@@ -113,7 +113,7 @@ button{cursor:pointer;background:none;border:none}
 .card.rf{background:#FBF3E2;box-shadow:0 0 0 1.5px #E29A2E,0 2px 8px rgba(28,28,26,.05)}
 .card .chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;margin-bottom:6px}
 .card .chip .cdot{width:6px;height:6px;border-radius:50%}
-.card .t{font-size:15px;font-weight:600;line-height:1.35;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .t{font-size:15px;font-weight:600;line-height:1.38;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .card .meta{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#75756E;flex-wrap:nowrap;overflow:hidden;min-width:0}
 .card .meta>span{flex:none}
 .card .meta .due.urgent{color:#A66A12;font-weight:600}
@@ -121,8 +121,19 @@ button{cursor:pointer;background:none;border:none}
 .card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
 .card .pchip{font-size:10px;font-weight:600;padding:1px 7px;border-radius:8px;background:rgba(28,28,26,.07);color:#4F4F49}
-.card .vfrist{font-size:11.5px;color:#75756E}
-.card .vfrist.urgent{color:#A66A12;font-weight:700}
+/* Tags (Migration 121). Mit Firma = warmer Ton, damit ARGE/Eignungsleihe auffallen. */
+.tagrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.tagrow.drawer{margin-top:10px}
+.tchip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:9px;background:rgba(28,28,26,.07);color:#4F4F49;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tchip.firma{background:#EFE6D2;color:#6A4E12}
+.tchip .tf{font-weight:500;opacity:.85}
+.tchip .tx{font-size:12px;line-height:1;color:inherit;opacity:.5;cursor:pointer;background:none;border:none;padding:0 0 0 2px}
+.tchip .tx:hover{opacity:1}
+.card .vfrist{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#75756E;white-space:nowrap}
+.card .vfrist.a-rot{color:#A8341C;font-weight:700}
+.card .vfrist.a-orange{color:#8A5606;font-weight:600}
+.card .vfrist.a-gruen{color:#4A6B32}
+.card .vfrist.a-vorbei{color:#9A9A93}
 .vgvban{border-radius:10px;padding:10px 14px;margin-bottom:10px}
 .vgvkv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:12.5px}
 .vgvkv .k{color:#75756E;white-space:nowrap}
@@ -137,6 +148,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dkopf h2{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:700}
 .dclose{margin-left:auto;font-size:17px;color:#75756E;padding:2px 8px}
 .dgrid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,58fr) minmax(0,42fr);gap:0 26px}
+.dgrid.gleich{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 30px}
 .dcol{min-height:0;overflow-y:auto;padding-right:6px}
 @media(max-width:1020px){.dashbox{height:auto;max-height:92vh;overflow-y:auto}.dgrid{display:block}}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
@@ -148,9 +160,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dlane{margin-bottom:22px}
 .dlane .slbl{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin-bottom:9px}
 .dleer{font-size:12.5px;color:#75756E;background:#F6F6F3;border-radius:9px;padding:10px 14px}
-.drow{display:grid;grid-template-columns:200px 1fr;gap:12px;align-items:center;margin-bottom:6px}
+.drow{display:grid;grid-template-columns:250px 1fr;gap:12px;align-items:center;margin-bottom:7px}
 .dlbl{font-size:12.5px;line-height:1.3;overflow:hidden}
-.dlbl b{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-weight:600}
+.dlbl b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600;line-height:1.3}
 .dlbl .dsub{font-size:11px;color:#8A8A83}
 .dtrack{position:relative;height:22px;background:#EFEFEB;border-radius:6px}
 .dtrack.kopf{background:none;height:14px}
@@ -170,22 +182,55 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .vgrp{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin:16px 0 8px}
 .klist .vgrp:first-child{margin-top:2px}
 .vtag{flex:none;font-size:10.5px;font-weight:700;border-radius:9px;padding:2px 8px}
+.vtag.ampel{display:inline-flex;align-items:center;gap:5px;padding:3px 9px}
 .kand2.erl{opacity:.55}
 .kand2 .vm2{font-size:11.5px;color:#75756E;margin-top:4px}
 .vdet{padding-left:10px}
 .vst{font-size:12.5px;color:#3C3C38;line-height:1.55}
 .vpfad{font-size:11px;color:#8A8A83;margin-top:6px;word-break:break-all}
-.klist{display:flex;flex-direction:column;gap:7px}
-.kand2{background:#fff;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:9px 12px;cursor:pointer}
-.kand2:hover{border-color:rgba(28,28,26,.25)}
-.kand2 .krow{display:flex;gap:9px;align-items:center;min-width:0}
-.kscore{flex:none;font-size:11px;font-weight:700;color:#3C5D1E;background:#E8F5C4;border-radius:9px;padding:1px 7px;min-width:26px;text-align:center}
+.klist{display:flex;flex-direction:column;gap:8px}
+/* Ampel — ueberall derselbe Punkt in derselben Farbe. */
+.adot{flex:none;width:8px;height:8px;border-radius:50%;display:inline-block}
+.amp{border-left:3px solid transparent}
+.amp-rot{border-left-color:#C2543D}
+.amp-orange{border-left-color:#D08427}
+.amp-gruen{border-left-color:#7FB04E}
+.amp-vorbei{border-left-color:#C9C9C2}
+.card.amp{padding-left:12px}
+.kand2.amp{padding-left:11px}
+/* Legende unter dem Kopf: was rot, orange, gruen heisst. */
+.dlegende{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin:-4px 0 14px;
+  padding:9px 14px;background:#F4F4F0;border-radius:11px;font-size:11.5px;color:#4F4F49}
+.dlegende .lgt{font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#8A8A83}
+.lgi{display:inline-flex;align-items:center;gap:7px}
+.dlegende .lgn{margin-left:auto;color:#8A8A83}
+/* Erklaerkasten fuer die Punktzahl. */
+.dinfo{background:#F8F8F5;border:1px solid rgba(28,28,26,.07);border-radius:11px;padding:12px 15px;margin-bottom:12px}
+.dinfot{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#8A8A83;margin-bottom:6px}
+.dinfox{font-size:12.5px;line-height:1.6;color:#3C3C38}
+.dskala{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:11.5px;color:#4F4F49}
+/* Listenkopf mit Zaehlpille. */
+.slbl.mitzahl{display:flex;align-items:center;gap:9px}
+.zpill{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0;
+  color:#3C3C38;background:#E8DFC5;border-radius:9px;padding:1px 8px;text-transform:none}
+.dnote{margin-top:10px;font-size:11.5px;color:#8A8A83;padding:8px 12px;background:#F4F4F0;border-radius:9px}
+.kand2{background:#fff;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:10px 13px;cursor:pointer;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}
+.kand2:hover{border-color:rgba(28,28,26,.22);box-shadow:0 4px 14px rgba(28,28,26,.10);transform:translateY(-1px)}
+.kand2 .krow{display:flex;gap:9px;align-items:flex-start;min-width:0}
+.kscore{flex:none;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+  width:44px;min-height:34px;border-radius:10px;padding:3px 0;background:#E8F5C4;color:#3C5D1E;line-height:1.05}
+.kscore .kn{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;letter-spacing:-.02em}
+.kscore .ke{font-size:8.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.72}
+.kscore.hoch{background:#E1F2BC;color:#33581A}
+.kscore.mittel{background:#FBEFDA;color:#7E4F06}
+.kscore.niedrig{background:#EFEAE2;color:#77706A}
 .kscore.leer{background:#ECECE8;color:#8A8A83}
-.kand2 .kt2{flex:1;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kscore.klein{width:auto;min-height:0;padding:2px 8px;font-size:11px;font-weight:700;flex-direction:row}
+.kand2 .kt2{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .kbtn{flex:none;font-size:11px;font-weight:700;padding:3px 10px;border-radius:9px}
 .kbtn.go{background:#E8F5C4;color:#3C5D1E}.kbtn.go:hover{background:#D7EF9E}
 .kbtn.nogo{background:#ECECE8;color:#75756E}.kbtn.nogo:hover{background:#DDDDD7;color:#1C1C1A}
-.kand2 .km2{font-size:11.5px;color:#75756E;margin-top:4px;padding-left:35px}
+.kand2 .km2{font-size:11.5px;color:#75756E;margin-top:5px;padding-left:53px}
 .kdet{margin-top:7px;padding:8px 10px 8px 35px;background:#F8F8F5;border-radius:8px}
 .kref{font-size:12px;color:#3C5D1E}
 .kbeg{font-size:12.5px;color:#3C3C38;margin-top:4px;line-height:1.45}
@@ -498,7 +543,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mta4k4rr">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mta4tjkd">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -576,7 +621,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mta4k4rr"></script>
-<script type="module" src="dashboard.js?v=mta4k4rr"></script>
+<script src="app.js?v=mta4tjkd"></script>
+<script type="module" src="dashboard.js?v=mta4tjkd"></script>
 </body>
 </html>
