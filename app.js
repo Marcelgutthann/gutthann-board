@@ -1567,6 +1567,14 @@ function renderDrawer() {
       ladeDateienHoch(e.dataTransfer.files, d.id);
     },
   });
+  // Redesign 26.08. (Feedback-Meeting): der Kopf spannt oben ueber beide Spalten,
+  // darunter links der Chat (dchat -- primaerer Umgang mit dem Agenten), rechts die
+  // Aufgabe wie gehabt (dinfo -- eigenstaendig scrollend). Jede bisherige Sektion
+  // behaelt ihre Logik unveraendert, wandert nur von dr.append(...) auf dinfo.append(...).
+  const dkopf = el('div', { class: 'drawer-kopf' }); // eigene Klasse -- '.dkopf' ist anderswo (Dashboard) schon vergeben
+  const dbody = el('div', { class: 'dbody' });
+  const dchat = el('div', { class: 'dchat' });
+  const dinfo = el('div', { class: 'dinfo' });
 
   // Kopf
   const head = el('div', { class: 'dsec dhead' });
@@ -1613,14 +1621,14 @@ function renderDrawer() {
   } }, d.faellig ? '📅 fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : '📅 Frist setzen');
   meta.append(fristBtn);
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
-  head.append(meta); dr.append(head);
+  head.append(meta); dkopf.append(head);
 
   // Zielbild-Pflicht (Loop B2): bei Zuarbeitskarten steht das WOFUER vor der Bitte.
   if (d.zuarbeit && d.zielbild) {
     const sec = el('div', { class: 'dsec' });
     sec.append(el('div', { class: 'slbl' }, 'Wofür der Agent das braucht'));
     sec.append(el('div', { class: 'zielbild' }, d.zielbild));
-    dr.append(sec);
+    dinfo.append(sec);
   }
 
   // Auftrag (editierbar — auch KI-formulierte Texte)
@@ -1636,7 +1644,7 @@ function renderDrawer() {
       } }, 'Speichern');
       inhalt.replaceWith(el('div', {}, ta, speichern));
     } }, 'Bearbeiten'));
-    sec.append(kopf, inhalt); dr.append(sec);
+    sec.append(kopf, inhalt); dinfo.append(sec);
   }
 
   // VgV-Verfahren (Radar-Pipeline, Migration 45)
@@ -1700,7 +1708,7 @@ function renderDrawer() {
       if (ana.length > 1) row2.append(el('button', { class: 'btn lime', onclick: () => oeffneAnhaenge(ana.slice(0, 3)) }, `Alle ${Math.min(ana.length, 3)} öffnen`));
       sec.append(row2);
     }
-    dr.append(sec);
+    dinfo.append(sec);
   }
 
   // Rueckfragen — Sammel-Modus (Marcels Wunsch 24.07.): Antworten zwischenspeichern
@@ -1739,7 +1747,7 @@ function renderDrawer() {
     } }, 'Zwischenspeichern'));
     sec.append(rowB);
     sec.append(el('div', { style: 'font-size:11.5px;color:#8A5606;margin-top:8px' }, 'Zwischengespeichert = der Agent wartet noch. Häng unten in Ruhe Dateien an – er bekommt sie beim Weiterarbeiten mit. Erst „Losschicken" lässt ihn weitermachen.'));
-    dr.append(sec);
+    dinfo.append(sec);
   }
   if (beantwortete.length) {
     const sec = el('div', { class: 'dsec' });
@@ -1747,7 +1755,7 @@ function renderDrawer() {
     for (const f of beantwortete) sec.append(
       el('div', { style: 'font-size:12.5px;color:#75756E;margin-bottom:2px' }, f.frage),
       el('div', { style: 'font-size:13px;margin-bottom:8px' }, '→ ' + (f.antwort || 'übersprungen')));
-    dr.append(sec);
+    dinfo.append(sec);
   }
 
   // Ergebnis
@@ -1757,7 +1765,7 @@ function renderDrawer() {
     sec.append(el('div', { class: 'pre' }, d.agent_ergebnis));
     const m = d.agent_ergebnis.match(/Datei abgelegt:\s*([^\n—]+)/);
     if (m) sec.append(el('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => { navigator.clipboard.writeText(m[1].trim()); } }, 'Datei-Pfad kopieren'));
-    dr.append(sec);
+    dinfo.append(sec);
   }
 
   // Unterpunkte
@@ -1772,7 +1780,7 @@ function renderDrawer() {
   }
   const addU = el('div', { class: 'inline-add' });
   const uInp = el('input', { placeholder: 'Unterpunkt hinzufügen…', onkeydown: async (e) => { if (e.key === 'Enter' && uInp.value.trim()) { await mut('unterpunkt_anlegen',{ todo_id: d.id, text: uInp.value.trim() }); await openCard(d.id); } } });
-  addU.append(uInp); su.append(addU); dr.append(su);
+  addU.append(uInp); su.append(addU); dinfo.append(su);
 
   // Personen
   const sp2 = el('div', { class: 'dsec' });
@@ -1784,7 +1792,7 @@ function renderDrawer() {
     const kandidaten = personListe().filter((p) => !d.zugewiesen.includes(p.kurz));
     if (!kandidaten.length) return;
     ctxMenu(e.clientX, e.clientY, kandidaten.map((p) => ({ txt: p.name, do: async () => { await mut('todo_zuweisen',{ todo_id: d.id, person: p.kurz, an: true }); await openCard(d.id); await ladeBoard(); } })));
-  } }, '+ Person')); dr.append(sp2);
+  } }, '+ Person')); dinfo.append(sp2);
 
   // Anhaenge — Bild und PDF zeigen sich als Vorschau, statt erst nach dem Herunterladen
   // (Marcel, 25.08.). Ablegen geht per Drag&Drop auf das ganze Blatt.
@@ -1808,11 +1816,13 @@ function renderDrawer() {
   sa.append(fileInp,
     el('div', { class: 'ablage', onclick: () => fileInp.click() }, 'Dateien hierher ziehen oder klicken zum Auswählen'),
     el('div', { id: 'anh-status', style: 'font-size:11.5px;color:#75756E;margin-top:6px' }));
-  dr.append(sa);
+  dinfo.append(sa);
 
-  // Kommentare
-  const sk = el('div', { class: 'dsec' });
-  if (d.kommentare.length) sk.append(el('div', { class: 'slbl' }, 'Kommentare'));
+  // Kommentare -- der Chat. Eigene, feste linke Spalte (Redesign 26.08.): der Kopf
+  // der Spalte traegt die Ueberschrift, darum entfaellt das fruehere Inline-Label.
+  const sk = el('div', { class: 'dchat-verlauf' });
+  if (!d.kommentare.length) sk.append(el('div', { class: 'dchat-leer' },
+    'Schreib hier mit dem Team, oder ruf @agent — er kennt Titel, Notiz, Unterpunkte, Dateien und den ganzen Verlauf dieser Karte.'));
   for (const k of d.kommentare) {
     const zeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     const kopf = el('div', { class: 'von' }, `${k.von} · ${zeit(k.am)}` + (k.bearbeitet ? ` · bearbeitet ${zeit(k.bearbeitet)}` : ''));
@@ -1832,7 +1842,10 @@ function renderDrawer() {
         if (r && r.ok) { await openCard(d.id); await ladeBoard(); }
       } }, '✕'));
     }
-    const komZeile = el('div', { class: 'kom' }, kopf, el('div', { class: 'txt' }, k.text));
+    // Eigene Nachrichten rechtsbuendig, alle anderen (Kollegen wie Agent) linksbuendig --
+    // das gibt dem Chat sein Richtungsgefuehl. k.meiner traegt die App schon lange.
+    const komKlasse = 'kom' + (k.von === 'agent' ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '');
+    const komZeile = el('div', { class: komKlasse }, kopf, el('div', { class: 'txt' }, k.text));
     // Vorschlag mit Klick-Bestaetigung (Migration 115/116): eine Frist AENDERT eine
     // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
     // schlaegt vor, ein Mensch entscheidet mit einem Klick. Einmal entschieden bleibt
@@ -1883,7 +1896,7 @@ function renderDrawer() {
       el('span', {}, 'Agent ' + was),
       wartet > 3 ? el('small', { style: 'color:#9A9A93' }, ' ' + wartet + ' Sek.') : ''));
   }
-  const addK = el('div', { class: 'inline-add' });
+  const addK = el('div', { class: 'dchat-eingabe' });
   const senden = async () => {
     const txt = kInp.value.trim(); if (!txt) return;
     kInp.value = ''; S.komEntwurf = '';
@@ -1899,7 +1912,8 @@ function renderDrawer() {
   kInp.value = S.komEntwurf || '';
   mentionHilfe(kInp);
   addK.append(kInp, el('button', { class: 'btn', onclick: senden }, 'Senden'));
-  sk.append(addK); dr.append(sk);
+  dchat.append(el('div', { class: 'dchat-kopf' }, 'Chat',
+    el('span', { class: 'dchat-hinweis' }, '@agent fragt den Agenten')), sk, addK);
 
   // Verlauf
   if ((d.verlauf || []).length) {
@@ -1909,7 +1923,7 @@ function renderDrawer() {
     for (const v of d.verlauf) sv.append(el('div', { class: 'vrow' },
       el('span', {}, new Date(v.am).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })),
       el('span', {}, (WAS[v.was] || v.was) + (v.detail ? ' — ' + v.detail : ''))));
-    dr.append(sv);
+    dinfo.append(sv);
   }
 
   // Aktionen
@@ -1938,8 +1952,10 @@ function renderDrawer() {
     const r = await mut('todo_loeschen', { todo_id: d.id });
     if (r && r.ok) { closeDrawer(); await ladeBoard(); }
   } }, 'Löschen'));
-  dr.append(sf);
+  dinfo.append(sf);
 
+  dbody.append(dchat, dinfo);
+  dr.append(dkopf, dbody);
   ov.append(dr); root.append(ov);
 }
 
