@@ -1954,7 +1954,9 @@ function renderDrawer() {
   } }, 'Löschen'));
   dinfo.append(sf);
 
-  dbody.append(dchat, dinfo);
+  // Marcels Korrektur nach dem ersten Blick (26.08.): Aufgabe links (primaer, mehr
+  // Inhalt), Chat rechts wie eine Seitenleiste -- nicht umgekehrt.
+  dbody.append(dinfo, dchat);
   dr.append(dkopf, dbody);
   ov.append(dr); root.append(ov);
 }
