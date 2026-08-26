@@ -254,6 +254,20 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kom:hover .von .edit,.kom:hover .von .del{visibility:visible}
 .kom .von .edit:hover,.kom .von .del:hover{color:#1C1C1A}
 .kom .txt{font-size:13.5px;line-height:1.55;background:#fff;border:1px solid rgba(28,28,26,.08);border-radius:12px;padding:10px 13px;box-shadow:0 1px 2px rgba(28,28,26,.04)}
+/* Strukturierte Agenten-Antworten (26.08.): Listen und Zwischenueberschriften sollen in
+   der schmalen Chat-Spalte auf einen Blick lesbar sein -- enge Abstaende, damit eine
+   Aufzaehlung kompakt bleibt und nicht wie ein Formular wirkt. */
+.kom .txt p{margin:0 0 7px}
+.kom .txt p:last-child{margin-bottom:0}
+.kom .txt .txt-kopf{font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:#75756E;margin:11px 0 5px}
+.kom .txt > .txt-kopf:first-child{margin-top:0}
+.kom .txt .txt-liste{margin:0 0 7px;padding-left:16px;list-style:none}
+.kom .txt .txt-liste:last-child{margin-bottom:0}
+.kom .txt .txt-liste li{position:relative;margin-bottom:4px}
+.kom .txt .txt-liste li:last-child{margin-bottom:0}
+.kom .txt .txt-liste li::before{content:"";position:absolute;left:-12px;top:8px;width:4px;height:4px;border-radius:50%;background:#B8B8AE}
+.kom.kom-agent .txt .txt-liste li::before{background:#D8B856}
+.kom .txt b{font-weight:600;color:#1C1C1A}
 .kom.kom-agent .txt{background:#FEFCF6;border-color:#E8DFC5;border-left:3px solid #D8B856;border-radius:4px 12px 12px 12px}
 .kom.kom-agent .von{font-weight:600;color:#8A6D1E}
 /* Vorschlagszeile und Tipp-Anzeige sitzen im selben Chatfluss -- volle Breite der Spalte. */
@@ -458,7 +472,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mt9wq4pd">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mt9x67md">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -536,7 +550,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mt9wq4pd"></script>
-<script type="module" src="dashboard.js?v=mt9wq4pd"></script>
+<script src="app.js?v=mt9x67md"></script>
+<script type="module" src="dashboard.js?v=mt9x67md"></script>
 </body>
 </html>
