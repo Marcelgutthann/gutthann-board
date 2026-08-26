@@ -22,6 +22,7 @@ const S = {
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
+  tags: null, // Tag-Liste (Migration 121), einmal geholt und bis zur naechsten Aenderung behalten
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
 };
 
@@ -148,7 +149,7 @@ async function lotse(action, body = {}, retried = false) {
     // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
     // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
     // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
-    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen'];
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen', 'tags'];
     if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
@@ -235,9 +236,35 @@ function vgvRest(frist) {
   const d0 = new Date(d); d0.setHours(0, 0, 0, 0);
   const tage = Math.round((d0 - heute) / 86400000);
   const dat = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  if (tage < 0) return { txt: `Abgabe ${dat} vorbei`, tage, knapp: true };
-  if (tage === 0) return { txt: 'Abgabe HEUTE', tage, knapp: true };
-  return { txt: `Abgabe ${dat} · ${tage} Tg`, tage, knapp: tage <= 7 };
+  // Ampel (Marcels Regel 26.08.): bis 7 Tage rot, bis 14 orange, darueber gruen.
+  // Eine abgelaufene Frist ist keine Ampelstufe, sondern ein Ausschlussgrund.
+  const ampel = tage < 0 ? 'vorbei' : tage <= 7 ? 'rot' : tage <= 14 ? 'orange' : 'gruen';
+  if (tage < 0) return { txt: `Abgabe ${dat} vorbei`, tage, ampel, knapp: true };
+  if (tage === 0) return { txt: 'Abgabe HEUTE', tage, ampel, knapp: true };
+  return { txt: `Abgabe ${dat} · ${tage} Tg`, tage, ampel, knapp: tage <= 7 };
+}
+// Eine Farbtafel fuer ALLE Stellen, an denen eine Abgabefrist steht — Kachel, Dashboard,
+// Kartendetail. Nur so heisst dieselbe Farbe ueberall dasselbe.
+const AMPEL = {
+  rot:    { bg: '#F7DDD6', fg: '#A8341C', dot: '#C2543D', wort: 'dringend' },
+  orange: { bg: '#FBEFDA', fg: '#8A5606', dot: '#D08427', wort: 'bald' },
+  gruen:  { bg: '#EDF3E1', fg: '#3C5D1E', dot: '#5FA132', wort: 'Zeit' },
+  vorbei: { bg: '#ECECE8', fg: '#75756E', dot: '#9A9A93', wort: 'vorbei' },
+};
+// Abgelaufen heisst: raus aus der Sichtung. Ohne Frist ist NICHT abgelaufen — eine
+// fehlende Frist ist eine Luecke in den Unterlagen, kein vergangener Termin.
+function fristVorbei(frist) {
+  const r = vgvRest(frist);
+  return !!r && r.tage < 0;
+}
+// Ampel-Plakette: Punkt + Text in einem, damit die Stufe auch ohne Farbsehen lesbar ist.
+function ampelChip(rest, klasse) {
+  const f = AMPEL[rest.ampel] || AMPEL.gruen;
+  return el('span', { class: (klasse || 'vtag') + ' ampel', style: `background:${f.bg};color:${f.fg}`,
+    title: rest.txt + ' — ' + (rest.ampel === 'rot' ? 'unter 7 Tagen: dringend'
+      : rest.ampel === 'orange' ? '8 bis 14 Tage: bald dran' : 'mehr als 14 Tage: noch Zeit') },
+    el('span', { class: 'adot', style: `background:${f.dot}` }),
+    rest.tage < 0 ? 'vorbei' : rest.tage === 0 ? 'HEUTE' : rest.tage + ' Tg');
 }
 function ctxMenu(x, y, items) {
   closeCtx();
@@ -1333,6 +1360,56 @@ async function openVgvDashboard() {
   renderVgvDashboard(box, d);
 }
 
+// ---------- Legenden: was die Farbe und was die Zahl bedeutet ----------
+// Beides stand bisher nirgends. Wer das Dashboard zum ersten Mal sieht, soll die Ampel
+// und die Punktzahl lesen koennen, ohne jemanden zu fragen (Marcels Auftrag 26.08.).
+function ampelLegende() {
+  const stufe = (k, txt) => el('span', { class: 'lgi' },
+    el('span', { class: 'adot', style: `background:${AMPEL[k].dot}` }), txt);
+  return el('div', { class: 'dlegende' },
+    el('span', { class: 'lgt' }, 'Dringlichkeit bis zur Abgabe'),
+    stufe('rot', '7 Tage oder weniger'),
+    stufe('orange', '8 bis 14 Tage'),
+    stufe('gruen', 'mehr als 14 Tage'),
+    el('span', { class: 'lgn' }, 'Abgelaufene Fristen zeigt diese Ansicht nicht mehr.'));
+}
+
+// Punktzahl des Radars, 0-100. Die Stufen sind Lesehilfe, nicht Entscheidung.
+function punkteStufe(n) {
+  if (n == null) return { cls: 'leer', wort: 'keine Wertung' };
+  if (n >= 70) return { cls: 'hoch', wort: 'passt gut' };
+  if (n >= 50) return { cls: 'mittel', wort: 'grenzwertig' };
+  return { cls: 'niedrig', wort: 'passt eher nicht' };
+}
+function punkteChip(n) {
+  const st = punkteStufe(n);
+  return el('span', { class: 'kscore ' + st.cls,
+    title: n == null ? 'Der Radar hat sich keine Zahl zugetraut.'
+      : `${n} von 100 — ${st.wort}. Gewichtet werden Referenzstaerke im Gebaeudetyp, Entfernung zu Donaustauf/Bogen, Auftraggeber-Typ und Konkurrenzlage.` },
+    el('span', { class: 'kn' }, n == null ? '–' : String(n)),
+    el('span', { class: 'ke' }, n == null ? '' : 'Pkt'));
+}
+function punkteLegende() {
+  const b = el('div', { class: 'dinfo' });
+  b.append(el('div', { class: 'dinfot' }, 'Was die Punktzahl sagt'));
+  b.append(el('div', { class: 'dinfox' },
+    'Der Radar gibt jedem Fund 0 bis 100 Punkte dafür, wie gut das Verfahren zu uns passt. ',
+    'Gewichtet werden vier Dinge: Referenzstärke im Gebäudetyp, Entfernung zu Donaustauf und Bogen, ',
+    'Art des Auftraggebers und die Konkurrenzlage aus dem Konkurrenz-Index. ',
+    'Die Zahl sortiert die Liste — sie entscheidet nichts. Ein „–" heißt, der Radar hat sich keine Wertung zugetraut.'));
+  const sk = el('div', { class: 'dskala' });
+  for (const [n, txt] of [[70, 'ab 70 — genauer hinsehen'], [50, '50 bis 69 — grenzwertig, Begründung lesen'], [30, 'unter 50 — nur mit gutem Grund']]) {
+    const st = punkteStufe(n);
+    sk.append(el('span', { class: 'lgi' }, el('span', { class: 'kscore klein ' + st.cls }, n >= 70 ? '70+' : n >= 50 ? '50+' : '<50'), txt));
+  }
+  b.append(sk);
+  return b;
+}
+// Listenkopf mit Zaehlpille — die nackte Klammerzahl ging im Fliesstext unter.
+function listenKopf(titel, n) {
+  return el('div', { class: 'slbl mitzahl' }, titel, el('span', { class: 'zpill' }, String(n)));
+}
+
 function dashLane(titel, eintraege, leerText) {
   const TAGE = 49;
   const lane = el('div', { class: 'dlane' });
@@ -1350,7 +1427,7 @@ function dashLane(titel, eintraege, leerText) {
     const rest = vgvRest(e2.datum);
     if (!rest) continue;
     const pos = Math.max(0.5, Math.min(100, (rest.tage / TAGE) * 100));
-    const cls = rest.tage < 0 ? 'vorbei' : rest.tage <= 3 ? 'rot' : rest.tage <= 7 ? 'knapp' : '';
+    const cls = rest.tage < 0 ? 'vorbei' : rest.tage <= 7 ? 'rot' : rest.tage <= 14 ? 'knapp' : '';
     const lbl = el('div', { class: 'dlbl' }, el('b', {}, e2.name.slice(0, 44)),
       e2.sub ? el('span', { class: 'dsub' }, e2.sub) : '');
     const track = el('div', { class: 'dtrack' },
@@ -1396,10 +1473,8 @@ function verfahrenZeile(k) {
   // Nur noch offene Termine bekommen einen Chip: bei einem abgegebenen Antrag ist die
   // vergangene Phase-1-Frist kein Warnsignal, sondern der Normalfall.
   if (rest && rest.tage >= 0 && !erl) {
-    const f = rest.tage <= 3 ? { bg: '#F7DDD6', fg: '#B4432E' }
-      : rest.tage <= 7 ? { bg: '#FBEFDA', fg: '#8A5606' } : { bg: '#EDF3E1', fg: '#3C5D1E' };
-    kopf.append(el('span', { class: 'vtag', style: `background:${f.bg};color:${f.fg}` },
-      rest.tage === 0 ? 'HEUTE' : rest.tage + ' Tg'));
+    kopf.append(ampelChip(rest, 'vtag'));
+    zeile.classList.add('amp', 'amp-' + rest.ampel);
   }
   if (k.agent_status === 'laeuft') kopf.append(el('span', { class: 'vtag', style: 'background:#E8F5C4;color:#3C5D1E' }, 'Agent läuft'));
   zeile.append(kopf);
@@ -1463,7 +1538,7 @@ function renderDashLaufend(grid, laufend) {
 }
 
 // Ansicht 2: Empfehlungen — frische Board-Karten links, Weitwinkel-Markt rechts.
-function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
+function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
   const p1 = vorschlaege.filter((k) => k.vgv.frist).map((k) => ({
     name: k.titel, datum: k.vgv.frist,
     sub: [k.spalte, k.vgv.frist_bieterfragen ? 'Bieterfragen bis ' + String(k.vgv.frist_bieterfragen).slice(0, 10) : null].filter(Boolean).join(' · '),
@@ -1477,7 +1552,7 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
     dashKpi(naechste ? naechste.rest.tage + ' Tg' : '—', 'Nächste Abgabe',
       naechste ? naechste.name.slice(0, 26) : 'keine Frist offen', naechste && naechste.rest.tage <= 7 ? 'warn' : ''),
     dashKpi(`${(d.entschieden || {}).go || 0} / ${(d.entschieden || {}).nogo || 0}`, 'Go / No-Go', 'letzte 14 Tage')));
-  links.append(el('div', { class: 'slbl' }, `Aufgenommen, noch nicht entschieden (${vorschlaege.length})`));
+  links.append(listenKopf('Aufgenommen, noch nicht entschieden', vorschlaege.length));
   if (!vorschlaege.length) {
     links.append(el('div', { class: 'dleer' }, 'Nichts Neues in der ersten Spalte. Neue Funde legt der Radar dort automatisch ab.'));
   }
@@ -1489,7 +1564,8 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
   grid.append(links);
 
   const rechts = el('div', { class: 'dcol' });
-  rechts.append(el('div', { class: 'slbl' }, `Markt im größeren Radius — was noch passen würde (${kandidaten.length})`));
+  rechts.append(listenKopf('Markt im größeren Radius — was noch passen würde', kandidaten.length));
+  rechts.append(punkteLegende());
   if (!kandidaten.length) {
     rechts.append(el('div', { class: 'dleer' }, 'Keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — alle Themengebiete mit Referenzlage, bis 250 km um Donaustauf und Bogen.'));
   }
@@ -1507,11 +1583,16 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
         (was === 'go' ? '✓ GO — ' : '✕ No-Go — ') + (r.hinweis || '')));
       if (was === 'go') await ladeBoard();
     };
-    zeile.append(el('div', { class: 'krow' },
-      k.score != null ? el('span', { class: 'kscore' }, k.score) : el('span', { class: 'kscore leer' }, '–'),
-      el('span', { class: 'kt2', title: k.titel }, k.titel),
+    const krest = vgvRest(k.frist);
+    if (krest) zeile.classList.add('amp', 'amp-' + krest.ampel);
+    const kopf = el('div', { class: 'krow' },
+      punkteChip(k.score),
+      el('span', { class: 'kt2', title: k.titel }, k.titel));
+    if (krest) kopf.append(ampelChip(krest, 'vtag'));
+    kopf.append(
       el('button', { class: 'kbtn go', title: 'Go — Karte in „Neu", Aufnahme startet automatisch', onclick: (ev) => entscheide('go', ev) }, '✓ Go'),
-      el('button', { class: 'kbtn nogo', title: 'No-Go — wird nie wieder vorgelegt', onclick: (ev) => entscheide('nogo', ev) }, '✕')));
+      el('button', { class: 'kbtn nogo', title: 'No-Go — wird nie wieder vorgelegt', onclick: (ev) => entscheide('nogo', ev) }, '✕'));
+    zeile.append(kopf);
     zeile.append(el('div', { class: 'km2' }, [
       k.ort, k.km != null ? Math.round(k.km) + ' km' : null, k.kategorie,
       k.frist ? 'Abgabe ' + String(k.frist).slice(8, 10) + '.' + String(k.frist).slice(5, 7) + '.' : null,
@@ -1522,15 +1603,23 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d) {
     liste.append(zeile);
   }
   rechts.append(liste);
+  if (abgelaufen) rechts.append(el('div', { class: 'dnote' },
+    `${abgelaufen} Verfahren mit abgelaufener Abgabefrist sind ausgeblendet — sie stehen weiter auf dem Board.`));
   grid.append(rechts);
 }
 
 function renderVgvDashboard(box, d) {
   box.innerHTML = '';
   const alle = (d.karten || []).filter((k) => k.vgv);
-  const vorschlaege = alle.filter((k) => (k.spalte_pos || 0) === 0 && k.status !== 'erledigt');
+  // Abgelaufen raus (Marcels Regel 26.08.): ein Verfahren, dessen Abgabefrist vorbei ist,
+  // ist keine Entscheidung mehr, sondern steht nur im Weg. Wie viele es waren, steht
+  // unter der Liste — stilles Wegfiltern liest sich sonst wie "da ist nichts".
+  const vorschlaegeAlle = alle.filter((k) => (k.spalte_pos || 0) === 0 && k.status !== 'erledigt');
+  const vorschlaege = vorschlaegeAlle.filter((k) => !fristVorbei(k.vgv.frist));
   const laufend = alle.filter((k) => (k.spalte_pos || 0) > 0);
-  const kandidaten = d.kandidaten || [];
+  const kandidatenAlle = d.kandidaten || [];
+  const kandidaten = kandidatenAlle.filter((k) => !fristVorbei(k.frist));
+  const abgelaufen = (vorschlaegeAlle.length - vorschlaege.length) + (kandidatenAlle.length - kandidaten.length);
 
   const st = d.weitwinkel_stand ? 'Weitwinkel-Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
   const tabs = el('div', { class: 'dtabs' });
@@ -1544,9 +1633,13 @@ function renderVgvDashboard(box, d) {
     el('h2', {}, 'VgV-Dashboard'), tabs,
     el('span', { class: 'scope' }, st),
     el('button', { class: 'dclose', onclick: closeDrawer }, '✕')));
+  box.append(ampelLegende());
 
-  const grid = el('div', { class: 'dgrid' });
-  if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d);
+  // In der Sichtung stehen zwei Listen nebeneinander — die brauchen gleich viel Platz,
+  // sonst passt der Projektname nicht in eine Zeile. Bei den laufenden Verfahren bleibt
+  // es beim breiteren linken Teil: dort sitzen die Fristen-Balken.
+  const grid = el('div', { class: 'dgrid' + (dashTab === 'empfehlung' ? ' gleich' : '') });
+  if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen);
   else renderDashLaufend(grid, laufend);
   box.append(grid);
 }
@@ -1585,12 +1678,72 @@ function projektMenu(x, y, todoId, danach) {
   } })));
 }
 
+// ---------- Tags (Migration 121) ----------
+// Zwei Arten: System-Tags sind vorgegeben und nicht loeschbar (ARGE, Eignungsleihe,
+// Eigene Referenzen reichen, Referenz fehlt), freie legt jeder selbst an. Tags mit
+// Firmenfeld tragen an der Karte zusaetzlich den Partnernamen ("ARGE · Musterplan GmbH").
+// Gesetzt wird ausschliesslich von Hand — kein Agent haengt Tags an (Marcels Entscheidung).
+async function ladeTags(frisch) {
+  if (S.tags && !frisch) return S.tags;
+  const r = await lotse('tags').catch(() => ({ fehler: 'Netzwerkfehler' }));
+  if (r.fehler) { uiHinweis(r.fehler); return S.tags || []; }
+  S.tags = r.tags || [];
+  return S.tags;
+}
+function tagChipEl(t, abnehmen) {
+  const c = el('span', { class: 'tchip' + (t.firma ? ' firma' : '') },
+    t.name, t.firma ? el('span', { class: 'tf' }, ' · ' + t.firma) : null);
+  if (abnehmen) c.append(el('button', { class: 'tx', title: 'Tag abnehmen',
+    onclick: (e) => { e.stopPropagation(); abnehmen(t); } }, '×'));
+  return c;
+}
+// Auswahlmenue am "+ Tag"-Knopf. danach() laedt Karte und Board neu.
+async function tagMenu(x, y, todoId, danach) {
+  const tags = await ladeTags();
+  const setze = async (g) => {
+    let firma = null;
+    if (g.mit_firma) {
+      firma = await uiEingabe('Firma für „' + g.name + '":', '', { ok: 'Tag setzen' });
+      if (firma === null || !firma.trim()) return;   // ohne Firma kein Tag — der Server lehnt sonst ab
+    }
+    const r = await mut('tag_setzen', { todo_id: todoId, tag_id: g.id, firma: firma ? firma.trim() : null });
+    if (!r.fehler) await danach();
+  };
+  const items = tags.map((g) => ({
+    txt: (g.art === 'system' ? '◆ ' : '') + g.name + (g.mit_firma ? ' + Firma…' : ''),
+    do: () => setze(g),
+  }));
+  items.push({ txt: '＋ Neuen Tag anlegen…', do: async () => {
+    const name = await uiEingabe('Name des neuen Tags:', '', { ok: 'Anlegen' });
+    if (name === null || !name.trim()) return;
+    const mitFirma = await uiFrage('Soll „' + name.trim() + '" eine Firma tragen — so wie ARGE?',
+      { titel: 'Neuer Tag', ok: 'Mit Firma', abbruch: 'Ohne Firma' });
+    const r = await mut('tag_anlegen', { name: name.trim(), mit_firma: mitFirma });
+    if (r.fehler) return;
+    await ladeTags(true);
+    await setze({ id: r.id, name: r.name, mit_firma: r.mit_firma });
+  } });
+  const frei = tags.filter((g) => g.art === 'frei');
+  if (frei.length) items.push({ txt: '⚙ Freie Tags aufräumen…', do: () => setTimeout(() => ctxMenu(x, y,
+    frei.map((g) => ({ txt: 'Löschen: ' + g.name + (g.benutzt ? ' (an ' + g.benutzt + ' Karten)' : ''), danger: true, do: async () => {
+      if (!await uiFrage('Tag „' + g.name + '" löschen? Er verschwindet damit auch von allen Karten, an denen er hängt.',
+        { ok: 'Löschen', gefahr: true })) return;
+      const r = await mut('tag_loeschen', { tag_id: g.id });
+      if (!r.fehler) { await ladeTags(true); await danach(); }
+    } })))) });
+  ctxMenu(x, y, items);
+}
+
 function renderCard(t) {
   const st = statusVon(t);
   const chip = st && CHIPS[st];
   const due = fmtDatum(t.faellig);
+  // Dringlichkeit einer VgV-Karte faerbt den linken Rand der Kachel: beim Ueberfliegen
+  // des Boards sieht man die Lage, ohne eine einzige Zeile zu lesen.
+  const vrest = vgvRest(t.vgv_frist);
   const c = el('div', {
-    class: 'card' + (st === 'arbeitet' ? ' aura' : '') + (st === 'rueckfrage' ? ' rf' : ''),
+    class: 'card' + (st === 'arbeitet' ? ' aura' : '') + (st === 'rueckfrage' ? ' rf' : '')
+      + (vrest ? ' amp amp-' + vrest.ampel : ''),
     draggable: 'true',
     'data-id': t.id,
     ondragstart: (e) => {
@@ -1618,15 +1771,25 @@ function renderCard(t) {
   // Zielbild-Pflicht (Marcels Regel): das WOFUER steht sichtbar VOR der Bitte.
   if (t.zuarbeit && t.zielbild) c.append(el('div', { class: 'wofuer' }, el('b', {}, 'Wofür: '), t.zielbild));
   // VgV-Karte: Empfehlung + Abgabefrist direkt auf der Kachel (Radar-Board)
-  if (t.vgv_empfehlung || t.vgv_frist) {
-    const rest = vgvRest(t.vgv_frist);
+  if (t.vgv_empfehlung || vrest) {
     const f = t.vgv_empfehlung === 'BEWERBEN' ? { bg: '#E8F5C4', fg: '#3C5D1E' }
       : t.vgv_empfehlung === 'PRUEFEN' ? { bg: '#FBEFDA', fg: '#8A5606' }
       : { bg: '#ECECE8', fg: '#75756E' };
     const row = el('div', { class: 'vgvrow' });
     if (t.vgv_empfehlung) row.append(el('span', { class: 'vchip', style: `background:${f.bg};color:${f.fg}` }, t.vgv_empfehlung));
-    if (rest) row.append(el('span', { class: 'vfrist' + (rest.knapp ? ' urgent' : '') }, rest.txt));
+    if (vrest) {
+      const a = AMPEL[vrest.ampel];
+      row.append(el('span', { class: 'vfrist a-' + vrest.ampel, title: vrest.txt },
+        el('span', { class: 'adot', style: `background:${a.dot}` }), vrest.txt));
+    }
     c.append(row);
+  }
+  // Tags (Migration 121): ARGE-Partner und Referenzlage sind auf der Kachel zu sehen,
+  // ohne die Karte zu oeffnen.
+  if ((t.tags || []).length) {
+    const tr = el('div', { class: 'tagrow' });
+    for (const g of t.tags) tr.append(tagChipEl(g));
+    c.append(tr);
   }
   const meta = el('div', { class: 'meta' });
   // Redesign 10.08.: die Kachel zeigt nur Frist, Personen, Herkunft, Projekt — Zaehler
@@ -1792,7 +1955,21 @@ function renderDrawer() {
   } }, d.faellig ? '📅 fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : '📅 Frist setzen');
   meta.append(fristBtn);
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
-  head.append(meta); dkopf.append(head);
+  head.append(meta);
+  // Tags (Migration 121): setzen, abnehmen, neue anlegen — alles von Hand.
+  {
+    const danach = async () => { await openCard(d.id); await ladeBoard(); };
+    const zeile = el('div', { class: 'tagrow drawer' });
+    for (const g of (d.tags || [])) zeile.append(tagChipEl(g, async (x2) => {
+      const r = await mut('tag_entfernen', { zuordnung_id: x2.zuordnung_id });
+      if (!r.fehler) await danach();
+    }));
+    zeile.append(el('button', { class: 'metabtn', title: 'Tag an diese Karte hängen',
+      onclick: (e) => tagMenu(e.clientX, e.clientY, d.id, danach) },
+      (d.tags || []).length ? '＋ Tag' : '＋ Tag setzen'));
+    head.append(zeile);
+  }
+  dkopf.append(head);
 
   // Zielbild-Pflicht (Loop B2): bei Zuarbeitskarten steht das WOFUER vor der Bitte.
   if (d.zuarbeit && d.zielbild) {
@@ -1840,7 +2017,7 @@ function renderDrawer() {
       ['Bieterfragen bis', v.frist_bieterfragen], ['Verfahrensart', v.verfahrensart],
       ['Volumen', v.volumen], ['Leistung', v.leistung],
       ['Konstellation', v.konstellation ? String(v.konstellation).toUpperCase() : null],
-      ['Scout-Score', v.score != null ? v.score + '/100' : null],
+      ['Punkte (Passung)', v.score != null ? v.score + ' / 100 — ' + punkteStufe(v.score).wort : null],
     ];
     for (const [k2, w] of paare) if (w) kv.append(el('div', { class: 'k' }, k2), el('div', { class: 'w' }, String(w)));
     sec.append(kv);
