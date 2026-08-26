@@ -240,9 +240,9 @@ function vgvRest(frist) {
   // Ampel (Marcels Regel 26.08.): bis 7 Tage rot, bis 14 orange, darueber gruen.
   // Eine abgelaufene Frist ist keine Ampelstufe, sondern ein Ausschlussgrund.
   const ampel = tage < 0 ? 'vorbei' : tage <= 7 ? 'rot' : tage <= 14 ? 'orange' : 'gruen';
-  if (tage < 0) return { txt: `Abgabe ${dat} vorbei`, tage, ampel, knapp: true };
-  if (tage === 0) return { txt: 'Abgabe HEUTE', tage, ampel, knapp: true };
-  return { txt: `Abgabe ${dat} · ${tage} Tg`, tage, ampel, knapp: tage <= 7 };
+  if (tage < 0) return { txt: `Abgabe ${dat} vorbei`, tage, ampel };
+  if (tage === 0) return { txt: 'Abgabe HEUTE', tage, ampel };
+  return { txt: `Abgabe ${dat} · ${tage} Tg`, tage, ampel };
 }
 // Eine Farbtafel fuer ALLE Stellen, an denen eine Abgabefrist steht — Kachel, Dashboard,
 // Kartendetail. Nur so heisst dieselbe Farbe ueberall dasselbe.
@@ -1495,7 +1495,6 @@ function verfahrenZeile(k) {
   // vergangene Phase-1-Frist kein Warnsignal, sondern der Normalfall.
   if (rest && rest.tage >= 0 && !erl) {
     kopf.append(ampelChip(rest, 'vtag'));
-    zeile.classList.add('amp', 'amp-' + rest.ampel);
   }
   if (k.agent_status === 'laeuft') kopf.append(el('span', { class: 'vtag', style: 'background:#E8F5C4;color:#3C5D1E' }, 'Agent läuft'));
   zeile.append(kopf);
@@ -1605,7 +1604,6 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
       if (was === 'go') await ladeBoard();
     };
     const krest = vgvRest(k.frist);
-    if (krest) zeile.classList.add('amp', 'amp-' + krest.ampel);
     const kopf = el('div', { class: 'krow' },
       punkteChip(k.score),
       el('span', { class: 'kt2', title: k.titel }, k.titel));
@@ -1760,12 +1758,9 @@ function renderCard(t) {
   const st = statusVon(t);
   const chip = st && CHIPS[st];
   const due = fmtDatum(t.faellig);
-  // Dringlichkeit einer VgV-Karte faerbt den linken Rand der Kachel: beim Ueberfliegen
-  // des Boards sieht man die Lage, ohne eine einzige Zeile zu lesen.
   const vrest = vgvRest(t.vgv_frist);
   const c = el('div', {
-    class: 'card' + (st === 'arbeitet' ? ' aura' : '') + (st === 'rueckfrage' ? ' rf' : '')
-      + (vrest ? ' amp amp-' + vrest.ampel : ''),
+    class: 'card' + (st === 'arbeitet' ? ' aura' : '') + (st === 'rueckfrage' ? ' rf' : ''),
     draggable: 'true',
     'data-id': t.id,
     ondragstart: (e) => {
@@ -1833,6 +1828,14 @@ function renderCard(t) {
   }
   if (t.projekt_name) meta.append(el('span', { class: 'proj', style: 'color:' + projDot(t.projekt_name) }, t.projekt_name.replace(/^\d+\s*/, '')));
   c.append(meta);
+  // Zeitspur am unteren Rand statt Farbbalken am linken: die Fuellung waechst, je naeher
+  // die Abgabe rueckt (Fenster: 45 Tage). Sie zeigt den Verlauf, nicht nur eine Stufe —
+  // und sie liegt dort, wo sie nichts zerschneidet.
+  if (vrest) {
+    const anteil = vrest.tage < 0 ? 100 : Math.max(6, Math.min(100, Math.round((1 - vrest.tage / 45) * 100)));
+    c.append(el('div', { class: 'fristspur', title: vrest.txt },
+      el('i', { style: `width:${anteil}%;background:${AMPEL[vrest.ampel].dot}` })));
+  }
   return c;
 }
 
