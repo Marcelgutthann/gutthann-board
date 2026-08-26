@@ -22,7 +22,6 @@ const S = {
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
-  tags: null, // Tag-Liste (Migration 123), einmal geholt und bis zur naechsten Aenderung behalten
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
 };
@@ -150,7 +149,7 @@ async function lotse(action, body = {}, retried = false) {
     // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
     // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
     // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
-    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen', 'tags'];
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen'];
     if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
@@ -1698,62 +1697,6 @@ function projektMenu(x, y, todoId, danach) {
   } })));
 }
 
-// ---------- Tags (Migration 123) ----------
-// Zwei Arten: System-Tags sind vorgegeben und nicht loeschbar (ARGE, Eignungsleihe,
-// Eigene Referenzen reichen, Referenz fehlt), freie legt jeder selbst an. Tags mit
-// Firmenfeld tragen an der Karte zusaetzlich den Partnernamen ("ARGE · Musterplan GmbH").
-// Gesetzt wird ausschliesslich von Hand — kein Agent haengt Tags an (Marcels Entscheidung).
-async function ladeTags(frisch) {
-  if (S.tags && !frisch) return S.tags;
-  const r = await lotse('tags').catch(() => ({ fehler: 'Netzwerkfehler' }));
-  if (r.fehler) { uiHinweis(r.fehler); return S.tags || []; }
-  S.tags = r.tags || [];
-  return S.tags;
-}
-function tagChipEl(t, abnehmen) {
-  const c = el('span', { class: 'tchip' + (t.firma ? ' firma' : '') },
-    t.name, t.firma ? el('span', { class: 'tf' }, ' · ' + t.firma) : null);
-  if (abnehmen) c.append(el('button', { class: 'tx', title: 'Tag abnehmen',
-    onclick: (e) => { e.stopPropagation(); abnehmen(t); } }, '×'));
-  return c;
-}
-// Auswahlmenue am "+ Tag"-Knopf. danach() laedt Karte und Board neu.
-async function tagMenu(x, y, todoId, danach) {
-  const tags = await ladeTags();
-  const setze = async (g) => {
-    let firma = null;
-    if (g.mit_firma) {
-      firma = await uiEingabe('Firma für „' + g.name + '":', '', { ok: 'Tag setzen' });
-      if (firma === null || !firma.trim()) return;   // ohne Firma kein Tag — der Server lehnt sonst ab
-    }
-    const r = await mut('tag_setzen', { todo_id: todoId, tag_id: g.id, firma: firma ? firma.trim() : null });
-    if (!r.fehler) await danach();
-  };
-  const items = tags.map((g) => ({
-    txt: (g.art === 'system' ? '◆ ' : '') + g.name + (g.mit_firma ? ' + Firma…' : ''),
-    do: () => setze(g),
-  }));
-  items.push({ txt: '＋ Neuen Tag anlegen…', do: async () => {
-    const name = await uiEingabe('Name des neuen Tags:', '', { ok: 'Anlegen' });
-    if (name === null || !name.trim()) return;
-    const mitFirma = await uiFrage('Soll „' + name.trim() + '" eine Firma tragen — so wie ARGE?',
-      { titel: 'Neuer Tag', ok: 'Mit Firma', abbruch: 'Ohne Firma' });
-    const r = await mut('tag_anlegen', { name: name.trim(), mit_firma: mitFirma });
-    if (r.fehler) return;
-    await ladeTags(true);
-    await setze({ id: r.id, name: r.name, mit_firma: r.mit_firma });
-  } });
-  const frei = tags.filter((g) => g.art === 'frei');
-  if (frei.length) items.push({ txt: '⚙ Freie Tags aufräumen…', do: () => setTimeout(() => ctxMenu(x, y,
-    frei.map((g) => ({ txt: 'Löschen: ' + g.name + (g.benutzt ? ' (an ' + g.benutzt + ' Karten)' : ''), danger: true, do: async () => {
-      if (!await uiFrage('Tag „' + g.name + '" löschen? Er verschwindet damit auch von allen Karten, an denen er hängt.',
-        { ok: 'Löschen', gefahr: true })) return;
-      const r = await mut('tag_loeschen', { tag_id: g.id });
-      if (!r.fehler) { await ladeTags(true); await danach(); }
-    } })))) });
-  ctxMenu(x, y, items);
-}
-
 function renderCard(t) {
   const st = statusVon(t);
   const chip = st && CHIPS[st];
@@ -1800,13 +1743,6 @@ function renderCard(t) {
         el('span', { class: 'adot', style: `background:${a.dot}` }), vrest.txt));
     }
     c.append(row);
-  }
-  // Tags (Migration 123): ARGE-Partner und Referenzlage sind auf der Kachel zu sehen,
-  // ohne die Karte zu oeffnen.
-  if ((t.tags || []).length) {
-    const tr = el('div', { class: 'tagrow' });
-    for (const g of t.tags) tr.append(tagChipEl(g));
-    c.append(tr);
   }
   const meta = el('div', { class: 'meta' });
   // Redesign 10.08.: die Kachel zeigt nur Frist, Personen, Herkunft, Projekt — Zaehler
@@ -1981,19 +1917,6 @@ function renderDrawer() {
   meta.append(fristBtn);
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta);
-  // Tags (Migration 123): setzen, abnehmen, neue anlegen — alles von Hand.
-  {
-    const danach = async () => { await openCard(d.id); await ladeBoard(); };
-    const zeile = el('div', { class: 'tagrow drawer' });
-    for (const g of (d.tags || [])) zeile.append(tagChipEl(g, async (x2) => {
-      const r = await mut('tag_entfernen', { zuordnung_id: x2.zuordnung_id });
-      if (!r.fehler) await danach();
-    }));
-    zeile.append(el('button', { class: 'metabtn', title: 'Tag an diese Karte hängen',
-      onclick: (e) => tagMenu(e.clientX, e.clientY, d.id, danach) },
-      (d.tags || []).length ? '＋ Tag' : '＋ Tag setzen'));
-    head.append(zeile);
-  }
   dkopf.append(head);
 
   // Zielbild-Pflicht (Loop B2): bei Zuarbeitskarten steht das WOFUER vor der Bitte.
