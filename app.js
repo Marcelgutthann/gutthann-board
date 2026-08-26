@@ -1837,11 +1837,17 @@ function renderDrawer() {
     // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
     // schlaegt vor, ein Mensch entscheidet mit einem Klick. Einmal entschieden bleibt
     // die Zeile stehen (ausgegraut), damit der Verlauf nachvollziehbar bleibt.
-    if (k.vorschlag_art === 'frist' && k.vorschlag?.datum) {
-      const datumTxt = new Date(k.vorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE');
+    // Beschriftung je Vorschlagsart -- neue Arten (Migration 117: 'folgekarte') brauchen
+    // hier nur eine weitere Zeile, nicht noch einen Block wie oben.
+    const vorschlagTxt = k.vorschlag_art === 'frist' && k.vorschlag?.datum
+      ? '📅 Frist ' + new Date(k.vorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE')
+      : k.vorschlag_art === 'folgekarte' && k.vorschlag?.titel
+        ? '➕ Folgekarte „' + k.vorschlag.titel + '“'
+        : null;
+    if (vorschlagTxt) {
       if (!k.vorschlag_status) {
         const zeile = el('div', { class: 'vorschlagzeile' },
-          el('span', {}, '📅 Frist ' + datumTxt + ' übernehmen?'));
+          el('span', {}, vorschlagTxt + ' übernehmen?'));
         const entscheiden = async (annehmen) => {
           zeile.querySelectorAll('button').forEach((b) => { b.disabled = true; });
           const r = await mut('vorschlag_entscheiden', { kommentar_id: k.id, annehmen });
@@ -1854,7 +1860,7 @@ function renderDrawer() {
         komZeile.append(zeile);
       } else {
         komZeile.append(el('div', { class: 'vorschlagzeile entschieden' },
-          el('span', {}, '📅 Frist ' + datumTxt + ' — ' + (k.vorschlag_status === 'angenommen' ? 'übernommen ✓' : 'abgelehnt'))));
+          el('span', {}, vorschlagTxt + ' — ' + (k.vorschlag_status === 'angenommen' ? 'übernommen ✓' : 'abgelehnt'))));
       }
     }
     sk.append(komZeile);
