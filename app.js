@@ -971,6 +971,21 @@ function renderBoard() {
   if (b.fehler) { bw.append(el('div', { class: 'empty', style: 'padding:20px' }, b.fehler)); return; }
   const spalten = b.spalten || [];
   const erste = spalten[0]?.id;
+  // Spaltengruppen (Marcels Auftrag 26.08., Migration 119): aufeinanderfolgende Spalten mit
+  // demselben Band stehen in einem Block mit Ueberschrift — im VgV-Radar sind das die Phasen.
+  // Spalten ohne Band (alle uebrigen Boards) haengen wie bisher direkt im Board.
+  let band = null;
+  const bandFuer = (sp) => {
+    if (!sp.gruppe) { band = null; return bw; }
+    if (band && band.name === sp.gruppe) return band.cols;
+    const cnt = el('span', { class: 'pcnt' }, '0');
+    const cols = el('div', { class: 'phasecols' });
+    bw.append(el('div', { class: 'phase' },
+      el('div', { class: 'phasehead' }, el('span', { class: 'pname' }, sp.gruppe), cnt, el('span', { class: 'pline' })),
+      cols));
+    band = { name: sp.gruppe, cols, cnt, n: 0 };
+    return cols;
+  };
   for (const sp of spalten) {
     const bekannt = (id) => spalten.some((s2) => s2.id === id);
     const inSpalte = (b.todos || []).filter((t) =>
@@ -1032,7 +1047,15 @@ function renderBoard() {
       // nie (Schutz gegen als-erledigt-Anlegen), sondern kommentarlos in Spalte 1.
       colEl.append(el('button', { class: 'addcard', onclick: () => { S.newCardCol = sp.id; S.newCardText = ''; renderBoard(); } }, '+ Aufgabe'));
     }
-    bw.append(colEl);
+    const ziel = bandFuer(sp);
+    ziel.append(colEl);
+    // Der Band-Zaehler zaehlt laufende Verfahren, nicht das Archiv: die Erledigt-Spalte
+    // sammelt ALLE je abgehakten Karten ein (auch verworfene Radar-Vorschlaege) — die
+    // gehoeren nicht in die Zahl ueber dem Ergebnis-Block.
+    if (band) {
+      band.n += inSpalte.filter((t) => t.status !== 'erledigt').length;
+      band.cnt.textContent = String(band.n);
+    }
   }
   bw.append(el('button', { class: 'addcol', onclick: async () => {
     const n = await uiEingabe('Name der Spalte:'); if (!n?.trim()) return;
