@@ -23,6 +23,7 @@ const S = {
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
+  komAuf: new Set(), // Kommentare, die der Nutzer aufgeklappt hat — ueberlebt das Neuzeichnen
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
 };
 
@@ -869,6 +870,30 @@ function chatText(roh) {
   }
   if (!box.childNodes.length) box.textContent = String(roh ?? '');
   return box;
+}
+
+// Lange Antworten falten (Marcel, 27.08.: "wenn ein Agent mir so viele Informationen holt,
+// ist der ganze Chat ueberfuellt"). Stehen bleibt der Anfang -- dort steht das Ergebnis --,
+// der Rest kommt auf Klick. Entschieden wird nach Textlaenge, nicht nach gemessener Hoehe:
+// die Hoehe steht erst nach dem Einhaengen fest, und der Chat wird im Takt neu gezeichnet,
+// solange der Agent arbeitet -- eine Messung je Durchgang liesse die Nachricht springen.
+// Aufgeklappte Kommentare merkt sich S.komAuf, sonst klappte der Takt sie wieder zu.
+const FALT_AB_ZEICHEN = 800;
+function chatFaltung(roh, id) {
+  const box = chatText(roh);
+  const text = String(roh ?? '');
+  if (text.length <= FALT_AB_ZEICHEN) return [box];
+  const versteckt = text.split('\n').filter((z) => z.trim()).length;
+  const offen = () => S.komAuf.has(id);
+  const beschriftung = () => (offen() ? 'Weniger anzeigen' : `Ganze Antwort anzeigen (${versteckt} Zeilen)`);
+  box.classList.add('komfold');
+  if (offen()) box.classList.add('komauf');
+  const btn = el('button', { class: 'mehrbtn', onclick: () => {
+    if (offen()) S.komAuf.delete(id); else S.komAuf.add(id);
+    box.classList.toggle('komauf', offen());
+    btn.textContent = beschriftung();
+  } }, beschriftung());
+  return [box, btn];
 }
 
 function mentionHilfe(inp) {
@@ -1779,7 +1804,7 @@ function renderCard(t) {
 async function openCard(id) {
   // Frisch angelegte Karten tragen bis zur Antwort des Servers eine Platzhalter-Kennung.
   if (!id || String(id).startsWith('neu-')) return;
-  if (S.detail?.id !== id) { S.komEntwurf = ''; if (S.zuruf?.todoId !== id) S.zuruf = null; } // Entwurf und Anzeige gehoeren zu IHRER Karte
+  if (S.detail?.id !== id) { S.komEntwurf = ''; S.komAuf.clear(); if (S.zuruf?.todoId !== id) S.zuruf = null; } // Entwurf und Anzeige gehoeren zu IHRER Karte
   try {
     S.detail = await lotse('todo_detail', { todo_id: id });
     renderDrawer();
@@ -2141,7 +2166,7 @@ function renderDrawer() {
     // Eigene Nachrichten rechtsbuendig, alle anderen (Kollegen wie Agent) linksbuendig --
     // das gibt dem Chat sein Richtungsgefuehl. k.meiner traegt die App schon lange.
     const komKlasse = 'kom' + (k.von === 'agent' ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '');
-    const komZeile = el('div', { class: komKlasse }, kopf, chatText(k.text));
+    const komZeile = el('div', { class: komKlasse }, kopf, ...chatFaltung(k.text, k.id));
     // Vorschlag mit Klick-Bestaetigung (Migration 115/116): eine Frist AENDERT eine
     // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
     // schlaegt vor, ein Mensch entscheidet mit einem Klick. Einmal entschieden bleibt
