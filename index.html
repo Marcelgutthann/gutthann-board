@@ -331,6 +331,16 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kom.kom-agent .txt .txt-liste li::before{background:#D8B856}
 .kom .txt b{font-weight:600;color:#1C1C1A}
 .kom.kom-agent .txt{background:#FEFCF6;border-color:#E8DFC5;border-radius:4px 12px 12px 12px}
+/* Lange Antworten falten (Marcel, 27.08.): seit der Agent im Netz recherchieren darf, kommen
+   Antworten, die den ganzen Chat zuschuetten. Stehen bleibt der Anfang -- also das Ergebnis --,
+   der Rest klappt auf Klick auf. Kein Balken, nur ein Auslauf in die jeweilige Blasenfarbe. */
+.kom .txt.komfold{position:relative;max-height:184px;overflow:hidden}
+.kom .txt.komfold::after{content:"";position:absolute;left:0;right:0;bottom:0;height:52px;pointer-events:none;background:linear-gradient(rgba(255,255,255,0),#fff)}
+.kom.kom-agent .txt.komfold::after{background:linear-gradient(rgba(254,252,246,0),#FEFCF6)}
+.kom .txt.komfold.komauf{max-height:none;overflow:visible}
+.kom .txt.komfold.komauf::after{display:none}
+.kom .mehrbtn{margin-top:5px;font-size:11.5px;font-weight:600;color:#75756E;padding:2px 0}
+.kom .mehrbtn:hover{color:#1C1C1A}
 .kom.kom-agent .von{font-weight:600;color:#8A6D1E}
 /* Vorschlagszeile und Tipp-Anzeige sitzen im selben Chatfluss -- volle Breite der Spalte. */
 .dchat-verlauf .vorschlagzeile,.dchat-verlauf .agenttippt{max-width:92%}
@@ -539,7 +549,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mta5vcou">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mtbj9eqt">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -617,7 +627,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mta5vcou"></script>
-<script type="module" src="dashboard.js?v=mta5vcou"></script>
+<script src="app.js?v=mtbj9eqt"></script>
+<script type="module" src="dashboard.js?v=mtbj9eqt"></script>
 </body>
 </html>
