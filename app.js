@@ -1419,6 +1419,19 @@ function ampelLegende() {
     el('span', { class: 'lgn' }, 'Abgelaufene Fristen zeigt diese Ansicht nicht mehr.'));
 }
 
+// Erklaerungen auf Abruf statt Dauerpraesenz (Marcel 31.08.): ein kleines rundes
+// Info-Zeichen im Kopf; Ampel- und Punkte-Legende erscheinen erst auf Klick.
+function infoKnopf() {
+  const halter = el('span', { class: 'dinfoH' });
+  const pop = el('div', { class: 'dpop', style: 'display:none' }, ampelLegende(), punkteLegende());
+  const btn = el('button', { class: 'dinfoBtn', title: 'Was Farben und Punktzahl bedeuten', onclick: (e) => {
+    e.stopPropagation();
+    pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+  } }, 'i');
+  halter.append(btn, pop);
+  return halter;
+}
+
 // Punktzahl des Radars, 0-100. Die Stufen sind Lesehilfe, nicht Entscheidung.
 function punkteStufe(n) {
   if (n == null) return { cls: 'leer', wort: 'keine Wertung' };
@@ -1490,6 +1503,145 @@ function dashLane(titel, eintraege, leerText) {
 // Verfahren oder die Empfehlungen — beides zusammen war zu voll. Trennlinie: eine Karte in
 // der Spalte "Neu" ist ein Vorschlag, ab der zweiten Spalte ist sie ein laufendes Verfahren.
 let dashTab = 'laufend';
+
+// ---------- Ansicht 3: der ganze Markt (Marcels Auftrag 31.08.) ----------
+// Nicht mehr nur die vorgefilterte Empfehlungsliste: alle Bekanntmachungen aus dem
+// taeglichen Vollabzug (Tabelle ausschreibungen, ~90 Tage), durchsuchbar nach Namen,
+// mit Standardfiltern wie bei competitionline und MEHREREN speicherbaren Filtern.
+// Die Daten kommen direkt ueber PostgREST (Such-RPC + Filter-Tabelle, Migration 129) —
+// der Lotse bleibt aussen vor, damit kein Edge-Deploy noetig ist.
+let marktZ = { krit: null, aktiv: null, liste: null };
+const MARKT_CPV = [['', 'Alle Bereiche'], ['71', 'Planung gesamt'], ['712', 'Architektur/Objektplanung'],
+  ['7122', 'Objektplanung Gebäude'], ['713', 'Ingenieure/Technik'], ['714', 'Stadtplanung/Freianlagen'],
+  ['45', 'Bauleistungen']];
+const MARKT_LAENDER = [['', 'Ganz Deutschland'], ['DE2', 'Bayern'], ['DE1', 'Baden-Württemberg'],
+  ['DED', 'Sachsen'], ['DEG', 'Thüringen'], ['DE7', 'Hessen'], ['DE3', 'Berlin'], ['DE4', 'Brandenburg'],
+  ['DE5', 'Bremen'], ['DE6', 'Hamburg'], ['DE8', 'Mecklenburg-Vorpommern'], ['DE9', 'Niedersachsen'],
+  ['DEA', 'Nordrhein-Westfalen'], ['DEB', 'Rheinland-Pfalz'], ['DEC', 'Saarland'],
+  ['DEE', 'Sachsen-Anhalt'], ['DEF', 'Schleswig-Holstein']];
+const MARKT_ART = [['ContractNotice', 'Offene Ausschreibungen'], ['ContractAwardNotice', 'Vergeben (Zuschläge)'], ['', 'Alle Bekanntmachungen']];
+
+async function restRpc(fn, body) {
+  const r = await fetch(`${SUPA}/rest/v1/rpc/${fn}`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
+    body: JSON.stringify(body) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function restFilter(methode, zusatz = '', body = null) {
+  const r = await fetch(`${SUPA}/rest/v1/ausschreibungs_filter${zusatz}`, { method: methode,
+    headers: { 'Content-Type': 'application/json', apikey: ANON,
+      Authorization: 'Bearer ' + (S.session?.access_token || ''), Prefer: 'return=representation' },
+    body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.status === 204 ? null : r.json();
+}
+
+function marktZeile(z) {
+  const zeile = el('div', { class: 'kand2' });
+  const rest = vgvRest(z.frist);
+  const kopf = el('div', { class: 'krow' }, el('span', { class: 'kt2', title: z.titel }, z.titel || '(ohne Titel)'));
+  if (z.art === 'ContractAwardNotice') kopf.append(el('span', { class: 'vtag', style: 'background:#ECECE8;color:#75756E' }, 'VERGEBEN'));
+  if (rest && rest.tage >= 0) kopf.append(ampelChip(rest, 'vtag'));
+  zeile.append(kopf);
+  zeile.append(el('div', { class: 'km2' }, [
+    z.vergabestelle, z.ort,
+    z.frist ? 'Abgabe ' + String(z.frist).slice(8, 10) + '.' + String(z.frist).slice(5, 7) + '.'
+      : 'veröffentlicht ' + String(z.pub_datum).slice(8, 10) + '.' + String(z.pub_datum).slice(5, 7) + '.',
+    z.verfahrensart,
+  ].filter(Boolean).join(' · ')));
+  const det = el('div', { class: 'kdet', style: 'display:none' });
+  if (z.beschreibung) det.append(el('div', { class: 'kbeg' }, z.beschreibung));
+  const links = el('div', { class: 'vpfad' });
+  if (z.ted_nr) links.append(el('a', { href: 'https://ted.europa.eu/de/notice/-/detail/' + z.ted_nr, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'TED ' + z.ted_nr), ' · ');
+  const doku = z.links?.dokumente?.[0];
+  if (doku) links.append(el('a', { href: doku, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'Unterlagen/Portal'));
+  if (links.childNodes.length) det.append(links);
+  if (det.childNodes.length) {
+    zeile.append(det);
+    zeile.addEventListener('click', () => { det.style.display = det.style.display === 'none' ? 'block' : 'none'; });
+  } else { zeile.style.cursor = 'default'; }
+  return zeile;
+}
+
+async function renderDashMarkt(wrap) {
+  if (!marktZ.liste) {
+    try { marktZ.liste = await restFilter('GET', '?select=*&order=position,created_at'); }
+    catch { marktZ.liste = []; }
+    if (!marktZ.krit) {
+      const f0 = marktZ.liste[0];
+      marktZ.aktiv = f0 ? f0.id : null;
+      marktZ.krit = f0 ? { ...f0.kriterien } : { text: '', cpv: '712', land: '', offen: true, art: 'ContractNotice' };
+    }
+  }
+  if (!wrap.isConnected) return;
+  wrap.innerHTML = '';
+  const k = marktZ.krit;
+
+  // Zeile 1: gespeicherte Filter — die heutige Voreinstellung heisst schlicht "Filter 1".
+  const chips = el('div', { class: 'mchips' });
+  for (const f of marktZ.liste) {
+    const c = el('button', { class: 'mchip' + (f.id === marktZ.aktiv ? ' an' : ''), onclick: () => {
+      marktZ.aktiv = f.id; marktZ.krit = { ...f.kriterien }; renderDashMarkt(wrap);
+    } }, f.name);
+    if (f.id === marktZ.aktiv && marktZ.liste.length > 1) {
+      c.append(el('span', { class: 'mx', title: 'Filter löschen', onclick: async (ev) => {
+        ev.stopPropagation();
+        if (!await uiFrage(`Filter "${f.name}" löschen?`)) return;
+        await restFilter('DELETE', `?id=eq.${f.id}`).catch(() => {});
+        marktZ.liste = null; marktZ.aktiv = null; marktZ.krit = null; renderDashMarkt(wrap);
+      } }, '×'));
+    }
+    chips.append(c);
+  }
+  chips.append(el('button', { class: 'mchip neu', onclick: async () => {
+    const name = (window.prompt('Name des neuen Filters:', `Filter ${marktZ.liste.length + 1}`) || '').trim();
+    if (!name) return;
+    const neu = await restFilter('POST', '', [{ name, kriterien: k, position: marktZ.liste.length + 1 }]).catch(() => null);
+    marktZ.liste = null; if (neu && neu[0]) marktZ.aktiv = neu[0].id;
+    renderDashMarkt(wrap);
+  } }, '+ Neuer Filter'));
+  const aktiv = marktZ.liste.find((f) => f.id === marktZ.aktiv);
+  if (aktiv && JSON.stringify(aktiv.kriterien) !== JSON.stringify(k)) {
+    chips.append(el('button', { class: 'mchip sich', onclick: async () => {
+      await restFilter('PATCH', `?id=eq.${marktZ.aktiv}`, { kriterien: k }).catch(() => {});
+      marktZ.liste = null; renderDashMarkt(wrap);
+    } }, `✓ In „${aktiv.name}" speichern`));
+  }
+  wrap.append(chips);
+
+  // Zeile 2: Standardfilter wie auf den grossen Plattformen.
+  const sel = (optionen, wert, setz) => {
+    const s = el('select', { class: 'msel', onchange: (e) => { setz(e.target.value); sucheJetzt(); } });
+    for (const [v, txt] of optionen) s.append(el('option', { value: v, ...(v === (wert || '') ? { selected: true } : {}) }, txt));
+    return s;
+  };
+  const suchfeld = el('input', { class: 'minput', type: 'search', placeholder: 'Suche nach Projektname, Ort, Vergabestelle …', value: k.text || '' });
+  suchfeld.addEventListener('keydown', (e) => { if (e.key === 'Enter') { k.text = suchfeld.value.trim(); sucheJetzt(); } });
+  wrap.append(el('div', { class: 'mfilter' },
+    suchfeld,
+    sel(MARKT_CPV, k.cpv, (v) => { k.cpv = v; }),
+    sel(MARKT_LAENDER, k.land, (v) => { k.land = v; }),
+    sel(MARKT_ART, k.art ?? 'ContractNotice', (v) => { k.art = v; }),
+    el('label', { class: 'mtog' }, el('input', { type: 'checkbox', ...(k.offen ? { checked: true } : {}), onchange: (e) => { k.offen = e.target.checked; sucheJetzt(); } }), 'nur offene Fristen'),
+    el('button', { class: 'kbtn go', onclick: () => { k.text = suchfeld.value.trim(); sucheJetzt(); } }, 'Suchen')));
+
+  const stat = el('div', { class: 'mstat' }, 'Suche läuft …');
+  const liste = el('div', { class: 'klist' });
+  wrap.append(stat, liste);
+
+  async function sucheJetzt() {
+    stat.textContent = 'Suche läuft …'; liste.innerHTML = '';
+    let d;
+    try { d = await restRpc('assistant_ausschreibungen_suche', { p: k }); }
+    catch (e) { stat.textContent = 'Suche fehlgeschlagen (' + e.message + ') — einmal neu laden hilft meist.'; return; }
+    if (!liste.isConnected) return;
+    if (d.fehler) { stat.textContent = d.fehler; return; }
+    stat.textContent = `${d.treffer} Treffer` + (d.treffer > d.zeilen.length ? ` — die ersten ${d.zeilen.length} angezeigt, Filter enger stellen` : '');
+    for (const z of d.zeilen) liste.append(marktZeile(z));
+  }
+  sucheJetzt();
+}
 
 function dashKpi(wert, lbl, sub, cls = '') {
   return el('div', { class: 'kpi ' + cls },
@@ -1613,7 +1765,6 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
 
   const rechts = el('div', { class: 'dcol' });
   rechts.append(listenKopf('Markt im größeren Radius — was noch passen würde', kandidaten.length));
-  rechts.append(punkteLegende());
   if (!kandidaten.length) {
     rechts.append(el('div', { class: 'dleer' }, 'Keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — alle Themengebiete mit Referenzlage, bis 250 km um Donaustauf und Bogen.'));
   }
@@ -1679,23 +1830,29 @@ function renderVgvDashboard(box, d) {
 
   const st = d.weitwinkel_stand ? 'Weitwinkel-Stand ' + String(d.weitwinkel_stand).slice(0, 16).replace('T', ' ') : '';
   const tabs = el('div', { class: 'dtabs' });
-  const tab = (id, lbl, n) => el('button', {
-    class: 'dtab' + (dashTab === id ? ' an' : ''),
-    onclick: () => { dashTab = id; renderVgvDashboard(box, d); },
-  }, lbl, el('span', { class: 'n' }, String(n)));
+  const tab = (id, lbl, n) => {
+    const b = el('button', {
+      class: 'dtab' + (dashTab === id ? ' an' : ''),
+      onclick: () => { dashTab = id; renderVgvDashboard(box, d); },
+    }, lbl);
+    if (n != null) b.append(el('span', { class: 'n' }, String(n)));
+    return b;
+  };
   tabs.append(tab('laufend', 'Laufende Verfahren', laufend.filter((k) => k.status !== 'erledigt').length));
   tabs.append(tab('empfehlung', 'Empfehlungen', vorschlaege.length + kandidaten.length));
+  tabs.append(tab('markt', 'Ausschreibungen', null));
   box.append(el('div', { class: 'dkopf' },
     el('h2', {}, 'VgV-Dashboard'), tabs,
     el('span', { class: 'scope' }, st),
+    infoKnopf(),
     el('button', { class: 'dclose', onclick: closeDrawer }, '✕')));
-  box.append(ampelLegende());
 
   // In der Sichtung stehen zwei Listen nebeneinander — die brauchen gleich viel Platz,
   // sonst passt der Projektname nicht in eine Zeile. Bei den laufenden Verfahren bleibt
   // es beim breiteren linken Teil: dort sitzen die Fristen-Balken.
-  const grid = el('div', { class: 'dgrid' + (dashTab === 'empfehlung' ? ' gleich' : '') });
-  if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen);
+  const grid = el('div', { class: dashTab === 'markt' ? 'dmarkt' : 'dgrid' + (dashTab === 'empfehlung' ? ' gleich' : '') });
+  if (dashTab === 'markt') renderDashMarkt(grid);
+  else if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen);
   else renderDashLaufend(grid, laufend, laufendWeg);
   box.append(grid);
 }
