@@ -1541,7 +1541,7 @@ function verfahrenZeile(k) {
 }
 
 // Ansicht 1: laufende Verfahren — Termine links, Stand je Spalte rechts.
-function renderDashLaufend(grid, laufend) {
+function renderDashLaufend(grid, laufend, weg) {
   const offen = laufend.filter((k) => k.status !== 'erledigt');
   const p1 = offen.filter((k) => k.vgv.frist && (vgvRest(k.vgv.frist) || {}).tage >= 0).map((k) => ({
     name: k.titel, datum: k.vgv.frist,
@@ -1549,7 +1549,8 @@ function renderDashLaufend(grid, laufend) {
   }));
   const p2 = offen.filter((k) => k.vgv.termin_phase2).map((k) => ({ name: k.titel, datum: k.vgv.termin_phase2, sub: k.spalte }));
   const naechste = dashNaechste(p1.concat(p2));
-  const wartend = offen.filter((k) => k.spalte === 'Beworben').length;
+  // Die Spalte heisst seit Migration 119 "Abgabe"; alter Name bleibt als Rueckfall drin.
+  const wartend = offen.filter((k) => ['Abgabe', 'Beworben'].includes(String(k.spalte))).length;
   const inP2 = offen.filter((k) => String(k.spalte).startsWith('Phase 2')).length;
 
   const links = el('div', { class: 'dcol' });
@@ -1578,6 +1579,9 @@ function renderDashLaufend(grid, laufend) {
     liste.append(verfahrenZeile(k));
   }
   rechts.append(liste);
+  // Stilles Wegfiltern liest sich wie "da ist nichts" — deshalb die Zaehlzeile.
+  if (weg) rechts.append(el('div', { class: 'dnote' },
+    `${weg} Verfahren ausgeblendet (erledigt oder Abgabefrist ohne Bewerbung abgelaufen) — auf dem Board stehen sie weiterhin.`));
   grid.append(rechts);
 }
 
@@ -1660,7 +1664,15 @@ function renderVgvDashboard(box, d) {
   // unter der Liste — stilles Wegfiltern liest sich sonst wie "da ist nichts".
   const vorschlaegeAlle = alle.filter((k) => (k.spalte_pos || 0) === 0 && k.status !== 'erledigt');
   const vorschlaege = vorschlaegeAlle.filter((k) => !fristVorbei(k.vgv.frist));
-  const laufend = alle.filter((k) => (k.spalte_pos || 0) > 0);
+  // Aktuell halten (Marcels Regel 31.08.): erledigte Karten und Verfahren, die im
+  // Sichten-Band (die ersten zwei Spalten) mit abgelaufener Abgabefrist liegengeblieben
+  // sind, erscheinen nicht mehr im Stand — nie beworben heisst: vorbei ist vorbei, auch
+  // wenn die Unterlagen einen Phase-2-Termin nennen. Der Filter rechnet bei jedem
+  // Oeffnen live gegen heute; auf dem Board bleiben die Karten stehen.
+  const laufendAlle = alle.filter((k) => (k.spalte_pos || 0) > 0);
+  const laufend = laufendAlle.filter((k) => k.status !== 'erledigt'
+    && !((k.spalte_pos || 0) <= 1 && fristVorbei(k.vgv.frist)));
+  const laufendWeg = laufendAlle.length - laufend.length;
   const kandidatenAlle = d.kandidaten || [];
   const kandidaten = kandidatenAlle.filter((k) => !fristVorbei(k.frist));
   const abgelaufen = (vorschlaegeAlle.length - vorschlaege.length) + (kandidatenAlle.length - kandidaten.length);
@@ -1684,7 +1696,7 @@ function renderVgvDashboard(box, d) {
   // es beim breiteren linken Teil: dort sitzen die Fristen-Balken.
   const grid = el('div', { class: 'dgrid' + (dashTab === 'empfehlung' ? ' gleich' : '') });
   if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen);
-  else renderDashLaufend(grid, laufend);
+  else renderDashLaufend(grid, laufend, laufendWeg);
   box.append(grid);
 }
 
@@ -1762,11 +1774,9 @@ function renderCard(t) {
       : { bg: '#ECECE8', fg: '#75756E' };
     const row = el('div', { class: 'vgvrow' });
     if (t.vgv_empfehlung) row.append(el('span', { class: 'vchip', style: `background:${f.bg};color:${f.fg}` }, t.vgv_empfehlung));
-    if (vrest) {
-      const a = AMPEL[vrest.ampel];
-      row.append(el('span', { class: 'vfrist a-' + vrest.ampel, title: vrest.txt },
-        el('span', { class: 'adot', style: `background:${a.dot}` }), vrest.txt));
-    }
+    // Zurueckgebaut 31.08. (Marcel): die Karte bleibt clean — schlichter Frist-Text wie
+    // vor dem 26.08., Ampelfarben und Verlaufsgrafik wohnen NUR im Dashboard.
+    if (vrest) row.append(el('span', { class: 'vfrist' + (vrest.tage >= 0 && vrest.tage <= 7 ? ' urgent' : '') }, vrest.txt));
     c.append(row);
   }
   const meta = el('div', { class: 'meta' });
@@ -1789,14 +1799,6 @@ function renderCard(t) {
   }
   if (t.projekt_name) meta.append(el('span', { class: 'proj', style: 'color:' + projDot(t.projekt_name) }, t.projekt_name.replace(/^\d+\s*/, '')));
   c.append(meta);
-  // Zeitspur am unteren Rand statt Farbbalken am linken: die Fuellung waechst, je naeher
-  // die Abgabe rueckt (Fenster: 45 Tage). Sie zeigt den Verlauf, nicht nur eine Stufe —
-  // und sie liegt dort, wo sie nichts zerschneidet.
-  if (vrest) {
-    const anteil = vrest.tage < 0 ? 100 : Math.max(6, Math.min(100, Math.round((1 - vrest.tage / 45) * 100)));
-    c.append(el('div', { class: 'fristspur', title: vrest.txt },
-      el('i', { style: `width:${anteil}%;background:${AMPEL[vrest.ampel].dot}` })));
-  }
   return c;
 }
 
