@@ -196,6 +196,34 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dlegende .lgn{margin-left:auto;color:#8A8A83}
 /* Erklaerkasten fuer die Punktzahl. */
 .dinfo{background:#F8F8F5;border:1px solid rgba(28,28,26,.07);border-radius:11px;padding:12px 15px;margin-bottom:12px}
+/* Info-Popover am Dashboard-Kopf: Legenden auf Abruf statt Dauerzeile (Marcel 31.08.). */
+.dinfoH{position:relative;display:inline-flex;flex:none}
+.dinfoBtn{width:22px;height:22px;border-radius:50%;border:1px solid rgba(28,28,26,.18);background:#FDFDFB;
+  color:#75756E;font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:700;font-style:italic;
+  cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.dinfoBtn:hover{border-color:rgba(28,28,26,.35);color:#1C1C1A}
+.dpop{position:absolute;top:28px;right:0;z-index:60;width:min(440px,86vw);background:#FFF;
+  border:1px solid rgba(28,28,26,.14);border-radius:12px;box-shadow:0 12px 34px rgba(28,28,26,.16);padding:14px 16px}
+.dpop .dlegende{margin:0 0 10px;flex-direction:column;align-items:flex-start;gap:6px}
+.dpop .dlegende .lgn{margin-left:0}
+.dpop .dinfo{margin:0;border:none;padding:0;background:transparent}
+/* Markt-Ansicht: Filterchips + Standardfilter + Trefferliste in voller Breite. */
+.dmarkt{display:flex;flex-direction:column;gap:10px}
+.mchips{display:flex;flex-wrap:wrap;gap:7px}
+.mchip{border:1px solid rgba(28,28,26,.16);background:#FDFDFB;border-radius:999px;padding:5px 13px;
+  font:inherit;font-size:12px;font-weight:600;color:#4F4F49;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.mchip.an{background:#1C1C1A;border-color:#1C1C1A;color:#F5F4F0}
+.mchip.neu{border-style:dashed;color:#75756E}
+.mchip.sich{border-color:#3C5D1E;color:#3C5D1E;background:#F3FAE4}
+.mchip .mx{opacity:.65;font-weight:700}
+.mchip .mx:hover{opacity:1}
+.mfilter{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.minput{flex:1 1 250px;min-width:200px;border:1px solid rgba(28,28,26,.16);border-radius:9px;
+  padding:7px 11px;font:inherit;font-size:13px;background:#FFF}
+.msel{border:1px solid rgba(28,28,26,.16);border-radius:9px;padding:7px 9px;font:inherit;font-size:12.5px;
+  background:#FFF;color:#1C1C1A;max-width:215px}
+.mtog{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#4F4F49;white-space:nowrap;cursor:pointer}
+.mstat{font-size:12px;color:#8A8A83}
 .dinfot{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#8A8A83;margin-bottom:6px}
 .dinfox{font-size:12.5px;line-height:1.6;color:#3C3C38}
 .dskala{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:11.5px;color:#4F4F49}
@@ -207,10 +235,14 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kand2{background:#fff;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:10px 13px;cursor:pointer;transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}
 .kand2:hover{border-color:rgba(28,28,26,.22);box-shadow:0 4px 14px rgba(28,28,26,.10);transform:translateY(-1px)}
 .kand2 .krow{display:flex;gap:9px;align-items:flex-start;min-width:0}
-.kscore{flex:none;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
-  width:44px;min-height:34px;border-radius:10px;padding:3px 0;background:#E8F5C4;color:#3C5D1E;line-height:1.05}
-.kscore .kn{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;letter-spacing:-.02em}
-.kscore .ke{font-size:8.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.72}
+/* Punktzahl als kleines rundes Zeichen in der Ecke (Marcel 31.08.) — die Erklaerung
+   dazu wohnt im Info-Popover am Dashboard-Kopf, nicht mehr als Dauertext. */
+.kscore{flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border-radius:50%;background:#E8F5C4;color:#3C5D1E;line-height:1}
+.kscore .kn{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:700;letter-spacing:-.02em}
+.kscore .ke{display:none}
+.kscore.klein{width:24px;height:24px}
+.kscore.klein .kn{font-size:10.5px}
 .kscore.hoch{background:#E1F2BC;color:#33581A}
 .kscore.mittel{background:#FBEFDA;color:#7E4F06}
 .kscore.niedrig{background:#EFEAE2;color:#77706A}
@@ -543,7 +575,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mtgx056p">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mtgy7gof">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -621,7 +653,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mtgx056p"></script>
-<script type="module" src="dashboard.js?v=mtgx056p"></script>
+<script src="app.js?v=mtgy7gof"></script>
+<script type="module" src="dashboard.js?v=mtgy7gof"></script>
 </body>
 </html>
