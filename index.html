@@ -123,11 +123,8 @@ button{cursor:pointer;background:none;border:none}
 .card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
 .card .pchip{font-size:10px;font-weight:600;padding:1px 7px;border-radius:8px;background:rgba(28,28,26,.07);color:#4F4F49}
-.card .vfrist{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#75756E;white-space:nowrap}
-.card .vfrist.a-rot{color:#A8341C;font-weight:700}
-.card .vfrist.a-orange{color:#8A5606;font-weight:600}
-.card .vfrist.a-gruen{color:#4A6B32}
-.card .vfrist.a-vorbei{color:#9A9A93}
+.card .vfrist{font-size:11.5px;color:#75756E;white-space:nowrap}
+.card .vfrist.urgent{color:#A66A12;font-weight:700}
 .vgvban{border-radius:10px;padding:10px 14px;margin-bottom:10px}
 .vgvkv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:12.5px}
 .vgvkv .k{color:#75756E;white-space:nowrap}
@@ -185,12 +182,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .klist{display:flex;flex-direction:column;gap:8px}
 /* Ampel — ueberall derselbe Punkt in derselben Farbe. */
 .adot{flex:none;width:8px;height:8px;border-radius:50%;display:inline-block}
-/* KEINE farbigen Balken am linken Rand (Marcels Ansage 26.08., ausdruecklich: nie wieder).
-   Die Dringlichkeit einer Abgabefrist zeigt stattdessen eine Zeitspur am unteren Rand der
-   Karte: sie waechst, je naeher die Frist rueckt, und traegt damit mehr Information als
-   eine Farbstufe — man sieht nicht nur "dringend", sondern wie weit die Zeit gelaufen ist. */
-.fristspur{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(28,28,26,.07)}
-.fristspur i{display:block;height:100%;border-radius:0 2px 2px 0;transition:width .3s ease}
+/* KEINE Fristen-Grafik an der Einzelkarte (Marcels Ansage 31.08.): weder Farbbalken links
+   (Ansage 26.08.) noch Zeitspur/Balken am Kartenfuss (Rueckbau des 26.08.-Versuchs).
+   Die Karte bleibt clean; Ampeln und Zeitverlaeufe wohnen NUR in der Dashboard-Uebersicht. */
 .card{position:relative;overflow:hidden;flex:none}  /* flex:none ist Pflicht: in der Kartenspalte (flex column) schrumpften die Karten sonst
      unter ihre Inhaltshoehe — bisher lief der Text einfach ueber die Box hinaus, mit der
      abgerundeten Zeitspur (overflow:hidden) waere er abgeschnitten worden. */
@@ -549,7 +543,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mtbj9eqt">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mtgx056p">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -627,7 +621,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mtbj9eqt"></script>
-<script type="module" src="dashboard.js?v=mtbj9eqt"></script>
+<script src="app.js?v=mtgx056p"></script>
+<script type="module" src="dashboard.js?v=mtgx056p"></script>
 </body>
 </html>
