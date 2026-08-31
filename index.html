@@ -207,8 +207,15 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dpop .dlegende{margin:0 0 10px;flex-direction:column;align-items:flex-start;gap:6px}
 .dpop .dlegende .lgn{margin-left:0}
 .dpop .dinfo{margin:0;border:none;padding:0;background:transparent}
-/* Markt-Ansicht: Filterchips + Standardfilter + Trefferliste in voller Breite. */
-.dmarkt{display:flex;flex-direction:column;gap:10px}
+/* Markt-Ansicht: Filterchips + Standardfilter + Trefferliste in voller Breite.
+   flex:1 + min-height:0 sind Pflicht, sonst laeuft die Trefferliste unten aus dem
+   Fenster statt zu scrollen (Marcels Befund 31.08.). */
+.dmarkt{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.mliste{flex:1;min-height:0;overflow-y:auto;padding-right:6px}
+.mmerk{display:flex;flex-wrap:wrap;gap:5px 8px;margin-top:5px;align-items:center}
+.mm{font-size:11.5px;color:#4F4F49;background:rgba(28,28,26,.05);border-radius:7px;padding:2px 8px;white-space:nowrap}
+.mm.stark{font-weight:600;background:#E8F5C4;color:#3C5D1E}
+.mm.blass{color:#9A9A93;background:transparent;padding-left:0}
 .mchips{display:flex;flex-wrap:wrap;gap:7px}
 .mchip{border:1px solid rgba(28,28,26,.16);background:#FDFDFB;border-radius:999px;padding:5px 13px;
   font:inherit;font-size:12px;font-weight:600;color:#4F4F49;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
@@ -575,7 +582,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mtgy7gof">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mtgypajx">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -653,7 +660,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mtgy7gof"></script>
-<script type="module" src="dashboard.js?v=mtgy7gof"></script>
+<script src="app.js?v=mtgypajx"></script>
+<script type="module" src="dashboard.js?v=mtgypajx"></script>
 </body>
 </html>
