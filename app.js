@@ -1520,6 +1520,13 @@ const MARKT_LAENDER = [['', 'Ganz Deutschland'], ['DE2', 'Bayern'], ['DE1', 'Bad
   ['DEA', 'Nordrhein-Westfalen'], ['DEB', 'Rheinland-Pfalz'], ['DEC', 'Saarland'],
   ['DEE', 'Sachsen-Anhalt'], ['DEF', 'Schleswig-Holstein']];
 const MARKT_ART = [['ContractNotice', 'Offene Ausschreibungen'], ['ContractAwardNotice', 'Vergeben (Zuschläge)'], ['', 'Alle Bekanntmachungen']];
+// Umkreis in den Ringen des Buero-Geomodells (Donaustauf/Bogen, siehe geo_filter.py).
+const MARKT_KM = [['', 'Ganz Deutschland'], ['50', 'bis 50 km'], ['100', 'bis 100 km'], ['150', 'bis 150 km'], ['200', 'bis 200 km']];
+const MARKT_LEIST = [['', 'Alle Leistungen'], ['Objektplanung', 'Objektplanung'], ['Generalplanung', 'Generalplanung'],
+  ['Freianlagen', 'Freianlagen'], ['Stadtplanung', 'Stadtplanung'], ['TGA', 'TGA / Technische Ausrüstung'],
+  ['Tragwerk', 'Tragwerk / Ingenieurbau'], ['Bauüberwachung', 'Bauüberwachung / Projektsteuerung']];
+// Radar-Regel: unter 10 Tagen ist ein VgV-Teilnahmeantrag nicht mehr seriös zu bauen.
+const MARKT_TAGE = [['', 'Restzeit egal'], ['10', 'noch ≥ 10 Tage'], ['21', 'noch ≥ 21 Tage'], ['30', 'noch ≥ 30 Tage']];
 
 async function restRpc(fn, body) {
   const r = await fetch(`${SUPA}/rest/v1/rpc/${fn}`, { method: 'POST',
@@ -1543,14 +1550,40 @@ function marktZeile(z) {
   const kopf = el('div', { class: 'krow' }, el('span', { class: 'kt2', title: z.titel }, z.titel || '(ohne Titel)'));
   if (z.art === 'ContractAwardNotice') kopf.append(el('span', { class: 'vtag', style: 'background:#ECECE8;color:#75756E' }, 'VERGEBEN'));
   if (rest && rest.tage >= 0) kopf.append(ampelChip(rest, 'vtag'));
+  // Go/No-Go direkt aus der Suche (Marcel 31.08.): Go legt die Karte an und startet die
+  // Aufnahme sofort — dieselbe Mechanik wie beim Weitwinkel-Kandidaten.
+  if (z.entscheidung === 'go') {
+    kopf.append(el('span', { class: 'vtag', style: 'background:#E8F5C4;color:#3C5D1E' }, '✓ auf dem Board'));
+  } else if (z.art !== 'ContractAwardNotice') {
+    const entscheide = async (was, ev) => {
+      ev.stopPropagation();
+      const r = await restRpc('assistant_ausschreibung_entscheiden',
+        { p_kennung: z.kennung, p_entscheidung: was }).catch(() => ({ fehler: 'Netzwerkfehler' }));
+      if (r.fehler) { uiHinweis(r.fehler); return; }
+      zeile.replaceWith(el('div', { class: 'kandhin' + (was === 'go' ? ' go' : '') },
+        (was === 'go' ? '✓ GO — ' : '✕ No-Go — ') + (r.hinweis || '')));
+      if (was === 'go') await ladeBoard();
+    };
+    kopf.append(
+      el('button', { class: 'kbtn go', title: 'Go — Karte in „Neu", Aufnahme startet automatisch', onclick: (ev) => entscheide('go', ev) }, '✓ Go'),
+      el('button', { class: 'kbtn nogo', title: 'No-Go — verschwindet aus der Trefferliste', onclick: (ev) => entscheide('nogo', ev) }, '✕'));
+  }
   zeile.append(kopf);
-  zeile.append(el('div', { class: 'km2' }, [
-    z.vergabestelle, z.ort,
-    z.frist ? 'Abgabe ' + String(z.frist).slice(8, 10) + '.' + String(z.frist).slice(5, 7) + '.'
-      : 'veröffentlicht ' + String(z.pub_datum).slice(8, 10) + '.' + String(z.pub_datum).slice(5, 7) + '.',
-    z.verfahrensart,
-  ].filter(Boolean).join(' · ')));
+  // Die Zeile zeigt, was die Entscheidung traegt (Marcels Ansage 31.08.): Leistungsart,
+  // Leistungsphasen, Entfernung und verbleibende Zeit — nicht Vergabestelle/Verfahrensart.
+  // Ort und Auftraggeber stehen im aufgeklappten Teil, sie entscheiden nichts beim Ueberfliegen.
+  const merkmale = el('div', { class: 'mmerk' });
+  const merk = (txt, kl) => merkmale.append(el('span', { class: 'mm' + (kl ? ' ' + kl : '') }, txt));
+  if (z.leistung) merk(z.leistung, 'stark');
+  merk(z.lph ? 'LPH ' + z.lph : 'LPH nicht angegeben', z.lph ? '' : 'blass');
+  merk(z.km != null ? Math.round(z.km) + ' km ab ' + z.standort : (z.ort || 'Ort unbekannt'), z.km == null ? 'blass' : '');
+  if (rest && rest.tage >= 0) merk(rest.tage === 0 ? 'Abgabe heute' : 'noch ' + rest.tage + ' Tage bis Abgabe');
+  else if (z.frist) merk('Frist ' + String(z.frist).slice(8, 10) + '.' + String(z.frist).slice(5, 7) + '. vorbei', 'blass');
+  else merk('veröffentlicht ' + String(z.pub_datum).slice(8, 10) + '.' + String(z.pub_datum).slice(5, 7) + '.', 'blass');
+  zeile.append(merkmale);
   const det = el('div', { class: 'kdet', style: 'display:none' });
+  const wer = [z.vergabestelle, [z.plz, z.ort].filter(Boolean).join(' '), z.verfahrensart].filter(Boolean).join(' · ');
+  if (wer) det.append(el('div', { class: 'kref' }, wer));
   if (z.beschreibung) det.append(el('div', { class: 'kbeg' }, z.beschreibung));
   const links = el('div', { class: 'vpfad' });
   if (z.ted_nr) links.append(el('a', { href: 'https://ted.europa.eu/de/notice/-/detail/' + z.ted_nr, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'TED ' + z.ted_nr), ' · ');
@@ -1620,6 +1653,9 @@ async function renderDashMarkt(wrap) {
   suchfeld.addEventListener('keydown', (e) => { if (e.key === 'Enter') { k.text = suchfeld.value.trim(); sucheJetzt(); } });
   wrap.append(el('div', { class: 'mfilter' },
     suchfeld,
+    sel(MARKT_LEIST, k.leistung, (v) => { k.leistung = v; }),
+    sel(MARKT_KM, k.km_max, (v) => { k.km_max = v; }),
+    sel(MARKT_TAGE, k.tage_min, (v) => { k.tage_min = v; }),
     sel(MARKT_CPV, k.cpv, (v) => { k.cpv = v; }),
     sel(MARKT_LAENDER, k.land, (v) => { k.land = v; }),
     sel(MARKT_ART, k.art ?? 'ContractNotice', (v) => { k.art = v; }),
@@ -1627,7 +1663,8 @@ async function renderDashMarkt(wrap) {
     el('button', { class: 'kbtn go', onclick: () => { k.text = suchfeld.value.trim(); sucheJetzt(); } }, 'Suchen')));
 
   const stat = el('div', { class: 'mstat' }, 'Suche läuft …');
-  const liste = el('div', { class: 'klist' });
+  // Eigener Scroll-Bereich: ohne ihn lief die Liste unten aus dem Fenster (Marcels Befund).
+  const liste = el('div', { class: 'klist mliste' });
   wrap.append(stat, liste);
 
   async function sucheJetzt() {
@@ -1637,7 +1674,9 @@ async function renderDashMarkt(wrap) {
     catch (e) { stat.textContent = 'Suche fehlgeschlagen (' + e.message + ') — einmal neu laden hilft meist.'; return; }
     if (!liste.isConnected) return;
     if (d.fehler) { stat.textContent = d.fehler; return; }
-    stat.textContent = `${d.treffer} Treffer` + (d.treffer > d.zeilen.length ? ` — die ersten ${d.zeilen.length} angezeigt, Filter enger stellen` : '');
+    stat.textContent = `${d.treffer} Treffer`
+      + (d.treffer > d.zeilen.length ? ` — die ersten ${d.zeilen.length} angezeigt, Filter enger stellen` : '')
+      + (d.nogo_versteckt ? ` · ${d.nogo_versteckt} als No-Go ausgeblendet` : '');
     for (const z of d.zeilen) liste.append(marktZeile(z));
   }
   sucheJetzt();
