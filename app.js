@@ -1903,10 +1903,13 @@ function renderVgvDashboard(box, d) {
   // sonst passt der Projektname nicht in eine Zeile. Bei den laufenden Verfahren bleibt
   // es beim breiteren linken Teil: dort sitzen die Fristen-Balken.
   const grid = el('div', { class: dashTab === 'markt' ? 'dmarkt' : 'dgrid' + (dashTab === 'empfehlung' ? ' gleich' : '') });
+  // Erst einhaengen, dann zeichnen: renderDashMarkt prueft wrap.isConnected und brach
+  // ab dem zweiten Oeffnen (Filter schon im Speicher, kein await davor) still ab —
+  // leerer Reiter bis zum Neuladen (Marcels Bild 07.09.).
+  box.append(grid);
   if (dashTab === 'markt') renderDashMarkt(grid);
   else if (dashTab === 'empfehlung') renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen);
   else renderDashLaufend(grid, laufend, laufendWeg);
-  box.append(grid);
 }
 
 // Rechtsklick auf eine Karte: Verschieben (auch der Touch-Ausweg ohne Drag&Drop),
