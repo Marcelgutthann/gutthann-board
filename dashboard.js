@@ -1483,17 +1483,28 @@ function betFormLesen(){
     status:g('bf_status')||'aktiv',ist_bauherr:ck('bf_bh'),ist_intern:ck('bf_int'),kontakte:konts});
   return d;
 }
-// Eingetippte Nummer -> Platz im Zweig (Marcel 07.09.). Die Liste zaehlt oben ab 0
-// (0 Behoerden, 1 Auftraggeber ...), unter einer Gruppe ab 1 (1.1, 1.2 ...).
-// "1.7" heisst also: siebter Platz unter Gruppe 1; die bisherige 1.7 und alles
-// danach ruecken eins weiter. Endet die Nummer nicht auf eine Zahl ("1.7a"),
-// bleibt sie reine Anzeige-Nummer ohne Einfluss auf die Reihenfolge -> null.
-function betEinfuegeIndex(anzahl,nummer,oben){
-  const m=/^(?:\d+\.)*(\d+)$/.exec(String(nummer||'').trim());
+// Eingetippte Nummer -> Zweig UND Platz (Marcel 07.09., zweiter Anlauf: die
+// Nummer allein reicht nicht als Platz im gewaehlten Zweig, sie meint den ORT).
+// "1.2" heisst: unter dem Punkt mit Nummer "1", an zweiter Stelle; "3.2.5" unter
+// "3.2" an fuenfter Stelle; "4" ganz oben (oben zaehlt die Liste ab 0, darunter
+// ab 1). Die bisherige 1.2 und alles danach ruecken eins weiter. Gibt es den
+// Vorspann ("1" bzw. "3.2") nicht, oder endet die Nummer nicht auf eine Zahl
+// ("1.7a"), bleibt sie reine Anzeige-Nummer ohne Einfluss -> null.
+function betZielAusNummer(nummer,eigeneId){
+  const m=/^(?:(\d+(?:\.\d+)*)\.)?(\d+)$/.exec(String(nummer||'').trim());
   if(!m)return null;
-  const n=parseInt(m[1],10)-(oben?0:1);
+  let parent=null;
+  if(m[1]){
+    const k=betL.find(r=>r.nummer===m[1]);
+    if(!k)return null;
+    // nicht in sich selbst oder in einen eigenen Nachfahren haengen
+    for(let x=k;x;x=betL.find(r=>r.id===x.parent_id))if(x.id===eigeneId)return null;
+    parent=k.id;
+  }
+  const gesch=betL.filter(r=>(r.parent_id||null)===parent&&r.id!==eigeneId);
+  const n=parseInt(m[2],10)-(parent?1:0);
   if(n<0)return null;
-  return Math.min(n,anzahl);
+  return {parent,idx:Math.min(n,gesch.length),gesch};
 }
 // Zweig in dieser Reihenfolge festschreiben: pos 10, 20, 30 ... -- gleiches
 // Muster wie betListeSchieben, damit gleiche pos-Werte aus Importen nicht
@@ -1508,31 +1519,33 @@ async function betZweigSchreiben(ids){
 async function betSpeichern(){
   const d=betFormLesen();
   if(!d.titel&&!d.firma){betHinweis('Bitte mindestens Rolle oder Firma angeben.');return;}
-  const parent=betEdit.parent_id||null;
-  const gesch=betL.filter(r=>(r.parent_id||null)===parent&&r.id!==betEdit.id);
-  const idx=betEinfuegeIndex(gesch.length,d.nummer_manuell,!parent);
-  // Eine Nummer, die sich als Platz lesen laesst, wird zum Platz: die Zeile
-  // rutscht dorthin, und die automatische Nummerierung uebernimmt wieder
-  // (sonst gaebe es zwei 1.7).
-  if(idx!==null)d.nummer_manuell=null;
+  const ziel=betZielAusNummer(d.nummer_manuell,betEdit.id);
+  // Eine Nummer, die sich als Ort lesen laesst, wird zum Ort: die Zeile wandert
+  // in diesen Zweig an diesen Platz, und die automatische Nummerierung
+  // uebernimmt wieder (sonst gaebe es zwei 1.2).
+  if(ziel){d.nummer_manuell=null;d.parent_id=ziel.parent;}
+  else if(/^\d+(\.\d+)+$/.test(d.nummer_manuell||'')){
+    betHinweis('Zu „'+d.nummer_manuell+'“ gibt es keinen übergeordneten Punkt — die Nummer bleibt nur Anzeige.');}
+  const parent=ziel?ziel.parent:(betEdit.parent_id||null);
+  const gesch=ziel?ziel.gesch:betL.filter(r=>(r.parent_id||null)===parent&&r.id!==betEdit.id);
   let id=betEdit.id;
   if(id){
     const{error}=await sb.from('beteiligte').update(d).eq('id',id);
     if(error){betHinweis('Nicht gespeichert: '+betFehler(error));return;}
   }else{
-    // ohne Platzangabe ans Ende des Zielzweigs
+    // ohne Ortsangabe ans Ende des Zielzweigs
     const pos=(gesch.length+1)*10;
     const{data,error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,listen_id:betListeId,parent_id:parent,
       pos,quelle:betEdit.quelle||'hand'},d,betEdit.crm||{})).select('id').single();
     if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
     id=data.id;
   }
-  if(idx!==null){
-    const reihe=gesch.map(r=>r.id);reihe.splice(idx,0,id);
+  if(ziel){
+    const reihe=gesch.map(r=>r.id);reihe.splice(ziel.idx,0,id);
     const e=await betZweigSchreiben(reihe);
     if(e){betHinweis('Gespeichert, aber nicht einsortiert: '+betFehler(e));betEdit=null;await betNeuZeichnen();return;}
   }
-  betEdit=null;await betNeuZeichnen();betHinweis('Gespeichert.');
+  betEdit=null;await betNeuZeichnen();betHinweis(ziel?'Gespeichert und einsortiert.':'Gespeichert.');
 }
 // Loeschen wird im Arbeitsbereich rechts bestaetigt, nicht ueber den
 // Browser-Dialog: der reisst den Fokus aus der App und sieht fremd aus.
