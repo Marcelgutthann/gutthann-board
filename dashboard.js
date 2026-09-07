@@ -188,7 +188,8 @@ function boot(){if(started){render();return;}started=true;render();loadRuns();
   if(mb)mb.onclick=()=>setDrawer(!document.querySelector('.sidebar').classList.contains('open'));
   if(bd)bd.onclick=()=>setDrawer(false);
   setInterval(()=>loadRuns(),15000);  // Runner-Status + Läufe regelmäßig auffrischen
-  sb.channel('os-rt').on('postgres_changes',{event:'*',schema:'public',table:'agent_runs'},()=>loadRuns())
+  sb.channel('os-rt').on('postgres_changes',{event:'*',schema:'public',table:'agent_runs'},p=>{loadRuns();
+      if(p.new&&p.new.agent==='poool-sync'&&el('main').querySelector('#bet_crmsync'))betCrmStandZeichnen();})
    .on('postgres_changes',{event:'*',schema:'public',table:'tasks'},()=>{if(view==='project')render();})
    .on('postgres_changes',{event:'*',schema:'public',table:'communications'},()=>render())
    .on('postgres_changes',{event:'*',schema:'public',table:'projects'},()=>{if(view==='project')render();})
@@ -1052,6 +1053,9 @@ function renderBet(){
        (betAnalyseAn?'Analyse ✕':'Aus Analyse')+'</button>'+
      '<button class="btn-sm ghost" data-bet="pdf">PDF einlesen</button>'+
      '<input type="file" id="bet_pdf" accept="application/pdf,.pdf" hidden>'+
+     '<button class="btn-sm ghost" data-bet="crm-sync" id="bet_crmsync" title="Holt alle Firmen und Personen neu aus Poool in das Adressbuch (etwa 3 Minuten). Zeilen der Liste ändern sich dabei nicht."'+
+       (betCrmLauf?' disabled':'')+'>'+(betCrmLauf?'CRM-Abgleich läuft …':'CRM abgleichen')+'</button>'+
+     '<span class="bet-hint" id="bet_crmstand">'+esc(betCrmStandText())+'</span>'+
      '<span class="bet-bar-sep"></span>'+
      '<button class="btn-sm ghost" data-bet="verteiler">Verteiler</button>'+
      '<button class="btn-sm ghost" data-bet="druck">Als PDF drucken</button>'+
@@ -1308,6 +1312,10 @@ function betAktionen(r){
   const neben=[];
   if(r.crm_company_id)neben.push('<button class="btn-sm ghost" data-betfirma="'+r.crm_company_id+
     '" title="Zeigt alle im CRM hinterlegten Ansprechpartner dieser Firma zum Anklicken">Alle Personen dieser Firma</button>');
+  // Anschrift/Kontakte auf Knopfdruck aus dem Poool-Spiegel nachziehen (Marcel
+  // 07.09.). Nur auf Klick -- nichts schlaegt von selbst in die Zeile durch.
+  if(r.art==='eintrag'&&(r.crm_company_id||r.crm_person_id))neben.push('<button class="btn-sm ghost" data-betcrm="'+r.id+
+    '" title="Überschreibt Straße, PLZ, Ort und Kontakte dieser Zeile mit dem Stand aus dem Adressbuch. Rolle, Name und Notiz bleiben.">Anschrift aus CRM übernehmen</button>');
   // Nur sinnvoll, wenn die Zeile selbst die Firmenposition innehat (haengt
   // direkt unter einer Gruppe) und trotzdem eine Person traegt. Bei Zeilen,
   // die schon unter einer Firma stehen, waere der Knopf Unsinn.
@@ -1374,6 +1382,8 @@ function betForm(e,eingebettet){
 // --- Beteiligtenliste: laden, speichern, umsortieren ------------------------
 // true, wenn gerade Zeilen aus der Analyse in der Liste stehen (Schalterzustand)
 let betAnalyseAn=false;
+// Poool-Spiegel: letzter Abgleich (crm_sync) und ein gerade laufender Abgleich-Lauf.
+let betCrmStand=null,betCrmLauf=null;
 async function betLaden(){
   // Listen des Projekts zuerst — ohne sie weiss man nicht, welche Zeilen gelten.
   const{data:LI}=await sb.from('beteiligten_listen')
@@ -1383,7 +1393,8 @@ async function betLaden(){
   const[{data:L},{data:R},{data:V}]=await Promise.all([
     betListeId?sb.rpc('beteiligte_liste',{p_liste:betListeId}):Promise.resolve({data:[]}),
     betRollen.length?Promise.resolve({data:betRollen}):sb.from('beteiligten_rollen').select('rolle,bereich').order('bereich').order('pos'),
-    sb.from('listen_vorlagen').select('id,name,beschreibung').order('pos')]);
+    sb.from('listen_vorlagen').select('id,name,beschreibung').order('pos'),
+    betCrmStandLaden()]);
   betL=L||[];betRollen=R||[];betVorlagen=V||[];
   betAnalyseAn=betL.some(r=>r.art==='eintrag'&&(r.quelle==='analyse'||r.analyse_befuellt));
 }
@@ -1401,6 +1412,59 @@ function betFehler(e){
   return m;
 }
 function betHinweis(t){const e=el('main').querySelector('#bethint');if(e){e.textContent=t;if(t)setTimeout(()=>{if(e.textContent===t)e.textContent='';},3500);}}
+// CRM-Abgleich auf Knopfdruck (Marcel 07.09.): reiht einen projektlosen Lauf
+// 'poool-sync' ein; der Runner holt alle Firmen und Personen aus Poool in den
+// Spiegel (etwa 3 Minuten). Zeilen der Liste aendern sich dabei NICHT -- die
+// holt man danach je Zeile mit "Anschrift aus CRM uebernehmen".
+async function betCrmStandLaden(){
+  const[{data:S},{data:A}]=await Promise.all([
+    sb.from('crm_sync').select('fertig,firmen,personen,fehler').order('gestartet',{ascending:false}).limit(1),
+    sb.from('agent_runs').select('id,status').eq('agent','poool-sync').in('status',['queued','running']).limit(1)]);
+  betCrmStand=(S||[])[0]||null;betCrmLauf=(A||[])[0]||null;
+}
+function betCrmStandText(){
+  if(betCrmLauf)return betCrmLauf.status==='running'?'Abgleich läuft, etwa 3 Minuten':'Abgleich eingereiht';
+  if(!betCrmStand)return 'Adressbuch noch nie abgeglichen';
+  if(betCrmStand.fehler)return 'Letzter Abgleich fehlgeschlagen';
+  if(!betCrmStand.fertig)return 'Abgleich läuft';
+  const d=new Date(betCrmStand.fertig);
+  return 'Adressbuch-Stand '+d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})+
+    ', '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+}
+async function betCrmAbgleich(){
+  if(betCrmLauf){betHinweis('Der CRM-Abgleich läuft bereits.');return;}
+  const{error}=await sb.from('agent_runs').insert({project_id:null,agent:'poool-sync',status:'queued',meta:{trigger:'app',von_projekt:current}});
+  if(error){betHinweis('Abgleich nicht gestartet: '+betFehler(error));return;}
+  betHinweis('CRM-Abgleich eingereiht, dauert etwa 3 Minuten.');
+  await betCrmStandZeichnen();
+}
+// Was aus dem Spiegel in die Zeile wandert: nur Anschrift und Kontakte. Rolle,
+// Name, Funktion, Notiz und Status bleiben, wie sie in der Liste stehen.
+function betCrmMerge(spiegel){
+  return {strasse:spiegel.strasse||null,plz:spiegel.plz||null,ort:spiegel.ort||null,kontakte:spiegel.kontakte||[]};
+}
+// Person schlaegt Firma: traegt die Zeile eine crm_person_id, kommt der Satz von
+// der Person (die hat im Spiegel die Firmenanschrift, wenn sie keine eigene hat).
+async function betCrmUebernehmen(id){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  const{data:S,error:e1}=r.crm_person_id
+    ?await sb.from('crm_personen').select('strasse,plz,ort,kontakte,gesehen_at').eq('crm_id',r.crm_person_id).maybeSingle()
+    :await sb.from('crm_firmen').select('strasse,plz,ort,kontakte,gesehen_at').eq('crm_id',r.crm_company_id).maybeSingle();
+  if(e1){betHinweis('Adressbuch nicht lesbar: '+betFehler(e1));return;}
+  if(!S){betHinweis('Im Adressbuch nicht mehr vorhanden. Erst „CRM abgleichen“?');return;}
+  const{error}=await sb.from('beteiligte').update(betCrmMerge(S)).eq('id',id);
+  if(error){betHinweis('Nicht übernommen: '+betFehler(error));return;}
+  await betNeuZeichnen();
+  betHinweis('Anschrift und Kontakte übernommen, Adressbuch-Stand '+fmtD(S.gesehen_at)+'.');
+}
+// Nur Knopf und Standzeile nachziehen -- kein Neuzeichnen der Liste, sonst
+// schliesst sich ein offenes Formular, waehrend der Abgleich laeuft.
+async function betCrmStandZeichnen(){
+  await betCrmStandLaden();
+  const M=el('main'),k=M.querySelector('#bet_crmsync'),s=M.querySelector('#bet_crmstand');
+  if(k){k.disabled=!!betCrmLauf;k.textContent=betCrmLauf?'CRM-Abgleich läuft …':'CRM abgleichen';}
+  if(s)s.textContent=betCrmStandText();
+}
 // Nur den Fensterinhalt neu zeichnen — ein voller render() wuerde das Formular schliessen.
 async function betNeuZeichnen(){await betLaden();const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
   if(!bd){render();return;}bd.innerHTML=renderBet();wireBet();}
@@ -1419,19 +1483,54 @@ function betFormLesen(){
     status:g('bf_status')||'aktiv',ist_bauherr:ck('bf_bh'),ist_intern:ck('bf_int'),kontakte:konts});
   return d;
 }
+// Eingetippte Nummer -> Platz im Zweig (Marcel 07.09.). Die Liste zaehlt oben ab 0
+// (0 Behoerden, 1 Auftraggeber ...), unter einer Gruppe ab 1 (1.1, 1.2 ...).
+// "1.7" heisst also: siebter Platz unter Gruppe 1; die bisherige 1.7 und alles
+// danach ruecken eins weiter. Endet die Nummer nicht auf eine Zahl ("1.7a"),
+// bleibt sie reine Anzeige-Nummer ohne Einfluss auf die Reihenfolge -> null.
+function betEinfuegeIndex(anzahl,nummer,oben){
+  const m=/^(?:\d+\.)*(\d+)$/.exec(String(nummer||'').trim());
+  if(!m)return null;
+  const n=parseInt(m[1],10)-(oben?0:1);
+  if(n<0)return null;
+  return Math.min(n,anzahl);
+}
+// Zweig in dieser Reihenfolge festschreiben: pos 10, 20, 30 ... -- gleiches
+// Muster wie betListeSchieben, damit gleiche pos-Werte aus Importen nicht
+// zu einer zufaelligen Reihenfolge fuehren.
+async function betZweigSchreiben(ids){
+  for(let k=0;k<ids.length;k++){
+    const{error}=await sb.from('beteiligte').update({pos:(k+1)*10}).eq('id',ids[k]);
+    if(error)return error;
+  }
+  return null;
+}
 async function betSpeichern(){
   const d=betFormLesen();
   if(!d.titel&&!d.firma){betHinweis('Bitte mindestens Rolle oder Firma angeben.');return;}
-  if(betEdit.id){
-    const{error}=await sb.from('beteiligte').update(d).eq('id',betEdit.id);
+  const parent=betEdit.parent_id||null;
+  const gesch=betL.filter(r=>(r.parent_id||null)===parent&&r.id!==betEdit.id);
+  const idx=betEinfuegeIndex(gesch.length,d.nummer_manuell,!parent);
+  // Eine Nummer, die sich als Platz lesen laesst, wird zum Platz: die Zeile
+  // rutscht dorthin, und die automatische Nummerierung uebernimmt wieder
+  // (sonst gaebe es zwei 1.7).
+  if(idx!==null)d.nummer_manuell=null;
+  let id=betEdit.id;
+  if(id){
+    const{error}=await sb.from('beteiligte').update(d).eq('id',id);
     if(error){betHinweis('Nicht gespeichert: '+betFehler(error));return;}
   }else{
-    // ans Ende des Zielzweigs
-    const gesch=betL.filter(r=>(r.parent_id||null)===(betEdit.parent_id||null));
-    const pos=gesch.length?Math.max(...gesch.map((_,i)=>i))*10+10:10;
-    const{error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,listen_id:betListeId,parent_id:betEdit.parent_id||null,
-      pos:pos+10,quelle:betEdit.quelle||'hand'},d,betEdit.crm||{}));
+    // ohne Platzangabe ans Ende des Zielzweigs
+    const pos=(gesch.length+1)*10;
+    const{data,error}=await sb.from('beteiligte').insert(Object.assign({project_id:current,listen_id:betListeId,parent_id:parent,
+      pos,quelle:betEdit.quelle||'hand'},d,betEdit.crm||{})).select('id').single();
     if(error){betHinweis('Nicht angelegt: '+betFehler(error));return;}
+    id=data.id;
+  }
+  if(idx!==null){
+    const reihe=gesch.map(r=>r.id);reihe.splice(idx,0,id);
+    const e=await betZweigSchreiben(reihe);
+    if(e){betHinweis('Gespeichert, aber nicht einsortiert: '+betFehler(e));betEdit=null;await betNeuZeichnen();return;}
   }
   betEdit=null;await betNeuZeichnen();betHinweis('Gespeichert.');
 }
@@ -1995,6 +2094,7 @@ function wireBet(){
     else if(a==='analyse'){await betAusAnalyse();return;}
     else if(a==='verteiler'){await betVerteiler();return;}
     else if(a==='druck'){betDruck();return;}
+    else if(a==='crm-sync'){await betCrmAbgleich();return;}
     else if(a==='pdf'){const f=M.querySelector('#bet_pdf');if(f)f.click();return;}
     else if(a==='pdf-uebernehmen'){await betPdfUebernehmen();return;}
     else if(a==='pdf-abbrechen'){betPdfFunde=null;betPdfName='';}
@@ -2092,6 +2192,8 @@ function wireBet(){
     const id=g.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);betNurListe();});
   M.querySelectorAll('[data-betfirma]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();betCrmOffen=true;betCrmFirmaOeffnen(+b.dataset.betfirma);});
+  M.querySelectorAll('[data-betcrm]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();betCrmUebernehmen(b.dataset.betcrm);});
   M.querySelectorAll('[data-bfkdel]').forEach(b=>b.onclick=()=>{
     const cur=betFormLesen();betEdit=Object.assign({},betEdit,cur);
     betEdit.kontakte=(cur.kontakte||[]).filter((_,k)=>k!==+b.dataset.bfkdel);betNurSeite();});
@@ -2172,18 +2274,13 @@ function betDruckKontakte(r){
 function betDruckInhalt(){
   const L=betL||[];
   const adr=r=>[r.strasse,[r.plz,r.ort].filter(Boolean).join(' ')].filter(Boolean);
-  // Der Ausdruck zeigt nur, was wirklich besetzt ist. Unbesetzte Rollen fallen
-  // weg -- und mit ihnen jede Gruppe, in der danach nichts mehr uebrig waere
-  // (sonst stuenden leere Ueberschriften wie "Rohbau" ohne Inhalt da).
-  const besetzt=r=>r.art==='eintrag'&&r.status!=='ausgeschieden'&&
-    !!(r.firma||betName(r)||betKont(r).length);
-  const traegtInhalt={};
-  for(let i=L.length-1;i>=0;i--){const r=L[i];
-    const eigen=besetzt(r)||L.some(k=>k.parent_id===r.id&&traegtInhalt[k.id]);
-    traegtInhalt[r.id]=eigen;}
+  // Der Ausdruck zeigt ALLE Rollen, auch die unbesetzten (Marcel 07.09.): eine
+  // leere Zeile sagt "hier ist nichts beauftragt" -- faellt sie weg, fragt sich
+  // der Leser, ob die Rolle vergessen wurde. Nur Ausgeschiedene bleiben draussen.
+  const leer=r=>!(r.firma||betName(r)||r.funktion||adr(r).length||betKont(r).length);
   let h='';
   L.forEach(r=>{
-    if(!traegtInhalt[r.id])return;
+    if(r.art==='eintrag'&&r.status==='ausgeschieden')return;
     const nr='<span class="nr">'+esc(r.nummer)+'</span>';
     if(r.art==='gruppe'){
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
@@ -2192,8 +2289,10 @@ function betDruckInhalt(){
     const unterFirma=vater&&vater.art==='eintrag';
     const nm=betName(r);
     if(!unterFirma){
-      // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz
+      // Firmenposition: eigener Balken mit Nummer und Rolle, darunter der Satz.
+      // Unbesetzt: der Satz bleibt leer, mit Platz zum Handschreiben.
       h+='<div class="balken e'+Math.min(r.tiefe,2)+'">'+nr+esc(r.titel||'')+'</div>';
+      if(leer(r)){h+='<table class="satz leer"><tr><td class="li"></td><td class="re"></td></tr></table>';return;}
       h+='<table class="satz"><tr><td class="li">'+
         (r.firma?'<div class="firma">'+esc(r.firma)+'</div>':'')+
         (nm?'<div>'+esc(nm)+'</div>':'')+
