@@ -1519,20 +1519,43 @@ let dashTab = 'laufend';
 // Die Daten kommen direkt ueber PostgREST (Such-RPC + Filter-Tabelle, Migration 129) —
 // der Lotse bleibt aussen vor, damit kein Edge-Deploy noetig ist.
 let marktZ = { krit: null, aktiv: null, liste: null };
-const MARKT_CPV = [['', 'Alle Bereiche'], ['71', 'Planung gesamt'], ['712', 'Architektur/Objektplanung'],
-  ['7122', 'Objektplanung Gebäude'], ['713', 'Ingenieure/Technik'], ['714', 'Stadtplanung/Freianlagen'],
-  ['45', 'Bauleistungen']];
+const MARKT_CPV = [['', 'Alle Bereiche'], ['71', 'Planungsleistungen · CPV 71'], ['712', 'Architekturleistungen · CPV 712'],
+  ['7122', 'Objektplanung Gebäude / Freianlagen · CPV 7122'], ['713', 'Ingenieurleistungen · CPV 713'],
+  ['714', 'Stadtplanung / Landschaft · CPV 714'], ['45', 'Bauleistungen · CPV 45']];
 const MARKT_LAENDER = [['', 'Ganz Deutschland'], ['DE2', 'Bayern'], ['DE1', 'Baden-Württemberg'],
   ['DED', 'Sachsen'], ['DEG', 'Thüringen'], ['DE7', 'Hessen'], ['DE3', 'Berlin'], ['DE4', 'Brandenburg'],
   ['DE5', 'Bremen'], ['DE6', 'Hamburg'], ['DE8', 'Mecklenburg-Vorpommern'], ['DE9', 'Niedersachsen'],
   ['DEA', 'Nordrhein-Westfalen'], ['DEB', 'Rheinland-Pfalz'], ['DEC', 'Saarland'],
   ['DEE', 'Sachsen-Anhalt'], ['DEF', 'Schleswig-Holstein']];
-const MARKT_ART = [['ContractNotice', 'Offene Ausschreibungen'], ['ContractAwardNotice', 'Vergeben (Zuschläge)'], ['', 'Alle Bekanntmachungen']];
+const MARKT_ART = [['ContractNotice', 'Auftragsbekanntmachungen (laufend)'], ['ContractAwardNotice', 'Zuschlag erteilt'], ['', 'Alle Bekanntmachungen']];
 // Umkreis in den Ringen des Buero-Geomodells (Donaustauf/Bogen, siehe geo_filter.py).
 const MARKT_KM = [['', 'Ganz Deutschland'], ['50', 'bis 50 km'], ['100', 'bis 100 km'], ['150', 'bis 150 km'], ['200', 'bis 200 km']];
-const MARKT_LEIST = [['', 'Alle Leistungen'], ['Objektplanung', 'Objektplanung'], ['Generalplanung', 'Generalplanung'],
-  ['Freianlagen', 'Freianlagen'], ['Stadtplanung', 'Stadtplanung'], ['TGA', 'TGA / Technische Ausrüstung'],
-  ['Tragwerk', 'Tragwerk / Ingenieurbau'], ['Bauüberwachung', 'Bauüberwachung / Projektsteuerung']];
+// Leistungsbilder nach HOAI 2021 (Marcel 07.09.); die Werte sind Praefixe auf die aus dem
+// CPV abgeleitete Leistungsart (Migration 137) — "Objektplanung" fasst Teil 3 zusammen.
+const MARKT_LEIST = [['', 'Alle Leistungsbilder'],
+  ['Objektplanung', 'Objektplanung gesamt · Teil 3 HOAI'],
+  ['Objektplanung Gebäude', 'Gebäude und Innenräume · § 34'],
+  ['Objektplanung Freianlagen', 'Freianlagen · § 39'],
+  ['Objektplanung Ingenieurbauwerke', 'Ingenieurbauwerke / Verkehrsanlagen · §§ 43, 47'],
+  ['Tragwerksplanung', 'Tragwerksplanung · § 51'],
+  ['Technische Ausrüstung', 'Technische Ausrüstung · § 55'],
+  ['Flächenplanung', 'Flächenplanung / Bauleitplanung · §§ 18 ff.'],
+  ['Objektüberwachung', 'Objektüberwachung · LPH 8'],
+  ['Projektsteuerung', 'Projektsteuerung · AHO (außerhalb HOAI)'],
+  ['Architektur- und Ingenieurleistungen', 'Leistungsbild nicht bestimmt (Sammel-CPV)'],
+  ['Bauleistungen', 'Bauleistungen · VOB (keine Planung)']];
+// Leistungsphasen § 34 HOAI — fuer Chip-Beschriftung und Tooltip.
+const LPH_NAMEN = { 1: 'Grundlagenermittlung', 2: 'Vorplanung', 3: 'Entwurfsplanung', 4: 'Genehmigungsplanung',
+  5: 'Ausführungsplanung', 6: 'Vorbereitung der Vergabe', 7: 'Mitwirkung bei der Vergabe',
+  8: 'Objektüberwachung', 9: 'Objektbetreuung' };
+function lphText(lph) {
+  const m = String(lph || '').match(/^(\d)(?:-(\d))?$/);
+  if (!m) return { kurz: 'LPH ' + lph, lang: '' };
+  if (!m[2] || m[1] === m[2]) return { kurz: `LPH ${m[1]} · ${LPH_NAMEN[m[1]] || ''}`, lang: '' };
+  const von = +m[1], bis = +m[2];
+  const namen = []; for (let i = von; i <= bis; i++) namen.push(`${i} ${LPH_NAMEN[i] || ''}`);
+  return { kurz: `LPH ${von}–${bis} · ${LPH_NAMEN[von]} bis ${LPH_NAMEN[bis]}`, lang: namen.join(' · ') };
+}
 // Radar-Regel: unter 10 Tagen ist ein VgV-Teilnahmeantrag nicht mehr seriös zu bauen.
 const MARKT_TAGE = [['', 'Restzeit egal'], ['10', 'noch ≥ 10 Tage'], ['21', 'noch ≥ 21 Tage'], ['30', 'noch ≥ 30 Tage']];
 
@@ -1561,7 +1584,7 @@ function marktZeile(z) {
   const zeile = el('div', { class: 'kand2' });
   const rest = vgvRest(z.frist);
   const kopf = el('div', { class: 'krow' }, el('span', { class: 'kt2', title: z.titel }, z.titel || '(ohne Titel)'));
-  if (z.art === 'ContractAwardNotice') kopf.append(el('span', { class: 'vtag', style: 'background:#ECECE8;color:#75756E' }, 'VERGEBEN'));
+  if (z.art === 'ContractAwardNotice') kopf.append(el('span', { class: 'vtag', style: 'background:#ECECE8;color:#75756E' }, 'ZUSCHLAG ERTEILT'));
   if (rest && rest.tage >= 0) kopf.append(ampelChip(rest, 'vtag'));
   // Go/No-Go direkt aus der Suche (Marcel 31.08.): Go legt die Karte an und startet die
   // Aufnahme sofort — dieselbe Mechanik wie beim Weitwinkel-Kandidaten.
@@ -1586,9 +1609,10 @@ function marktZeile(z) {
   // Leistungsphasen, Entfernung und verbleibende Zeit — nicht Vergabestelle/Verfahrensart.
   // Ort und Auftraggeber stehen im aufgeklappten Teil, sie entscheiden nichts beim Ueberfliegen.
   const merkmale = el('div', { class: 'mmerk' });
-  const merk = (txt, kl) => merkmale.append(el('span', { class: 'mm' + (kl ? ' ' + kl : '') }, txt));
+  const merk = (txt, kl) => { const s = el('span', { class: 'mm' + (kl ? ' ' + kl : '') }, txt); merkmale.append(s); return s; };
   if (z.leistung) merk(z.leistung, 'stark');
-  merk(z.lph ? 'LPH ' + z.lph : 'LPH nicht angegeben', z.lph ? '' : 'blass');
+  if (z.lph) { const t = lphText(z.lph); const s = merk(t.kurz, ''); if (t.lang && s) s.title = t.lang; }
+  else merk('Leistungsphasen nicht genannt', 'blass');
   merk(z.km != null ? Math.round(z.km) + ' km ab ' + z.standort : (z.ort || 'Ort unbekannt'), z.km == null ? 'blass' : '');
   if (rest && rest.tage >= 0) merk(rest.tage === 0 ? 'Abgabe heute' : 'noch ' + rest.tage + ' Tage bis Abgabe');
   else if (z.frist) merk('Frist ' + String(z.frist).slice(8, 10) + '.' + String(z.frist).slice(5, 7) + '. vorbei', 'blass');
