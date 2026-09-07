@@ -1816,7 +1816,30 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
   grid.append(links);
 
   const rechts = el('div', { class: 'dcol' });
-  rechts.append(listenKopf('Markt im größeren Radius — was noch passen würde', kandidaten.length));
+  const kopfR = listenKopf('Markt im größeren Radius — was noch passen würde', kandidaten.length);
+  // Aktiv aktualisieren (Marcel 07.09.): reiht den Weitwinkel-Lauf sofort ein, fragt den
+  // Stand alle 15 s ab und laedt das Dashboard neu, sobald der Lauf fertig ist.
+  const stat = el('span', { class: 'scope', style: 'margin-left:auto' });
+  const knopf = el('button', { class: 'kbtn', title: 'Weitwinkel-Suche jetzt starten (dauert etwa 5 Minuten)', onclick: async () => {
+    knopf.disabled = true; stat.textContent = 'wird eingereiht …';
+    let s;
+    try { s = await restRpc('assistant_weitwinkel_anstossen', {}); }
+    catch (e) { stat.textContent = 'Start fehlgeschlagen (' + e.message + ')'; knopf.disabled = false; return; }
+    if (s.fehler) { stat.textContent = s.fehler; knopf.disabled = false; return; }
+    const seit = Date.now();
+    const pruefe = async () => {
+      if (!stat.isConnected) return;
+      let z; try { z = await restRpc('assistant_weitwinkel_stand', {}); } catch { z = {}; }
+      const min = Math.round((Date.now() - seit) / 60000);
+      if (z.status === 'done' && new Date(z.beendet).getTime() > seit) { stat.textContent = ''; openVgvDashboard(); return; }
+      if (z.status === 'failed' && new Date(z.created_at || z.erstellt).getTime() > seit - 60000) { stat.textContent = 'Lauf fehlgeschlagen — ' + (z.ergebnis || ''); knopf.disabled = false; return; }
+      stat.textContent = (z.status === 'running' ? 'Weitwinkel sucht …' : 'wartet auf den Runner …') + (min ? ` (${min} min)` : '');
+      setTimeout(pruefe, 15000);
+    };
+    setTimeout(pruefe, 5000);
+  } }, '↻ Aktualisieren');
+  kopfR.append(stat, knopf);
+  rechts.append(kopfR);
   if (!kandidaten.length) {
     rechts.append(el('div', { class: 'dleer' }, 'Keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — alle Themengebiete mit Referenzlage, bis 250 km um Donaustauf und Bogen.'));
   }
