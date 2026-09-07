@@ -1402,7 +1402,15 @@ async function openVgvDashboard() {
   ov.addEventListener('click', (e) => { if (e.target === ov) closeDrawer(); });
   const d = await lotse('vgv_dashboard').catch(() => ({ fehler: 'Netzwerkfehler' }));
   if (d.fehler) { box.innerHTML = ''; box.append(el('div', { class: 'dleer' }, d.fehler)); return; }
-  renderVgvDashboard(box, d);
+  // Wirft das Zeichnen, blieb bisher eine leere weisse Box ohne Schliessen-Knopf stehen
+  // (Marcels "white screen" 07.09.). Jetzt: Meldung + Knopf statt Neuladen der Seite.
+  try { renderVgvDashboard(box, d); }
+  catch (e) {
+    console.error('vgv_dashboard:', e);
+    box.innerHTML = '';
+    box.append(el('button', { class: 'dclose', onclick: closeDrawer }, '✕'),
+      el('div', { class: 'dleer' }, 'Dashboard konnte nicht gezeichnet werden: ' + e.message));
+  }
 }
 
 // ---------- Legenden: was die Farbe und was die Zahl bedeutet ----------
@@ -1528,18 +1536,23 @@ const MARKT_LEIST = [['', 'Alle Leistungen'], ['Objektplanung', 'Objektplanung']
 // Radar-Regel: unter 10 Tagen ist ein VgV-Teilnahmeantrag nicht mehr seriös zu bauen.
 const MARKT_TAGE = [['', 'Restzeit egal'], ['10', 'noch ≥ 10 Tage'], ['21', 'noch ≥ 21 Tage'], ['30', 'noch ≥ 30 Tage']];
 
-async function restRpc(fn, body) {
+// Beide Direktwege an PostgREST erneuern bei 401 einmal den Token (wie lotse) — vorher
+// lief die Ausschreibungs-Ansicht nach Ablauf des Tokens (~1 h) nur noch auf Fehler
+// und half sich mit "einmal neu laden" (Marcels Befund 07.09.).
+async function restRpc(fn, body, retried = false) {
   const r = await fetch(`${SUPA}/rest/v1/rpc/${fn}`, { method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
     body: JSON.stringify(body) });
+  if (r.status === 401 && !retried && await authRefresh()) return restRpc(fn, body, true);
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
-async function restFilter(methode, zusatz = '', body = null) {
+async function restFilter(methode, zusatz = '', body = null, retried = false) {
   const r = await fetch(`${SUPA}/rest/v1/ausschreibungs_filter${zusatz}`, { method: methode,
     headers: { 'Content-Type': 'application/json', apikey: ANON,
       Authorization: 'Bearer ' + (S.session?.access_token || ''), Prefer: 'return=representation' },
     body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401 && !retried && await authRefresh()) return restFilter(methode, zusatz, body, true);
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.status === 204 ? null : r.json();
 }
