@@ -2079,7 +2079,7 @@ async function openCard(id) {
 // wenn man die Karte schliesst und wieder oeffnet. Genau das nimmt dem Zuruf das
 // Chat-Gefuehl. Neu gezeichnet wird nur, wenn sich wirklich etwas geaendert hat.
 function kartenFinger(d) {
-  return [d?.agent_status || '', (d?.kommentare || []).length, (d?.unterpunkte || []).length,
+  return [d?.agent_status || '', d?.agent_fortschritt || '', (d?.kommentare || []).length, (d?.unterpunkte || []).length,
     (d?.anhaenge || []).length, (d?.kommentare || []).at(-1)?.text?.length || 0].join('|');
 }
 function chatTakt(id) {
@@ -2087,7 +2087,9 @@ function chatTakt(id) {
   // Auch takten, solange nur die Bestaetigung steht: agent_status setzt erst der Server,
   // wenn er den Auftrag eingereiht hat -- bis dahin waere die Anzeige sonst eingefroren.
   if (statusVon(S.detail) !== 'arbeitet' && !(S.zuruf && S.zuruf.todoId === id)) return;
-  const bis = Date.now() + 5 * 60000; // Notbremse: kein Dauertakt, wenn ein Lauf haengt
+  // Notbremse: kein Dauertakt, wenn ein Lauf haengt. 13 min, weil der Zuruf im SDK-Zweig
+  // nach 12 min abgebrochen wird (ZURUF_SDK_TIMEOUT_MIN) -- die Antwort soll noch ankommen.
+  const bis = Date.now() + 13 * 60000;
   S.chatPoll = setInterval(async () => {
     if (!S.detail || S.detail.id !== id || Date.now() > bis) { clearInterval(S.chatPoll); S.chatPoll = null; return; }
     let neu;
@@ -2479,7 +2481,10 @@ function renderDrawer() {
     sk.append(el('div', { class: 'agenttippt' },
       el('span', { class: 'punkte' }, '•••'),
       el('span', {}, 'Agent ' + was),
-      wartet > 3 ? el('small', { style: 'color:#9A9A93' }, ' ' + wartet + ' Sek.') : ''));
+      wartet > 3 ? el('small', { style: 'color:#9A9A93' }, ' ' + wartet + ' Sek.') : '',
+      // Fortschritt live (A5): der Runner schreibt je Werkzeugaufruf, was der Agent gerade tut
+      // ("liest Vergabevorschlag_WDVS.pdf"); nach dem Lauf ist das Feld wieder leer.
+      d.agent_status === 'laeuft' && d.agent_fortschritt ? el('div', { class: 'fortschritt' }, d.agent_fortschritt) : ''));
   }
   const addK = el('div', { class: 'dchat-eingabe' });
   const senden = async () => {
