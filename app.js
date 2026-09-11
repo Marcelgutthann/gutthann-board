@@ -2900,11 +2900,18 @@ async function liveDelegation(ev) {
   liveZeile('backend', 'Aufgabe: ' + aufgabe);
   const verlauf = S.live.zeilen.filter((z) => z.rolle === 'nutzer' || z.rolle === 'assistent').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
   let text;
+  // Nach 20 s ohne Antwort ein Lebenszeichen ins Gespraech, sonst schweigt der Moderator bis zu
+  // zwei Minuten (11.09.: Backend-Abbruch nach 90 s blieb im Gespraech unhoerbar).
+  const lebenszeichen = setTimeout(() => {
+    liveSenden({ type: 'session.commentary.append', delegation_id: id, content: 'Ich bin noch dran, das dauert einen Moment.' });
+  }, 20000);
   try {
     text = (await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt() })).text || '';
   } catch (e) {
     liveFehler('Backend: ' + e.message);
     text = 'Das Backend hat nicht geantwortet. Bitte später noch einmal versuchen.';
+  } finally {
+    clearTimeout(lebenszeichen);
   }
   liveZeile('backend', text);
   // Stuecke bis 1500 Zeichen (etwa 400 Token), Schnitt moeglichst am Satzende.
