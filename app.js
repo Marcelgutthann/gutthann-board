@@ -2073,13 +2073,53 @@ async function openCard(id) {
   } catch (e) { console.error('openCard:', e); }
 }
 
+// Arbeitsweg des Zuruf-Agenten (Migration 141). Marcel am 11.09.2026: "damit ich nicht hier
+// hocke und gar keine Ahnung habe, wo er ist, wie weit er in der Aufgabe ist". Gezeigt wird,
+// was messbar ist: verstrichene Zeit, die uebliche Dauer aus den letzten Laeufen, die Zahl der
+// Werkzeuge und Leser -- und die letzten Schritte mit Sekunde. Kein erfundener Prozentsatz:
+// der Anteil ist ausdruecklich am Erfahrungswert gemessen und wird bei Ueberschreitung ehrlich
+// als "laenger als ueblich" benannt. Bewusst schlichter Text, keine Balken (Design-Regel).
+const ARBEITSWEG_ZEILEN = 6;
+const ART_WORT = { denkt: 'denkt', sagt: 'Zwischenstand', leser: 'Leser', werkzeug: '', fertig: '' };
+function mmss(s) { return Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0'); }
+function arbeitsweg(d) {
+  const l = d && d.agent_lauf;
+  if (!l || !Array.isArray(l.schritte) || !l.schritte.length) return '';
+  const laeuft = d.agent_status === 'laeuft' && !l.fertig;
+  const seit = l.start ? Math.round((Date.now() - new Date(l.start).getTime()) / 1000) : (l.dauer_s || 0);
+  const kopf = [];
+  if (laeuft) {
+    kopf.push(`läuft seit ${seit} Sek.`);
+    if (l.erwartet_s) kopf.push(seit > l.erwartet_s * 1.3
+      ? `länger als üblich (sonst ~${l.erwartet_s})`
+      : `üblich ~${l.erwartet_s} · etwa ${Math.min(95, Math.round(seit / l.erwartet_s * 100))} %`);
+  } else {
+    kopf.push(`fertig in ${l.dauer_s != null ? l.dauer_s : seit} Sek.`);
+  }
+  if (l.werkzeuge) kopf.push(`${l.werkzeuge} Werkzeuge`);
+  if (l.leser) kopf.push(`${l.leser} Leser`);
+  if (l.turns) kopf.push(`${l.turns} Züge`);
+  const zeigen = laeuft ? l.schritte.slice(-ARBEITSWEG_ZEILEN) : l.schritte.slice(-ARBEITSWEG_ZEILEN);
+  const box = el('div', { class: 'arbeitsweg' }, el('div', { class: 'awkopf' }, kopf.join(' · ')));
+  for (const s of zeigen) {
+    const wort = ART_WORT[s.a] || '';
+    box.append(el('div', { class: 'awzeile' },
+      el('span', { class: 'awzeit' }, mmss(s.s || 0)),
+      el('span', {}, (wort ? wort + ': ' : '') + s.t)));
+  }
+  if (l.schritte.length > zeigen.length) box.append(el('div', { class: 'awzeile awmehr' }, `… davor ${l.schritte.length - zeigen.length} weitere Schritte`));
+  return box;
+}
+
+
 // Waehrend der Agent an der offenen Karte arbeitet, laeuft ein schneller Takt nur fuer
 // diesen Kartenschnitt. Noetig, weil der 60s-Poll des Boards pausiert, solange ein Drawer
 // offen ist (sonst raeumt er Eingaben weg) -- ohne den Takt sieht man die Antwort erst,
 // wenn man die Karte schliesst und wieder oeffnet. Genau das nimmt dem Zuruf das
 // Chat-Gefuehl. Neu gezeichnet wird nur, wenn sich wirklich etwas geaendert hat.
 function kartenFinger(d) {
-  return [d?.agent_status || '', d?.agent_fortschritt || '', (d?.kommentare || []).length, (d?.unterpunkte || []).length,
+  const w = d?.agent_lauf?.schritte || [];
+  return [d?.agent_status || '', d?.agent_fortschritt || '', w.length, w.at(-1)?.t || '', d?.agent_lauf?.fertig ? 'f' : '',
     (d?.anhaenge || []).length, (d?.kommentare || []).at(-1)?.text?.length || 0].join('|');
 }
 function chatTakt(id) {
@@ -2484,7 +2524,10 @@ function renderDrawer() {
       wartet > 3 ? el('small', { style: 'color:#9A9A93' }, ' ' + wartet + ' Sek.') : '',
       // Fortschritt live (A5): der Runner schreibt je Werkzeugaufruf, was der Agent gerade tut
       // ("liest Vergabevorschlag_WDVS.pdf"); nach dem Lauf ist das Feld wieder leer.
-      d.agent_status === 'laeuft' && d.agent_fortschritt ? el('div', { class: 'fortschritt' }, d.agent_fortschritt) : ''));
+      d.agent_status === 'laeuft' && d.agent_fortschritt ? el('div', { class: 'fortschritt' }, d.agent_fortschritt) : '',
+      // Arbeitsweg (Marcel, 11.09.): nicht nur WAS gerade laeuft, sondern der Weg dahin --
+      // Schritt fuer Schritt mit Sekunde, dazu der Vergleich mit der ueblichen Dauer.
+      arbeitsweg(d)));
   }
   const addK = el('div', { class: 'dchat-eingabe' });
   const senden = async () => {
