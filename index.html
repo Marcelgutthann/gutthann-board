@@ -482,6 +482,30 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .hidden{display:none!important}
 .empty{color:#8A8A83;font-size:12.5px}
 /* ---- Proaktiver Kollege (Loop B/D/E) ---- */
+/* Sprach-Knopf (voice/BAUPLAN.md, Paket C): aus / verbindet / spricht. Der Zustand
+   steckt im Punkt und in der Fuellung -- kein Balken, kein Farbrand. */
+.micbtn{display:flex;align-items:center;gap:7px;background:rgba(28,28,26,.06);border-radius:18px;padding:7px 12px;font-size:12.5px;font-weight:600;color:#1C1C1A;white-space:nowrap}
+.micbtn:hover{background:rgba(28,28,26,.12)}
+.micbtn .mdot{width:7px;height:7px;border-radius:50%;background:#B5B5AF;flex:none}
+.micbtn.verbindet .mdot{background:#E29A2E;animation:tippt 1s infinite}
+.micbtn.spricht{background:#1C1C1A;color:#E8E8E6}
+.micbtn.spricht:hover{background:#33332F}
+.micbtn.spricht .mdot{background:#7CA928;animation:tippt 1.6s infinite}
+.livepanel{position:fixed;right:18px;bottom:18px;z-index:60;width:392px;max-height:min(60vh,520px);display:flex;flex-direction:column;background:#FBFBFA;border:1px solid rgba(28,28,26,.12);border-radius:14px;box-shadow:0 14px 40px rgba(28,28,26,.18)}
+.livepanel .lkopf{display:flex;align-items:center;gap:8px;padding:11px 14px 9px;border-bottom:1px solid rgba(28,28,26,.08)}
+.livepanel .lkopf b{font-family:'Space Grotesk',sans-serif;font-size:13.5px}
+.livepanel .lstat{font-size:11.5px;color:#75756E}
+.livepanel .lzu{margin-left:auto;background:none;font-size:17px;line-height:1;color:#75756E;padding:0 2px}
+.livepanel .lzu:hover{color:#1C1C1A}
+.livepanel .lliste{overflow-y:auto;padding:8px 14px 12px;display:flex;flex-direction:column;gap:7px}
+.livepanel .lleer{font-size:12px;color:#8A8A83;padding:6px 0}
+.lzeile{display:grid;grid-template-columns:34px 66px 1fr;gap:8px;font-size:12.5px;line-height:1.45}
+.lzeile .lzeit{color:#9A9A93;font-size:11px;padding-top:2px}
+.lzeile .lwer{font-weight:700;color:#3C3C38}
+.lzeile.assistent .lwer{color:#3E5312}
+.lzeile.backend .lwer,.lzeile.backend .ltxt,.lzeile.hinweis .lwer,.lzeile.hinweis .ltxt{color:#75756E}
+.lzeile.fehler .lwer,.lzeile.fehler .ltxt{color:#B4432E}
+@media (max-width:900px){.livepanel{left:2vw;right:2vw;width:auto;bottom:10px;max-height:52vh}}
 .taskbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .tchip{display:flex;align-items:center;gap:6px;background:#FCFCFB;border:1px solid rgba(28,28,26,.12);border-radius:14px;padding:4px 11px;font-size:11px;font-weight:600;color:#3C3C38;box-shadow:0 1px 3px rgba(28,28,26,.07);cursor:pointer;max-width:300px;overflow:hidden;white-space:nowrap}
 .tchip:hover{border-color:rgba(28,28,26,.3)}
@@ -588,7 +612,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mtwrgw4h">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mtxbv1p5">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -666,7 +690,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mtwrgw4h"></script>
-<script type="module" src="dashboard.js?v=mtwrgw4h"></script>
+<script src="app.js?v=mtxbv1p5"></script>
+<script type="module" src="dashboard.js?v=mtxbv1p5"></script>
 </body>
 </html>
