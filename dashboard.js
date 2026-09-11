@@ -226,6 +226,8 @@ async function projektLoeschen(id,name,btn){
   const ok=await uiFrage(name+' endgültig löschen? Damit verschwinden '+dok+' Dokumente, '+auf+' Aufgaben, '+laeufe+' Agentenläufe und '+ber+' Berichte aus der Datenbank. Die Dateien auf dem Netzlaufwerk bleiben unberührt.',{titel:'Projekt löschen',ok:'Endgültig löschen',gefahr:true});
   if(!ok)return;
   btn.disabled=true;btn.textContent='…';
+  // Das Logbuch hängt bewusst an keinem Fremdschlüssel, sonst bliebe es liegen.
+  await sb.from('task_events').delete().eq('project_id',id);
   const{error}=await sb.from('projects').delete().eq('id',id);
   if(error){btn.disabled=false;btn.textContent='Löschen';uiHinweis('Löschen fehlgeschlagen: '+error.message);return;}
   if(current===id){go('cockpit');return;}
