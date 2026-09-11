@@ -2768,6 +2768,7 @@ async function downloadAnhang(a) {
 // Antwort als 'session.commentary.append' zurueck. Zweiter Klick beendet.
 const LIVE_SESSION = SUPA + '/functions/v1/live-session';
 const LIVE_BACKEND = SUPA + '/functions/v1/live-backend';
+const LIVE_NACHBEREITUNG = SUPA + '/functions/v1/live-nachbereitung';
 
 function liveKnopf() {
   const z = S.live?.zustand || 'aus';
@@ -2828,7 +2829,7 @@ async function liveFetch(url, body, retried = false) {
 
 async function liveStart() {
   if (S.live?.pc) return;
-  S.live = { zustand: 'verbindet', zeilen: [], pc: null, dc: null, stream: null, audio: null };
+  S.live = { zustand: 'verbindet', zeilen: [], pc: null, dc: null, stream: null, audio: null, begonnen: new Date().toISOString() };
   liveZustand('verbindet');
   try {
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) throw new Error('Dieser Browser kann kein Mikrofon/WebRTC');
@@ -2869,6 +2870,19 @@ function liveEnde(hinweis, still) {
   L.pc = null; L.dc = null; L.stream = null; L.audio = null;
   if (hinweis) liveZeile('hinweis', hinweis);
   liveZustand('aus');
+  liveNachbereiten(L);
+}
+// Gedaechtnis des Moderators (Migration 149): ab vier gesprochenen Zuegen geht der Verlauf als
+// Gespraech an live-nachbereitung, die daraus dauerhaft Nuetzliches ueber den Nutzer lernt.
+// Feuer und vergiss -- das Gespraech ist vorbei, das Ergebnis steht nur in der Konsole.
+function liveNachbereiten(L) {
+  if (L.nachbereitet) return;
+  const verlauf = L.zeilen.filter((z) => z.rolle === 'nutzer' || z.rolle === 'assistent').map((z) => ({ rolle: z.rolle, text: z.text }));
+  if (verlauf.length < 4) return;
+  L.nachbereitet = true;
+  liveFetch(LIVE_NACHBEREITUNG, { kanal: 'board', verlauf, begonnen: L.begonnen, beendet: new Date().toISOString() })
+    .then((j) => console.log('[live] Nachbereitung:', (j.gelernt || []).length + ' gelernt', j))
+    .catch((e) => console.warn('[live] Nachbereitung fehlgeschlagen:', e.message));
 }
 
 // Alle Ereignisse landen in der Konsole -- die Namen der Transkript-Ereignisse sind
