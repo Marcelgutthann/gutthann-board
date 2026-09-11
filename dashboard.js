@@ -207,7 +207,7 @@ async function renderSystemPanel(){
   const lastSeen=hb&&hb[0]?hb[0].last_seen:null,active=lastSeen&&(Date.now()-new Date(lastSeen).getTime()<20000);
   let h='<section class="av-panel active"><div class="av-hero"><div class="av-hero-ico">'+navIco('cog')+'</div><div><div class="av-hero-kicker">System · Automatik</div><div class="av-hero-title">Steuerung & Selbstlauf</div><div class="av-hero-desc">Der Manager-Loop hält alle Projekte automatisch aktuell (alle 6 h, max 3 Jobs/Durchlauf). Hier siehst du den Status — und kannst jedes Projekt jederzeit selbst aktualisieren.</div></div><div class="av-hero-side"><span class="rstatus '+(active?'on':'off')+'" style="display:inline-flex"><span class="d"></span>'+(active?'Runner aktiv':'Runner aus')+'</span><div class="av-lastrun">'+(lastSeen?'Heartbeat '+timeAgo(lastSeen):'kein Heartbeat')+(hb&&hb[0]&&hb[0].host?' · '+esc(hb[0].host):'')+'</div></div></div>';
   h+='<div class="av-secrow">Projekte · Aktualität</div><table class="av-table"><tr><th>Projekt</th><th>Phase</th><th>Analyse</th><th>Letzter Scan</th><th></th></tr>';
-  for(const p of (projs||[]))h+='<tr><td>'+esc(short(p.name))+'</td><td>'+(p.lph?'LPH '+p.lph:'—')+'</td><td>'+(p.dashboard_stand?timeAgo(p.dashboard_stand):'<span style="color:var(--c-danger)">nie</span>')+'</td><td>'+(p.last_sync?timeAgo(p.last_sync):'—')+'</td><td style="text-align:right"><button class="btn-sm" data-refresh="'+p.id+'">Aktualisieren</button></td></tr>';
+  for(const p of (projs||[]))h+='<tr><td>'+esc(short(p.name))+'</td><td>'+(p.lph?'LPH '+p.lph:'—')+'</td><td>'+(p.dashboard_stand?timeAgo(p.dashboard_stand):'<span style="color:var(--c-danger)">nie</span>')+'</td><td>'+(p.last_sync?timeAgo(p.last_sync):'—')+'</td><td style="text-align:right"><button class="btn-sm" data-refresh="'+p.id+'">Aktualisieren</button> <button class="btn-sm" data-del="'+p.id+'">Löschen</button></td></tr>';
   h+='</table>';
   h+='<div class="av-secrow">Letzte Agenten-Läufe · Nachweise (Control Plane)</div><table class="av-table"><tr><th>Projekt</th><th>Agent</th><th>Auslöser</th><th>Status</th><th>Ergebnis</th><th>Zeit</th></tr>';
   for(const r of (runs||[])){const trg=(r.meta&&r.meta.trigger)||'manuell';h+='<tr><td>'+esc(short(r.projects?r.projects.name:''))+'</td><td>'+esc(AL[r.agent]||r.agent)+'</td><td><span class="av-tag '+(trg==='manager'?'ok':'offen')+'">'+esc(trg)+'</span></td><td><span class="rst '+r.status+'">'+r.status+'</span></td><td style="font-size:11px;color:var(--c-slate-600)">'+esc((r.result||'').slice(0,60))+'</td><td class="mono" style="font-size:10px;white-space:nowrap">'+timeAgo(r.created_at)+'</td></tr>';}
@@ -215,6 +215,21 @@ async function renderSystemPanel(){
   el('main').innerHTML=h;
   const tc=el('toC');if(tc)tc.onclick=()=>go('cockpit');
   el('main').querySelectorAll('button[data-refresh]').forEach(b=>b.onclick=()=>queueAgentFor(b.dataset.refresh,'scan',b));
+  el('main').querySelectorAll('button[data-del]').forEach(b=>b.onclick=()=>{const p=(projs||[]).find(x=>x.id===b.dataset.del);if(p)projektLoeschen(p.id,p.name,b);});
+}
+// Löscht ein Projekt samt allem, was per Fremdschlüssel daran hängt (Dokumente,
+// Aufgaben, Agentenläufe, Berichte ...). Die Kaskade macht die Datenbank; hier
+// steht nur die Sicherheitsfrage mit den echten Zahlen davor.
+async function projektLoeschen(id,name,btn){
+  const zaehl=async t=>{const{count}=await sb.from(t).select('*',{count:'exact',head:true}).eq('project_id',id);return count||0;};
+  const[dok,auf,laeufe,ber]=await Promise.all([zaehl('documents'),zaehl('tasks'),zaehl('agent_runs'),zaehl('berichte')]);
+  const ok=await uiFrage(name+' endgültig löschen? Damit verschwinden '+dok+' Dokumente, '+auf+' Aufgaben, '+laeufe+' Agentenläufe und '+ber+' Berichte aus der Datenbank. Die Dateien auf dem Netzlaufwerk bleiben unberührt.',{titel:'Projekt löschen',ok:'Endgültig löschen',gefahr:true});
+  if(!ok)return;
+  btn.disabled=true;btn.textContent='…';
+  const{error}=await sb.from('projects').delete().eq('id',id);
+  if(error){btn.disabled=false;btn.textContent='Löschen';uiHinweis('Löschen fehlgeschlagen: '+error.message);return;}
+  if(current===id){go('cockpit');return;}
+  render();
 }
 function renderSidebar(){
   const box=el('sbagents'),lbl=el('sbproj');if(!box)return;
