@@ -2814,6 +2814,11 @@ function liveZeile(rolle, text, ev) {
     letzte.text += text; letzte.bis = ev.end_ms;
   } else zl.push({ rolle, text, zeit: new Date().toTimeString().slice(0, 5), bis: ev?.end_ms });
   liveFenster();
+  // Auflegen: sagt der Moderator die Abschiedsformel aus dem Prompt, beenden wir die Session selbst
+  // (er kann die Verbindung nicht trennen -- gleiche Regel wie im Telefondienst).
+  if (rolle === 'assistent' && !S.live.auflegen && /auf wiederh[oö]ren|ich lege (jetzt )?auf/i.test(zl[zl.length - 1].text)) {
+    S.live.auflegen = setTimeout(() => liveEnde('Moderator hat das Gespräch beendet'), 2500);
+  }
 }
 function liveFehler(text) { console.error('[live]', text); if (S.live) liveZeile('fehler', String(text)); else uiHinweis(text); }
 
