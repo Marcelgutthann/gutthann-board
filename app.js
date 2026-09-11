@@ -25,6 +25,7 @@ const S = {
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
   komAuf: new Set(), // Kommentare, die der Nutzer aufgeklappt hat — ueberlebt das Neuzeichnen
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
+  live: null, // Sprach-Moderator: {zustand:'aus'|'verbindet'|'spricht', pc, dc, stream, audio, zeilen}
 };
 
 // ---------- Dialoge ----------
@@ -974,6 +975,7 @@ function renderTopbar() {
     else setTimeout(() => { rufBtn.textContent = alt; rufBtn.disabled = false; }, 20000);
   } }, '📞 Ruf mich an');
   tb.append(rufBtn);
+  tb.append(liveKnopf());
   // Glocke direkt neben dem Anruf-Knopf: die eine Stelle, an der alles auflaeuft,
   // was mich betrifft -- unabhaengig davon, welches Board gerade offen ist.
   const offen = S.melde?.offen || 0;
@@ -2759,6 +2761,161 @@ async function downloadAnhang(a) {
 }
 
 // ---------- Login + Start ----------
+// ---------- Sprach-Knopf: Live-Moderator (voice/BAUPLAN.md, Paket C) ----------
+// Ein Klick verbindet das Mikrofon per WebRTC mit GPT-Live; die Edge Function live-session
+// handelt die Sitzung aus (OpenAI-Schluessel bleibt dort). Denken tut der Moderator nicht
+// selbst: bei 'session.delegation.created' fragt der Browser live-backend und reicht die
+// Antwort als 'session.commentary.append' zurueck. Zweiter Klick beendet.
+const LIVE_SESSION = SUPA + '/functions/v1/live-session';
+const LIVE_BACKEND = SUPA + '/functions/v1/live-backend';
+
+function liveKnopf() {
+  const z = S.live?.zustand || 'aus';
+  return el('button', { class: 'micbtn ' + z, id: 'micbtn',
+    title: z === 'aus' ? 'Mit dem Moderator sprechen' : 'Gespräch beenden',
+    onclick: () => (z === 'aus' ? liveStart() : liveEnde()) },
+  el('span', { class: 'mdot' }), '🎙 ' + { aus: 'Moderator', verbindet: 'verbindet…', spricht: 'spricht' }[z]);
+}
+function liveProjekt() { return S.detail?.projekt || (S.active?.typ === 'projekt' ? S.active.name : undefined); }
+function liveZustand(z) {
+  if (S.live) S.live.zustand = z;
+  document.getElementById('micbtn')?.replaceWith(liveKnopf());
+  liveFenster();
+}
+
+// Kleines Fenster unten rechts: was gesagt wird, was das Backend liefert, was schiefgeht.
+// Steht ausserhalb der Topbar, damit ein Neuzeichnen des Boards es nicht wegwischt.
+function liveFenster() {
+  let p = document.getElementById('live-panel');
+  if (!S.live) { p?.remove(); return; }
+  if (!p) { p = el('div', { class: 'livepanel', id: 'live-panel' }); document.body.appendChild(p); }
+  const z = S.live.zustand;
+  p.innerHTML = '';
+  const kopf = el('div', { class: 'lkopf' }, el('b', {}, 'Moderator'),
+    el('span', { class: 'lstat' }, { aus: 'beendet', verbindet: 'verbindet …', spricht: 'hört zu' }[z]));
+  if (z === 'aus') kopf.append(el('button', { class: 'lzu', title: 'Fenster schließen', onclick: () => { S.live = null; liveFenster(); } }, '×'));
+  p.append(kopf);
+  const liste = el('div', { class: 'lliste' });
+  if (!S.live.zeilen.length) liste.append(el('div', { class: 'lleer' }, 'Sprich einfach los — hier steht mit, was gesagt wird.'));
+  const WER = { nutzer: 'Du', assistent: 'Moderator', backend: 'Backend', hinweis: 'Hinweis', fehler: 'Fehler' };
+  for (const zl of S.live.zeilen) liste.append(el('div', { class: 'lzeile ' + zl.rolle },
+    el('span', { class: 'lzeit' }, zl.zeit), el('span', { class: 'lwer' }, WER[zl.rolle]), el('span', { class: 'ltxt' }, zl.text)));
+  p.append(liste);
+  liste.scrollTop = liste.scrollHeight;
+}
+// GPT-Live schickt Transkripte NUR als Wortstuecke (session.input_transcript.delta /
+// session.output_transcript.delta mit start_ms/end_ms), nie ein abschliessendes Ereignis
+// (gemessen 11.09.). Ein Stueck haengt an den letzten Zug derselben Rolle, wenn es
+// nahtlos anschliesst; eine Pause ab 2,5 s ist ein neuer Zug.
+function liveZeile(rolle, text, ev) {
+  const zl = S.live.zeilen, letzte = zl[zl.length - 1];
+  if (ev && letzte && letzte.rolle === rolle && letzte.bis != null && ev.start_ms - letzte.bis <= 2500) {
+    letzte.text += text; letzte.bis = ev.end_ms;
+  } else zl.push({ rolle, text, zeit: new Date().toTimeString().slice(0, 5), bis: ev?.end_ms });
+  liveFenster();
+}
+function liveFehler(text) { console.error('[live]', text); if (S.live) liveZeile('fehler', String(text)); else uiHinweis(text); }
+
+async function liveFetch(url, body, retried = false) {
+  const r = await fetch(url, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
+    body: JSON.stringify(body) });
+  if (r.status === 401 && !retried && await authRefresh()) return liveFetch(url, body, true);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || j.fehler || (r.status === 404 ? 'Sprachdienst nicht erreichbar (404)' : 'HTTP ' + r.status));
+  return j;
+}
+
+async function liveStart() {
+  if (S.live?.pc) return;
+  S.live = { zustand: 'verbindet', zeilen: [], pc: null, dc: null, stream: null, audio: null };
+  liveZustand('verbindet');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) throw new Error('Dieser Browser kann kein Mikrofon/WebRTC');
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const pc = new RTCPeerConnection();
+    S.live.stream = stream; S.live.pc = pc;
+    for (const t of stream.getTracks()) pc.addTrack(t, stream);
+    const audio = el('audio', { autoplay: '' }); document.body.appendChild(audio); S.live.audio = audio;
+    pc.ontrack = (e) => { audio.srcObject = e.streams[0]; };
+    pc.onconnectionstatechange = () => {
+      console.log('[live] Verbindung:', pc.connectionState);
+      if (/failed|disconnected/.test(pc.connectionState)) liveEnde('Verbindung ' + pc.connectionState + ' — Gespräch beendet.', true);
+    };
+    const dc = pc.createDataChannel('oai-events'); S.live.dc = dc;
+    dc.onopen = () => console.log('[live] Datenkanal offen');
+    dc.onmessage = (e) => { try { liveEreignis(JSON.parse(e.data)); } catch { console.warn('[live] kein JSON:', e.data); } };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const j = await liveFetch(LIVE_SESSION, { sdp: offer.sdp, karte_id: S.detail?.id, projekt: liveProjekt() });
+    if (!j.sdp) throw new Error('live-session ohne SDP-Antwort');
+    await pc.setRemoteDescription({ type: 'answer', sdp: j.sdp });
+    console.log('[live] Sitzung', j.session_id, 'als', j.email);
+  } catch (e) {
+    liveFehler(e.name === 'NotAllowedError' ? 'Mikrofon nicht freigegeben' : e.message);
+    liveEnde(null, true);
+  }
+}
+function liveSenden(obj) {
+  const dc = S.live?.dc;
+  if (!dc || dc.readyState !== 'open') return liveFehler('Datenkanal nicht offen — ' + obj.type + ' nicht gesendet');
+  dc.send(JSON.stringify(obj));
+}
+function liveEnde(hinweis, still) {
+  const L = S.live; if (!L) return;
+  if (!still && L.dc?.readyState === 'open') L.dc.send(JSON.stringify({ type: 'session.close' }));
+  for (const t of L.stream?.getTracks() || []) t.stop();
+  L.pc?.close(); L.audio?.remove();
+  L.pc = null; L.dc = null; L.stream = null; L.audio = null;
+  if (hinweis) liveZeile('hinweis', hinweis);
+  liveZustand('aus');
+}
+
+// Alle Ereignisse landen in der Konsole -- die Namen der Transkript-Ereignisse sind
+// noch nicht belegt (BAUPLAN), deshalb wird hier bewusst breit gefangen.
+function liveEreignis(ev) {
+  console.log('[live]', ev.type, ev);
+  const typ = String(ev.type || '');
+  if (typ === 'session.started' || typ === 'session.start') return liveZustand('spricht');
+  if (typ === 'session.closed') return liveEnde('Der Moderator hat das Gespräch beendet.', true);
+  if (typ === 'session.delegation.created') return liveDelegation(ev);
+  if (typ === 'error' || ev.error) return liveFehler(ev.error?.message || ev.message || JSON.stringify(ev.error || ev));
+  if (/transcript|text/i.test(typ)) {
+    const text = [ev.transcript, ev.text, ev.delta, ev.content, ev.item?.transcript, ev.item?.text].find((x) => typeof x === 'string' && x);
+    if (!text) return;
+    const rolle = /input|user/i.test(typ) || ev.role === 'user' ? 'nutzer' : 'assistent';
+    liveZeile(rolle, text, /delta/i.test(typ) ? ev : null);
+  }
+}
+async function liveDelegation(ev) {
+  const d = ev.delegation || ev;
+  // Gemessen 11.09.: die Delegation ist nur {id, type:'delegation', target:'client'} --
+  // OHNE Aufgabentext. Die Aufgabe ist, was der Nutzer zuletzt gesagt hat; der Verlauf
+  // liefert den Rest. Falls OpenAI spaeter doch ein Textfeld mitschickt, gewinnt das.
+  console.log('[live] delegation:', JSON.stringify(d));
+  const nutzer = S.live.zeilen.filter((z) => z.rolle === 'nutzer');
+  const aufgabe = d.task || d.input || d.instructions || d.prompt || nutzer[nutzer.length - 1]?.text || '';
+  const id = d.id || ev.delegation_id || d.delegation_id;
+  if (!aufgabe) return liveFehler('Delegation, aber noch kein Nutzertext im Transkript (siehe Konsole)');
+  liveZeile('backend', 'Aufgabe: ' + aufgabe);
+  const verlauf = S.live.zeilen.filter((z) => z.rolle === 'nutzer' || z.rolle === 'assistent').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
+  let text;
+  try {
+    text = (await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt() })).text || '';
+  } catch (e) {
+    liveFehler('Backend: ' + e.message);
+    text = 'Das Backend hat nicht geantwortet. Bitte später noch einmal versuchen.';
+  }
+  liveZeile('backend', text);
+  // Stuecke bis 1500 Zeichen (etwa 400 Token), Schnitt moeglichst am Satzende.
+  for (let rest = text; rest.length;) {
+    let n = rest.length > 1500 ? rest.lastIndexOf('. ', 1500) + 1 : rest.length;
+    if (n < 1) n = 1500;
+    liveSenden({ type: 'session.commentary.append', delegation_id: id, content: rest.slice(0, n).trim() });
+    rest = rest.slice(n);
+  }
+}
+
 function showLogin() {
   document.getElementById('login').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
