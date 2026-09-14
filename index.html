@@ -51,6 +51,11 @@ button{cursor:pointer;background:none;border:none}
 .bellbtn{position:relative;background:rgba(28,28,26,.06);border-radius:18px;padding:7px 12px;font-size:14px;line-height:1}
 .bellbtn:hover{background:rgba(28,28,26,.12)}
 .bellbtn .cnt{position:absolute;top:-4px;right:-4px;background:#E29A2E;color:#231602;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.accountchip{display:flex;align-items:center;gap:7px;min-width:0;max-width:min(320px,42vw);padding:7px 11px;
+  border-radius:18px;background:rgba(28,28,26,.06);color:#4F4F49;font-size:12px;white-space:nowrap}
+.accountchip svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.accountchip span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:760px){.accountchip{max-width:72vw;order:20}.accountchip span{overflow:visible;text-overflow:clip}}
 .bellpanel{position:fixed;z-index:60;width:392px;max-height:min(70vh,560px);overflow-y:auto;background:#FBFBFA;border:1px solid rgba(28,28,26,.12);border-radius:14px;box-shadow:0 14px 40px rgba(28,28,26,.18);padding:6px}
 .bellpanel .bkopf{display:flex;align-items:center;gap:8px;padding:9px 10px 8px}
 .bellpanel .bkopf b{font-family:'Space Grotesk',sans-serif;font-size:13.5px}
@@ -612,7 +617,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mtxh634u">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu0xmiv8">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -690,7 +695,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mtxh634u"></script>
-<script type="module" src="dashboard.js?v=mtxh634u"></script>
+<script src="app.js?v=mu0xmiv8"></script>
+<script type="module" src="dashboard.js?v=mu0xmiv8"></script>
 </body>
 </html>
