@@ -16,7 +16,7 @@ const CHIPS = {
 };
 
 const S = {
-  session: null, liste: null, projects: [],
+  session: null, authEmail: null, liste: null, projects: [],
   active: null, // {typ:'board'|'projekt', id, name}
   ansicht: 'board', // im Projekt: 'board' (Aufgaben) oder 'dash' (Projekt-Dashboard)
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
@@ -137,6 +137,21 @@ async function authRefresh() {
   const j = await r.json();
   saveSession({ access_token: j.access_token, refresh_token: j.refresh_token, email: S.session.email });
   return true;
+}
+
+// Die sichtbare Konto-Adresse kommt immer aus Supabase Auth. Der lokal gespeicherte
+// Login-Text ist dafuer keine Quelle: Er kann veraltet sein oder anders geschrieben
+// worden sein als die kanonische Adresse des tatsaechlich gueltigen Tokens.
+async function authIdentity(retried = false) {
+  if (!S.session?.access_token) { S.authEmail = null; return null; }
+  const r = await fetch(SUPA + '/auth/v1/user', {
+    headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token },
+  });
+  if (r.status === 401 && !retried && await authRefresh()) return authIdentity(true);
+  if (!r.ok) { S.authEmail = null; return null; }
+  const user = await r.json();
+  S.authEmail = typeof user?.email === 'string' && user.email ? user.email : null;
+  return S.authEmail;
 }
 
 async function lotse(action, body = {}, retried = false) {
@@ -984,6 +999,12 @@ function renderTopbar() {
     onclick: (e) => { e.stopPropagation(); meldePanel(bell); } },
     '\u{1F514}', offen ? el('span', { class: 'cnt' }, offen > 99 ? '99+' : String(offen)) : '');
   tb.append(bell);
+  const konto = S.authEmail || 'Nicht angemeldet';
+  tb.append(el('div', { class: 'accountchip', title: konto, 'aria-label': 'Angemeldetes Konto: ' + konto },
+    el('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+      el('circle', { cx: '12', cy: '8', r: '3.5' }),
+      el('path', { d: 'M5 20c0-4 3.1-6.5 7-6.5s7 2.5 7 6.5' })),
+    el('span', {}, konto)));
   const rf = (S.board?.todos || []).filter((t) => statusVon(t) === 'rueckfrage');
   if (rf.length) tb.append(el('button', {
     class: 'alertbtn', onclick: () => openCard(rf[0].id),
@@ -2949,6 +2970,7 @@ function showLogin() {
 async function start() {
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  await authIdentity().catch(() => { S.authEmail = null; });
   try { await ladeAlles(); }
   catch (e) {
     console.error('start:', e);
