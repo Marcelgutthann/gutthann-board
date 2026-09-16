@@ -16,7 +16,7 @@ const CHIPS = {
 };
 
 const S = {
-  session: null, authEmail: null, liste: null, projects: [],
+  session: null, liste: null, projects: [],
   active: null, // {typ:'board'|'projekt', id, name}
   ansicht: 'board', // im Projekt: 'board' (Aufgaben) oder 'dash' (Projekt-Dashboard)
   board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
@@ -137,21 +137,6 @@ async function authRefresh() {
   const j = await r.json();
   saveSession({ access_token: j.access_token, refresh_token: j.refresh_token, email: S.session.email });
   return true;
-}
-
-// Die sichtbare Konto-Adresse kommt immer aus Supabase Auth. Der lokal gespeicherte
-// Login-Text ist dafuer keine Quelle: Er kann veraltet sein oder anders geschrieben
-// worden sein als die kanonische Adresse des tatsaechlich gueltigen Tokens.
-async function authIdentity(retried = false) {
-  if (!S.session?.access_token) { S.authEmail = null; return null; }
-  const r = await fetch(SUPA + '/auth/v1/user', {
-    headers: { apikey: ANON, Authorization: 'Bearer ' + S.session.access_token },
-  });
-  if (r.status === 401 && !retried && await authRefresh()) return authIdentity(true);
-  if (!r.ok) { S.authEmail = null; return null; }
-  const user = await r.json();
-  S.authEmail = typeof user?.email === 'string' && user.email ? user.email : null;
-  return S.authEmail;
 }
 
 async function lotse(action, body = {}, retried = false) {
@@ -912,6 +897,26 @@ function chatFaltung(roh, id) {
   return [box, btn];
 }
 
+// Lange Auftrags- und Ergebnistexte falten (Marcel 16.09.: "so viele Informationen drinnen,
+// die es nicht moeglich machen, die Infos zu verwerten"). Gleiche Bedienung wie im Chat:
+// gekuerzt anzeigen, ein Klick zeigt alles. Kurze Texte bleiben unveraendert stehen.
+const FELD_FALT_AB = 520;
+function feldFaltung(box, text, id) {
+  if (String(text ?? '').length <= FELD_FALT_AB) return [box];
+  const offen = () => S.komAuf.has(id);
+  // Bewusst ohne Zeilenzahl: die gezaehlten Absaetze sagen nichts darueber, wie viel
+  // unter der Faltung noch liegt -- eine Zahl, die nichts misst, ist schlimmer als keine.
+  const wort = () => (offen() ? 'Weniger anzeigen' : 'Ganzen Text anzeigen');
+  box.classList.toggle('gefaltet', !offen());
+  const btn = el('button', { class: 'faltbtn', onclick: (e) => {
+    e.stopPropagation();
+    if (offen()) S.komAuf.delete(id); else S.komAuf.add(id);
+    box.classList.toggle('gefaltet', !offen());
+    btn.textContent = wort();
+  } }, wort());
+  return [box, btn];
+}
+
 function mentionHilfe(inp) {
   let box = null;
   const zu = () => { if (box) { box.remove(); box = null; } };
@@ -999,12 +1004,6 @@ function renderTopbar() {
     onclick: (e) => { e.stopPropagation(); meldePanel(bell); } },
     '\u{1F514}', offen ? el('span', { class: 'cnt' }, offen > 99 ? '99+' : String(offen)) : '');
   tb.append(bell);
-  const konto = S.authEmail || 'Nicht angemeldet';
-  tb.append(el('div', { class: 'accountchip', title: konto, 'aria-label': 'Angemeldetes Konto: ' + konto },
-    el('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
-      el('circle', { cx: '12', cy: '8', r: '3.5' }),
-      el('path', { d: 'M5 20c0-4 3.1-6.5 7-6.5s7 2.5 7 6.5' })),
-    el('span', {}, konto)));
   const rf = (S.board?.todos || []).filter((t) => statusVon(t) === 'rueckfrage');
   if (rf.length) tb.append(el('button', {
     class: 'alertbtn', onclick: () => openCard(rf[0].id),
@@ -2278,20 +2277,32 @@ function renderDrawer() {
     dinfo.append(sec);
   }
 
-  // Auftrag (editierbar — auch KI-formulierte Texte)
+  // Auftrag (editierbar — auch KI-formulierte Texte). Redesign 16.09.: der Text sitzt in
+  // einem sichtbaren Feld, und ein Klick hinein oeffnet das Schreibfeld. Vorher war das ein
+  // nackter Absatz mit einem grauen Woertchen daneben -- Marcel: "man weiss gar nicht, dass
+  // man da was eingeben kann".
   {
     const sec = el('div', { class: 'dsec' });
-    const kopf = el('div', { class: 'slbl', style: 'display:flex;gap:10px;align-items:center' }, d.zuarbeit ? 'Die Bitte' : 'Auftrag');
-    const inhalt = el('div', { class: 'pre' }, d.notiz || '');
-    kopf.append(el('button', { style: 'font-size:11px;color:#75756E', onclick: () => {
-      const ta = el('textarea', { style: 'width:100%;min-height:110px;padding:8px 10px;border:1px solid rgba(28,28,26,.2);border-radius:8px;background:#fff;font-size:13px' });
+    const kopf = el('div', { class: 'slbl' }, d.zuarbeit ? 'Die Bitte' : 'Auftrag');
+    const leer = !String(d.notiz || '').trim();
+    const inhalt = el('div', { class: 'feldtext schreibbar' + (leer ? ' leer' : ''), title: 'Klicken zum Bearbeiten' },
+      leer ? 'Noch kein Auftrag hinterlegt — hier klicken und schreiben.' : d.notiz);
+    const bearbeiten = () => {
+      const ta = el('textarea', { class: 'feldta' });
       ta.value = d.notiz || '';
-      const speichern = el('button', { class: 'btn', style: 'margin-top:8px', onclick: async () => {
-        await mut('todo_update', { todo_id: d.id, notiz: ta.value }); await openCard(d.id);
-      } }, 'Speichern');
-      inhalt.replaceWith(el('div', {}, ta, speichern));
-    } }, 'Bearbeiten'));
-    sec.append(kopf, inhalt); dinfo.append(sec);
+      gefaltet.forEach((n) => n.remove());
+      kopf.querySelector('.minibtn')?.remove();
+      sec.append(ta, el('div', { style: 'display:flex;gap:8px;margin-top:10px' },
+        el('button', { class: 'btn', onclick: async () => {
+          await mut('todo_update', { todo_id: d.id, notiz: ta.value }); await openCard(d.id);
+        } }, 'Speichern'),
+        el('button', { class: 'btn ghost', onclick: () => openCard(d.id) }, 'Abbrechen')));
+      setTimeout(() => ta.focus());
+    };
+    inhalt.onclick = bearbeiten;
+    kopf.append(el('button', { class: 'minibtn', onclick: bearbeiten }, 'Bearbeiten'));
+    const gefaltet = feldFaltung(inhalt, d.notiz, 'auftrag-' + d.id);
+    sec.append(kopf, ...gefaltet); dinfo.append(sec);
   }
 
   // VgV-Verfahren (Radar-Pipeline, Migration 45)
@@ -2409,7 +2420,7 @@ function renderDrawer() {
   if (d.agent_ergebnis && (st === 'fertig' || st === 'fehlgeschlagen' || !st)) {
     const sec = el('div', { class: 'dsec' });
     sec.append(el('div', { class: 'slbl' }, 'Ergebnis'));
-    sec.append(el('div', { class: 'pre' }, d.agent_ergebnis));
+    sec.append(...feldFaltung(el('div', { class: 'feldtext lesen' }, d.agent_ergebnis), d.agent_ergebnis, 'ergebnis-' + d.id));
     const m = d.agent_ergebnis.match(/Datei abgelegt:\s*([^\n—]+)/);
     if (m) sec.append(el('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => { navigator.clipboard.writeText(m[1].trim()); } }, 'Datei-Pfad kopieren'));
     dinfo.append(sec);
@@ -2419,8 +2430,12 @@ function renderDrawer() {
   const su = el('div', { class: 'dsec' });
   // Leere Sektionen zeigen kein Label — nur die schlanke Hinzufuegen-Zeile (Redesign 10.08.).
   if (d.unterpunkte.length) su.append(el('div', { class: 'slbl' }, `Unterpunkte (${d.unterpunkte.filter(u => u.erledigt).length}/${d.unterpunkte.length})`));
+  // Redesign 16.09.: die Punkte stehen in einer umrandeten Liste mit Trennlinie je Zeile.
+  // Vorher lagen sie ohne Abgrenzung untereinander und lasen sich wie ein Absatz.
+  const suListe = el('div', { class: 'subliste' });
+  if (d.unterpunkte.length) su.append(suListe);
   for (const u of d.unterpunkte) {
-    su.append(el('div', { class: 'sub' },
+    suListe.append(el('div', { class: 'sub' },
       el('input', { type: 'checkbox', ...(u.erledigt ? { checked: '' } : {}), onchange: async (e) => { await mut('unterpunkt_setzen',{ unterpunkt_id: u.id, erledigt: e.target.checked }); await openCard(d.id); } }),
       el('span', { style: u.erledigt ? 'text-decoration:line-through;color:#8A8A83' : '' }, u.text),
       el('button', { class: 'del', onclick: async () => { await mut('unterpunkt_loeschen',{ unterpunkt_id: u.id }); await openCard(d.id); } }, '✕')));
@@ -2451,7 +2466,9 @@ function renderDrawer() {
     for (const a of vorschaubar) grid.append(anhangKachel(a));
     sa.append(grid);
   }
-  for (const a of d.anhaenge) sa.append(el('div', { class: 'sub' },
+  const saListe = el('div', { class: 'subliste' });
+  if (d.anhaenge.length) sa.append(saListe);
+  for (const a of d.anhaenge) saListe.append(el('div', { class: 'sub' },
     el('a', { href: '#', style: 'color:#1C1C1A;font-weight:500', onclick: async (e) => {
       e.preventDefault();
       if (istBild(a.name) || istPdf(a.name)) anhangGross(a); else await downloadAnhang(a);
@@ -2599,16 +2616,16 @@ function renderDrawer() {
   }
 
   // Aktionen
-  const sf = el('div', { class: 'dsec', style: 'display:flex;gap:9px;border-bottom:none' });
+  const sf = el('div', { class: 'dsec', style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' });
   if (d.status === 'offen') {
-    sf.append(el('button', { class: 'btn lime', onclick: async () => {
+    sf.append(el('button', { class: 'btn erledigt', onclick: async () => {
       const kom = await uiEingabe('Kommentar zum Abschluss (fließt ins Agenten-Gedächtnis):', '');
       if (kom === null) return;
       await mut('todo_complete',{ todo_id: d.id, kommentar: kom || null });
       closeDrawer(); await ladeBoard();
     } }, 'Mit Kommentar abschließen'));
   }
-  sf.append(el('button', { class: 'btn ghost', title: 'Kommt in der nächsten Ausbaustufe', disabled: '', style: 'opacity:.45;cursor:default' }, 'Nachbessern'));
+  sf.append(el('button', { class: 'btn ghost', title: 'Kommt in der nächsten Ausbaustufe', disabled: '' }, 'Nachbessern'));
   // "Nicht relevant" (Loop D): die Begruendung fliesst als Kommentar-Abschluss in die
   // Lernschleife (item_feedback via assistant_todo_abschliessen, Migration 52).
   if (d.status === 'offen' && (d.zuarbeit || d.quelle === 'agent')) {
@@ -2970,7 +2987,6 @@ function showLogin() {
 async function start() {
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  await authIdentity().catch(() => { S.authEmail = null; });
   try { await ladeAlles(); }
   catch (e) {
     console.error('start:', e);
