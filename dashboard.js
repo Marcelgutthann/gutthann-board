@@ -1332,9 +1332,9 @@ async function betListeSchieben(richtung){
 
 function betUebersicht(){
   const A=betL.filter(r=>r.art==='eintrag');
-  if(!A.length)return '<div class="bet-p"><div class="bet-p-kopf">Beteiligtenliste</div>'+
-    '<p class="bet-imp-p">Noch keine Einträge. Über „+ Beteiligter“ aus dem Adressbuch übernehmen, '+
-    'oder eine bestehende Liste als PDF einlesen.</p></div>';
+  // Bei leerer Liste steht der Einstieg gross in der Mitte -- hier daneben
+  // nochmal dasselbe zu sagen, lenkt nur davon ab.
+  if(!A.length)return '';
   // Nur besetzte Zeilen zaehlen als Beteiligte; Platzhalter sind offene Punkte.
   const E=A.filter(r=>r.firma||r.nachname);
   const z={hand:0,analyse:0,crm:0,pdf:0};E.forEach(r=>{z[r.quelle]=(z[r.quelle]||0)+1;});
@@ -1706,23 +1706,8 @@ async function betVerschieben(id,richtung){
   await Promise.all(neu.map((x,k)=>sb.from('beteiligte').update({pos:(k+1)*10}).eq('id',x.id)));
   await betNeuZeichnen();
 }
-// Einruecken: unter die vorhergehende Geschwisterzeile haengen. Ausruecken: eine Ebene hoeher.
-async function betEbene(id,rein){
-  const r=betL.find(x=>x.id===id);if(!r)return;
-  let ziel;
-  if(rein){
-    const gesch=betL.filter(x=>(x.parent_id||null)===(r.parent_id||null));
-    const i=gesch.findIndex(x=>x.id===id);
-    if(i<=0){betHinweis('Zum Einrücken muss eine Zeile darüber stehen.');return;}
-    ziel=gesch[i-1].id;
-  }else{
-    if(!r.parent_id){betHinweis('Diese Zeile ist bereits auf oberster Ebene.');return;}
-    ziel=(betL.find(x=>x.id===r.parent_id)||{}).parent_id||null;
-  }
-  const{error}=await sb.from('beteiligte').update({parent_id:ziel,pos:9999}).eq('id',id);
-  if(error){betHinweis('Nicht verschoben: '+betFehler(error));return;}
-  await betNeuZeichnen();
-}
+// Die Ebene wird ueber das Feld "Steht unter" im Formular gesetzt -- dort ist
+// jede Zeile als Ziel waehlbar, nicht nur die direkt darueberstehende.
 // "Aus Analyse" ist ein Schalter: einmal holt die Vorschlaege, nochmal nimmt sie
 // wieder heraus. Von Hand Ergaenztes bleibt dabei stehen (siehe Migration 92).
 async function betAusAnalyse(){
@@ -2319,8 +2304,6 @@ function wireBet(){
   M.querySelectorAll('[data-betrunter]').forEach(b=>b.onclick=e=>{e.stopPropagation();betPersonRunter(b.dataset.betrunter);});
   M.querySelectorAll('[data-betup]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betup,'up');});
   M.querySelectorAll('[data-betdown]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betdown,'down');});
-  M.querySelectorAll('[data-betin]').forEach(b=>b.onclick=e=>{e.stopPropagation();betEbene(b.dataset.betin,true);});
-  M.querySelectorAll('[data-betout]').forEach(b=>b.onclick=e=>{e.stopPropagation();betEbene(b.dataset.betout,false);});
   M.querySelectorAll('[data-betfold]').forEach(g=>g.onclick=e=>{
     if(e.target.closest('[data-betadd]'))return;
     const id=g.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);betNurListe();});
