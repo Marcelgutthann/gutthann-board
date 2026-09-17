@@ -2708,7 +2708,27 @@ function renderDrawer() {
   // Anhaenge — Bild und PDF zeigen sich als Vorschau, statt erst nach dem Herunterladen
   // (Marcel, 25.08.). Ablegen geht per Drag&Drop auf das ganze Blatt.
   const sa = el('div', { class: 'dsec' });
-  sa.append(el('div', { class: 'slbl' }, 'Dateien'));
+  // Umschalter (17.09., Marcel): Karten-Dateien und Vergabeunterlagen sind zweierlei.
+  // Die einen haengen an der Karte, die anderen liegen im Verfahrensordner auf N: --
+  // und weil kein Portal sie zuverlaessig hergibt, muss man sie hier auch selbst
+  // einraeumen koennen.
+  const vgvDateien = (d.vgv && Array.isArray(d.vgv.dateien)) ? d.vgv.dateien : [];
+  const reiter = d.vgv ? (S.dateiReiter || 'karte') : 'karte';
+  if (d.vgv) {
+    const um = el('div', { class: 'dumschalt' });
+    const knopf = (id, txt, n, art) => el('button', {
+      class: 'dabtab' + (reiter === id ? ' an' : '') + (art ? ' ' + art : ''),
+      onclick: () => { S.dateiReiter = id; renderDrawer(); },
+    }, txt, el('span', { class: 'dabn' }, String(n)));
+    um.append(
+      knopf('karte', 'Dateien an der Karte', d.anhaenge.length, ''),
+      knopf('vgv', 'VgV-Unterlagen', vgvDateien.length, vgvDateien.length ? 'voll' : 'leer'));
+    sa.append(um);
+  } else {
+    sa.append(el('div', { class: 'slbl' }, 'Dateien'));
+  }
+  if (reiter === 'vgv') { sa.append(vgvUnterlagenTeil(d, vgvDateien)); dinfo.append(sa); }
+  else {
   const vorschaubar = d.anhaenge.filter((a) => istBild(a.name) || istPdf(a.name));
   if (vorschaubar.length) {
     const grid = el('div', { class: 'anhgrid' });
@@ -2730,6 +2750,7 @@ function renderDrawer() {
     el('div', { class: 'ablage', onclick: () => fileInp.click() }, 'Dateien hierher ziehen oder klicken zum Auswählen'),
     el('div', { id: 'anh-status', style: 'font-size:11.5px;color:#75756E;margin-top:6px' }));
   dinfo.append(sa);
+  }
 
   // Kommentare -- der Chat. Eigene, feste linke Spalte (Redesign 26.08.): der Kopf
   // der Spalte traegt die Ueberschrift, darum entfaellt das fruehere Inline-Label.
@@ -2917,6 +2938,60 @@ function renderDrawer() {
 
 // HTML-Anhaenge im neuen Tab ANZEIGEN statt herunterladen (VgV-Analyse-Dateien). Fenster
 // synchron im Klick oeffnen (Popup-Blocker), Inhalt nach dem Fetch als Blob-URL setzen.
+// VgV-Unterlagen: was im Verfahrensordner auf N: liegt — nicht, was an der Karte haengt.
+// Der Ordner ist die Wahrheit; die Karte fuehrt nur die Liste. Weil kein Portal die
+// Unterlagen zuverlaessig hergibt (AUMASS/DTVP/Deutsche eVergabe haben keinen Adapter),
+// stehen hier die beiden Wege, sie von Hand hereinzuholen.
+function vgvUnterlagenTeil(d, dateien) {
+  const box = el('div', {});
+  const voll = dateien.length > 0;
+  const laeuft = (S.laeufe || []).some((l) => l.agent === 'vgv-unterlagen-uebernehmen'
+    && ['queued', 'running'].includes(l.status) && (l.todo_id === d.id || l.meta?.todo_id === d.id));
+
+  box.append(el('div', { class: 'dabband ' + (voll ? 'voll' : 'leer') },
+    el('b', {}, voll ? dateien.length + ' Datei' + (dateien.length === 1 ? '' : 'en') + ' im Verfahrensordner'
+                     : 'Keine Vergabeunterlagen im Verfahrensordner'),
+    el('span', {}, voll
+      ? (d.vgv.quelle_unterlagen ? 'von Hand eingeräumt' : 'vom Portal geladen')
+      : 'Das Portal gibt sie nicht her — lade sie selbst herunter und räume sie hier ein.')));
+
+  if (d.vgv.ordner) box.append(el('div', { class: 'dabpfad', title: d.vgv.ordner }, d.vgv.ordner));
+
+  if (voll) {
+    const liste = el('div', { class: 'subliste' });
+    for (const f of dateien.slice(0, 60)) liste.append(el('div', { class: 'sub' },
+      el('span', { style: 'color:#1C1C1A' }, (istPdf(f.name) ? '📄 ' : '📎 ') + f.name),
+      el('span', { style: 'color:#9A9A93;font-size:11.5px' }, f.kb ? f.kb + ' KB' : '')));
+    box.append(liste);
+    if (dateien.length > 60) box.append(el('div', { style: 'font-size:11.5px;color:#75756E;margin-top:4px' },
+      '… und ' + (dateien.length - 60) + ' weitere'));
+  }
+
+  const anstossen = async (quelle) => {
+    const r = await restRpc('assistant_vgv_unterlagen_uebernehmen',
+      { p_todo_id: d.id, p_quelle: quelle || null }).catch((e) => ({ fehler: e.message }));
+    if (r?.fehler) { uiHinweis(r.fehler); return; }
+    uiHinweis('Übernahme läuft — die Dateien wandern in den Verfahrensordner.');
+    await openCard(d.id);
+  };
+
+  const knoepfe = el('div', { class: 'dabakt' });
+  knoepfe.append(el('button', { class: 'btn', disabled: laeuft || undefined, onclick: async () => {
+    const pfad = await uiEingabe('Ordner, in dem die heruntergeladenen Unterlagen liegen '
+      + '(voller Pfad, z.B. C:\\Users\\m.gutthann\\Downloads\\Kaisheim):');
+    if (!pfad?.trim()) return;
+    await anstossen(pfad.trim());
+  } }, 'Ordner übernehmen…'));
+  knoepfe.append(el('button', { class: 'btn ghost', disabled: laeuft || undefined, onclick: () => anstossen(null) },
+    'Dateien von der Karte übernehmen' + (d.anhaenge.length ? ' (' + d.anhaenge.length + ')' : '')));
+  box.append(knoepfe);
+  box.append(el('div', { class: 'dabhint' }, laeuft
+    ? 'Die Übernahme läuft gerade — das Ergebnis erscheint als Kommentar im Chat.'
+    : 'Der zweite Weg: Dateien im Reiter „Dateien an der Karte" hochladen, dann hier übernehmen. '
+      + 'ZIP-Archive werden dabei ausgepackt.'));
+  return box;
+}
+
 async function oeffneAnhaenge(liste) {
   const wins = liste.map(() => window.open('about:blank'));
   for (let i = 0; i < liste.length; i++) {
