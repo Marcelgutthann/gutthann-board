@@ -1398,7 +1398,7 @@ function betAktionen(r){
   // die schon unter einer Firma stehen, waere der Knopf Unsinn.
   if(r.art==='eintrag'&&r.firma&&(r.nachname||r.vorname)&&betIstFirmenzeile(r))
     neben.push('<button class="btn-sm ghost" data-betrunter="'+r.id+
-      '" title="Firma bleibt oben stehen, die Person rückt eine Ebene tiefer">Person nach unten</button>');
+      '" title="Firma bleibt oben stehen, die Person rückt eine Ebene tiefer">Person unter die Firma stellen</button>');
   const mitte=neben.length===1?neben[0].replace('btn-sm ghost','btn-sm ghost weit'):neben.join('');
   return '<div class="bet-p-akt">'+kopf+mitte+
     '<button class="btn-sm ghost warn weit" data-betdel="'+r.id+'">Löschen</button></div>';
