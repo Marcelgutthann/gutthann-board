@@ -1155,7 +1155,8 @@ function betListe(L){
     if(r.art==='gruppe'){
       const kinder=L.filter(x=>x.parent_id===r.id);
       const n=kinder.filter(x=>x.art==='eintrag').length;
-      h+='<div class="bet-g t'+Math.min(r.tiefe,2)+'" data-betfold="'+r.id+'">'+
+      h+='<div class="bet-g t'+Math.min(r.tiefe,2)+'" data-betfold="'+r.id+'"'+
+         ' title="Klick: auf- und zuklappen · Rechtsklick: Zeile oder Überschrift einfügen">'+
          '<span class="bet-g-nr">'+(kinder.length?(zu(r.id)&&!f?'▸ ':'▾ '):'')+esc(r.nummer)+'</span>'+
          '<span class="bet-g-t">'+esc(r.titel||'(ohne Titel)')+'</span>'+
          (n?'<span class="bet-g-n">'+n+'</span>':'')+
@@ -1177,7 +1178,8 @@ function betListe(L){
       (vater.firma||'').trim().toLowerCase()===(r.firma||'').trim().toLowerCase();
     h+='<div class="bet-z t'+Math.min(r.tiefe,3)+(betSel===r.id?' sel':'')+
        (istFirma?' firmenzeile':'')+
-       (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'">'+
+       (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'"'+
+       ' title="Klick: ansehen und bearbeiten · Rechtsklick: Zeile einfügen, verschieben, löschen">'+
        '<span class="z-nr">'+esc(r.nummer)+'</span>'+
        '<span class="z-rolle">'+esc(r.titel||'—')+'</span>'+
        '<span class="z-firma">'+esc(firmaGleich?'':(r.firma||(r.status==='offen'?'— noch nicht vergeben —':'')))+'</span>'+
@@ -1354,7 +1356,8 @@ function betUebersicht(){
       .filter(Boolean).join(' · ')+
       (letzte?'<br>zuletzt geändert '+esc(fmtD(letzte)):'')+
       (dateien.length?'<br>Quelle: '+esc(dateien.join(', ')):'')+'</div>'+
-    '<p class="bet-imp-p" style="margin-top:14px">Eine Zeile anklicken, um sie anzusehen oder zu bearbeiten.</p></div>';
+    '<p class="bet-imp-p" style="margin-top:14px">Eine Zeile anklicken, um sie anzusehen oder zu bearbeiten. '+
+    'Rechtsklick auf eine Zeile fügt darunter eine neue ein — mit derselben Rolle und Firma.</p></div>';
 }
 
 function betDetail(r){
@@ -1696,6 +1699,65 @@ async function betPersonRunter(id){
   if(e2){betHinweis('Nicht verschoben: '+betFehler(e2));return;}
   await betNeuZeichnen();betHinweis('Person steht jetzt unter der Firma.');
 }
+// Excel-Reflex (Marcel 17.09.): Rechtsklick auf eine Zeile, "Zeile darunter
+// einfuegen" -- die neue steht DIREKT unter der angeklickten, nicht am Ende des
+// Zweigs, und bringt deren Bezug mit (Rolle und Firma). Wer eine Person unter
+// eine Firma haengen will, nimmt 'kind'; 'gruppe' legt eine Ueberschrift an.
+async function betZeileDarunter(id,modus){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  const alsKind=modus==='kind';
+  const parent=alsKind?r.id:(r.parent_id||null);
+  const gesch=betL.filter(x=>(x.parent_id||null)===parent);
+  const uebernehmen=modus!=='gruppe'&&r.art==='eintrag';
+  const d=modus==='gruppe'?{art:'gruppe'}
+    :{art:'eintrag',titel:uebernehmen?(r.titel||null):null,
+      firma:uebernehmen?(r.firma||null):null,kontakte:[],status:'aktiv'};
+  const{data,error}=await sb.from('beteiligte').insert(Object.assign(
+    {project_id:current,listen_id:betListeId,parent_id:parent,
+     pos:(gesch.length+1)*10,quelle:'hand'},d)).select('id').single();
+  if(error){betHinweis('Nicht eingefügt: '+betFehler(error));return;}
+  // Nur auf gleicher Ebene muss der Zweig neu geordnet werden; als Unterzeile
+  // steht sie ohnehin am Ende ihres neuen Zweigs.
+  if(!alsKind){
+    const reihe=gesch.map(x=>x.id);
+    reihe.splice(gesch.findIndex(x=>x.id===id)+1,0,data.id);
+    const e=await betZweigSchreiben(reihe);
+    if(e){betHinweis('Eingefügt, aber nicht einsortiert: '+betFehler(e));}
+  }
+  await betNeuZeichnen();
+  // Gleich weiterschreiben koennen: neue Zeile ausgewaehlt, Bearbeitung offen.
+  const neu=(betL||[]).find(x=>x.id===data.id);
+  if(neu){betSel=neu.id;betEdit=Object.assign({},neu,{kontakte:betKont(neu),_inline:true});
+    betFormAuf=true;betNurSeite();}
+  betHinweis(modus==='gruppe'?'Überschrift eingefügt.'
+    :uebernehmen&&(r.titel||r.firma)?'Zeile eingefügt — Rolle und Firma sind übernommen.':'Zeile eingefügt.');
+}
+
+// Rechtsklick-Menue einer Zeile. Nutzt das Menue der Board-Huelle (app.js);
+// fehlt es, passiert nichts -- die gleichen Wege stehen auch als Knoepfe da.
+function betZeilenMenue(e,id){
+  const r=betL.find(x=>x.id===id);if(!r||!window.ctxMenu)return;
+  e.preventDefault();
+  const M=el('main');
+  M.querySelectorAll('[data-betrow],[data-betfold]').forEach(x=>
+    x.classList.toggle('sel',x.dataset.betrow===id||x.dataset.betfold===id));
+  const istG=r.art==='gruppe';
+  const punkte=[{txt:istG?'Zeile in dieser Überschrift':'Zeile darunter einfügen',
+                 do:()=>betZeileDarunter(id,istG?'kind':'gleich')}];
+  if(!istG)punkte.push({txt:r.firma?'Ansprechpartner dieser Firma darunter':'Zeile eine Ebene tiefer',
+                        do:()=>betZeileDarunter(id,'kind')});
+  punkte.push({txt:'Überschrift darunter einfügen',do:()=>betZeileDarunter(id,'gruppe')});
+  punkte.push({txt:'Nach oben',do:()=>betVerschieben(id,'up')});
+  punkte.push({txt:'Nach unten',do:()=>betVerschieben(id,'down')});
+  if(!istG)punkte.push({txt:'Aus dem Adressbuch füllen',do:()=>{
+    const z=betL.find(x=>x.id===id);
+    betSel=id;betEdit=Object.assign({},z,{kontakte:betKont(z)});
+    betCrmOffen=true;betCrmFirma=null;betNurSeite();}});
+  punkte.push({txt:'Löschen',danger:true,do:()=>{
+    betLoeschFrage=id;betEdit=null;betCrmOffen=false;betNurSeite();}});
+  window.ctxMenu(e.clientX,e.clientY,punkte);
+}
+
 // Umsortieren: pos der Geschwister neu vergeben (10,20,30 …) und tauschen.
 async function betVerschieben(id,richtung){
   const r=betL.find(x=>x.id===id);if(!r)return;
@@ -2268,6 +2330,9 @@ function wireBet(){
     betCrmOffen=false;betCrmFirma=null;betMitRolle='';
     M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
     betNurSeite();});
+  // Rechtsklick auf Zeile und Ueberschrift: einfuegen, verschieben, loeschen.
+  M.querySelectorAll('[data-betrow]').forEach(z=>z.oncontextmenu=e=>betZeilenMenue(e,z.dataset.betrow));
+  M.querySelectorAll('[data-betfold]').forEach(g=>g.oncontextmenu=e=>betZeilenMenue(e,g.dataset.betfold));
   // "Firma / Person hinzufügen" an einer Rolle: Adressbuch mit dieser Zeile als Ziel.
   // Ansprechpartner hinzufuegen: die neue Person wird ANGEHAENGT, nicht die
   // angeklickte Zeile ueberschrieben. Deshalb bekommt betEdit KEINE id --
