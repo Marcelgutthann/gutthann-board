@@ -157,6 +157,31 @@ button{cursor:pointer;background:none;border:none}
 .ffsw.an .ffknauf::after{transform:translateX(16px)}
 .ffsw:disabled{opacity:.5}
 .ffchip{background:#E4EBD2;color:#4E6117}
+/* Dateien-Umschalter im Kartendetail (17.09.): Karten-Anhaenge und Vergabeunterlagen
+   sind zweierlei Ablage. Der aktive Reiter traegt Farbe, der leere VgV-Reiter warnt
+   in Bernstein -- fehlende Unterlagen sind der haeufigste Grund fuer eine tote Karte. */
+.dumschalt{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.dabtab{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;
+  color:#75756E;background:rgba(28,28,26,.05);border:1px solid rgba(28,28,26,.12);
+  border-radius:11px;padding:8px 14px}
+.dabtab:hover{background:rgba(28,28,26,.1)}
+.dabtab .dabn{font-size:12px;font-weight:700;padding:1px 8px;border-radius:8px;
+  background:rgba(28,28,26,.1);color:#4F4F49}
+.dabtab.an{background:#1C1C1A;color:#F7F7F5;border-color:#1C1C1A}
+.dabtab.an .dabn{background:rgba(255,255,255,.2);color:#F7F7F5}
+.dabtab.leer:not(.an){color:#8A5606;background:#FBEFDA;border-color:#D8A23E}
+.dabtab.leer:not(.an) .dabn{background:#E8C98A;color:#6B4404}
+.dabtab.an.leer{background:#8A5606;border-color:#8A5606;color:#FFF}
+.dabtab.voll:not(.an){color:#3C5D1E;background:#E8F5C4;border-color:#9FBF62}
+.dabtab.voll:not(.an) .dabn{background:#CBE199;color:#31500F}
+.dabband{display:flex;flex-direction:column;gap:3px;border-radius:11px;padding:12px 15px;margin-bottom:10px}
+.dabband b{font-size:14.5px}
+.dabband span{font-size:12.5px}
+.dabband.voll{background:#E8F5C4;color:#31500F;border:1px solid #9FBF62}
+.dabband.leer{background:#FBEFDA;color:#7A4B05;border:1px solid #D8A23E}
+.dabpfad{font-size:11.5px;color:#75756E;margin-bottom:10px;word-break:break-all}
+.dabakt{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.dabhint{font-size:12px;color:#75756E;margin-top:8px;line-height:1.45}
 .tagx:hover{opacity:1}
 .card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
@@ -694,7 +719,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mu5apbvm">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu5b4ds1">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -772,7 +797,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mu5apbvm"></script>
-<script type="module" src="dashboard.js?v=mu5apbvm"></script>
+<script src="app.js?v=mu5b4ds1"></script>
+<script type="module" src="dashboard.js?v=mu5b4ds1"></script>
 </body>
 </html>
