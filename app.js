@@ -413,6 +413,18 @@ function tagMenu(x, y, todoId, danach) {
     const farben = Object.keys(TAG_FARBEN);
     ctxMenu(x, y, farben.map((f) => ({ txt: '● ' + f, do: () => setze(name.trim(), f) })));
   } });
+  // Aufraeumen: der einzige Weg, einen Vertipper wieder aus dem Board zu bekommen —
+  // abgenommene Tags bleiben seit Migration 156 sonst dauerhaft stehen.
+  if (S.tags.liste.length) items.push({ txt: '🗑 Tag aus dem Board löschen…', danger: true, do: () => setTimeout(() => {
+    ctxMenu(x, y, S.tags.liste.map((t) => ({ txt: t.name, danger: true, do: async () => {
+      const n = S.tags.proKarte ? Object.values(S.tags.proKarte).filter((l) => l.some((x2) => x2.id === t.id)).length : 0;
+      if (!await uiFrage(`Tag „${t.name}" ganz aus dem Board löschen?`
+        + (n ? ` Er hängt noch an ${n} Karte${n === 1 ? '' : 'n'} und verschwindet dort mit.` : ''))) return;
+      const r = await restRpc('assistant_tag_loeschen', { p_tag_id: t.id }).catch((e) => ({ fehler: e.message }));
+      if (r?.fehler) { uiHinweis(r.fehler); return; }
+      await danach();
+    } })));
+  }) });
   ctxMenu(x, y, items);
 }
 
@@ -2406,7 +2418,21 @@ function renderDrawer() {
   if (d.zuarbeit) chipRow.append(el('span', { class: 'chip zu', style: 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px' }, '⇄ Zuarbeit · vom Agenten' + (d.projekt ? ' für ' + d.projekt.name : '')));
   chipRow.append(el('span', { style: 'font-size:12px;color:#75756E' },
     d.quelle === 'agent' ? '⚙ vom Agenten angelegt' : d.quelle === 'voice' ? '📞 per Anruf erstellt' : '⌨ in der App erstellt'));
-  chipRow.append(el('button', { style: 'margin-left:auto;font-size:16px;color:#75756E', onclick: closeDrawer }, '✕'));
+  // Tags stehen oben rechts im Kopf (Marcels Stelle, 17.09.) — beim Aufklappen als
+  // Erstes im Blick, mit dem Anlege-Knopf direkt daneben.
+  const tagNeu = async () => { await ladeTags(S.board?.board_id); renderDrawer(); };
+  const tagBox = el('div', { class: 'tagbox' });
+  const tagZeile = tagChips(d.id, async (t) => {
+    const r = await restRpc('assistant_tag_entfernen', { p_todo_id: d.id, p_tag_id: t.id })
+      .catch((err) => ({ fehler: err.message }));
+    if (r?.fehler) { uiHinweis(r.fehler); return; }
+    await tagNeu();
+  });
+  if (tagZeile) tagBox.append(tagZeile);
+  tagBox.append(el('button', { class: 'tagplus', title: 'Tag setzen oder neuen Tag anlegen',
+    onclick: (e) => tagMenu(e.clientX, e.clientY, d.id, tagNeu) }, '🏷 + Tag'));
+  chipRow.append(tagBox);
+  chipRow.append(el('button', { style: 'font-size:16px;color:#75756E', onclick: closeDrawer }, '✕'));
   const titelZeile = el('div', { class: 't', style: 'display:flex;gap:8px;align-items:baseline' }, d.titel,
     el('button', { title: 'Titel bearbeiten', style: 'font-size:13px;color:#9A9A93', onclick: async () => {
       const t2 = await uiEingabe('Titel bearbeiten:', d.titel);
@@ -2443,19 +2469,8 @@ function renderDrawer() {
     ]);
   } }, d.faellig ? '📅 fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : '📅 Frist setzen');
   meta.append(fristBtn);
-  // Tags: setzen und wieder abnehmen, direkt im Kopf neben Projekt und Frist.
-  meta.append(el('button', { class: 'metabtn', title: 'Tag setzen', onclick: (e) => {
-    tagMenu(e.clientX, e.clientY, d.id, async () => { await ladeTags(S.board?.board_id); renderDrawer(); });
-  } }, '🏷 Tag'));
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta);
-  const tagZeile = tagChips(d.id, async (t) => {
-    const r = await restRpc('assistant_tag_entfernen', { p_todo_id: d.id, p_tag_id: t.id })
-      .catch((err) => ({ fehler: err.message }));
-    if (r?.fehler) { uiHinweis(r.fehler); return; }
-    await ladeTags(S.board?.board_id); renderDrawer();
-  });
-  if (tagZeile) head.append(tagZeile);
   dkopf.append(head);
 
   // Zielbild-Pflicht (Loop B2): bei Zuarbeitskarten steht das WOFUER vor der Bitte.
