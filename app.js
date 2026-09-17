@@ -373,11 +373,35 @@ async function ladeTags(boardId, token) {
     if (!tag) continue;
     (proKarte[z.todo_id] ||= []).push(tag);
   }
-  S.tags = { liste: d.tags || [], proKarte };
+  S.tags = { liste: d.tags || [], proKarte, ff: new Set(d.federfuehrend || []) };
   renderBoard();
 }
 
 function tagsVon(todoId) { return S.tags?.proKarte?.[todoId] || []; }
+function istFederfuehrend(todoId) { return !!S.tags?.ff?.has(todoId); }
+
+// Federfuehrung ist eine Ja/Nein-Aussage, kein freier Tag — deshalb ein Schalter
+// (Migration 157). Er steht nur an VgV-Karten; ausserhalb eines Verfahrens gibt es
+// keine Federfuehrung.
+function ffSchalter(todoId, danach) {
+  const an = istFederfuehrend(todoId);
+  const s = el('button', {
+    class: 'ffsw' + (an ? ' an' : ''),
+    title: an ? 'GHIW führt das Verfahren federführend — klicken zum Ausschalten'
+              : 'GHIW ist nicht federführend — klicken zum Einschalten',
+    onclick: async (e) => {
+      e.stopPropagation();
+      s.disabled = true;
+      const r = await restRpc('assistant_federfuehrend_setzen', { p_todo_id: todoId, p_wert: !an })
+        .catch((err) => ({ fehler: err.message }));
+      s.disabled = false;
+      if (r?.fehler) { uiHinweis(r.fehler); return; }
+      await danach();
+    },
+  });
+  s.append(el('span', { class: 'ffknauf' }), el('span', { class: 'fftxt' }, 'federführend'));
+  return s;
+}
 
 // Chip-Zeile fuer Board-Kachel und Kartendetail. onWeg != null blendet das ✕ ein.
 function tagChips(todoId, onWeg) {
@@ -2172,10 +2196,10 @@ function kartenMenu(e, t) {
     items.push({ txt: '⌖ ' + (t.projekt_name ? 'Projekt ändern…' : 'Projekt zuweisen…'), do: () => setTimeout(() => projektMenu(x, y, t.id)) });
     if (t.projekt_name) items.push({ txt: '⌖ Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
   }
-  items.push({ txt: '🏷 Tag setzen…', do: () => setTimeout(() => tagMenu(x, y, t.id,
+  items.push({ txt: '＋ Tag setzen…', do: () => setTimeout(() => tagMenu(x, y, t.id,
     async () => { await ladeTags(S.board?.board_id); })) });
   for (const tg of tagsVon(t.id)) {
-    items.push({ txt: '🏷 „' + tg.name + '" abnehmen', do: async () => {
+    items.push({ txt: '✕ Tag „' + tg.name + '" abnehmen', do: async () => {
       const r = await restRpc('assistant_tag_entfernen', { p_todo_id: t.id, p_tag_id: tg.id })
         .catch((err) => ({ fehler: err.message }));
       if (r?.fehler) { uiHinweis(r.fehler); return; }
@@ -2231,7 +2255,13 @@ function renderCard(t) {
   // Tags direkt unter dem Titel: auf dem VgV-Board soll ohne Aufklappen stehen,
   // mit wem ein Verfahren laeuft (Wunsch aus der Karte "TAGS", 17.09.).
   const tr = tagChips(t.id, null);
-  if (tr) c.append(tr);
+  const ff = istFederfuehrend(t.id);
+  if (tr || ff) {
+    const row = tr || el('div', { class: 'tagrow' });
+    // Nur "ja" wird gezeigt — ein Chip "nicht federfuehrend" an jeder Karte waere Laerm.
+    if (ff) row.append(el('span', { class: 'tagc ffchip', title: 'GHIW führt das Verfahren federführend' }, 'federführend'));
+    c.append(row);
+  }
   // Aussortiert: was hier steht, ist gleich weg — Restzeit und Grund gehoeren aufs Deckblatt.
   const pk = papierkorbRest(t);
   if (pk) c.append(el('div', { class: 'chip', style: 'background:#E8DFC5;color:#4A3B14' },
@@ -2430,7 +2460,9 @@ function renderDrawer() {
   });
   if (tagZeile) tagBox.append(tagZeile);
   tagBox.append(el('button', { class: 'tagplus', title: 'Tag setzen oder neuen Tag anlegen',
-    onclick: (e) => tagMenu(e.clientX, e.clientY, d.id, tagNeu) }, '🏷 + Tag'));
+    onclick: (e) => tagMenu(e.clientX, e.clientY, d.id, tagNeu) }, '+ Tag'));
+  // Nur an Verfahren: der Schalter fragt "führen WIR das?" — ohne VgV sinnlos.
+  if (d.vgv) tagBox.append(ffSchalter(d.id, tagNeu));
   chipRow.append(tagBox);
   chipRow.append(el('button', { style: 'font-size:16px;color:#75756E', onclick: closeDrawer }, '✕'));
   const titelZeile = el('div', { class: 't', style: 'display:flex;gap:8px;align-items:baseline' }, d.titel,
