@@ -126,12 +126,23 @@ button{cursor:pointer;background:none;border:none}
 .card .meta>span{flex:none}
 .card .meta .due.urgent{color:#A66A12;font-weight:600}
 .card .meta .proj{margin-left:auto;font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Tags (17.09.): eigene Klassen tagrow/tagc/tagx — bewusst NICHT .tchip, die Klasse
+   ist im Terminplan schon vergeben und hatte das erste Tag-Feature zerlegt. */
+.tagrow{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px}
+.tagc{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;
+  letter-spacing:.01em;padding:2px 8px;border-radius:9px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tagx{font-size:10px;line-height:1;opacity:.7;padding:0 1px}
+.tagx:hover{opacity:1}
 .card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
 .card .pchip{font-size:10px;font-weight:600;padding:1px 7px;border-radius:8px;background:rgba(28,28,26,.07);color:#4F4F49}
 .card .vfrist{font-size:11.5px;color:#75756E;white-space:nowrap}
 .card .vfrist.urgent{color:#A66A12;font-weight:700}
 .vgvban{border-radius:10px;padding:10px 14px;margin-bottom:10px}
+/* Hinweis, dass die Erst-Empfehlung darueber ueberholt ist (Migration 150). Sandton wie
+   alles, wo ein Mensch etwas entschieden hat -- kein Alarmrot, es ist kein Fehler. */
+.nbhin{border:1px solid #E5D9B4;background:#FBF6E9;border-radius:10px;padding:9px 13px;margin-bottom:10px;font-size:12.5px;line-height:1.5;color:#5C4A16}
 .vgvkv{display:grid;grid-template-columns:auto 1fr;gap:0;font-size:13px}
 .vgvkv .k,.vgvkv .w{padding:7px 0;border-top:1px solid rgba(28,28,26,.08);line-height:1.5}
 .vgvkv>:nth-child(-n+2){border-top:none;padding-top:0}
@@ -659,7 +670,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mu434by6">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu5a3y7r">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -737,7 +748,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mu434by6"></script>
-<script type="module" src="dashboard.js?v=mu434by6"></script>
+<script src="app.js?v=mu5a3y7r"></script>
+<script type="module" src="dashboard.js?v=mu5a3y7r"></script>
 </body>
 </html>
