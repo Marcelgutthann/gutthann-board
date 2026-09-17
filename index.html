@@ -128,17 +128,21 @@ button{cursor:pointer;background:none;border:none}
 .card .meta .proj{margin-left:auto;font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Tags (17.09.): eigene Klassen tagrow/tagc/tagx — bewusst NICHT .tchip, die Klasse
    ist im Terminplan schon vergeben und hatte das erste Tag-Feature zerlegt. */
-.tagrow{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px}
-.tagc{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
-  letter-spacing:.01em;padding:2px 8px;border-radius:9px;max-width:100%;
+.tagrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tagc{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;
+  letter-spacing:.01em;padding:4px 11px;border-radius:11px;max-width:100%;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tagx{font-size:11px;line-height:1;opacity:.7;padding:0 1px}
-/* Kopf des Kartendetails: Etiketten und Anlege-Knopf sitzen rechts, vor dem Schliessen-X. */
-.tagbox{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
-.tagbox .tagrow{margin-top:0}
-.tagplus{font-size:11px;font-weight:600;color:#5A5A52;background:rgba(28,28,26,.05);
-  border-radius:9px;padding:3px 9px;white-space:nowrap}
-.tagplus:hover{background:rgba(28,28,26,.1)}
+.tagx{font-size:12px;line-height:1;opacity:.7;padding:0 1px}
+/* Kopf des Kartendetails: Etiketten und Anlege-Knopf sitzen rechts, vor dem Schliessen-X.
+   Bewusst groesser als auf der Kachel (Marcel, 17.09.: "viel groesser und praesenter") --
+   im Detail ist Platz, und die ARGE-Angabe ist beim Aufklappen die erste Frage. */
+.tagbox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+.tagbox .tagrow{margin-top:0;gap:8px}
+.tagbox .tagc{font-size:15px;font-weight:700;padding:7px 15px;border-radius:13px}
+.tagbox .tagx{font-size:14px;opacity:.6}
+.tagplus{font-size:14px;font-weight:700;color:#4F4F49;background:rgba(28,28,26,.06);
+  border:1px dashed rgba(28,28,26,.28);border-radius:13px;padding:6px 14px;white-space:nowrap}
+.tagplus:hover{background:rgba(28,28,26,.12);border-style:solid}
 .tagx:hover{opacity:1}
 .card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
@@ -676,7 +680,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mu5ahokt">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu5alfff">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -754,7 +758,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mu5ahokt"></script>
-<script type="module" src="dashboard.js?v=mu5ahokt"></script>
+<script src="app.js?v=mu5alfff"></script>
+<script type="module" src="dashboard.js?v=mu5alfff"></script>
 </body>
 </html>
