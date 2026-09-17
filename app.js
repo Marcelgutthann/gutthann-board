@@ -15,6 +15,20 @@ const CHIPS = {
   fehlgeschlagen: { txt: 'Fehlgeschlagen', bg: '#F4E0DC', fg: '#B4432E', dot: '#B4432E', anim: false },
 };
 
+// Tags (Migration 155): freie Etiketten an der Karte — auf dem VgV-Board vor allem
+// "mit wem laeuft das Verfahren" (ARGE) und "sind wir federfuehrend". Gedeckte
+// Farbwelt wie die uebrigen Chips; kein Lime, das gehoert dem Agenten-Status.
+const TAG_FARBEN = {
+  stein: { bg: '#ECECE8', fg: '#5A5A52' },
+  oliv: { bg: '#E4EBD2', fg: '#4E6117' },
+  sand: { bg: '#F3E7CE', fg: '#7A5A12' },
+  ziegel: { bg: '#F4E0DC', fg: '#A03A26' },
+  himmel: { bg: '#DDE6EE', fg: '#3A5872' },
+  flieder: { bg: '#E6E0EC', fg: '#5B4A72' },
+};
+const TAG_FARBE_STD = 'stein';
+function tagFarbe(f) { return TAG_FARBEN[f] || TAG_FARBEN[TAG_FARBE_STD]; }
+
 const S = {
   session: null, liste: null, projects: [],
   active: null, // {typ:'board'|'projekt', id, name}
@@ -25,6 +39,7 @@ const S = {
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
   komAuf: new Set(), // Kommentare, die der Nutzer aufgeklappt hat — ueberlebt das Neuzeichnen
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
+  tags: { liste: [], proKarte: {} }, // Etiketten des offenen Boards (assistant_board_tags)
   live: null, // Sprach-Moderator: {zustand:'aus'|'verbindet'|'spricht', pc, dc, stream, audio, zeilen}
 };
 
@@ -330,6 +345,9 @@ async function ladeBoard() {
   if (token !== ladeToken) return; // inzwischen wurde ein anderes Board angefordert
   S.board = b;
   renderTopbar(); renderBoard();
+  // Etiketten nachladen (eigener kurzer Aufruf, damit assistant_board unangetastet
+  // bleibt). Faellt er aus, steht das Board trotzdem — nur ohne Tag-Chips.
+  ladeTags(b.board_id, token);
   // Agenten-Taskbar nachladen (blockiert das Board nicht; Fehler sind egal)
   lotse('agent_laeufe').then((r) => {
     if (token !== ladeToken) return;
@@ -337,6 +355,67 @@ async function ladeBoard() {
     renderTopbar();
   }).catch(() => {});
 }
+// ---------- Tags ----------
+// Eine Abfrage je Board; das Ergebnis liegt in S.tags und wird beim Zeichnen
+// ueber die Karten gelegt. token verwirft Antworten zu einem Board, das der
+// Nutzer inzwischen verlassen hat.
+async function ladeTags(boardId, token) {
+  if (!boardId) { S.tags = { liste: [], proKarte: {} }; return; }
+  let d;
+  try { d = await restRpc('assistant_board_tags', { p_board_id: boardId }); }
+  catch { return; } // Board ohne Tags ist kein Fehlerfall fuer den Nutzer
+  if (token !== undefined && token !== ladeToken) return;
+  if (!d || d.fehler) return;
+  const proKarte = {};
+  const nachId = Object.fromEntries((d.tags || []).map((t) => [t.id, t]));
+  for (const z of d.karten || []) {
+    const tag = nachId[z.tag_id];
+    if (!tag) continue;
+    (proKarte[z.todo_id] ||= []).push(tag);
+  }
+  S.tags = { liste: d.tags || [], proKarte };
+  renderBoard();
+}
+
+function tagsVon(todoId) { return S.tags?.proKarte?.[todoId] || []; }
+
+// Chip-Zeile fuer Board-Kachel und Kartendetail. onWeg != null blendet das ✕ ein.
+function tagChips(todoId, onWeg) {
+  const tags = tagsVon(todoId);
+  if (!tags.length && !onWeg) return null;
+  const row = el('div', { class: 'tagrow' });
+  for (const t of tags) {
+    const f = tagFarbe(t.farbe);
+    const chip = el('span', { class: 'tagc', style: `background:${f.bg};color:${f.fg}`, title: t.name }, t.name);
+    if (onWeg) chip.append(el('button', { class: 'tagx', title: 'Tag von dieser Karte nehmen',
+      onclick: (e) => { e.stopPropagation(); onWeg(t); } }, '✕'));
+    row.append(chip);
+  }
+  return row;
+}
+
+// Tag setzen: erst die Etiketten anbieten, die es auf diesem Board schon gibt
+// (so bleibt "ARGE: SPP" ein Tag und wird nicht zu drei Schreibweisen), darunter
+// der Weg zu einem neuen.
+function tagMenu(x, y, todoId, danach) {
+  const drauf = new Set(tagsVon(todoId).map((t) => t.id));
+  const setze = async (name, farbe) => {
+    const r = await restRpc('assistant_tag_setzen', { p_todo_id: todoId, p_name: name, p_farbe: farbe })
+      .catch((e) => ({ fehler: e.message }));
+    if (r?.fehler) { uiHinweis(r.fehler); return; }
+    await danach();
+  };
+  const items = S.tags.liste.filter((t) => !drauf.has(t.id))
+    .map((t) => ({ txt: t.name, do: () => setze(t.name, t.farbe) }));
+  items.push({ txt: items.length ? '＋ Neuer Tag…' : '＋ Ersten Tag anlegen…', do: async () => {
+    const name = await uiEingabe('Name des Tags (z.B. "ARGE: SPP" oder "federführend"):');
+    if (!name?.trim()) return;
+    const farben = Object.keys(TAG_FARBEN);
+    ctxMenu(x, y, farben.map((f) => ({ txt: '● ' + f, do: () => setze(name.trim(), f) })));
+  } });
+  ctxMenu(x, y, items);
+}
+
 async function wechsle(typ, id, name) {
   S.active = { typ, id, name }; S.board = null;
   if (typ === 'radar') S.radarGeklickt = true;
@@ -1362,6 +1441,91 @@ function aussortierDialog(t, danach) {
   setTimeout(() => ta.focus());
 }
 
+// ---------- Analyse neu bewerten (Marcels Auftrag 16.09., Migration 150) ----------
+// Eine VgV-Analyse ist eine Momentaufnahme. Antworten auf Bieterfragen, ein Nachtrag zu den
+// Vergabeunterlagen oder eine gekippte Referenzlage machen sie ungueltig -- die Erst-Empfehlung
+// steht aber weiter unveraendert an der Karte. Marcels Behelf war: Datei an die Karte ziehen und
+// frei formuliert um eine neue Analyse bitten. Der Knopf nimmt das Formulieren ab und gibt dem
+// Agenten mit, WAS sich geaendert hat und WELCHE Einschaetzung er ersetzt.
+const NEUBEWERTUNG_GRUENDE = [
+  ['Neue Bieterfragen oder Antworten', 'Neue Bieterfragen/Antworten'],
+  ['Unterlagen geaendert oder nachgereicht', 'Unterlagen geändert'],
+  ['Frist oder Termine geaendert', 'Frist/Termine geändert'],
+  ['Referenzlage geaendert', 'Referenzlage geändert'],
+  ['Konstellation geaendert (GHIW/AIP/ARGE)', 'Konstellation geändert'],
+  ['Interne Neubewertung', 'Interne Neubewertung'],
+];
+
+// Anhaenge, die seit der letzten Bewertung dazugekommen sind. Anker ist die letzte
+// Neubewertung, sonst der juengste Analyse-Anhang. Rein zur ANZEIGE -- die verbindliche
+// Liste stellt die RPC selbst zusammen, damit beide nicht auseinanderlaufen koennen.
+function neueDateienSeitBewertung(d) {
+  const anh = (d.anhaenge || []).filter((a) => a.von !== 'agent' && a.am);
+  if (!anh.length) return [];
+  const anker = d.vgv?.neubewertung?.am
+    || (d.anhaenge || []).filter((a) => /^VGV[_ ]?Analyse/i.test(a.name || '')).map((a) => a.am).sort().pop();
+  if (!anker) return [];
+  return anh.filter((a) => a.am > anker);
+}
+
+function neuBewertenDialog(d, danach) {
+  const root = document.getElementById('ctx-root'); root.innerHTML = '';
+  const zu = () => { root.innerHTML = ''; };
+  const ov = el('div', { class: 'overlay', style: 'justify-content:center;align-items:center', onclick: (e) => { if (e.target === ov) zu(); } });
+  const box = el('div', { class: 'modalbox' });
+  box.append(el('div', { style: 'font-size:15px;font-weight:700;margin-bottom:2px' }, 'Analyse neu bewerten'));
+  box.append(el('div', { style: 'font-size:12px;color:#75756E;margin-bottom:12px;line-height:1.5' },
+    'Der Agent fährt die VgV-Analyse noch einmal — mit den Unterlagen, die jetzt im Verfahrensordner liegen. '
+    + 'Die bisherige Analyse bleibt im Ordner stehen; die neue sagt dir ausdrücklich, was sich gegenüber der '
+    + 'letzten Bewertung ändert und was gleich bleibt.'));
+
+  const neue = neueDateienSeitBewertung(d);
+  box.append(el('div', { class: 'slbl' }, 'Neu an der Karte seit der letzten Bewertung'));
+  box.append(neue.length
+    ? el('div', { style: 'font-size:12.5px;line-height:1.6;margin:2px 0 4px' },
+        ...neue.map((a) => el('div', {}, '📎 ' + a.name)))
+    : el('div', { style: 'font-size:12.5px;color:#8A8A83;margin:2px 0 4px;line-height:1.5' },
+        'Nichts — der Agent schaut trotzdem in „4-Bieterfragen" und „1-Unterlagen_Download" nach Nachträgen. '
+        + 'Wenn du eine Datei hast, zieh sie besser vorher auf die Karte.'));
+
+  box.append(el('div', { class: 'slbl', style: 'margin-top:12px' }, 'Was hat sich geändert? (mehrere möglich)'));
+  const gewaehlt = new Set();
+  const gRow = el('div', { style: 'display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 4px' });
+  for (const [wert, label] of NEUBEWERTUNG_GRUENDE) {
+    const b = el('button', { class: 'lernchip', onclick: () => {
+      if (gewaehlt.has(wert)) gewaehlt.delete(wert); else gewaehlt.add(wert);
+      b.classList.toggle('an', gewaehlt.has(wert));
+    } }, label);
+    gRow.append(b);
+  }
+  box.append(gRow);
+
+  box.append(el('div', { class: 'slbl', style: 'margin-top:12px' }, 'Was genau soll er berücksichtigen?'));
+  const ta = el('textarea', { class: 'autota', style: 'min-height:74px',
+    placeholder: 'Im Klartext. Z. B.: „Antwort auf Bieterfrage 7 — die Turnhalle ist doch kein eigenes Los, damit fällt unsere Los-Rechnung in der Analyse weg."' });
+  box.append(ta);
+
+  const hinweis = el('div', { style: 'font-size:11.5px;color:#8A8A83;margin-top:10px;line-height:1.5' },
+    'Der Lauf dauert so lange wie die Erst-Analyse. Anlass und Datum stehen danach als Kommentar an der Karte.');
+  box.append(hinweis);
+
+  const row = el('div', { style: 'display:flex;gap:9px;margin-top:16px;flex-wrap:wrap' });
+  const los = el('button', { class: 'btn', onclick: async () => {
+    los.disabled = true; los.textContent = 'Wird eingereiht…';
+    const r = await restRpc('assistant_vgv_neu_bewerten', {
+      p_todo_id: d.id, p_gruende: Array.from(gewaehlt), p_notiz: ta.value.trim() || null,
+    }).catch(() => ({ fehler: 'Netzwerkfehler — der Lauf wurde nicht eingereiht.' }));
+    if (r && r.fehler) { uiHinweis(r.fehler); los.disabled = false; los.textContent = 'Neu bewerten'; return; }
+    zu(); uiHinweis('Neubewertung eingereiht — der Agent meldet sich an der Karte.');
+    if (danach) await danach();
+    await ladeBoard();
+  } }, 'Neu bewerten');
+  row.append(los, el('button', { class: 'btn ghost', onclick: zu }, 'Abbrechen'));
+  box.append(row);
+  ov.append(box); root.append(ov);
+  setTimeout(() => ta.focus());
+}
+
 function spalteAutomatikDialog(sp) {
   // "Spalte programmieren": Auftrag + Quellen + Ziel. Loest NUR bei Hand-Moves aus
   // (Entscheidung Marcel 24.07.); Agenten-Moves koennen keine Automatik starten.
@@ -1996,6 +2160,16 @@ function kartenMenu(e, t) {
     items.push({ txt: '⌖ ' + (t.projekt_name ? 'Projekt ändern…' : 'Projekt zuweisen…'), do: () => setTimeout(() => projektMenu(x, y, t.id)) });
     if (t.projekt_name) items.push({ txt: '⌖ Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
   }
+  items.push({ txt: '🏷 Tag setzen…', do: () => setTimeout(() => tagMenu(x, y, t.id,
+    async () => { await ladeTags(S.board?.board_id); })) });
+  for (const tg of tagsVon(t.id)) {
+    items.push({ txt: '🏷 „' + tg.name + '" abnehmen', do: async () => {
+      const r = await restRpc('assistant_tag_entfernen', { p_todo_id: t.id, p_tag_id: tg.id })
+        .catch((err) => ({ fehler: err.message }));
+      if (r?.fehler) { uiHinweis(r.fehler); return; }
+      await ladeTags(S.board?.board_id);
+    } });
+  }
   // Auf dem VgV-Radar ist Aussortieren der normale Weg — das endgueltige Loeschen bleibt
   // daneben stehen, fuer Karten, die gar kein Verfahren sind (Notizen, Fehleintraege).
   if (S.active?.name === 'VgV-Radar' && !t.vgv_papierkorb) {
@@ -2042,6 +2216,10 @@ function renderCard(t) {
     el('span', { class: 'cdot', style: `background:${chip.dot}` }),
     chip.txt, st === 'fertig' && t.anhaenge_n ? ' 📎' : ''));
   c.append(el('div', { class: 't' }, t.titel));
+  // Tags direkt unter dem Titel: auf dem VgV-Board soll ohne Aufklappen stehen,
+  // mit wem ein Verfahren laeuft (Wunsch aus der Karte "TAGS", 17.09.).
+  const tr = tagChips(t.id, null);
+  if (tr) c.append(tr);
   // Aussortiert: was hier steht, ist gleich weg — Restzeit und Grund gehoeren aufs Deckblatt.
   const pk = papierkorbRest(t);
   if (pk) c.append(el('div', { class: 'chip', style: 'background:#E8DFC5;color:#4A3B14' },
@@ -2265,8 +2443,19 @@ function renderDrawer() {
     ]);
   } }, d.faellig ? '📅 fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : '📅 Frist setzen');
   meta.append(fristBtn);
+  // Tags: setzen und wieder abnehmen, direkt im Kopf neben Projekt und Frist.
+  meta.append(el('button', { class: 'metabtn', title: 'Tag setzen', onclick: (e) => {
+    tagMenu(e.clientX, e.clientY, d.id, async () => { await ladeTags(S.board?.board_id); renderDrawer(); });
+  } }, '🏷 Tag'));
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta);
+  const tagZeile = tagChips(d.id, async (t) => {
+    const r = await restRpc('assistant_tag_entfernen', { p_todo_id: d.id, p_tag_id: t.id })
+      .catch((err) => ({ fehler: err.message }));
+    if (r?.fehler) { uiHinweis(r.fehler); return; }
+    await ladeTags(S.board?.board_id); renderDrawer();
+  });
+  if (tagZeile) head.append(tagZeile);
   dkopf.append(head);
 
   // Zielbild-Pflicht (Loop B2): bei Zuarbeitskarten steht das WOFUER vor der Bitte.
@@ -2318,6 +2507,19 @@ function renderDrawer() {
       ban.append(el('div', { style: 'font-weight:700;font-size:13px' }, 'Erst-Empfehlung: ' + v.empfehlung));
       if (v.empfehlung_grund) ban.append(el('div', { style: 'font-size:12.5px;margin-top:3px' }, v.empfehlung_grund));
       sec.append(ban);
+    }
+    // Nach einer Neubewertung ist die Erst-Empfehlung oben ueberholt. Sie stehen zu lassen,
+    // ohne das zu sagen, waere die schlimmere Variante -- dann entscheidet jemand nach einer
+    // Einschaetzung, die der Agent selbst schon kassiert hat (Marcel 16.09.).
+    if (v.neubewertung && v.neubewertung.am) {
+      const nb = v.neubewertung;
+      const tag = new Date(nb.am).toLocaleDateString('de-DE');
+      const gr = [].concat(nb.gruende || []).filter(Boolean).join('; ');
+      sec.append(el('div', { class: 'nbhin' },
+        el('b', {}, `Neu bewertet am ${tag}` + (nb.durch ? ' durch ' + personName(nb.durch) : '')),
+        el('div', { style: 'margin-top:3px' },
+          'Maßgeblich ist die neueste Analyse an der Karte, nicht die Erst-Empfehlung oben.'
+          + (gr ? ' Anlass: ' + gr + '.' : '') + (nb.notiz ? ' ' + nb.notiz : ''))));
     }
     const kv = el('div', { class: 'vgvkv' });
     const rest = vgvRest(v.frist);
@@ -2625,7 +2827,13 @@ function renderDrawer() {
       closeDrawer(); await ladeBoard();
     } }, 'Mit Kommentar abschließen'));
   }
-  sf.append(el('button', { class: 'btn ghost', title: 'Kommt in der nächsten Ausbaustufe', disabled: '' }, 'Nachbessern'));
+  // "Neu bewerten" steht an der Stelle des frueheren, toten "Nachbessern" (Marcel 16.09.).
+  // Nur bei VgV-Karten mit Verfahrensordner: ohne Unterlagen gibt es nichts neu zu bewerten.
+  if (d.status === 'offen' && d.vgv && d.vgv.ordner) {
+    sf.append(el('button', { class: 'btn ghost',
+      title: 'Die VgV-Analyse mit dem heutigen Stand der Unterlagen noch einmal fahren',
+      onclick: () => neuBewertenDialog(d, async () => { await openCard(d.id); }) }, 'Neu bewerten…'));
+  }
   // "Nicht relevant" (Loop D): die Begruendung fliesst als Kommentar-Abschluss in die
   // Lernschleife (item_feedback via assistant_todo_abschliessen, Migration 52).
   if (d.status === 'offen' && (d.zuarbeit || d.quelle === 'agent')) {
