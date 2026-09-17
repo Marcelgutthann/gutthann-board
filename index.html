@@ -133,6 +133,12 @@ button{cursor:pointer;background:none;border:none}
   letter-spacing:.01em;padding:2px 8px;border-radius:9px;max-width:100%;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tagx{font-size:11px;line-height:1;opacity:.7;padding:0 1px}
+/* Kopf des Kartendetails: Etiketten und Anlege-Knopf sitzen rechts, vor dem Schliessen-X. */
+.tagbox{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+.tagbox .tagrow{margin-top:0}
+.tagplus{font-size:11px;font-weight:600;color:#5A5A52;background:rgba(28,28,26,.05);
+  border-radius:9px;padding:3px 9px;white-space:nowrap}
+.tagplus:hover{background:rgba(28,28,26,.1)}
 .tagx:hover{opacity:1}
 .card .vgvrow{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:nowrap;overflow:hidden}
 .card .vchip{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:2px 9px;border-radius:9px}
@@ -670,7 +676,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mu5a8qjs">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu5aewqd">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -748,7 +754,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mu5a8qjs"></script>
-<script type="module" src="dashboard.js?v=mu5a8qjs"></script>
+<script src="app.js?v=mu5aewqd"></script>
+<script type="module" src="dashboard.js?v=mu5aewqd"></script>
 </body>
 </html>
