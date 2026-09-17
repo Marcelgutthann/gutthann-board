@@ -87,6 +87,10 @@ let betSel=null,betFilter='';
 // Der Klappzustand der Bearbeitung ueberlebt das Neuladen -- wer sie einmal
 // weggeklappt hat, will sie nicht bei jedem Seitenaufruf wieder dastehen haben.
 let betFormAuf=localStorage.getItem('gb_bet_form')!=='zu';
+// Selten gebrauchte Knoepfe stehen zugeklappt: oben nur die zwei Wege, mit denen
+// eine Liste entsteht. Wer zum ersten Mal hier ist, soll nicht zwischen acht
+// gleich grossen Knoepfen raten muessen, welcher der Einstieg ist.
+let betMehrAuf=false,betListeMenuAuf=false;
 const BER_TYPEN=[['lagebericht','Lagebericht','letzte 3 Monate'],['projektakte','Projektakte','ganzes Projekt'],['zielpfad','Zielpfad','Ausblick']];
 const BER_DIM={kosten:'Kosten',termine:'Termine',planung:'Planung',bauherr:'Bauherr',team:'Team',dokumentation:'Doku/Risiko'};
 const berCls=s=>s==='danger'||s==='ueberfaellig'?'d':s==='warn'?'w':'o';
@@ -1052,45 +1056,90 @@ function renderBet(){
        (l.lph?'<span class="tab-meta">LPH '+esc(String(l.lph))+'</span>':'')+
        (l.bauabschnitt?'<span class="tab-meta">'+esc(l.bauabschnitt)+'</span>':'')+
        '</button>').join('')+
-     '<button class="bet-tab neu" data-bet="liste-neu" title="Neue Liste aus einer Vorlage anlegen">+ Liste</button>'+
+     '<button class="bet-tab neu" data-bet="liste-neu" title="Weitere Liste für dieses Projekt anlegen">+ Liste</button>'+
+     // Umbenennen, verschieben, sichern, loeschen standen frueher als fuenf
+     // Knoepfe dauerhaft neben den Reitern -- darunter das Loeschen der ganzen
+     // Liste. Jetzt liegen sie hinter einem Knopf, der sagt, was er oeffnet.
      (betListeId?'<span class="bet-tabs-rechts">'+
-       '<button class="bet-t" data-bet="liste-links" title="Reiter nach links">◂</button>'+
-       '<button class="bet-t" data-bet="liste-rechts" title="Reiter nach rechts">▸</button>'+
-       '<button class="bet-t" data-bet="liste-umbenennen" title="Liste umbenennen">✎</button>'+
-       '<button class="bet-t" data-bet="liste-vorlage" title="Diese Liste als Vorlage sichern — Gruppen und Rollen, ohne Firmen">Als Vorlage</button>'+
-       '<button class="bet-t del" data-bet="liste-loeschen" title="Diese Liste mit allen Zeilen löschen">Liste löschen</button></span>':'')+
+       '<button class="bet-t'+(betListeMenuAuf?' an':'')+'" data-bet="liste-menu" '+
+       'title="Diese Liste umbenennen, verschieben, als Vorlage sichern oder löschen">'+
+       'Diese Liste '+(betListeMenuAuf?'▴':'▾')+'</button></span>':'')+
      '</div>';
+  if(betListeId&&betListeMenuAuf)
+    h+='<div class="bet-unterbar">'+
+       '<button class="btn-sm ghost" data-bet="liste-umbenennen">Umbenennen</button>'+
+       '<button class="btn-sm ghost" data-bet="liste-links" title="Reiter eine Stelle nach links">◂ nach links</button>'+
+       '<button class="btn-sm ghost" data-bet="liste-rechts" title="Reiter eine Stelle nach rechts">nach rechts ▸</button>'+
+       '<button class="btn-sm ghost" data-bet="liste-vorlage" title="Gliederung und Rollen sichern — ohne Firmen und Personen">Als Vorlage sichern</button>'+
+       '<span class="bet-bar-sep"></span>'+
+       '<button class="btn-sm ghost warn" data-bet="liste-loeschen" title="Diese Liste mit allen Zeilen löschen">Liste löschen</button>'+
+       '</div>';
+  // Oben stehen nur die zwei Wege, die beim ersten Mal gebraucht werden.
+  // Analyse, PDF, Adressbuch-Abgleich und Verteiler sind Sonderfaelle und
+  // liegen hinter "Mehr" -- vorher standen sie gleich gross daneben.
   h+='<div class="bet-bar">'+
-     '<button class="btn-sm" data-bet="neu-eintrag" title="Öffnet das Adressbuch und legt die gewählte Firma bzw. Person in der ersten Gruppe an. Danach lässt sie sich mit den Pfeilen verschieben.">+ Firma / Person</button>'+
-     '<button class="btn-sm ghost" data-bet="neu-gruppe" title="Legt eine neue Überschrift auf oberster Ebene an">+ Gruppe</button>'+
+     '<button class="btn-sm" data-bet="neu-eintrag" title="Öffnet das Adressbuch. Die gewählte Firma oder Person wird als neue Zeile angelegt.">+ Beteiligten</button>'+
+     '<button class="btn-sm ghost" data-bet="neu-gruppe" title="Legt eine Überschrift an, unter der Beteiligte einsortiert werden — z. B. „Ausführende Firmen“">+ Überschrift</button>'+
      '<span class="bet-bar-sep"></span>'+
-     '<button class="btn-sm'+(betAnalyseAn?'':' ghost')+'" data-bet="analyse" title="'+
-       (betAnalyseAn?'Vorschläge der Tiefenanalyse wieder entfernen (von Hand Ergänztes bleibt)'
-                   :'Beteiligte aus der Tiefenanalyse übernehmen, mit dem CRM abgeglichen')+'">'+
-       (betAnalyseAn?'Analyse ✕':'Aus Analyse')+'</button>'+
-     '<button class="btn-sm ghost" data-bet="pdf">PDF einlesen</button>'+
+     '<button class="btn-sm ghost" data-bet="druck" title="Die Liste als PDF im Büro-Layout ausgeben">Drucken</button>'+
+     '<button class="btn-sm ghost'+(betMehrAuf?' an':'')+'" data-bet="mehr" '+
+       'title="Beteiligte aus Projektunterlagen oder einem PDF holen, Adressbuch auffrischen, E-Mail-Verteiler">'+
+       'Mehr '+(betMehrAuf?'▴':'▾')+'</button>'+
      '<input type="file" id="bet_pdf" accept="application/pdf,.pdf" hidden>'+
-     '<button class="btn-sm ghost" data-bet="crm-sync" id="bet_crmsync" title="Holt alle Firmen und Personen neu aus Poool in das Adressbuch (etwa 3 Minuten). Zeilen der Liste ändern sich dabei nicht."'+
-       (betCrmLauf?' disabled':'')+'>'+(betCrmLauf?'CRM-Abgleich läuft …':'CRM abgleichen')+'</button>'+
-     '<span class="bet-hint" id="bet_crmstand">'+esc(betCrmStandText())+'</span>'+
-     '<span class="bet-bar-sep"></span>'+
-     '<button class="btn-sm ghost" data-bet="verteiler">Verteiler</button>'+
-     '<button class="btn-sm ghost" data-bet="druck">Als PDF drucken</button>'+
      '<span class="bet-hint" id="bethint"></span>'+
-     '<span class="bet-filter"><input id="bet_q" placeholder="in der Liste filtern …" value="'+esc(betFilter||'')+'">'+
-     (betFilter?'<button class="bet-t" data-bet="filter-weg" title="Filter aufheben">✕</button>':'')+'</span>'+
+     '<span class="bet-filter"><input id="bet_q" placeholder="in der Liste suchen …" value="'+esc(betFilter||'')+'">'+
+     (betFilter?'<button class="bet-t" data-bet="filter-weg" title="Suche aufheben">✕</button>':'')+'</span>'+
      '</div>';
+  if(betMehrAuf)
+    h+='<div class="bet-unterbar">'+
+       '<button class="btn-sm'+(betAnalyseAn?'':' ghost')+'" data-bet="analyse" title="'+
+         (betAnalyseAn?'Die vorgeschlagenen Zeilen wieder entfernen — von Hand Ergänztes bleibt stehen'
+                     :'Sucht in den Projektunterlagen nach Beteiligten und schlägt sie als Zeilen vor')+'">'+
+         (betAnalyseAn?'Vorschläge wieder entfernen':'Vorschläge aus den Projektunterlagen')+'</button>'+
+       '<button class="btn-sm ghost" data-bet="pdf" title="Eine bestehende Beteiligtenliste als PDF einlesen">Aus PDF einlesen</button>'+
+       '<button class="btn-sm ghost" data-bet="verteiler" title="Alle E-Mail-Adressen dieser Liste in die Zwischenablage">E-Mail-Verteiler kopieren</button>'+
+       '<span class="bet-bar-sep"></span>'+
+       '<button class="btn-sm ghost" data-bet="crm-sync" id="bet_crmsync" title="Holt alle Firmen und Personen neu aus Poool in das Adressbuch (etwa 3 Minuten). Zeilen dieser Liste ändern sich dabei nicht."'+
+         (betCrmLauf?' disabled':'')+'>'+(betCrmLauf?'Adressbuch wird geholt …':'Adressbuch aus Poool auffrischen')+'</button>'+
+       '<span class="bet-hint" id="bet_crmstand">'+esc(betCrmStandText())+'</span>'+
+       '</div>';
   h+='<div class="bet-split"><div class="bet-liste">'+betListe(L)+'</div>'+
      '<aside class="bet-seite">'+betSeite()+'</aside></div></div>';
   return h;
 }
 
+// Einstieg, wenn das Projekt noch gar keine Liste hat.
+function betStartOhneListe(){
+  return '<div class="bet-start"><div class="bet-start-h">Noch keine Beteiligtenliste</div>'+
+    '<p class="bet-start-p">Eine Liste hält fest, wer am Projekt beteiligt ist — gegliedert wie der '+
+    'Ausdruck im Büro: Bauherrschaft, Planungsbeteiligte, ausführende Firmen.</p>'+
+    '<div class="bet-start-w"><button class="btn-sm" data-bet="liste-neu">Liste anlegen</button>'+
+    '<span class="bet-start-sub">Beim Anlegen lässt sich eine Vorlage wählen, die die Überschriften gleich mitbringt.</span>'+
+    '</div></div>';
+}
+
+// Einstieg in eine angelegte, aber noch leere Liste: drei Wege, jeder mit dem
+// Knopf, der ihn startet.
+function betStart(){
+  const weg=(nr,titel,text,aktion,knopf)=>
+    '<div class="bet-start-w"><span class="bet-start-nr">'+nr+'</span>'+
+    '<div><div class="bet-start-t">'+titel+'</div><div class="bet-start-sub">'+text+'</div>'+
+    '<button class="btn-sm'+(nr===1?'':' ghost')+'" data-bet="'+aktion+'">'+knopf+'</button></div></div>';
+  return '<div class="bet-start"><div class="bet-start-h">Diese Liste ist noch leer</div>'+
+    '<p class="bet-start-p">Drei Wege führen zum ersten Eintrag — sie lassen sich auch mischen.</p>'+
+    weg(1,'Aus dem Adressbuch','Firma oder Person suchen und als Zeile übernehmen. Der gewohnte Weg.',
+        'neu-eintrag','+ Beteiligten')+
+    weg(2,'Aus einem bestehenden PDF','Eine frühere Beteiligtenliste einlesen; die Zeilen lassen sich vor der Übernahme prüfen.',
+        'pdf','Aus PDF einlesen')+
+    weg(3,'Erst die Gliederung','Überschriften anlegen und später füllen — z. B. „Ausführende Firmen“.',
+        'neu-gruppe','+ Überschrift')+
+    '</div>';
+}
+
 function betListe(L){
-  if(!L.length)return '<div class="bet-leer">'+(betListeId
-    ?'Diese Liste ist noch leer.<br>Mit „+ Firma / Person“ füllen, ein bestehendes PDF einlesen '+
-     'oder „+ Gruppe“ für eine eigene Überschrift.'
-    :'Für dieses Projekt ist noch keine Liste angelegt.<br>Oben auf „+ Liste“ — dort lässt sich eine Vorlage wählen, '+
-     'die die Gruppen gleich mitbringt.')+'</div>';
+  // Leere Liste: statt eines Satzes, der auf Knoepfe oben verweist, stehen die
+  // drei Wege hier als Knoepfe. Wer zum ersten Mal hier ist, muss nichts suchen.
+  if(!L.length)return betListeId?betStart():betStartOhneListe();
   const f=(betFilter||'').toLowerCase().trim();
   const passt=r=>!f||[r.titel,r.firma,betName(r),r.ort,r.nummer].filter(Boolean).join(' ').toLowerCase().includes(f);
   // Beim Filtern verschwinden Gruppen ohne Treffer; ohne Filter gilt das Ein-/Ausklappen.
@@ -1110,7 +1159,11 @@ function betListe(L){
          '<span class="bet-g-nr">'+(kinder.length?(zu(r.id)&&!f?'▸ ':'▾ '):'')+esc(r.nummer)+'</span>'+
          '<span class="bet-g-t">'+esc(r.titel||'(ohne Titel)')+'</span>'+
          (n?'<span class="bet-g-n">'+n+'</span>':'')+
-         '<button class="bet-t" data-betadd="'+r.id+'" title="Beteiligten in dieser Gruppe anlegen">+</button></div>';
+         '<span class="z-akt">'+
+           '<button class="bet-t" data-betup="'+r.id+'" title="Überschrift samt Inhalt eine Stelle nach oben">↑</button>'+
+           '<button class="bet-t" data-betdown="'+r.id+'" title="Überschrift samt Inhalt eine Stelle nach unten">↓</button>'+
+           '<button class="bet-t wort" data-betadd="'+r.id+'" title="Hier einen Beteiligten einsortieren">+ Beteiligter</button>'+
+         '</span></div>';
       return;}
     gezeigt++;
     const K=betKont(r),nm=betName(r);
@@ -1136,6 +1189,15 @@ function betListe(L){
          (r.quelle==='crm'?'<span class="bet-tag crm">CRM</span>':'')+
          (r.quelle==='pdf'?'<span class="bet-tag pdf">PDF</span>':'')+
          (r.quelle==='analyse'?'<span class="bet-tag an">Analyse</span>':'')+
+       '</span>'+
+       // Verschieben und Ergaenzen direkt an der Zeile. Beides gab es vorher
+       // nur rechts im Detail -- Marcel und die Kollegen haben es dort nicht
+       // gefunden und dachten, neue Zeilen liessen sich nicht einsortieren.
+       '<span class="z-akt">'+
+         '<button class="bet-t" data-betup="'+r.id+'" title="eine Zeile nach oben">↑</button>'+
+         '<button class="bet-t" data-betdown="'+r.id+'" title="eine Zeile nach unten">↓</button>'+
+         '<button class="bet-t" data-betfill="'+r.id+'" title="'+
+           (r.firma?'Ansprechpartner dieser Firma ergänzen':'Firma aus dem Adressbuch einsetzen')+'">+</button>'+
        '</span></div>';});
   if(f&&!gezeigt)h='<div class="bet-leer">Kein Eintrag passt zu „'+esc(betFilter)+'“.</div>';
   return h;
@@ -1298,13 +1360,11 @@ function betUebersicht(){
 function betDetail(r){
   const K=betKont(r),nm=betName(r),adr=betAdr(r);
   const ico=k=>k.art==='email'?'✉':k.art==='fax'?'Fax':k.art==='web'?'Web':k.art==='mobil'?'Mobil':'☎';
+  // Die vier Symbolpfeile standen hier ohne Beschriftung und wurden nicht
+  // verstanden. Reihenfolge aendert man jetzt an der Zeile selbst (↑ ↓), die
+  // Ebene ueber das Feld "Steht unter" in der Bearbeitung darunter.
   return '<div class="bet-p">'+
-    '<div class="bet-p-kopf"><span>'+esc(r.nummer)+(r.art==='gruppe'?' · Gruppe':'')+'</span>'+
-      '<span class="bet-move">'+
-        '<button class="bet-t" data-betup="'+r.id+'" title="nach oben">↑</button>'+
-        '<button class="bet-t" data-betdown="'+r.id+'" title="nach unten">↓</button>'+
-        '<button class="bet-t" data-betout="'+r.id+'" title="ausrücken">←</button>'+
-        '<button class="bet-t" data-betin="'+r.id+'" title="einrücken">→</button></span></div>'+
+    '<div class="bet-p-kopf"><span>'+esc(r.nummer)+(r.art==='gruppe'?' · Überschrift':'')+'</span></div>'+
     '<div class="bet-p-titel">'+esc(r.titel||'—')+'</div>'+
     (r.firma?'<div class="bet-p-sub">'+esc(r.firma)+'</div>':'')+
     (nm?'<div class="bet-p-sub">'+esc(nm)+(r.funktion?' · '+esc(r.funktion):'')+'</div>':'')+
@@ -1344,6 +1404,26 @@ function betAktionen(r){
     '<button class="btn-sm ghost warn weit" data-betdel="'+r.id+'">Löschen</button></div>';
 }
 
+// Auswahl fuer "Steht unter". Angeboten wird die ganze Liste; ausgenommen sind
+// nur die Zeile selbst und ihre Nachfahren -- sonst haengt sich ein Zweig in
+// sich selbst. Es gibt bewusst KEINE Regel, dass darueber eine Firma stehen
+// muesste: eine Person darf unter einer Rolle haengen, eine Rolle unter einer
+// Person, eine Untergruppe unter irgendetwas.
+function betParentOpt(e){
+  const tabu=new Set();
+  if(e.id){const sammle=id=>{tabu.add(id);betL.filter(r=>r.parent_id===id).forEach(x=>sammle(x.id));};sammle(e.id);}
+  const akt=e.parent_id||'';
+  let h='<option value=""'+(akt?'':' selected')+'>— ganz oben, unter keiner Überschrift —</option>';
+  (betL||[]).forEach(r=>{
+    if(tabu.has(r.id))return;
+    const ein='   '.repeat(Math.min(r.tiefe||0,3));
+    const name=r.titel||r.firma||betName(r)||'(ohne Titel)';
+    const zusatz=r.art==='gruppe'?'':(r.titel&&r.firma?' · '+r.firma:'');
+    h+='<option value="'+r.id+'"'+(r.id===akt?' selected':'')+'>'+
+       ein+esc((r.nummer?r.nummer+'  ':'')+name+zusatz)+'</option>';});
+  return h;
+}
+
 // Formular: alle Felder eines Knotens. Ohne id wird angelegt, sonst geaendert.
 // eingebettet = das Formular steht unter dem Detail derselben Zeile. Dann gibt
 // es nichts zu schliessen und nichts abzubrechen: eine andere Zeile anklicken
@@ -1364,9 +1444,14 @@ function betForm(e,eingebettet){
        '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></div>';
   }
   h+='<div class="bet-fgrid">';
-  h+='<label class="bf w2">'+(isG?'Gruppentitel':'Rolle im Projekt')+
+  h+='<label class="bf w2">'+(isG?'Überschrift':'Rolle im Projekt')+
      '<input id="bf_titel" list="bf_rollen" value="'+esc(e.titel||'')+'" placeholder="'+(isG?'z. B. Ausführende Firmen':'z. B. Fachplanung Statik')+'"></label>';
   h+='<datalist id="bf_rollen">'+betRollen.map(r=>'<option value="'+esc(r.rolle)+'">').join('')+'</datalist>';
+  // Wohin die Zeile gehoert, war bisher nur ueber die Pfeile im Kopf zu
+  // aendern -- eine Zeile nach der anderen. Hier steht der Ort als Auswahl:
+  // jede Ueberschrift und jede Zeile kann uebergeordnet sein, auch eine ohne
+  // Firma. Beim Anlegen entscheidet sie, wo die neue Zeile landet.
+  h+='<label class="bf w2">Steht unter<select id="bf_parent">'+betParentOpt(e)+'</select></label>';
   h+='<label class="bf">Nummer<input id="bf_nummer" value="'+esc(e.nummer_manuell||'')+'" placeholder="'+esc(e.nummer||'automatisch')+'"></label>';
   if(!isG){
     h+='<label class="bf">Status<select id="bf_status">'+opt([['aktiv','aktiv'],['offen','noch offen'],['ausgeschieden','ausgeschieden']],e.status||'aktiv')+'</select></label>';
@@ -1493,7 +1578,8 @@ function betFormLesen(){
     const w=z.querySelector('.bf-kval').value.trim();
     if(w)konts.push({art:z.querySelector('.bf-kart').value,kontext:z.querySelector('.bf-kctx').value,wert:w});});
   const isG=betEdit&&betEdit.art==='gruppe';
-  const d={art:isG?'gruppe':'eintrag',titel:g('bf_titel')||null,nummer_manuell:g('bf_nummer')||null};
+  const d={art:isG?'gruppe':'eintrag',titel:g('bf_titel')||null,nummer_manuell:g('bf_nummer')||null,
+           parent_id:g('bf_parent')||null};
   if(!isG)Object.assign(d,{firma:g('bf_firma')||null,anrede:g('bf_anrede')||null,namenstitel:g('bf_namenstitel')||null,
     vorname:g('bf_vorname')||null,nachname:g('bf_nachname')||null,funktion:g('bf_funktion')||null,
     strasse:g('bf_strasse')||null,plz:g('bf_plz')||null,ort:g('bf_ort')||null,notiz:g('bf_notiz')||null,
@@ -1543,8 +1629,13 @@ async function betSpeichern(){
   if(ziel){d.nummer_manuell=null;d.parent_id=ziel.parent;}
   else if(/^\d+(\.\d+)+$/.test(d.nummer_manuell||'')){
     betHinweis('Zu „'+d.nummer_manuell+'“ gibt es keinen übergeordneten Punkt — die Nummer bleibt nur Anzeige.');}
-  const parent=ziel?ziel.parent:(betEdit.parent_id||null);
+  // Ort: die eingetippte Nummer geht vor, sonst die Auswahl "Steht unter".
+  const parent=ziel?ziel.parent:(d.parent_id||null);
   const gesch=ziel?ziel.gesch:betL.filter(r=>(r.parent_id||null)===parent&&r.id!==betEdit.id);
+  // Umgehaengt ohne Ortsangabe -> ans Ende des neuen Zweigs, sonst behaelt die
+  // Zeile ihre alte pos und landet dort an zufaelliger Stelle.
+  const umgehaengt=!!betEdit.id&&!ziel&&(betEdit.parent_id||null)!==parent;
+  if(umgehaengt)d.pos=(gesch.length+1)*10;
   let id=betEdit.id;
   if(id){
     const{error}=await sb.from('beteiligte').update(d).eq('id',id);
@@ -1879,12 +1970,16 @@ async function betPdfUebernehmen(){
 function betCrmPanel(){
   if(betCrmFirma)return betCrmFirmaPanel();
   const f=(id,label)=>'<button class="bet-crm-f'+(betCrmFilter===id?' an':'')+'" data-crmfilter="'+(id||'')+'">'+label+'</button>';
-  let h='<div class="bet-p"><div class="bet-p-kopf">Adressbuch'+
-    '<span>'+(betEdit?'<button class="bet-t" data-bet="crm-zu" title="ohne Adressbuch weiter">von Hand eintragen ›</button>':'')+
-    '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></span></div>'+
+  // Der Weg ohne Adressbuch stand als graues Kleingedrucktes im Kopf und wurde
+  // uebersehen -- wer eine Firma eintragen will, die im Poool nicht steht, sass
+  // fest. Jetzt ist er ein gleichwertiger Knopf unter der Suche.
+  let h='<div class="bet-p"><div class="bet-p-kopf">Aus dem Adressbuch wählen'+
+    '<button class="bet-t" data-bet="abbrechen" title="schließen">✕</button></div>'+
     '<div class="bet-crm-box"><input id="bf_crmq" placeholder="Firma, Nachname oder Ort" value="'+esc(betCrmQ||'')+'">'+
     '<button class="btn-sm" data-bet="crm-suche">Suchen</button></div>'+
     '<div class="bet-crm-filter">'+f(null,'Alle')+f('lieferant','Firmen &amp; Planer')+f('kunde','Auftraggeber')+f('intern','Eigenes Büro')+'</div>'+
+    (betEdit?'<div class="bet-crm-frei"><span>Nicht im Adressbuch, oder nur ein Name ohne Firma?</span>'+
+      '<button class="btn-sm ghost" data-bet="crm-zu">Zeile selbst ausfüllen</button></div>':'')+
     '<div id="bf_crmres" class="bet-crm-res"></div></div>';
   return h;
 }
@@ -2131,12 +2226,21 @@ function wireBet(){
     else if(a==='crm-auf'){betCrmOffen=true;betCrmFirma=null;betNurSeite();return;}
     else if(a==='crm-zu'){betCrmOffen=false;betCrmFirma=null;betNurSeite();return;}
     else if(a==='del-nein'){betLoeschFrage=null;betNurSeite();return;}
+    // Die zwei Klappleisten: "Mehr" haelt die Sonderwege, "Diese Liste" die
+    // Arbeit am Reiter. Beide aendern die Kopfzeile, deshalb voll neu zeichnen.
+    else if(a==='mehr'){betMehrAuf=!betMehrAuf;neuZeichnen();return;}
+    else if(a==='liste-menu'){betListeMenuAuf=!betListeMenuAuf;neuZeichnen();return;}
     else if(a==='liste-neu'){betNeueListe={modus:'neu'};betEdit=null;betCrmOffen=false;betSel=null;}
-    else if(a==='liste-umbenennen'){betNeueListe={modus:'umbenennen'};betEdit=null;betCrmOffen=false;}
-    else if(a==='liste-vorlage'){betNeueListe={modus:'vorlage'};betEdit=null;betCrmOffen=false;}
+    // Nach einer gewaehlten Aktion klappt das Listenmenue wieder zu -- sonst
+    // steht es offen, waehrend rechts schon das Formular dazu wartet.
+    else if(a==='liste-umbenennen'){betNeueListe={modus:'umbenennen'};betEdit=null;betCrmOffen=false;
+      betListeMenuAuf=false;neuZeichnen();return;}
+    else if(a==='liste-vorlage'){betNeueListe={modus:'vorlage'};betEdit=null;betCrmOffen=false;
+      betListeMenuAuf=false;neuZeichnen();return;}
     else if(a==='liste-abbrechen'){betNeueListe=null;}
     else if(a==='liste-speichern'){await betListeSpeichern();return;}
-    else if(a==='liste-loeschen'){betLoeschFrage='LISTE';betNeueListe=null;betEdit=null;betCrmOffen=false;}
+    else if(a==='liste-loeschen'){betLoeschFrage='LISTE';betNeueListe=null;betEdit=null;betCrmOffen=false;
+      betListeMenuAuf=false;neuZeichnen();return;}
     else if(a==='liste-loeschen-ok'){await betListeLoeschen();return;}
     else if(a==='liste-links'){await betListeSchieben(-1);return;}
     else if(a==='liste-rechts'){await betListeSchieben(1);return;}
