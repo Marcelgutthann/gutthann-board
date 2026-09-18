@@ -278,7 +278,7 @@ async function renderCockpit(){el('crumb').textContent='Cockpit';
 
 async function renderProject(){
   const td=today();
-  const[{data:proj},{data:tasks},{data:comms},{count:docCount},{data:recent},{data:folders},{data:costDocs},{data:fbRows}]=await Promise.all([
+  const[{data:proj},{data:tasks},{data:comms},{count:docCount},{data:recent},{data:folders},{data:costDocs},{data:fbRows},{data:abdeckung}]=await Promise.all([
     sb.from('projects').select('id,name,lph,dashboard,dashboard_stand,doku_check,checklist,lph1,lph1_stand,lph_kataloge,angebote_check,angebote_stand,termin_check,termin_stand,ziele,kennzahlen,kennzahlen_stand').eq('id',current).single(),
     sb.from('tasks').select('id,title,status,prio,kategorie,assignee,due_date,meta').eq('project_id',current).order('prio'),
     sb.from('communications').select('id,typ,betreff,empfaenger,empfaenger_email,status,frist,betrag,meta').eq('project_id',current),
@@ -286,7 +286,8 @@ async function renderProject(){
     sb.from('documents').select('filename,doctype,modified_at').eq('project_id',current).not('modified_at','is',null).order('modified_at',{ascending:false}).limit(12),
     sb.rpc('folder_stats',{pid:current}),
     sb.from('documents').select('filename,modified_at').eq('project_id',current).or('filename.ilike.%kosten%,filename.ilike.%din%276%,filename.ilike.%honorar%,filename.ilike.%angebot%,filename.ilike.%nachtrag%').order('modified_at',{ascending:false}).limit(15),
-    sb.from('item_feedback').select('item_type,item_title,kommentar').eq('project_id',current).order('created_at')]);
+    sb.from('item_feedback').select('item_type,item_title,kommentar').eq('project_id',current).order('created_at'),
+    sb.from('wissens_abdeckung').select('dokumente,mit_text,mit_embedding,text_pct,embedding_pct,soll_bestand,ballast,letzter_ingest').eq('project_id',current).maybeSingle()]);
   if(!proj){go('cockpit');return;}
   await betLaden();
   currentName=proj.name;lastD=proj.dashboard||{};lastStand=proj.dashboard_stand;lastChecklist=proj.checklist||{};lastL1=proj.lph1||null;renderSidebar();
@@ -313,7 +314,7 @@ async function renderProject(){
   h+='<div class="kpi-strip">'+kpi('accent','Aktive Phase',lph?gl('LPH')+' '+lph:'—','','HOAI § 34')+
     kpi(kostenVal?'':'','Kosten aktuell',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio €':'',kostenSub,kostenBar)+
     kpi(cOver?'alert':'','Überfällige Vorgänge',cOver,'',cOver?'Nachhaken nötig · '+cOpen+' offen gesamt':(cOpen?cOpen+' offen · nichts überfällig':'nichts offen'))+
-    kzKpi(proj.kennzahlen,kostenVal)+'</div>';
+    kzKpi(proj.kennzahlen,kostenVal)+abKpi(abdeckung)+'</div>';
   h+='<nav class="pilgrim"><div class="pilgrim-label">Leistungsphasen HOAI · klick zum Setzen der aktiven Phase</div><div class="pilgrim-track"><div class="pilgrim-line"></div><div class="pilgrim-line-progress" style="width:'+(lph?((lph-1)/8*89+5.5):0)+'%"></div>';
   for(let i=1;i<=9;i++){const cl=lph&&i<lph?'done':lph&&i===lph?'active':'';h+='<div class="pilgrim-station '+cl+'" data-lph="'+i+'"><div class="pilgrim-dot">'+i+'</div><div class="pilgrim-labelset">'+LPH[i-1]+'</div></div>';}
   h+='</div></nav>';
@@ -418,6 +419,17 @@ function dm(val,size,color){return '<span class="dm" style="font-family:var(--f-
 function kpi(cl,label,val,unit,sub,extra){const col=cl==='alert'?'var(--c-danger)':cl==='warn'?'var(--c-warning)':'var(--c-navy-900)';
   const v=/^[0-9][0-9.,-]*$/.test(String(val))?dm(val,3.1,col):val;
   return '<div class="kpi '+cl+'"><div class="kpi-label">'+label+'</div><div class="kpi-value">'+v+(unit?'<span class="kpi-unit">'+unit+'</span>':'')+'</div><div class="kpi-sub">'+sub+'</div>'+(extra||'')+'</div>';}
+// Wissensabdeckung (Migration 171): wie viel des Bestands das System wirklich lesen kann.
+// Nenner ist der Soll-Bestand -- Textdokumente. Fotos und CAD-Plaene stehen daneben, damit
+// niemand eine Quote sieht, die von Bildern nach unten gezogen wird.
+function abKpi(a){
+  if(!a||!a.soll_bestand)return kpi('','Wissensabdeckung','—','','noch nichts eingelesen');
+  const p=+a.embedding_pct,n=v=>(+v).toLocaleString('de-DE');
+  const sub=n(a.mit_embedding)+' von '+n(a.soll_bestand)+' Textdokumenten durchsuchbar'+
+    (a.ballast?' · '+n(a.ballast)+' Bilder/Pläne ohne Text':'')+
+    (a.letzter_ingest?' · Stand '+fmtD(a.letzter_ingest):'');
+  return kpi(p<50?'alert':p<80?'warn':'','Wissensabdeckung',p,'%',sub);
+}
 // ---------- Projekt-Kennzahlen (Hardfacts, Migration 47) ----------
 // Jedes Feld hat die Form {wert, quelle, stand, status}. kzW() holt den Wert, kzF() formatiert.
 function kzW(g,k){const f=g&&g[k];return f&&typeof f==='object'&&f.wert!==null&&f.wert!==undefined&&f.wert!==''?f:null;}
