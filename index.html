@@ -651,6 +651,17 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 
 /* ---- Mein Radar (Startansicht): alles Offene einer Person, nach Bereich ---- */
 #radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
+#dev-root{flex:1;min-height:0;overflow:auto;padding:2px 0 28px}
+#dev-root[hidden]{display:none}
+#dev-root .dsec{margin-left:0;margin-right:0;max-width:900px}
+#dev-root .devta{width:100%;min-height:86px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:11px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
+#dev-root .devfeld{width:100%;font:inherit;font-size:13px;padding:8px 11px;border:1px solid rgba(28,28,26,.16);border-radius:8px;background:#FBFBF9;color:#1C1C1A}
+#dev-root .devstand{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6E6E67}
+#dev-root .devfrage{padding:11px 0;border-top:1px solid rgba(28,28,26,.09)}
+#dev-root .devfrage:first-of-type{border-top:0}
+#dev-root .devtext{font-size:13.5px;line-height:1.55;color:#33332F;white-space:pre-wrap}
+#dev-root .devmeta{font-size:12px;color:#75756E;margin-top:6px}
+#dev-root .devwarn{font-size:13px;line-height:1.5;color:#8A5606}
 .rkpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,220px));gap:10px;padding:2px 0 16px}
 /* Kennzahlen nach Datum-Muster (agentic-os/app/dashboard.css, .kpi-strip/.kpi):
    weisse randlose Karte, Label oben, 31px Space-Grotesk-Zahl, Unterzeile fuer den
@@ -722,7 +733,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mu6p05zx">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu6p84lo">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -766,6 +777,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
     <div class="boardwrap" id="board"></div>
     <!-- Mein Radar: persoenliche Startansicht ueber alle Bereiche (Migration 103) -->
     <div id="radar-root" hidden></div>
+    <!-- DEV: das Wunschbuch. Sieht aus wie das Kartendetail (weisse Blaetter, .dsec),
+         damit es keine zweite Formsprache in der App gibt. -->
+    <div id="dev-root" hidden></div>
     <!-- Projekt-Dashboard: eigener Container, damit die Dashboard-Styles (auf
          #dash-root gekapselt) das Board nicht anfassen. Die oberste Leiste des
          Dashboards bleibt verborgen -- Marke, Konto und Abmelden stehen in der
@@ -800,7 +814,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mu6p05zx"></script>
-<script type="module" src="dashboard.js?v=mu6p05zx"></script>
+<script src="app.js?v=mu6p84lo"></script>
+<script type="module" src="dashboard.js?v=mu6p84lo"></script>
 </body>
 </html>
