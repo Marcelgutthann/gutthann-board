@@ -657,12 +657,32 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #dev-root .dsec{margin-left:0;margin-right:0;max-width:900px}
 #dev-root .devta{width:100%;min-height:86px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:11px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
 #dev-root .devfeld{width:100%;font:inherit;font-size:13px;padding:8px 11px;border:1px solid rgba(28,28,26,.16);border-radius:8px;background:#FBFBF9;color:#1C1C1A}
-#dev-root .devstand{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6E6E67}
-#dev-root .devfrage{padding:11px 0;border-top:1px solid rgba(28,28,26,.09)}
-#dev-root .devfrage:first-of-type{border-top:0}
-#dev-root .devtext{font-size:13.5px;line-height:1.55;color:#33332F;white-space:pre-wrap}
-#dev-root .devmeta{font-size:12px;color:#75756E;margin-top:6px}
-#dev-root .devwarn{font-size:13px;line-height:1.5;color:#8A5606}
+#dev-root .devtext{font-size:13.5px;line-height:1.55;color:#33332F;white-space:pre-wrap;max-width:68ch}
+#dev-root .devmeta{font-size:12px;color:#75756E;margin-top:8px}
+#dev-root .devwarn{font-size:13px;line-height:1.5;color:#8A5606;margin-top:8px}
+/* Liste: eine Zeile je Wunsch. Rechts steht, was als naechstes passiert — das ist
+   die Spalte, die Marcel ueberfliegt, deshalb steht sie buendig und nicht im Fliesstext. */
+#dev-root .devliste{padding-bottom:4px}
+#dev-root .devzeile{display:flex;align-items:baseline;gap:18px;padding:11px 0;border-top:1px solid rgba(28,28,26,.09);cursor:pointer}
+#dev-root .devzeile:first-of-type{border-top:0}
+#dev-root .devzeile:hover .devztitel{color:#000}
+#dev-root .devztitel{font-size:14px;line-height:1.45;color:#1C1C1A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+#dev-root .devzstand{font-size:12px;color:#75756E;white-space:nowrap}
+#dev-root .devzstand.dran{color:#8A5606;font-weight:600}
+/* Detail */
+#dev-root .devzurueck{font-size:12.5px;color:#6E6E67;padding:10px 2px 4px}
+#dev-root .devzurueck:hover{color:#1C1C1A}
+#dev-root .devtitel{font-size:19px;line-height:1.35;font-weight:600;color:#1C1C1A;letter-spacing:-.01em}
+/* Das eine, was jetzt dran ist. Kein Farbbalken — nur ein waermerer Grund. */
+#dev-root .devdran{background:#FCFBF6;border-color:rgba(138,86,6,.22)}
+#dev-root .devgross{font-size:16px;line-height:1.5;color:#1C1C1A;max-width:60ch;margin-bottom:12px}
+#dev-root .devklapp{border-top:1px solid rgba(28,28,26,.09);padding:10px 0 2px}
+#dev-root .devklapp:first-of-type{border-top:0;padding-top:0}
+#dev-root .devklapp>summary{font-size:12.5px;color:#6E6E67;cursor:pointer;list-style:none}
+#dev-root .devklapp>summary::-webkit-details-marker{display:none}
+#dev-root .devklapp>summary::before{content:'›';display:inline-block;width:12px;transition:transform .15s ease}
+#dev-root .devklapp[open]>summary::before{transform:rotate(90deg)}
+#dev-root .devklapp>summary:hover{color:#1C1C1A}
 .rkpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,220px));gap:10px;padding:2px 0 16px}
 /* Kennzahlen nach Datum-Muster (agentic-os/app/dashboard.css, .kpi-strip/.kpi):
    weisse randlose Karte, Label oben, 31px Space-Grotesk-Zahl, Unterzeile fuer den
@@ -734,7 +754,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mu6pjbiz">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mu6px94y">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -815,7 +835,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mu6pjbiz"></script>
-<script type="module" src="dashboard.js?v=mu6pjbiz"></script>
+<script src="app.js?v=mu6px94y"></script>
+<script type="module" src="dashboard.js?v=mu6px94y"></script>
 </body>
 </html>
