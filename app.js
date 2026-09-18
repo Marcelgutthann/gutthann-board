@@ -3166,9 +3166,16 @@ function liveFenster() {
   p.append(kopf);
   const liste = el('div', { class: 'lliste' });
   if (!S.live.zeilen.length) liste.append(el('div', { class: 'lleer' }, 'Sprich einfach los — hier steht mit, was gesagt wird.'));
-  const WER = { nutzer: 'Du', assistent: 'Moderator', backend: 'Backend', hinweis: 'Hinweis', fehler: 'Fehler' };
-  for (const zl of S.live.zeilen) liste.append(el('div', { class: 'lzeile ' + zl.rolle },
-    el('span', { class: 'lzeit' }, zl.zeit), el('span', { class: 'lwer' }, WER[zl.rolle]), el('span', { class: 'ltxt' }, zl.text)));
+  const WER = { nutzer: 'Du', assistent: 'Moderator', backend: 'Backend', hinweis: 'Hinweis', fehler: 'Fehler', ruecknahme: 'Karte' };
+  for (const zl of S.live.zeilen) {
+    const zeile = el('div', { class: 'lzeile ' + zl.rolle },
+      el('span', { class: 'lzeit' }, zl.zeit), el('span', { class: 'lwer' }, WER[zl.rolle]), el('span', { class: 'ltxt' }, zl.text));
+    if (zl.ruecknahme && !zl.ruecknahme.erledigt) {
+      zeile.append(el('button', { class: 'lzurueck', onclick: () => liveRuecknahme(zl) },
+        zl.ruecknahme.laeuft ? 'nimmt zurück …' : 'Rückgängig'));
+    }
+    liste.append(zeile);
+  }
   p.append(liste);
   liste.scrollTop = liste.scrollHeight;
 }
@@ -3189,6 +3196,61 @@ function liveZeile(rolle, text, ev) {
   }
 }
 function liveFehler(text) { console.error('[live]', text); if (S.live) liveZeile('fehler', String(text)); else uiHinweis(text); }
+
+// Diktat an der offenen Karte (18.09.2026, Marcels Ansage: "er soll waehrend ich in einer
+// Karte drin bin parallel das reinschreiben"). Geschrieben wird sofort, nicht auf Zuruf
+// bestaetigt -- damit das gefahrlos bleibt, merkt sich der Browser den Stand der Karte VOR
+// der Delegation und vergleicht danach. Was neu ist, bekommt einen Rueckgaengig-Knopf im
+// Sprachfenster. Verglichen wird nur, wenn dieselbe Karte noch offen ist; hat Marcel
+// inzwischen weitergeklickt, fasst der Browser nichts an.
+const LIVE_SCHREIBWERKZEUG = /(todo_bearbeiten|todo_verschieben|todo_zuweisen|todo_projekt|unterpunkt_|kommentar_|tag_|vorschlag_entscheiden)/;
+function liveKartenstand() {
+  const d = S.detail;
+  if (!d) return null;
+  return { id: d.id, titel: d.titel, notiz: d.notiz, faellig: d.faellig,
+    unterpunkte: (d.unterpunkte || []).map((u) => u.id),
+    kommentare: (d.kommentare || []).map((k) => k.id) };
+}
+async function liveNachziehen(werkzeuge, vorher) {
+  if (!Array.isArray(werkzeuge) || !werkzeuge.some((w) => LIVE_SCHREIBWERKZEUG.test(String(w)))) return;
+  if (!vorher || S.detail?.id !== vorher.id) return;
+  await openCard(vorher.id);
+  const d = S.detail;
+  if (!d || d.id !== vorher.id) return;
+  const neueUp = (d.unterpunkte || []).filter((u) => !vorher.unterpunkte.includes(u.id));
+  const neueKom = (d.kommentare || []).filter((k) => !vorher.kommentare.includes(k.id));
+  const textGeaendert = d.titel !== vorher.titel || d.notiz !== vorher.notiz || d.faellig !== vorher.faellig;
+  if (!neueUp.length && !neueKom.length && !textGeaendert) return;
+  const was = [
+    neueUp.length ? neueUp.length + (neueUp.length > 1 ? ' Unterpunkte' : ' Unterpunkt') : '',
+    neueKom.length ? neueKom.length + (neueKom.length > 1 ? ' Kommentare' : ' Kommentar') : '',
+    textGeaendert ? 'Text der Karte' : '',
+  ].filter(Boolean).join(', ');
+  liveZeile('ruecknahme', 'Neu in der Karte: ' + was + '.');
+  S.live.zeilen[S.live.zeilen.length - 1].ruecknahme = {
+    karte: vorher, neueUp: neueUp.map((u) => u.id), neueKom: neueKom.map((k) => k.id), textGeaendert };
+  liveFenster();
+}
+async function liveRuecknahme(zeile) {
+  const r = zeile.ruecknahme;
+  if (!r || r.laeuft || r.erledigt) return;
+  r.laeuft = true; liveFenster();
+  try {
+    for (const id of r.neueUp) await mut('unterpunkt_loeschen', { unterpunkt_id: id });
+    for (const id of r.neueKom) await mut('kommentar_loeschen', { kommentar_id: id });
+    if (r.textGeaendert) {
+      await mut('todo_update', { todo_id: r.karte.id, titel: r.karte.titel, notiz: r.karte.notiz ?? '',
+        faellig: r.karte.faellig || null, faellig_leeren: !r.karte.faellig });
+    }
+    r.erledigt = true;
+    zeile.text = 'Zurückgenommen: ' + zeile.text.replace(/^Neu in der Karte: /, '');
+    if (S.detail?.id === r.karte.id) await openCard(r.karte.id);
+  } catch (e) {
+    r.laeuft = false;
+    liveFehler('Rücknahme: ' + e.message);
+  }
+  liveFenster();
+}
 
 async function liveFetch(url, body, retried = false) {
   const r = await fetch(url, { method: 'POST',
@@ -3292,8 +3354,13 @@ async function liveDelegation(ev) {
   const lebenszeichen = setTimeout(() => {
     liveSenden({ type: 'session.commentary.append', delegation_id: id, content: 'Ich bin noch dran, das dauert einen Moment.' });
   }, 20000);
+  const vorher = liveKartenstand();
   try {
-    text = (await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt() })).text || '';
+    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt() });
+    text = antwort.text || '';
+    // Hat das Backend an der Karte geschrieben, zieht der Drawer sofort nach -- Marcel
+    // soll das Ergebnis sehen, ohne die Karte neu zu oeffnen.
+    await liveNachziehen(antwort.werkzeuge, vorher).catch((e) => console.warn('[live] nachziehen:', e));
   } catch (e) {
     liveFehler('Backend: ' + e.message);
     text = 'Das Backend hat nicht geantwortet. Bitte später noch einmal versuchen.';
