@@ -3453,15 +3453,27 @@ const LIVE_ANSICHTEN = { aufgaben: 'board', board: 'board', karten: 'board', das
 // Formularelemente, Elemente mit eigenem onclick, und alles, was der Zeiger als klickbar
 // ausweist. Diese Liste geht mit jeder Delegation an live-backend (Feld `sicht`), und
 // dieselbe Liste bedient anschliessend den Klick -- was Tony sieht, kann er auch drücken.
-const LIVE_SICHT_MAX = 120;
+const LIVE_SICHT_MAX = 200;
 function liveBeschriftung(e) {
   // Der sichtbare Text gewinnt: der Mensch sagt, was er liest. Ein title-Attribut ist
   // oft ein ganzer Erklärsatz (der DEV-Knopf trägt einen) und würde „DEV" verdecken.
-  if (e.tagName === 'SELECT') return (e.options[e.selectedIndex]?.text || '').trim().slice(0, 60);
-  const t = (e.innerText || '').replace(/\s+/g, ' ').trim();
-  if (t) return t.slice(0, 60);
-  const fest = (e.getAttribute('aria-label') || e.placeholder || e.getAttribute('title') || e.value || '').trim();
-  return fest.slice(0, 60);
+  if (!/^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName)) {
+    const t = (e.innerText || '').replace(/\s+/g, ' ').trim();
+    if (t) return t.slice(0, 60);
+    return (e.getAttribute('aria-label') || e.getAttribute('title') || '').trim().slice(0, 60);
+  }
+  // Eingabefelder tragen ihre Beschriftung meist im umschliessenden <label> — so sind
+  // die Formulare der Beteiligtenliste gebaut (Vorname, Nachname, PLZ …). Genommen wird
+  // nur der eigene Text des Labels, nicht der Inhalt seiner Felder.
+  const fest = (e.getAttribute('aria-label') || e.placeholder || '').trim();
+  if (fest) return fest.slice(0, 60);
+  const lab = e.closest('label') || (e.id ? document.querySelector('label[for="' + e.id + '"]') : null);
+  if (lab) {
+    const eigen = [...lab.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent)
+      .join(' ').replace(/\s+/g, ' ').trim();
+    if (eigen) return eigen.slice(0, 60);
+  }
+  return (e.getAttribute('title') || e.name || e.id || '').trim().slice(0, 60);
 }
 function liveBedienbar() {
   const gefunden = [];
@@ -3490,6 +3502,14 @@ function liveBedienbar() {
   return gefunden;
 }
 function liveDialog() { return document.querySelector('.uidlg'); }
+// Der Terminplan lebt in einem Rahmen mit eigener Seite und eigener Rechenkette. Weil er
+// von derselben Adresse kommt, lässt sich seine Sprachschicht direkt aufrufen
+// (terminplan/plan.html, window.terminplanApi) — kein Nachbauen von Balken-Gesten.
+function livePlanApi() {
+  if (S.ansicht !== 'termin') return null;
+  const rahmen = document.querySelector('#termin-root iframe');
+  try { return rahmen?.contentWindow?.terminplanApi || null; } catch { return null; }
+}
 function liveBildschirm() {
   const teile = [];
   teile.push('Bereich: ' + (S.active?.name || 'keiner') + (S.ansicht && S.ansicht !== 'board' ? ' (Ansicht ' + S.ansicht + ')' : ''));
@@ -3498,6 +3518,16 @@ function liveBildschirm() {
   if (dlg) {
     teile.push('ACHTUNG, ein Dialog wartet auf Antwort: "' + (dlg.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200) +
       '" — beantworte ihn mit oberflaeche tu=bestaetigen, ziel ja oder nein; erst danach geht wieder etwas anderes.');
+  }
+  // Steht der Terminplan offen, gehört sein Inhalt zum Bildschirm: ohne die Vorgänge
+  // mit Terminen kann Tony „schieb den Rohbau zwei Wochen nach hinten" nicht ausführen.
+  const plan = livePlanApi()?.lage?.();
+  if (plan && !plan.fehler) {
+    const zeilen = (plan.vorgaenge || []).slice(0, 60).map((v) => '  ' + v.name + ': ' + v.start +
+      (v.meilenstein ? ' (Meilenstein)' : ' bis ' + v.ende + ', ' + v.dauer + ' Tage') +
+      (v.fixiert ? ', fixiert' : '') + (v.vor?.length ? ', nach ' + v.vor.join(' und ') : ''));
+    teile.push('Terminplan offen (' + (plan.vorgaenge || []).length + ' Vorgänge, Dauern in ' + plan.einheit +
+      (plan.eingefroren ? ', eingefrorener Stand — nicht änderbar' : '') + '); bediene ihn mit dem Werkzeug terminplan:\n' + zeilen.join('\n'));
   }
   const b = liveBedienbar();
   const knoepfe = b.filter((x) => !x.eingabe).map((x) => x.text);
@@ -3545,12 +3575,20 @@ async function liveOberflaeche(befehle) {
       } else if (b.tu === 'aktualisieren') {
         await ladeBoard();
         liveZeile('bildschirm', 'Board neu geladen.');
+      } else if (b.tu === 'plan') {
+        const api = livePlanApi();
+        if (!api) { schiefging('Der Terminplan ist gerade nicht offen — sag mir zuerst, welches Projekt, dann mache ich ihn auf.'); continue; }
+        const r = api.tu(b.plan || {}) || {};
+        if (r.fehler) { schiefging(r.fehler); continue; }
+        liveZeile('bildschirm', r.satz || 'Im Terminplan erledigt.');
       } else if (b.tu === 'klick') {
         // Wartet ein Dialog, gehört die Antwort ihm — sonst klickt Tony blind dahinter.
         if (liveDialog()) { schiefging('Ein Dialog wartet noch auf Ja oder Nein — erst den beantworten.'); continue; }
         const ziel2 = liveElementFinden(ziel, false);
         if (!ziel2) { schiefging('Nichts Anklickbares zu „' + ziel + '“ auf dem Bildschirm.'); continue; }
         const was = liveBeschriftung(ziel2);
+        // Sichtbar machen, was gedrueckt wird -- sonst passiert es ausserhalb des Bildes.
+        try { ziel2.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
         ziel2.click();
         liveZeile('bildschirm', 'Gedrückt: ' + was);
         await new Promise((r) => setTimeout(r, 300));
@@ -3562,6 +3600,7 @@ async function liveOberflaeche(befehle) {
         const wert = String(b?.wert ?? '');
         const feld = liveDialog()?.querySelector('.uidlg-i') || liveElementFinden(ziel, true);
         if (!feld) { schiefging('Kein Eingabefeld zu „' + ziel + '“ gefunden.'); continue; }
+        try { feld.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
         feld.focus();
         feld.value = wert;
         feld.dispatchEvent(new Event('input', { bubbles: true }));
