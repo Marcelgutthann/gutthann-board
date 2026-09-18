@@ -1100,137 +1100,166 @@ function mentionHilfe(inp) {
 // steht. Ich will Features erklaeren und er soll sie umsetzen. Verbesserungen, aber auch
 // sagen, wenn was nicht passt."
 //
-// Das Fenster baut nichts Eigenes. Es zeigt die Akten aus public.auftraege (Migration 154)
-// und bedient die vier Schritte, die es schon gibt:
-//   Wunsch sagen  -> dev_eroeffnen   -> der Klaerer liest den CODE und fragt zurueck
-//   Fragen        -> dev_antwort     -> je Frage eine Antwort
-//   Ziel steht    -> dev_uebergeben  -> die Werkstatt baut, testet, deployt
-// Der Klaerer ist der Grund, warum hier kein Pflichtenheft-Formular steht: er soll
-// widersprechen duerfen ("das gibt es schon", "das ist keine Software-Aufgabe"), und das
-// kann er nur, wenn der Wunsch als ganzer Satz bei ihm ankommt.
-const DEV_STAND = { neu: 'aufgenommen', klaerung: 'der Klärer schaut sich um', bereit: 'wartet auf dich',
-  uebergeben: 'die Werkstatt baut', fertig: 'fertig', abgebrochen: 'abgebrochen' };
+// Gebaut wird hier nichts Eigenes: das Fenster bedient die Akten aus public.auftraege
+// (Migration 154/163) in drei Schritten -- Wunsch sagen, Fragen beantworten, uebergeben.
+//
+// FORM (Fassung 2, nach Marcels Befund "unuebersichtlich, zu lang, das nimmt keiner her"):
+// Liste und Detail sind getrennt. Die Liste ist eine Zeile je Wunsch, rechts steht, was als
+// naechstes passiert. Im Detail steht IMMER genau eine Sache zum Tun -- die naechste offene
+// Frage ODER der Uebergabeknopf. Befund, Wortlaut und beantwortete Fragen liegen zugeklappt
+// darunter. Fassung 1 hatte alles gleichzeitig offen, und die war unbenutzbar.
+const DEV_STAND = { neu: 'aufgenommen', klaerung: 'schaut sich um', bereit: 'wartet auf dich',
+  uebergeben: 'wird gebaut', fertig: 'fertig', abgebrochen: 'abgebrochen' };
 
 async function ladeDev() {
   const r = await lotse('dev_liste');
   S.dev = r.error ? { fehler: r.error } : (r.auftraege || []);
   S.devOffen = Array.isArray(S.dev)
-    ? S.dev.filter((a) => a.stand === 'bereit' && (a.offene_fragen || []).length).length : 0;
+    ? S.dev.reduce((n, a) => n + ((a.offene_fragen || []).length ? 1 : 0), 0) : 0;
   renderDev(); renderSidebar();
+}
+
+function devAkte(id) { return (Array.isArray(S.dev) ? S.dev : []).find((a) => a.auftrag_id === id); }
+
+// Aufklappbarer Block. Zu ist der Normalfall — wer den Befund lesen will, sagt es.
+function devKlapp(titel, inhalt) {
+  const d = el('details', { class: 'devklapp' });
+  d.append(el('summary', {}, titel));
+  d.append(el('div', { class: 'devtext', style: 'margin-top:9px' }, inhalt));
+  return d;
 }
 
 function renderDev() {
   const root = document.getElementById('dev-root'); if (!root) return;
   root.innerHTML = '';
   const akten = S.dev;
+  if (!akten) { root.append(el('div', { class: 'dsec' }, el('div', { class: 'devmeta' }, 'Lade…'))); return; }
+  if (akten.fehler) { root.append(el('div', { class: 'dsec' }, el('div', { class: 'devwarn' }, akten.fehler))); return; }
+  if (S.devAkte && devAkte(S.devAkte)) return devDetail(root, devAkte(S.devAkte));
+  devListe(root, akten);
+}
 
-  // Eingabe zuerst: wer hierher kommt, will etwas sagen, nicht etwas lesen.
+// ---- Liste: eine Zeile je Wunsch ----
+function devListe(root, akten) {
   const neu = el('div', { class: 'dsec' });
   neu.append(el('div', { class: 'slbl' }, 'Was soll die Anwendung können?'));
   const ta = el('textarea', { class: 'devta',
-    placeholder: 'In ganzen Sätzen, so wie du es einem Kollegen sagen würdest. Zum Beispiel: „Ich will die Beteiligtenliste ausfüllen oder weiterentwickeln." Der Klärer liest erst den Code und fragt dann zurück.' });
+    placeholder: 'In ganzen Sätzen, so wie du es einem Kollegen sagen würdest. Er liest erst den Code und fragt dann zurück.' });
   neu.append(ta);
   const knopf = el('button', { class: 'btn', style: 'margin-top:11px' }, 'Klären lassen');
   knopf.onclick = async () => {
     const text = ta.value.trim();
-    if (text.length < 12) return uiHinweis('Sag es in einem ganzen Satz — daraus macht der Klärer einen Auftrag.');
+    if (text.length < 12) return uiHinweis('Sag es in einem ganzen Satz — daraus macht er einen Auftrag.');
     knopf.disabled = true; knopf.textContent = 'schickt los…';
     const r = await lotse('dev_eroeffnen', { anliegen: text });
     knopf.disabled = false; knopf.textContent = 'Klären lassen';
-    if (r.error || r.fehler) return uiHinweis(r.error || r.fehler);
+    if (r.fehler) return uiHinweis(r.fehler);
     ta.value = '';
-    uiHinweis('Aufgenommen. Der Klärer schaut sich im Code um — das dauert ein paar Minuten.');
+    uiHinweis('Aufgenommen. Er schaut sich im Code um — das dauert ein paar Minuten.');
     await ladeDev();
   };
   neu.append(knopf);
   root.append(neu);
 
-  if (!akten) { root.append(el('div', { class: 'dsec' }, el('div', { class: 'devmeta' }, 'Lade…'))); return; }
-  if (akten.fehler) { root.append(el('div', { class: 'dsec' }, el('div', { class: 'devwarn' }, akten.fehler))); return; }
   if (!akten.length) {
-    root.append(el('div', { class: 'dsec' }, el('div', { class: 'devmeta' },
-      'Noch kein Wunsch aufgenommen. Der erste steht oben in zwei Sätzen.')));
+    root.append(el('div', { class: 'dsec' }, el('div', { class: 'devmeta' }, 'Noch kein Wunsch aufgenommen.')));
     return;
   }
 
+  const liste = el('div', { class: 'dsec devliste' });
+  liste.append(el('div', { class: 'slbl' }, akten.length + ' Wünsche'));
   for (const a of akten) {
+    const offen = (a.offene_fragen || []).length;
+    const zeile = el('div', { class: 'devzeile', onclick: () => { S.devAkte = a.auftrag_id; renderDev(); } });
+    zeile.append(el('div', { class: 'devztitel' }, a.titel || 'Ohne Titel'));
+    // Rechts steht, was als NAECHSTES passiert — nicht der technische Zustand.
+    const was = offen ? offen + (offen === 1 ? ' Frage' : ' Fragen')
+      : a.stand === 'klaerung' ? 'schaut sich um'
+      : a.baubar === false ? 'passt nicht'
+      : a.reif ? 'bereit zum Bauen'
+      : DEV_STAND[a.stand] || a.stand;
+    zeile.append(el('div', { class: 'devzstand' + (offen ? ' dran' : '') }, was));
+    liste.append(zeile);
+  }
+  root.append(liste);
+}
+
+// ---- Detail: genau eine Sache zum Tun ----
+function devDetail(root, a) {
+  root.append(el('button', { class: 'devzurueck', onclick: () => { S.devAkte = null; renderDev(); } }, '← Alle Wünsche'));
+
+  const kopf = el('div', { class: 'dsec' });
+  kopf.append(el('div', { class: 'devtitel' }, a.titel || 'Ohne Titel'));
+
+  const alle = Array.isArray(a.fragen) ? a.fragen : [];
+  const offenIdx = alle.findIndex((f) => !f.antwort);
+  const offenZahl = alle.filter((f) => !f.antwort).length;
+  const beantwortet = alle.filter((f) => f.antwort);
+
+  if (a.stand === 'klaerung') {
+    kopf.append(el('div', { class: 'devmeta' }, 'Er liest Repo und Datenbank. Das dauert ein paar Minuten.'));
+    root.append(kopf); return;
+  }
+  if (a.baubar === false) kopf.append(el('div', { class: 'devwarn' }, 'Er hält das für keine Software-Aufgabe am Agentic OS.'));
+  if (a.risiko) kopf.append(el('div', { class: 'devwarn' }, 'Risiko: ' + a.risiko));
+  root.append(kopf);
+
+  if (offenIdx >= 0) {
+    // 1. Die naechste offene Frage — eine, nicht vier.
+    const f = alle[offenIdx];
+    const s = el('div', { class: 'dsec devdran' });
+    s.append(el('div', { class: 'slbl' }, 'Frage ' + (offenIdx + 1) + ' von ' + alle.length));
+    s.append(el('div', { class: 'devgross' }, f.frage || f.text || ''));
+    const feld = el('textarea', { class: 'devta', style: 'min-height:62px', placeholder: 'Ein Satz reicht.' });
+    const ok = el('button', { class: 'btn', style: 'margin-top:10px' }, 'Antworten');
+    ok.onclick = async () => {
+      const t = feld.value.trim(); if (!t) return;
+      ok.disabled = true; ok.textContent = 'trägt ein…';
+      const r = await lotse('dev_antwort', { auftrag_id: a.auftrag_id, antwort: t, nr: offenIdx + 1 });
+      if (r.fehler) { ok.disabled = false; ok.textContent = 'Antworten'; return uiHinweis(r.fehler); }
+      await ladeDev();
+    };
+    s.append(feld, ok);
+    if (offenZahl > 1) s.append(el('div', { class: 'devmeta' }, 'Danach noch ' + (offenZahl - 1) + '.'));
+    root.append(s);
+  } else if (a.stand === 'uebergeben' || a.stand === 'fertig') {
+    // 2b. Nichts zu tun — der Stand der Werkstatt.
     const s = el('div', { class: 'dsec' });
-    s.append(el('div', { class: 'slbl' }, a.titel || 'Ohne Titel',
-      el('span', { class: 'devstand' }, DEV_STAND[a.stand] || a.stand)));
-    if (a.anliegen) s.append(el('div', { class: 'devtext' }, a.anliegen));
-
-    if (a.stand === 'klaerung') {
-      s.append(el('div', { class: 'devmeta', style: 'margin-top:10px' },
-        'Der Klärer liest Repo und Datenbank. Sobald er fertig ist, stehen hier sein Befund und seine Fragen.'));
-      root.append(s); continue;
-    }
-
-    // Der Widerspruch steht vor allem anderen -- er ist der Sinn des Klaerers.
-    if (a.baubar === false) s.append(el('div', { class: 'devwarn', style: 'margin-top:12px' },
-      'Der Klärer hält das für keine Software-Aufgabe am Agentic OS.'));
-    if (a.risiko) s.append(el('div', { class: 'devwarn', style: 'margin-top:10px' }, 'Risiko: ' + a.risiko));
-    if (a.befund) {
-      s.append(el('div', { class: 'slbl', style: 'margin-top:16px' }, 'Was es heute schon gibt'));
-      s.append(el('div', { class: 'devtext' }, a.befund));
-    }
-
-    const offen = a.offene_fragen || [];
-    const alle = Array.isArray(a.fragen) ? a.fragen : [];
-    if (alle.length) {
-      s.append(el('div', { class: 'slbl', style: 'margin-top:16px' },
-        offen.length ? offen.length + ' Frage' + (offen.length === 1 ? '' : 'n') + ' an dich' : 'Fragen — alle beantwortet'));
-      alle.forEach((f, i) => {
-        const z = el('div', { class: 'devfrage' });
-        z.append(el('div', { class: 'devtext' }, (i + 1) + '. ' + (f.frage || f.text || '')));
-        if (f.antwort) { z.append(el('div', { class: 'devmeta' }, 'Deine Antwort: ' + f.antwort)); s.append(z); return; }
-        const feld = el('input', { class: 'devfeld', style: 'margin-top:8px', placeholder: 'Antwort — ein Satz reicht' });
-        const ok = el('button', { class: 'minibtn', style: 'margin:8px 0 0 0' }, 'Eintragen');
-        ok.onclick = async () => {
-          const t = feld.value.trim(); if (!t) return;
-          ok.disabled = true;
-          const r = await lotse('dev_antwort', { auftrag_id: a.auftrag_id, antwort: t, nr: i + 1 });
-          if (r.error || r.fehler) { ok.disabled = false; return uiHinweis(r.error || r.fehler); }
-          await ladeDev();
-        };
-        z.append(feld, ok);
-        s.append(z);
-      });
-    }
-
-    s.append(el('div', { class: 'slbl', style: 'margin-top:16px' }, 'Ziel — was hinterher anders ist'));
-    const ziel = el('input', { class: 'devfeld', placeholder: 'Ein Satz. Der Klärer schlägt ihn vor, du korrigierst ihn.' });
+    s.append(el('div', { class: 'slbl' }, 'Die Werkstatt'));
+    s.append(el('div', { class: 'devtext' }, 'Übergeben' + (a.werkstatt_status ? ' · Lauf ' + a.werkstatt_status : '') + '.'));
+    if (a.werkstatt_ergebnis) s.append(devKlapp('Bericht der Werkstatt', a.werkstatt_ergebnis));
+    root.append(s);
+  } else {
+    // 2a. Alles beantwortet: Ziel bestaetigen und uebergeben.
+    const s = el('div', { class: 'dsec devdran' });
+    s.append(el('div', { class: 'slbl' }, 'Ziel — was hinterher anders ist'));
+    const ziel = el('textarea', { class: 'devta', style: 'min-height:56px', placeholder: 'Ein Satz. Er schlägt ihn vor, du korrigierst ihn.' });
     ziel.value = a.ziel || '';
     s.append(ziel);
-
-    if (a.stand === 'uebergeben' || a.stand === 'fertig') {
-      s.append(el('div', { class: 'devmeta', style: 'margin-top:12px' },
-        'An die Werkstatt gegeben' + (a.werkstatt_status ? ' · Lauf ' + a.werkstatt_status : '')));
-      if (a.werkstatt_ergebnis) {
-        s.append(el('div', { class: 'slbl', style: 'margin-top:14px' }, 'Bericht der Werkstatt'));
-        s.append(el('div', { class: 'devtext' }, a.werkstatt_ergebnis));
-      }
-    } else {
-      const geben = el('button', { class: 'btn', style: 'margin-top:12px' }, 'An die Werkstatt geben');
-      geben.disabled = !a.reif;
-      geben.title = a.reif ? 'Bauen lassen'
-        : offen.length ? 'Erst die offenen Fragen beantworten'
-        : a.baubar === false ? 'Der Klärer hält das für keine Software-Aufgabe'
-        : 'Es fehlt das Ziel';
-      geben.onclick = async () => {
-        geben.disabled = true; geben.textContent = 'übergibt…';
-        const r = await lotse('dev_uebergeben', { auftrag_id: a.auftrag_id, ziel: ziel.value.trim() || null });
-        if (r.error || r.fehler) { geben.disabled = false; geben.textContent = 'An die Werkstatt geben'; return uiHinweis(r.error || r.fehler); }
-        uiHinweis('Übergeben. Die Werkstatt baut, testet und meldet sich an der Karte.');
-        await ladeDev();
-      };
-      s.append(geben);
-      if (!a.reif && !offen.length && a.baubar !== false) {
-        s.append(el('div', { class: 'devmeta' }, 'Trag ein Ziel ein, dann kann die Werkstatt anfangen.'));
-      }
-    }
+    const geben = el('button', { class: 'btn', style: 'margin-top:10px' }, 'An die Werkstatt geben');
+    geben.onclick = async () => {
+      if (!ziel.value.trim()) return uiHinweis('Ohne Ziel fängt die Werkstatt nicht an.');
+      geben.disabled = true; geben.textContent = 'übergibt…';
+      const r = await lotse('dev_uebergeben', { auftrag_id: a.auftrag_id, ziel: ziel.value.trim(), trotzdem: a.baubar === false });
+      if (r.fehler) { geben.disabled = false; geben.textContent = 'An die Werkstatt geben'; return uiHinweis(r.fehler); }
+      uiHinweis('Übergeben. Sie baut, testet und meldet sich an der Karte.');
+      await ladeDev();
+    };
+    s.append(geben);
     root.append(s);
   }
+
+  // 3. Hintergrund — zugeklappt, weil es Lesestoff ist und keine Handlung.
+  const unten = el('div', { class: 'dsec' });
+  if (a.befund) unten.append(devKlapp('Was er im Code gefunden hat', a.befund));
+  if (beantwortet.length) {
+    unten.append(devKlapp(beantwortet.length + ' beantwortete Frage' + (beantwortet.length === 1 ? '' : 'n'),
+      beantwortet.map((f) => '– ' + (f.frage || '') + '\n   ' + f.antwort).join('\n\n')));
+  }
+  if (a.anliegen) unten.append(devKlapp('Dein Wortlaut', a.anliegen));
+  if (unten.childNodes.length) root.append(unten);
 }
+
 
 // ---------- Topbar + Board ----------
 function renderTopbar() {
@@ -3576,6 +3605,9 @@ async function liveDelegation(ev) {
     text = antwort.text || '';
     // Erst den Bildschirm einstellen (Karte auf/zu, Board, Ansicht), dann nachziehen.
     await liveOberflaeche(antwort.oberflaeche);
+    // Gescheiterte Werkzeuge stehen sonst nirgends: hier werden sie sichtbar, damit Marcel
+    // sieht, WORAUF Tony keinen Zugriff hatte (18.09., sein Befund aus einem Gespraech).
+    for (const pr of antwort.probleme || []) liveZeile('fehler', 'Werkzeug ' + pr.werkzeug + ': ' + pr.meldung);
     // Hat das Backend an der Karte geschrieben, zieht der Drawer sofort nach -- Marcel
     // soll das Ergebnis sehen, ohne die Karte neu zu oeffnen.
     await liveNachziehen(antwort.werkzeuge, vorher).catch((e) => console.warn('[live] nachziehen:', e));
