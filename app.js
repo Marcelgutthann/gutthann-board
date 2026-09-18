@@ -3570,6 +3570,18 @@ async function liveOberflaeche(befehle) {
       } else if (b.tu === 'ansicht') {
         const w = LIVE_ANSICHTEN[ziel.toLowerCase()];
         if (!w) { schiefging('Diese Ansicht kenne ich nicht: „' + ziel + '“.'); continue; }
+        // Dashboard, Kalender und Terminplan gibt es nur innerhalb eines Projekts.
+        // „Mein Dashboard" ist dagegen der persönliche Bereich — die beiden werden im
+        // Gespräch regelmäßig verwechselt, deshalb hier abgefangen statt ins Leere laufen.
+        if (w !== 'board' && S.active?.typ !== 'projekt') {
+          if (w === 'dash') {
+            await wechsle('radar', null, 'Mein Dashboard');
+            liveZeile('bildschirm', 'Offen: Mein Dashboard.');
+          } else {
+            schiefging('Kalender und Terminplan gibt es nur in einem Projekt — welches Projekt soll ich aufmachen?');
+          }
+          continue;
+        }
         zeigeAnsicht(w);
         liveZeile('bildschirm', 'Ansicht: ' + ziel);
       } else if (b.tu === 'aktualisieren') {
