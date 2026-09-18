@@ -3443,14 +3443,88 @@ function liveBretter() {
 }
 const LIVE_ANSICHTEN = { aufgaben: 'board', board: 'board', karten: 'board', dashboard: 'dash', dash: 'dash',
   kalender: 'kal', termine: 'kal', terminplan: 'termin', terminplanung: 'termin' };
+
+// ---------- Was auf dem Bildschirm steht und was man dort drücken kann ----------
+// Marcel am 18.09.: "er muss alles können" und "er hatte keinen Zugriff, konnte es mir
+// bloss nicht benennen". Beides hat dieselbe Wurzel: Tony kannte den Bildschirm nicht.
+// Statt für jede der rund 200 Schaltflächen ein eigenes Werkzeug zu pflegen, wird hier
+// gesammelt, was gerade bedienbar IST -- generisch, also auch für das Projekt-Dashboard,
+// dessen Knöpfe über data-Attribute verdrahtet sind und kein eigenes onclick tragen:
+// Formularelemente, Elemente mit eigenem onclick, und alles, was der Zeiger als klickbar
+// ausweist. Diese Liste geht mit jeder Delegation an live-backend (Feld `sicht`), und
+// dieselbe Liste bedient anschliessend den Klick -- was Tony sieht, kann er auch drücken.
+const LIVE_SICHT_MAX = 120;
+function liveBeschriftung(e) {
+  const fest = (e.getAttribute('aria-label') || e.getAttribute('title') || e.placeholder || '').trim();
+  if (fest) return fest.slice(0, 60);
+  if (e.tagName === 'SELECT') return (e.options[e.selectedIndex]?.text || '').trim().slice(0, 60);
+  const t = (e.innerText || e.value || '').replace(/\s+/g, ' ').trim();
+  return t.slice(0, 60);
+}
+function liveBedienbar() {
+  const gefunden = [];
+  const gesehen = new Set();
+  for (const e of document.body.querySelectorAll('*')) {
+    if (gefunden.length >= LIVE_SICHT_MAX) break;
+    if (!e.offsetParent) continue; // unsichtbar oder ausgeblendet
+    const formular = /^(BUTTON|INPUT|TEXTAREA|SELECT|A)$/.test(e.tagName);
+    const eigener = typeof e.onclick === 'function';
+    let zeiger = false;
+    if (!formular && !eigener) {
+      try { zeiger = getComputedStyle(e).cursor === 'pointer'; } catch { zeiger = false; }
+      // Ein äusserer Kasten, der nur den Zeiger erbt, ist kein Bedienelement —
+      // sein klickbares Kind steht ohnehin gleich selbst in der Liste.
+      if (zeiger && e.querySelector('button, input, textarea, select, a')) zeiger = false;
+    }
+    if (!formular && !eigener && !zeiger) continue;
+    if (e.disabled) continue;
+    const text = liveBeschriftung(e);
+    if (!text) continue;
+    const schluessel = e.tagName + '|' + text;
+    if (gesehen.has(schluessel)) continue;
+    gesehen.add(schluessel);
+    gefunden.push({ el: e, text, eingabe: /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName) });
+  }
+  return gefunden;
+}
+function liveDialog() { return document.querySelector('.uidlg'); }
+function liveBildschirm() {
+  const teile = [];
+  teile.push('Bereich: ' + (S.active?.name || 'keiner') + (S.ansicht && S.ansicht !== 'board' ? ' (Ansicht ' + S.ansicht + ')' : ''));
+  if (S.detail) teile.push('Offene Karte: ' + (S.detail.titel || '').slice(0, 120));
+  const dlg = liveDialog();
+  if (dlg) {
+    teile.push('ACHTUNG, ein Dialog wartet auf Antwort: "' + (dlg.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200) +
+      '" — beantworte ihn mit oberflaeche tu=bestaetigen, ziel ja oder nein; erst danach geht wieder etwas anderes.');
+  }
+  const b = liveBedienbar();
+  const knoepfe = b.filter((x) => !x.eingabe).map((x) => x.text);
+  const felder = b.filter((x) => x.eingabe).map((x) => x.text);
+  if (knoepfe.length) teile.push('Anklickbar (tu=klick, ziel ist der Text): ' + knoepfe.join(' · '));
+  if (felder.length) teile.push('Eingabefelder (tu=tippen, ziel ist die Beschriftung, wert der Text): ' + felder.join(' · '));
+  return teile.join('\n');
+}
+function liveElementFinden(ziel, nurEingabe) {
+  const z = String(ziel || '').trim().toLowerCase();
+  const liste = liveBedienbar().filter((x) => (nurEingabe ? x.eingabe : !x.eingabe));
+  if (!z) return liste.length === 1 ? liste[0].el : null;
+  const treffer = liste.find((x) => x.text.toLowerCase() === z)
+    || liste.find((x) => x.text.toLowerCase().includes(z))
+    || liste.find((x) => z.includes(x.text.toLowerCase()) && x.text.length > 3);
+  return treffer?.el || null;
+}
+// Gibt zurueck, was NICHT geklappt hat. Diese Saetze haengt liveDelegation an Tonys
+// Antwort -- damit spricht er aus, woran es lag, statt "darauf habe ich keinen Zugriff".
 async function liveOberflaeche(befehle) {
-  if (!Array.isArray(befehle) || !befehle.length) return;
+  const misslungen = [];
+  const schiefging = (satz) => { liveZeile('bildschirm', satz); misslungen.push(satz); };
+  if (!Array.isArray(befehle) || !befehle.length) return misslungen;
   for (const b of befehle) {
     const ziel = String(b?.ziel ?? '').trim();
     try {
       if (b.tu === 'karte_oeffnen') {
         const id = liveKarteFinden(ziel);
-        if (!id) { liveZeile('bildschirm', 'Keine Karte gefunden zu „' + ziel + '“ — sie liegt wohl auf einem anderen Board.'); continue; }
+        if (!id) { schiefging('Keine Karte gefunden zu „' + ziel + '“ — sie liegt wohl auf einem anderen Board.'); continue; }
         await openCard(id);
         liveZeile('bildschirm', 'Karte offen: ' + (S.detail?.titel || ziel));
       } else if (b.tu === 'karte_schliessen') {
@@ -3458,22 +3532,54 @@ async function liveOberflaeche(befehle) {
         liveZeile('bildschirm', 'Karte geschlossen.');
       } else if (b.tu === 'board_oeffnen') {
         const t = liveTreffer(liveBretter(), ziel);
-        if (!t) { liveZeile('bildschirm', 'Kein Board und kein Projekt zu „' + ziel + '“.'); continue; }
+        if (!t) { schiefging('Kein Board und kein Projekt zu „' + ziel + '“.'); continue; }
         await wechsle(t.typ, t.id, t.name);
         liveZeile('bildschirm', 'Offen: ' + t.name);
       } else if (b.tu === 'ansicht') {
         const w = LIVE_ANSICHTEN[ziel.toLowerCase()];
-        if (!w) { liveZeile('bildschirm', 'Diese Ansicht kenne ich nicht: „' + ziel + '“.'); continue; }
+        if (!w) { schiefging('Diese Ansicht kenne ich nicht: „' + ziel + '“.'); continue; }
         zeigeAnsicht(w);
         liveZeile('bildschirm', 'Ansicht: ' + ziel);
       } else if (b.tu === 'aktualisieren') {
         await ladeBoard();
         liveZeile('bildschirm', 'Board neu geladen.');
+      } else if (b.tu === 'klick') {
+        // Wartet ein Dialog, gehört die Antwort ihm — sonst klickt Tony blind dahinter.
+        if (liveDialog()) { schiefging('Ein Dialog wartet noch auf Ja oder Nein — erst den beantworten.'); continue; }
+        const ziel2 = liveElementFinden(ziel, false);
+        if (!ziel2) { schiefging('Nichts Anklickbares zu „' + ziel + '“ auf dem Bildschirm.'); continue; }
+        const was = liveBeschriftung(ziel2);
+        ziel2.click();
+        liveZeile('bildschirm', 'Gedrückt: ' + was);
+        await new Promise((r) => setTimeout(r, 300));
+        const dlg = liveDialog();
+        // Die App fragt an gefährlichen Stellen selbst nach. Diese Frage bleibt stehen:
+        // Tony muss sie ausdrücklich beantworten, ein Klick allein löscht hier nichts.
+        if (dlg) liveZeile('bildschirm', 'Es fragt zurück: ' + (dlg.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 160));
+      } else if (b.tu === 'tippen') {
+        const wert = String(b?.wert ?? '');
+        const feld = liveDialog()?.querySelector('.uidlg-i') || liveElementFinden(ziel, true);
+        if (!feld) { schiefging('Kein Eingabefeld zu „' + ziel + '“ gefunden.'); continue; }
+        feld.focus();
+        feld.value = wert;
+        feld.dispatchEvent(new Event('input', { bubbles: true }));
+        feld.dispatchEvent(new Event('change', { bubbles: true }));
+        liveZeile('bildschirm', 'Eingetragen in ' + (liveBeschriftung(feld) || 'das Feld') + ': ' + wert.slice(0, 80));
+      } else if (b.tu === 'bestaetigen') {
+        const dlg = liveDialog();
+        if (!dlg) { schiefging('Es steht gerade keine Frage offen.'); continue; }
+        const ja = !/^(nein|abbrechen|nicht|stopp?|no)$/i.test(ziel || 'ja');
+        dlg.querySelector(ja ? '[data-ui="ok"]' : '[data-ui="nein"]')?.click();
+        liveZeile('bildschirm', ja ? 'Bestätigt.' : 'Abgebrochen.');
+        await new Promise((r) => setTimeout(r, 400));
+        if (S.detail?.id) await openCard(S.detail.id);
       }
     } catch (e) {
       liveFehler('Bildschirm: ' + (e?.message || e));
+      misslungen.push('Auf dem Bildschirm ging etwas schief: ' + (e?.message || e));
     }
   }
+  return misslungen;
 }
 
 async function liveRuecknahme(zeile) {
@@ -3601,10 +3707,13 @@ async function liveDelegation(ev) {
   }, 20000);
   const vorher = liveKartenstand();
   try {
-    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt(), kanal: 'board' });
+    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm() });
     text = antwort.text || '';
     // Erst den Bildschirm einstellen (Karte auf/zu, Board, Ansicht), dann nachziehen.
-    await liveOberflaeche(antwort.oberflaeche);
+    const misslungen = await liveOberflaeche(antwort.oberflaeche);
+    // Was der Bildschirm zurueckmeldet, spricht Tony aus -- sonst behauptet er, er habe
+    // etwas geoeffnet, das es gar nicht gibt (gemessen am 18.09. mit der Maengelliste).
+    if (misslungen.length) text = (text ? text + ' ' : '') + misslungen.join(' ');
     // Gescheiterte Werkzeuge stehen sonst nirgends: hier werden sie sichtbar, damit Marcel
     // sieht, WORAUF Tony keinen Zugriff hatte (18.09., sein Befund aus einem Gespraech).
     for (const pr of antwort.probleme || []) liveZeile('fehler', 'Werkzeug ' + pr.werkzeug + ': ' + pr.meldung);
