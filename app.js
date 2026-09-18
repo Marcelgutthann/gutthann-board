@@ -3320,7 +3320,7 @@ function liveFenster() {
   p.append(kopf);
   const liste = el('div', { class: 'lliste' });
   if (!S.live.zeilen.length) liste.append(el('div', { class: 'lleer' }, 'Sprich einfach los — hier steht mit, was gesagt wird.'));
-  const WER = { nutzer: 'Du', assistent: 'Moderator', backend: 'Backend', hinweis: 'Hinweis', fehler: 'Fehler', ruecknahme: 'Karte' };
+  const WER = { nutzer: 'Du', assistent: 'Moderator', backend: 'Backend', hinweis: 'Hinweis', fehler: 'Fehler', ruecknahme: 'Karte', bildschirm: 'Bildschirm' };
   for (const zl of S.live.zeilen) {
     const zeile = el('div', { class: 'lzeile ' + zl.rolle },
       el('span', { class: 'lzeit' }, zl.zeit), el('span', { class: 'lwer' }, WER[zl.rolle]), el('span', { class: 'ltxt' }, zl.text));
@@ -3385,6 +3385,68 @@ async function liveNachziehen(werkzeuge, vorher) {
     karte: vorher, neueUp: neueUp.map((u) => u.id), neueKom: neueKom.map((k) => k.id), textGeaendert };
   liveFenster();
 }
+// Tony bedient den Bildschirm (18.09.2026). Das Werkzeug `oberflaeche` tut serverseitig
+// nichts; live-backend reicht seine Aufrufe als Feld `oberflaeche` an den Browser durch,
+// und ausgefuehrt wird hier -- mit denselben Funktionen, die auch ein Klick ruft.
+// Gefunden wird nach Namen, weil Tony beim Sprechen Titel nennt und keine Kennungen.
+function liveTreffer(kandidaten, ziel) {
+  const z = String(ziel || '').trim().toLowerCase();
+  if (!z) return null;
+  return kandidaten.find((k) => String(k.name || '').toLowerCase() === z)
+    || kandidaten.find((k) => String(k.name || '').toLowerCase().includes(z))
+    || kandidaten.find((k) => z.includes(String(k.name || '').toLowerCase()) && String(k.name || '').length > 3)
+    || null;
+}
+function liveKarteFinden(ziel) {
+  const z = String(ziel || '').trim();
+  if (/^[0-9a-f-]{36}$/i.test(z)) return z;
+  const karten = (S.board?.todos || []).map((t) => ({ id: t.id, name: t.titel }));
+  return liveTreffer(karten, z)?.id || null;
+}
+function liveBretter() {
+  return [
+    { typ: 'radar', id: null, name: 'Mein Dashboard' },
+    { typ: 'dev', id: null, name: 'DEV' },
+    ...(S.liste?.boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
+    ...(S.liste?.team_boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
+    ...(S.projects || []).map((p) => ({ typ: 'projekt', id: p.id, name: p.name })),
+  ];
+}
+const LIVE_ANSICHTEN = { aufgaben: 'board', board: 'board', karten: 'board', dashboard: 'dash', dash: 'dash',
+  kalender: 'kal', termine: 'kal', terminplan: 'termin', terminplanung: 'termin' };
+async function liveOberflaeche(befehle) {
+  if (!Array.isArray(befehle) || !befehle.length) return;
+  for (const b of befehle) {
+    const ziel = String(b?.ziel ?? '').trim();
+    try {
+      if (b.tu === 'karte_oeffnen') {
+        const id = liveKarteFinden(ziel);
+        if (!id) { liveZeile('bildschirm', 'Keine Karte gefunden zu „' + ziel + '“ — sie liegt wohl auf einem anderen Board.'); continue; }
+        await openCard(id);
+        liveZeile('bildschirm', 'Karte offen: ' + (S.detail?.titel || ziel));
+      } else if (b.tu === 'karte_schliessen') {
+        closeDrawer();
+        liveZeile('bildschirm', 'Karte geschlossen.');
+      } else if (b.tu === 'board_oeffnen') {
+        const t = liveTreffer(liveBretter(), ziel);
+        if (!t) { liveZeile('bildschirm', 'Kein Board und kein Projekt zu „' + ziel + '“.'); continue; }
+        await wechsle(t.typ, t.id, t.name);
+        liveZeile('bildschirm', 'Offen: ' + t.name);
+      } else if (b.tu === 'ansicht') {
+        const w = LIVE_ANSICHTEN[ziel.toLowerCase()];
+        if (!w) { liveZeile('bildschirm', 'Diese Ansicht kenne ich nicht: „' + ziel + '“.'); continue; }
+        zeigeAnsicht(w);
+        liveZeile('bildschirm', 'Ansicht: ' + ziel);
+      } else if (b.tu === 'aktualisieren') {
+        await ladeBoard();
+        liveZeile('bildschirm', 'Board neu geladen.');
+      }
+    } catch (e) {
+      liveFehler('Bildschirm: ' + (e?.message || e));
+    }
+  }
+}
+
 async function liveRuecknahme(zeile) {
   const r = zeile.ruecknahme;
   if (!r || r.laeuft || r.erledigt) return;
@@ -3510,8 +3572,10 @@ async function liveDelegation(ev) {
   }, 20000);
   const vorher = liveKartenstand();
   try {
-    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt() });
+    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe, verlauf, karte_id: S.detail?.id, projekt: liveProjekt(), kanal: 'board' });
     text = antwort.text || '';
+    // Erst den Bildschirm einstellen (Karte auf/zu, Board, Ansicht), dann nachziehen.
+    await liveOberflaeche(antwort.oberflaeche);
     // Hat das Backend an der Karte geschrieben, zieht der Drawer sofort nach -- Marcel
     // soll das Ergebnis sehen, ohne die Karte neu zu oeffnen.
     await liveNachziehen(antwort.werkzeuge, vorher).catch((e) => console.warn('[live] nachziehen:', e));
