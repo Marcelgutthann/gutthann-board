@@ -4379,6 +4379,230 @@ async function planStart(){
     anlageZeigen();            // und der Anlege-Dialog davor
   }
 }
+
+// ==================================================================================
+// SPRACHSCHICHT (18.09.2026): window.terminplanApi
+// Marcel: "Tony soll auch den Terminplan praezise bedienen koennen", und: "es darf
+// keine Ausnahme geben, er muss alles wie unsere menschliche Assistenz bedienen".
+// Der Plan wird deshalb NICHT mit nachgebauten Mausgesten bedient, sondern ueber die
+// Rechenkette, die auch am Klick haengt: pushUndo -> Termine setzen -> cascadeChange
+// -> enforceBackward -> resolveLockedConstraints -> renderAll (renderAll stoesst ueber
+// markEdited das Speichern an). Diese Sequenz steht hier EINMAL als
+// vorgangUmterminieren. Die drei aelteren Kopien (Tabellen-Handler, applyDateChange,
+// Ziehen im Diagramm) sind bewusst unveraendert geblieben: fuer plan.html gibt es
+// keinen Test, der ein Umbiegen absichern wuerde.
+// ==================================================================================
+function vorgangUmterminieren(t, neuStart, neuEnde){
+  pushUndo();
+  const altStart = t.start, altEnde = t.finish;
+  t.start = neuStart;
+  t.finish = t.milestone ? neuStart : (neuEnde || t.finish);
+  if(parseISO(t.finish) < parseISO(t.start)) t.finish = t.start;
+  const sD = daysBetween(parseISO(altStart), parseISO(t.start));
+  const fD = daysBetween(parseISO(altEnde), parseISO(t.finish));
+  cascadeChange(t.uid, sD, fD);
+  if(t.grAnchor) cascadeChangeBackward(t.uid, sD, fD);
+  enforceBackward(t.uid);
+  resolveLockedConstraints();
+  renderAll();
+}
+
+// Vorgang am gesprochenen Namen finden. Mehrdeutigkeit ist ein Fehler mit Vorschlaegen --
+// lieber nachfragen als den falschen Balken verschieben.
+function planVorgangFinden(name){
+  const z = String(name || '').trim().toLowerCase();
+  const sichtbar = TASKS.filter(t => !t.hidden);
+  if(!z) return { fehler: 'Welcher Vorgang? Im Plan stehen: ' + sichtbar.slice(0, 12).map(t => t.name).join(', ') };
+  const exakt = sichtbar.filter(t => String(t.name || '').toLowerCase() === z);
+  const treffer = exakt.length ? exakt : sichtbar.filter(t => String(t.name || '').toLowerCase().includes(z));
+  if(!treffer.length) return { fehler: 'Im Plan gibt es keinen Vorgang „' + name + '". Vorhanden sind: ' + sichtbar.slice(0, 15).map(t => t.name).join(', ') };
+  if(treffer.length > 1) return { fehler: 'Auf „' + name + '" passen mehrere: ' + treffer.slice(0, 8).map(t => t.name).join(', ') + '. Welcher davon?' };
+  return { t: treffer[0] };
+}
+
+// "zwei Wochen nach hinten" sind 14 Kalendertage, "zehn Arbeitstage" haengen vom Kalender ab
+// (Wochenende, Feiertage, Betriebsferien) -- dafuer rechnet lagToCalendarDays ab dem Bezugstag.
+function planVersatzInTage(anzahl, einheit, abStr){
+  const n = Math.round(Number(anzahl) || 0);
+  const e = String(einheit || 'tage').toLowerCase();
+  if(e === 'wochen') return n * 7;
+  if(e === 'monate') return n * 30;
+  if(e === 'arbeitstage' || e === 'wd') return lagToCalendarDays(abStr, n, 'wd');
+  return n;
+}
+
+function planSatz(t){
+  return t.name + ' steht jetzt auf ' + fmtDE(t.start) + (t.milestone ? '' : ' bis ' + fmtDE(t.finish));
+}
+
+window.terminplanApi = {
+  // Was im Plan steht -- geht als Teil des Bildschirms an die Denkstufe.
+  lage(){
+    try{
+      if(typeof TASKS === 'undefined' || !Array.isArray(TASKS)) return { fehler: 'Im Terminplan ist noch kein Plan geladen.' };
+      const vorgaenge = TASKS.filter(t => !t.hidden).map(t => ({
+        name: t.name,
+        start: t.start,
+        ende: t.finish,
+        dauer: t.milestone ? 0 : durationCount(t.start, t.finish, durationUnit),
+        meilenstein: !!t.milestone,
+        fixiert: !!(t.lockStart || t.lockFinish),
+        vor: EDGES.filter(e => e.to === t.uid).map(e =>
+          (byUid[e.from] ? byUid[e.from].name : '?') + ' ' + e.type + (e.lag ? (e.lag > 0 ? '+' : '') + e.lag + 'd' : '')),
+      }));
+      return {
+        projekt: typeof PROJEKT_NAME !== 'undefined' ? PROJEKT_NAME : '',
+        einheit: durationUnit === 'wd' ? 'Arbeitstage' : 'Kalendertage',
+        eingefroren: !!SCHREIBSCHUTZ,
+        vorgaenge,
+      };
+    }catch(e){ return { fehler: 'Plan nicht lesbar: ' + (e && e.message || e) }; }
+  },
+
+  // Ein Befehl aus dem Gespraech. Rueckgabe: {ok, satz} oder {fehler} -- beides spricht Tony aus.
+  tu(b){
+    try{
+      const tu = String(b && b.tu || '').trim();
+      if(!tu) return { fehler: 'Kein Terminplan-Befehl angegeben.' };
+      if(typeof TASKS === 'undefined' || !Array.isArray(TASKS)) return { fehler: 'Im Terminplan ist noch kein Plan geladen.' };
+      const schreibend = !['lesen', 'rueckgaengig'].includes(tu);
+      if(SCHREIBSCHUTZ && schreibend) return { fehler: 'Dieser Plan ist ein eingefrorener Stand und wird nicht mehr geändert.' };
+      const einheit = String(b.einheit || 'tage').toLowerCase();
+
+      if(tu === 'lesen') return { ok: true, lage: window.terminplanApi.lage() };
+
+      if(tu === 'verschieben'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const tage = planVersatzInTage(b.tage, einheit, f.t.start);
+        if(!tage) return { fehler: 'Um wie viel soll ' + f.t.name + ' verschoben werden?' };
+        vorgangUmterminieren(f.t, fmtISO(addDays(parseISO(f.t.start), tage)), fmtISO(addDays(parseISO(f.t.finish), tage)));
+        return { ok: true, satz: planSatz(f.t) };
+      }
+
+      if(tu === 'termin'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const datum = String(b.datum || '').slice(0, 10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return { fehler: 'Für ' + f.t.name + ' fehlt ein Datum als JJJJ-MM-TT.' };
+        const art = String(b.art || 'start').toLowerCase();
+        if(art === 'ende' && !f.t.milestone) vorgangUmterminieren(f.t, f.t.start, datum);
+        else {
+          // Start verschieben heisst: die Dauer bleibt, das Ende wandert mit.
+          const spanne = daysBetween(parseISO(f.t.start), parseISO(f.t.finish));
+          vorgangUmterminieren(f.t, datum, fmtISO(addDays(parseISO(datum), spanne)));
+        }
+        return { ok: true, satz: planSatz(f.t) };
+      }
+
+      if(tu === 'dauer'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        if(f.t.milestone) return { fehler: f.t.name + ' ist ein Meilenstein und hat keine Dauer.' };
+        const n = Math.round(Number(b.tage) || 0);
+        if(n < 1) return { fehler: 'Wie lange soll ' + f.t.name + ' dauern?' };
+        const ende = finishFromDuration(f.t.start, n, (einheit === 'arbeitstage' || einheit === 'wd') ? 'wd' : 'cd');
+        vorgangUmterminieren(f.t, f.t.start, ende);
+        return { ok: true, satz: planSatz(f.t) + ' (' + n + ' ' + (einheit === 'arbeitstage' ? 'Arbeitstage' : 'Tage') + ')' };
+      }
+
+      if(tu === 'anlegen'){
+        const name = String(b.vorgang || '').trim();
+        if(!name) return { fehler: 'Wie soll der neue Vorgang heißen?' };
+        const meilenstein = String(b.art || '').toLowerCase() === 'meilenstein';
+        let start = String(b.datum || '').slice(0, 10);
+        let index = TASKS.length, level = 0;
+        let anker = null;
+        if(b.nach){
+          const f = planVorgangFinden(b.nach); if(f.fehler) return f;
+          anker = f.t;
+          index = findInsertionAdjacent(anker.uid, false);
+          level = anker.level;
+          // Der Tag nach dem Vorgaenger — aber nie ein Samstag, Sonntag oder Feiertag.
+          // (Vor dem Speichern raeumt kalenderDurchsetzen() das ohnehin; hier stimmt
+          // damit schon der Satz, den Tony sofort zurueckspricht.)
+          if(!start){
+            start = fmtISO(addDays(parseISO(anker.finish), 1));
+            if(KALENDER) start = KALENDER.naechsterArbeitstag(start, 1);
+          }
+        }
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(start)) return { fehler: 'Wann soll „' + name + '" beginnen? Bitte ein Datum oder einen Vorgänger nennen.' };
+        const tage = Math.max(1, Math.round(Number(b.tage) || 1));
+        const ende = meilenstein ? start : finishFromDuration(start, tage, (einheit === 'arbeitstage' || einheit === 'wd') ? 'wd' : 'cd');
+        pushUndo();
+        const neu = createTask({ name, milestone: meilenstein, start, finish: ende, level, index, isGewerk: String(b.art || '').toLowerCase() === 'gewerk', category: undefined });
+        // Steht ein Vorgaenger fest, wird die Kette gleich mitgeknuepft -- sonst haengt der
+        // neue Vorgang lose im Plan und wandert bei Verschiebungen nicht mit.
+        if(anker) EDGES.push({ from: anker.uid, to: neu.uid, type: 'EA', lag: 0, lagUnit: 'cd', lagValue: 0 });
+        resolveLockedConstraints();
+        renderAll();
+        return { ok: true, satz: (meilenstein ? 'Meilenstein ' : 'Vorgang ') + name + ' angelegt, ' + planSatz(neu).replace(name + ' steht jetzt auf ', '') };
+      }
+
+      if(tu === 'loeschen'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        pushUndo();
+        deleteTaskAndDescendants(f.t.uid);
+        renderAll();
+        return { ok: true, satz: f.t.name + ' ist aus dem Plan entfernt. Mit „rückgängig" hole ich es zurück.' };
+      }
+
+      if(tu === 'verknuepfen'){
+        const a = planVorgangFinden(b.vorgang); if(a.fehler) return a;
+        const c = planVorgangFinden(b.nach); if(c.fehler) return c;
+        if(a.t.uid === c.t.uid) return { fehler: 'Ein Vorgang kann nicht sein eigener Vorgänger sein.' };
+        const art = String(b.art || 'EA').toUpperCase();
+        if(!['EA', 'AA', 'EE', 'AE'].includes(art)) return { fehler: 'Verknüpfungsart muss EA, AA, EE oder AE sein.' };
+        if(EDGES.some(e => e.from === a.t.uid && e.to === c.t.uid)) return { fehler: a.t.name + ' und ' + c.t.name + ' sind schon verknüpft.' };
+        pushUndo();
+        const anker = edgeAnchors(art);
+        const wert = Math.round(Number(b.tage) || 0);
+        EDGES.push({ from: a.t.uid, to: c.t.uid, type: art, lagUnit: (einheit === 'arbeitstage' || einheit === 'wd') ? 'wd' : 'cd', lagValue: wert,
+          lag: lagToCalendarDays(a.t[anker.predEnd] || a.t.finish, wert, (einheit === 'arbeitstage' || einheit === 'wd') ? 'wd' : 'cd') });
+        resolveLockedConstraints();
+        renderAll();
+        return { ok: true, satz: c.t.name + ' hängt jetzt an ' + a.t.name + ' (' + art + (wert ? (wert > 0 ? ' plus ' : ' minus ') + Math.abs(wert) + ' Tage' : '') + ').' };
+      }
+
+      if(tu === 'verknuepfung_loesen'){
+        const a = planVorgangFinden(b.vorgang); if(a.fehler) return a;
+        const c = planVorgangFinden(b.nach); if(c.fehler) return c;
+        const i = EDGES.findIndex(e => (e.from === a.t.uid && e.to === c.t.uid) || (e.from === c.t.uid && e.to === a.t.uid));
+        if(i < 0) return { fehler: a.t.name + ' und ' + c.t.name + ' sind gar nicht verknüpft.' };
+        pushUndo();
+        EDGES.splice(i, 1);
+        renderAll();
+        return { ok: true, satz: 'Die Verknüpfung zwischen ' + a.t.name + ' und ' + c.t.name + ' ist gelöst.' };
+      }
+
+      if(tu === 'fixieren'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const art = String(b.art || 'start').toLowerCase() === 'ende' ? 'finish' : 'start';
+        toggleLock(f.t.uid, art);
+        const an = art === 'start' ? f.t.lockStart : f.t.lockFinish;
+        return { ok: true, satz: (art === 'start' ? 'Der Beginn' : 'Das Ende') + ' von ' + f.t.name + ' ist jetzt ' + (an ? 'fixiert' : 'wieder frei') + '.' };
+      }
+
+      if(tu === 'einfrieren'){
+        if(typeof standEinfrieren !== 'function') return { fehler: 'Das Einfrieren gibt es in dieser Fassung des Plans nicht.' };
+        standEinfrieren();
+        return { ok: true, satz: 'Der heutige Stand ist als Soll-Fassung eingefroren.' };
+      }
+
+      if(tu === 'rueckgaengig'){
+        undo();
+        return { ok: true, satz: 'Der letzte Schritt im Terminplan ist zurückgenommen.' };
+      }
+
+      if(tu === 'speichern'){
+        speichernAnstossen();
+        return { ok: true, satz: 'Der Plan wird gespeichert.' };
+      }
+
+      return { fehler: 'Diesen Terminplan-Befehl kenne ich nicht: ' + tu };
+    }catch(e){
+      return { fehler: 'Im Terminplan ging etwas schief: ' + (e && e.message || e) };
+    }
+  },
+};
+
 window.planStart = planStart;  // Testhaken: Neustart nach Einhaengen eines Datenbank-Mocks
 planStart();
 
