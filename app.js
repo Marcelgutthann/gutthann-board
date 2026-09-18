@@ -166,7 +166,7 @@ async function lotse(action, body = {}, retried = false) {
     // Kaltstart/Netz-Huester: einmal kurz warten und wiederholen — aber NUR bei
     // Lese-Aktionen. Eine wiederholte Mutation, deren Antwort nur verloren ging,
     // wuerde doppelt ausgefuehrt (doppelte Karte, doppelter Kommentar).
-    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen'];
+    const READS = ['board', 'board_liste', 'projects', 'todo_detail', 'todo_list', 'vgv_dashboard', 'mein_radar', 'kalender', 'agent_laeufe', 'benachrichtigungen', 'dev_liste'];
     if (!retried && READS.includes(action)) { await new Promise((s2) => setTimeout(s2, 900)); return lotse(action, body, true); }
     throw e;
   }
@@ -460,7 +460,9 @@ async function wechsle(typ, id, name) {
   // Poll-Guard den Auto-Refresh dauerhaft.
   S.newCardCol = null; S.newCardText = '';
   zeigeAnsicht('board'); // beim Wechsel immer zuerst die Aufgaben zeigen
-  renderSidebar(); renderTopbar(); renderBoard(); await ladeBoard();
+  renderSidebar(); renderTopbar();
+  if (typ === 'dev') return; // DEV hat kein Board zu laden
+  renderBoard(); await ladeBoard();
 }
 
 // Umschalten zwischen Aufgaben-Board und Projekt-Dashboard. Beide leben im selben
@@ -473,16 +475,20 @@ function zeigeAnsicht(welche) {
   const term = document.getElementById('termin-root');
   if (!dash || !board) return;
   const radar = document.getElementById('radar-root');
+  const devRoot = document.getElementById('dev-root');
   const istProjekt = S.active?.typ === 'projekt';
   const istRadar = S.active?.typ === 'radar';
+  const istDev = S.active?.typ === 'dev';
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
   const termAn = welche === 'termin' && istProjekt;
-  board.style.display = (dashAn || kalAn || termAn || istRadar) ? 'none' : '';
+  board.style.display = (dashAn || kalAn || termAn || istRadar || istDev) ? 'none' : '';
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
   if (term) term.hidden = !termAn;
   if (radar) radar.hidden = !istRadar;
+  if (devRoot) devRoot.hidden = !istDev;
+  if (istDev) ladeDev();
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
@@ -808,6 +814,16 @@ function renderSidebar() {
       : (S.radar?.kpi?.gesamt || 0) > 0
         ? el('span', { class: 'zahl', title: 'Offene Aufgaben, die dir gehören oder dir zugewiesen sind' }, String(S.radar.kpi.gesamt))
         : ''));
+  // DEV: hier sagt man der Anwendung, was sie koennen soll. Steht bewusst oben beim
+  // Radar und nicht bei den Boards -- es ist kein Board, sondern der Draht zur Werkstatt.
+  gR.append(el('div', {
+    class: 'row' + (S.active?.typ === 'dev' ? ' active' : ''),
+    onclick: () => wechsle('dev', null, 'DEV'),
+    title: 'Sag, was die Anwendung koennen soll — der Klaerer fragt zurueck, die Werkstatt baut',
+  }, '⌁ ', 'DEV',
+    (S.devOffen || 0) > 0
+      ? el('span', { class: 'badge', title: 'Fragen des Klärers warten auf deine Antwort' }, String(S.devOffen))
+      : ''));
   sb.append(gR);
 
   const g1 = grp('Meine Boards');
@@ -1079,12 +1095,150 @@ function mentionHilfe(inp) {
   });
 }
 
+// ---------- DEV: das Wunschbuch ----------
+// Marcels Vorgabe 18.09.2026: "Das soll einfach ein Button im Agentic OS sein, wo dann DEV
+// steht. Ich will Features erklaeren und er soll sie umsetzen. Verbesserungen, aber auch
+// sagen, wenn was nicht passt."
+//
+// Das Fenster baut nichts Eigenes. Es zeigt die Akten aus public.auftraege (Migration 154)
+// und bedient die vier Schritte, die es schon gibt:
+//   Wunsch sagen  -> dev_eroeffnen   -> der Klaerer liest den CODE und fragt zurueck
+//   Fragen        -> dev_antwort     -> je Frage eine Antwort
+//   Ziel steht    -> dev_uebergeben  -> die Werkstatt baut, testet, deployt
+// Der Klaerer ist der Grund, warum hier kein Pflichtenheft-Formular steht: er soll
+// widersprechen duerfen ("das gibt es schon", "das ist keine Software-Aufgabe"), und das
+// kann er nur, wenn der Wunsch als ganzer Satz bei ihm ankommt.
+const DEV_STAND = { neu: 'aufgenommen', klaerung: 'der Klärer schaut sich um', bereit: 'wartet auf dich',
+  uebergeben: 'die Werkstatt baut', fertig: 'fertig', abgebrochen: 'abgebrochen' };
+
+async function ladeDev() {
+  const r = await lotse('dev_liste');
+  S.dev = r.error ? { fehler: r.error } : (r.auftraege || []);
+  S.devOffen = Array.isArray(S.dev)
+    ? S.dev.filter((a) => a.stand === 'bereit' && (a.offene_fragen || []).length).length : 0;
+  renderDev(); renderSidebar();
+}
+
+function renderDev() {
+  const root = document.getElementById('dev-root'); if (!root) return;
+  root.innerHTML = '';
+  const akten = S.dev;
+
+  // Eingabe zuerst: wer hierher kommt, will etwas sagen, nicht etwas lesen.
+  const neu = el('div', { class: 'dsec' });
+  neu.append(el('div', { class: 'slbl' }, 'Was soll die Anwendung können?'));
+  const ta = el('textarea', { class: 'devta',
+    placeholder: 'In ganzen Sätzen, so wie du es einem Kollegen sagen würdest. Zum Beispiel: „Ich will die Beteiligtenliste ausfüllen oder weiterentwickeln." Der Klärer liest erst den Code und fragt dann zurück.' });
+  neu.append(ta);
+  const knopf = el('button', { class: 'btn', style: 'margin-top:11px' }, 'Klären lassen');
+  knopf.onclick = async () => {
+    const text = ta.value.trim();
+    if (text.length < 12) return uiHinweis('Sag es in einem ganzen Satz — daraus macht der Klärer einen Auftrag.');
+    knopf.disabled = true; knopf.textContent = 'schickt los…';
+    const r = await lotse('dev_eroeffnen', { anliegen: text });
+    knopf.disabled = false; knopf.textContent = 'Klären lassen';
+    if (r.error || r.fehler) return uiHinweis(r.error || r.fehler);
+    ta.value = '';
+    uiHinweis('Aufgenommen. Der Klärer schaut sich im Code um — das dauert ein paar Minuten.');
+    await ladeDev();
+  };
+  neu.append(knopf);
+  root.append(neu);
+
+  if (!akten) { root.append(el('div', { class: 'dsec' }, el('div', { class: 'devmeta' }, 'Lade…'))); return; }
+  if (akten.fehler) { root.append(el('div', { class: 'dsec' }, el('div', { class: 'devwarn' }, akten.fehler))); return; }
+  if (!akten.length) {
+    root.append(el('div', { class: 'dsec' }, el('div', { class: 'devmeta' },
+      'Noch kein Wunsch aufgenommen. Der erste steht oben in zwei Sätzen.')));
+    return;
+  }
+
+  for (const a of akten) {
+    const s = el('div', { class: 'dsec' });
+    s.append(el('div', { class: 'slbl' }, a.titel || 'Ohne Titel',
+      el('span', { class: 'devstand' }, DEV_STAND[a.stand] || a.stand)));
+    if (a.anliegen) s.append(el('div', { class: 'devtext' }, a.anliegen));
+
+    if (a.stand === 'klaerung') {
+      s.append(el('div', { class: 'devmeta', style: 'margin-top:10px' },
+        'Der Klärer liest Repo und Datenbank. Sobald er fertig ist, stehen hier sein Befund und seine Fragen.'));
+      root.append(s); continue;
+    }
+
+    // Der Widerspruch steht vor allem anderen -- er ist der Sinn des Klaerers.
+    if (a.baubar === false) s.append(el('div', { class: 'devwarn', style: 'margin-top:12px' },
+      'Der Klärer hält das für keine Software-Aufgabe am Agentic OS.'));
+    if (a.risiko) s.append(el('div', { class: 'devwarn', style: 'margin-top:10px' }, 'Risiko: ' + a.risiko));
+    if (a.befund) {
+      s.append(el('div', { class: 'slbl', style: 'margin-top:16px' }, 'Was es heute schon gibt'));
+      s.append(el('div', { class: 'devtext' }, a.befund));
+    }
+
+    const offen = a.offene_fragen || [];
+    const alle = Array.isArray(a.fragen) ? a.fragen : [];
+    if (alle.length) {
+      s.append(el('div', { class: 'slbl', style: 'margin-top:16px' },
+        offen.length ? offen.length + ' Frage' + (offen.length === 1 ? '' : 'n') + ' an dich' : 'Fragen — alle beantwortet'));
+      alle.forEach((f, i) => {
+        const z = el('div', { class: 'devfrage' });
+        z.append(el('div', { class: 'devtext' }, (i + 1) + '. ' + (f.frage || f.text || '')));
+        if (f.antwort) { z.append(el('div', { class: 'devmeta' }, 'Deine Antwort: ' + f.antwort)); s.append(z); return; }
+        const feld = el('input', { class: 'devfeld', style: 'margin-top:8px', placeholder: 'Antwort — ein Satz reicht' });
+        const ok = el('button', { class: 'minibtn', style: 'margin:8px 0 0 0' }, 'Eintragen');
+        ok.onclick = async () => {
+          const t = feld.value.trim(); if (!t) return;
+          ok.disabled = true;
+          const r = await lotse('dev_antwort', { auftrag_id: a.auftrag_id, antwort: t, nr: i + 1 });
+          if (r.error || r.fehler) { ok.disabled = false; return uiHinweis(r.error || r.fehler); }
+          await ladeDev();
+        };
+        z.append(feld, ok);
+        s.append(z);
+      });
+    }
+
+    s.append(el('div', { class: 'slbl', style: 'margin-top:16px' }, 'Ziel — was hinterher anders ist'));
+    const ziel = el('input', { class: 'devfeld', placeholder: 'Ein Satz. Der Klärer schlägt ihn vor, du korrigierst ihn.' });
+    ziel.value = a.ziel || '';
+    s.append(ziel);
+
+    if (a.stand === 'uebergeben' || a.stand === 'fertig') {
+      s.append(el('div', { class: 'devmeta', style: 'margin-top:12px' },
+        'An die Werkstatt gegeben' + (a.werkstatt_status ? ' · Lauf ' + a.werkstatt_status : '')));
+      if (a.werkstatt_ergebnis) {
+        s.append(el('div', { class: 'slbl', style: 'margin-top:14px' }, 'Bericht der Werkstatt'));
+        s.append(el('div', { class: 'devtext' }, a.werkstatt_ergebnis));
+      }
+    } else {
+      const geben = el('button', { class: 'btn', style: 'margin-top:12px' }, 'An die Werkstatt geben');
+      geben.disabled = !a.reif;
+      geben.title = a.reif ? 'Bauen lassen'
+        : offen.length ? 'Erst die offenen Fragen beantworten'
+        : a.baubar === false ? 'Der Klärer hält das für keine Software-Aufgabe'
+        : 'Es fehlt das Ziel';
+      geben.onclick = async () => {
+        geben.disabled = true; geben.textContent = 'übergibt…';
+        const r = await lotse('dev_uebergeben', { auftrag_id: a.auftrag_id, ziel: ziel.value.trim() || null });
+        if (r.error || r.fehler) { geben.disabled = false; geben.textContent = 'An die Werkstatt geben'; return uiHinweis(r.error || r.fehler); }
+        uiHinweis('Übergeben. Die Werkstatt baut, testet und meldet sich an der Karte.');
+        await ladeDev();
+      };
+      s.append(geben);
+      if (!a.reif && !offen.length && a.baubar !== false) {
+        s.append(el('div', { class: 'devmeta' }, 'Trag ein Ziel ein, dann kann die Werkstatt anfangen.'));
+      }
+    }
+    root.append(s);
+  }
+}
+
 // ---------- Topbar + Board ----------
 function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
   if (!S.active) return;
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
+    : S.active.typ === 'dev' ? 'Sag, was die Anwendung können soll · der Klärer fragt zurück, die Werkstatt baut'
     : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
