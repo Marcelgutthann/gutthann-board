@@ -3455,11 +3455,13 @@ const LIVE_ANSICHTEN = { aufgaben: 'board', board: 'board', karten: 'board', das
 // dieselbe Liste bedient anschliessend den Klick -- was Tony sieht, kann er auch drücken.
 const LIVE_SICHT_MAX = 120;
 function liveBeschriftung(e) {
-  const fest = (e.getAttribute('aria-label') || e.getAttribute('title') || e.placeholder || '').trim();
-  if (fest) return fest.slice(0, 60);
+  // Der sichtbare Text gewinnt: der Mensch sagt, was er liest. Ein title-Attribut ist
+  // oft ein ganzer Erklärsatz (der DEV-Knopf trägt einen) und würde „DEV" verdecken.
   if (e.tagName === 'SELECT') return (e.options[e.selectedIndex]?.text || '').trim().slice(0, 60);
-  const t = (e.innerText || e.value || '').replace(/\s+/g, ' ').trim();
-  return t.slice(0, 60);
+  const t = (e.innerText || '').replace(/\s+/g, ' ').trim();
+  if (t) return t.slice(0, 60);
+  const fest = (e.getAttribute('aria-label') || e.placeholder || e.getAttribute('title') || e.value || '').trim();
+  return fest.slice(0, 60);
 }
 function liveBedienbar() {
   const gefunden = [];
