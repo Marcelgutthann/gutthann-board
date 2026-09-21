@@ -3361,6 +3361,23 @@ function dateiAlsBase64(f) {
   });
 }
 
+// Der OBJEKTSCHLUESSEL im Storage muss ASCII sein: Supabase lehnt Umlaute mit
+// 400 {"error":"InvalidKey"} ab. Der Runner weiss das seit dem 09.09. (runner/anhang_schluessel.mjs);
+// hier im Browser stand weiter die alte Fassung, die Umlaute ausdruecklich BEHIELT — jeder
+// Anhang mit Umlaut im Namen scheiterte damit still, auch ueber den Rueckfallweg (gemessen 21.09.).
+// Der ANGEZEIGTE Name in todo_anhaenge.name bleibt unveraendert mit echten Umlauten.
+function asciiSchluessel(name) {
+  const s = String(name)
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
+    .replace(/Ä/g, 'Ae').replace(/Ö/g, 'Oe').replace(/Ü/g, 'Ue')
+    .replace(/ß/g, 'ss')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w.\- ]/g, '_')
+    .replace(/_{3,}/g, '__')
+    .trim();
+  return (/[A-Za-z0-9]/.test(s) ? s : 'datei').slice(0, 180);
+}
+
 async function ladeDateienHoch(dateien, todoId) {
   const liste = Array.from(dateien || []); if (!liste.length) return;
   const box = document.getElementById('anh-status');
@@ -3368,7 +3385,7 @@ async function ladeDateienHoch(dateien, todoId) {
   for (const f of liste) {
     n++;
     if (box) box.textContent = `Lädt hoch (${n}/${liste.length}): ${f.name}`;
-    const pfad = `${todoId}/${Date.now()}_${++anhangZaehler}_${f.name.replace(/[^\w.\-äöüÄÖÜß ]/g, '_')}`;
+    const pfad = `${todoId}/${Date.now()}_${++anhangZaehler}_${asciiSchluessel(f.name)}`;
     // Der Upload laeuft am Lotsen VORBEI direkt in den Speicher — und war darum der
     // einzige Weg ohne Token-Erneuerung. Ein Supabase-Zugangstoken laeuft nach einer
     // Stunde ab: wer das Board lange offen hat, konnte weiter Karten und Kommentare
