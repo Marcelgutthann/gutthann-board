@@ -1422,6 +1422,9 @@ function renderBoard() {
       sp.ist_erledigt ? el('span', { class: 'cnt' }, '✓') : '',
       el('button', { class: 'menu', onclick: (e) => { e.stopPropagation(); spaltenMenu(e, sp, spalten.length); } }, '···')));
     const cardsEl = el('div', { class: 'cards' });
+    // Feste Ablage oben im Eingang (Marcels Wunsch 21.09.): eine Mail aus Outlook hierher
+    // ziehen — daraus wird eine Aufgabe. Sichtbar, damit niemand raten muss, dass es geht.
+    if (sp.id === erste) cardsEl.append(mailKachel(sp));
     for (const t of sichtbar) cardsEl.append(renderCard(t));
     if (abgelaufen.length) {
       if (S.zeigeAlt[sp.id]) for (const t of abgelaufen) cardsEl.append(renderCard(t));
@@ -1561,6 +1564,25 @@ async function legeKarteAn(titel, sp, cardsEl, cntEl, inp) {
   tmp.id = r.todo_id; knoten.dataset.id = r.todo_id; knoten.classList.remove('pending');
   // mut wirft nie — schlaegt das Einsortieren fehl, existiert die Karte trotzdem (Spalte 1).
   if (!sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
+}
+
+// Die sichtbare Ablage im Eingang. Sie nimmt den Wurf selbst an (und haelt ihn auf,
+// damit die Spalte darunter nicht doppelt anspringt).
+function mailKachel(sp) {
+  const k = el('div', {
+    class: 'mailkachel',
+    title: 'Mail aus Outlook hierher ziehen — daraus wird eine Aufgabe',
+    ondragover: (e) => { if (!istDateiZug(e)) return; e.preventDefault(); e.stopPropagation(); k.classList.add('an'); },
+    ondragleave: (e) => { if (!k.contains(e.relatedTarget)) k.classList.remove('an'); },
+    ondrop: (e) => {
+      if (!istDateiZug(e)) return;
+      e.preventDefault(); e.stopPropagation(); k.classList.remove('an');
+      mailsAusZug(e, sp);
+    },
+  },
+    el('div', { class: 'mk-kopf' }, '✉ E-Mail-Aufgabe'),
+    el('div', { class: 'mk-sub' }, 'Mail aus Outlook hierher ziehen'));
+  return k;
 }
 
 // ---- Mail aus Outlook aufs Board ----------------------------------------------------
