@@ -1398,12 +1398,13 @@ function renderBoard() {
     const cntEl = el('span', { class: 'cnt' }, String(sichtbar.length));
     const colEl = el('div', {
       class: 'col',
-      // Nur Karten annehmen — eine hierher gezogene Datei gehoert ins Karten-Detail.
-      ondragover: (e) => { if (!S.drag) return; e.preventDefault(); colEl.classList.add('dragover'); },
+      // Karten verschieben — und seit 21.09. auch Mails aus Outlook annehmen: die Mail
+      // wird zur Karte in genau der Spalte, auf der sie losgelassen wurde.
+      ondragover: (e) => { if (!S.drag && !istDateiZug(e)) return; e.preventDefault(); colEl.classList.add('dragover'); },
       ondragleave: () => colEl.classList.remove('dragover'),
       ondrop: (e) => {
         e.preventDefault(); colEl.classList.remove('dragover');
-        if (!S.drag) return;
+        if (!S.drag) { if (istDateiZug(e)) { e.stopPropagation(); mailsAusZug(e, sp); } return; }
         const id = S.drag; S.drag = null;
         verschiebeKarte(id, sp); // bewusst ohne await: die Karte rutscht sofort hinueber
       },
@@ -1560,6 +1561,114 @@ async function legeKarteAn(titel, sp, cardsEl, cntEl, inp) {
   tmp.id = r.todo_id; knoten.dataset.id = r.todo_id; knoten.classList.remove('pending');
   // mut wirft nie — schlaegt das Einsortieren fehl, existiert die Karte trotzdem (Spalte 1).
   if (!sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
+}
+
+// ---- Mail aus Outlook aufs Board ----------------------------------------------------
+// Outlook uebergibt beim Ziehen die GANZE Mail als .msg — aber nur ueber
+// dataTransfer.files. Der Weg ueber webkitGetAsEntry, den die Ablage im Kartendetail
+// nimmt, steigt bei Outlook-Mails mit EncodingError aus und tut dann still gar nichts
+// (gemessen am 21.09.). Darum hier bewusst files und sonst nichts.
+const MAIL_ENDUNG = /\.(msg|eml)$/i;
+
+function istDateiZug(e) {
+  return !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+}
+
+// Outlook legt neben die Datei die Zeile aus der Mailliste — mit Kopfzeile, also mit den
+// Namen der Spalten. Daraus kommen Absender und Empfangsdatum, ohne die .msg zu oeffnen.
+function mailListenzeilen(txt) {
+  const zeilen = String(txt || '').split(/\r?\n/).filter((z) => z.trim());
+  if (zeilen.length < 2) return [];
+  const kopf = zeilen[0].split('\t').map((k) => k.trim().toLowerCase());
+  return zeilen.slice(1).map((z) => {
+    const w = z.split('\t');
+    const hol = (n) => { const i = kopf.indexOf(n); return i >= 0 ? (w[i] || '').trim() : ''; };
+    return { von: hol('von'), betreff: hol('betreff'), erhalten: hol('erhalten') };
+  }).filter((z) => z.betreff || z.von);
+}
+
+// Wo die Mail gelandet ist, entscheidet, was der Agent damit tun soll.
+function mailOrt() {
+  const name = S.active?.name || '';
+  if (S.active?.typ === 'projekt') return {
+    kurz: 'das Projektboard ' + name,
+    satz: 'das Projektboard "' + name + '"',
+    hinweis: 'Die Karte gehoert zum Projekt ' + name + ': sieh im Projektordner und in der Projektakte nach, bevor du etwas behauptest, und sag, welcher laufende Vorgang im Projekt davon beruehrt ist.',
+  };
+  if (name === 'VgV-Radar') return {
+    kurz: 'das VgV-Radar',
+    satz: 'das VgV-Radar',
+    hinweis: 'Im VgV-Radar geht es um Vergabeverfahren: pruefe zuerst, ob die Mail zu einem Verfahren gehoert, das schon auf dem Board liegt (dann gehoert sie dort dazu und nicht in eine zweite Spur), und ob Fristen, Nachweise oder Bieterfragen betroffen sind.',
+  };
+  if (S.active?.typ === 'radar') return { kurz: 'Mein Dashboard', satz: 'das eigene Aufgabenbrett', hinweis: '' };
+  return { kurz: 'das Board ' + name, satz: 'das Board "' + name + '"', hinweis: '' };
+}
+
+function mailAuftrag(ort) {
+  return [
+    '@agent Diese Karte ist gerade entstanden, weil eine Outlook-Mail auf ' + ort.satz + ' gezogen wurde. Die Mail haengt als Datei an der Karte.',
+    'Lies die Mail zuerst vollstaendig — sie ist der ganze Auftrag, der Kartentitel ist nur ihr Betreff.',
+    'Arbeite dann in dieser Reihenfolge:',
+    '1. Worum geht es und was ist zu tun? Schreib das als Notiz an die Karte: in ganzen Saetzen, mit den Zahlen, Namen und Fristen aus der Mail.',
+    '2. Steht eine Frist oder ein Termin darin, schlag sie als Frist vor.',
+    '3. Wer wird gebraucht? Intern die Kollegin oder den Kollegen aus public.personen, extern die Beteiligten des Projekts — beide mit Namen und dazu, wofuer.',
+    '4. Was davon kannst du JETZT selbst erledigen: Antwortentwurf schreiben, Unterlagen im Projektordner heraussuchen, Zahlen nachrechnen, Angaben gegen den Bestand pruefen? Tu es und leg das Ergebnis als Datei an die Karte.',
+    '5. Was danach uebrig bleibt und nur ein Mensch tun kann, kommt als Unterpunkte an die Karte — je Unterpunkt eine Handlung.',
+    ort.hinweis,
+  ].filter(Boolean).join('\n');
+}
+
+function mailNotiz(zeile, datei, ort) {
+  const jetzt = new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+  return [
+    'Aus Outlook auf ' + ort.kurz + ' gezogen am ' + jetzt + '.',
+    zeile && zeile.von ? 'Von: ' + zeile.von : '',
+    zeile && zeile.erhalten ? 'Erhalten: ' + zeile.erhalten : '',
+    'Die Mail selbst haengt als ' + datei.name + ' an der Karte.',
+  ].filter(Boolean).join('\n');
+}
+
+// Der Zug muss synchron ausgelesen werden — nach dem ersten await ist dataTransfer leer.
+function mailsAusZug(e, sp) {
+  const dateien = Array.from(e.dataTransfer.files || []);
+  let zeilen = [];
+  try { zeilen = mailListenzeilen(e.dataTransfer.getData('text/plain')); } catch {}
+  const mails = dateien.filter((f) => MAIL_ENDUNG.test(f.name));
+  if (!mails.length) {
+    uiHinweis(dateien.length
+      ? 'Hierher gehoeren Mails aus Outlook — andere Dateien haengt man im Kartendetail an.'
+      : 'Aus diesem Zug kam keine Mail an. Im neuen Outlook zieht man aus der Liste, nicht aus dem Lesebereich.');
+    return;
+  }
+  (async () => { for (const f of mails) {
+    const name = f.name.replace(MAIL_ENDUNG, '').trim();
+    const zeile = zeilen.find((z) => z.betreff && (z.betreff === name || name.startsWith(z.betreff.slice(0, 40))))
+      || (mails.length === 1 && zeilen.length === 1 ? zeilen[0] : null);
+    await mailAblegen(f, zeile, sp);
+  } })();
+}
+
+async function mailAblegen(datei, zeile, sp) {
+  const ort = mailOrt();
+  const betreff = ((zeile && zeile.betreff) || datei.name.replace(MAIL_ENDUNG, '')).trim() || 'Mail ohne Betreff';
+  uiHinweis('Mail wird abgelegt: ' + betreff);
+  let r;
+  try {
+    r = await lotse('todo_create', {
+      titel: betreff,
+      projekt: S.active.typ === 'projekt' ? S.active.name : null,
+      notiz: mailNotiz(zeile, datei, ort),
+    });
+  } catch (err) { r = { fehler: err.message }; }
+  if (!r || !r.todo_id) {
+    uiHinweis('Mail nicht abgelegt: ' + ((r && (r.fehler || r.error)) || 'keine Antwort vom Server'));
+    return;
+  }
+  if (sp && !sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
+  await ladeDateienHoch([datei], r.todo_id);
+  await mut('kommentar_anlegen', { todo_id: r.todo_id, text: mailAuftrag(ort) });
+  await ladeBoard();
+  uiHinweis('Mail liegt als Karte "' + betreff + '" — der Agent liest sie gerade.', 'ok');
 }
 
 function spaltenMenu(e, sp, nSpalten) {
@@ -3832,8 +3941,18 @@ async function doLogin() {
 for (const ereignis of ['dragover', 'drop']) {
   addEventListener(ereignis, (e) => {
     if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
-    if (e.target && e.target.closest && e.target.closest('.dropzone')) return;
+    if (e.target && e.target.closest && e.target.closest('.dropzone, .col, #radar-root')) return;
     e.preventDefault();
+  });
+}
+const radarRoot = document.getElementById('radar-root');
+if (radarRoot) {
+  radarRoot.addEventListener('dragover', (e) => { if (!istDateiZug(e)) return; e.preventDefault(); radarRoot.classList.add('dragover'); });
+  radarRoot.addEventListener('dragleave', (e) => { if (!radarRoot.contains(e.relatedTarget)) radarRoot.classList.remove('dragover'); });
+  radarRoot.addEventListener('drop', (e) => {
+    if (!istDateiZug(e)) return;
+    e.preventDefault(); e.stopPropagation(); radarRoot.classList.remove('dragover');
+    mailsAusZug(e, null); // ohne Spalte: die Karte landet in den eigenen Aufgaben
   });
 }
 addEventListener('unhandledrejection', (e) => console.error('unhandled:', e.reason));
