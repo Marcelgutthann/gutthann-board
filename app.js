@@ -1626,11 +1626,17 @@ function mailOrt() {
   return { kurz: 'das Board ' + name, satz: 'das Board "' + name + '"', hinweis: '' };
 }
 
-function mailAuftrag(ort) {
+function mailAuftrag(ort, wunsch) {
+  const eigen = (wunsch && wunsch.auftrag || '').trim();
   return [
     '@agent Diese Karte ist gerade entstanden, weil eine Outlook-Mail auf ' + ort.satz + ' gezogen wurde. Die Mail haengt als Datei an der Karte.',
-    'Lies die Mail zuerst vollstaendig — sie ist der ganze Auftrag, der Kartentitel ist nur ihr Betreff.',
-    'Arbeite dann in dieser Reihenfolge:',
+    'Lies die Mail zuerst vollstaendig — der Kartentitel ist nur ihr Betreff.',
+    // Was Marcel beim Ablegen hineingeschrieben hat, ist der Auftrag. Die Gliederung
+    // darunter ist nur das Geruest fuer den Fall, dass er nichts gesagt hat.
+    eigen ? 'DEIN AUFTRAG — das ist die Hauptsache, alles andere ordnet sich dem unter:\n' + eigen : '',
+    wunsch && wunsch.frist ? 'Frist: ' + wunsch.frist + ' — sie steht schon an der Karte.' : '',
+    wunsch && wunsch.melden === 'mail' ? 'Es ist ein Rueckruf bestellt, sobald die Antwort auf diese Mail eintrifft.' : '',
+    eigen ? 'Zur Orientierung, soweit der Auftrag nichts anderes verlangt:' : 'Arbeite in dieser Reihenfolge:',
     '1. Worum geht es und was ist zu tun? Schreib das als Notiz an die Karte: in ganzen Saetzen, mit den Zahlen, Namen und Fristen aus der Mail.',
     '2. Steht eine Frist oder ein Termin darin, schlag sie als Frist vor.',
     '3. Wer wird gebraucht? Intern die Kollegin oder den Kollegen aus public.personen, extern die Beteiligten des Projekts — beide mit Namen und dazu, wofuer.',
@@ -1640,14 +1646,76 @@ function mailAuftrag(ort) {
   ].filter(Boolean).join('\n');
 }
 
-function mailNotiz(zeile, datei, ort) {
+// 'agent' = wenn der Agent durch ist, 'mail' = wenn die Antwort eintrifft, 'frist' = zur Frist.
+// Welche Bedingung entsteht, entscheidet assistant_rueckruf_anfordern anhand der Argumente:
+// todo_id -> agent_fertig, suche -> mail, sonst -> zeit. Darum hier bewusst nur je eines.
+async function mailMelden(wunsch, betreff, todoId) {
+  const art = wunsch && wunsch.melden;
+  if (!art) return;
+  const zweck = 'Mail "' + betreff.slice(0, 80) + '"' + (wunsch.auftrag ? ' — ' + wunsch.auftrag.slice(0, 160) : '');
+  const daten = { zweck };
+  if (art === 'agent') daten.todo_id = todoId;
+  else if (art === 'mail') daten.suche = betreff.replace(/^\s*(AW|WG|RE|FWD?)\s*:\s*/i, '').slice(0, 60);
+  else if (art === 'frist') {
+    const min = Math.round((new Date(wunsch.frist + 'T09:00:00') - Date.now()) / 60000);
+    if (!(min > 0)) { uiHinweis('Die Frist liegt nicht in der Zukunft — kein Rückruf bestellt.'); return; }
+    daten.in_minuten = min;
+  }
+  const r = await lotse('rueckruf_anfordern', daten).catch((e) => ({ fehler: e.message }));
+  if (!r || r.fehler || r.ok === false) uiHinweis('Rückruf nicht bestellt: ' + ((r && (r.fehler || r.error)) || 'keine Antwort'));
+}
+
+function mailNotiz(zeile, datei, ort, wunsch) {
   const jetzt = new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
   return [
     'Aus Outlook auf ' + ort.kurz + ' gezogen am ' + jetzt + '.',
     zeile && zeile.von ? 'Von: ' + zeile.von : '',
     zeile && zeile.erhalten ? 'Erhalten: ' + zeile.erhalten : '',
     'Die Mail selbst haengt als ' + datei.name + ' an der Karte.',
+    wunsch && wunsch.auftrag ? '\nAuftrag beim Ablegen: ' + wunsch.auftrag : '',
   ].filter(Boolean).join('\n');
+}
+
+// Beim Ablegen sagen, was passieren soll. Leer lassen ist erlaubt — dann gilt die
+// Standard-Gliederung. Esc bricht ab, dann entsteht gar keine Karte.
+function mailWunschDialog(betreff, anzahl, ort) {
+  const schnell = [
+    ['Prüfen', 'Prüf die Mail und sag mir, was zu tun ist.'],
+    ['Prüfen + Antwort', 'Prüf die Mail und bereite eine Antwort an den Absender vor.'],
+    ['Nur verfolgen', 'Nichts selbst entscheiden — nur festhalten, worum es geht, und melden, wenn etwas ansteht.'],
+  ];
+  return new Promise((fertig) => {
+    const { o, schliessen } = uiModal(
+      '<div class="uidlg-t">Was soll damit passieren?</div>' +
+      '<div class="uidlg-x">' + uiEsc(anzahl > 1 ? anzahl + ' Mails' : '„' + betreff + '"') + ' · landet auf ' + uiEsc(ort.kurz) + '</div>' +
+      '<div class="mkd-schnell">' + schnell.map(([k, v]) =>
+        '<button class="uidlg-b hell" data-v="' + uiEsc(v) + '">' + uiEsc(k) + '</button>').join('') + '</div>' +
+      '<textarea class="uidlg-i uidlg-ta" data-ui="auftrag" rows="3" placeholder="z. B. Nachtrag erst prüfen, dann den Nachtrag erstellen"></textarea>' +
+      '<div class="mkd-zeile">' +
+        '<label>Frist<input type="date" class="uidlg-i" data-ui="frist"></label>' +
+        '<label>Melden<select class="uidlg-i" data-ui="melden">' +
+          '<option value="">nicht</option>' +
+          '<option value="agent">wenn der Agent durch ist</option>' +
+          '<option value="mail">wenn die Antwort da ist</option>' +
+          '<option value="frist">zur Frist</option>' +
+        '</select></label>' +
+      '</div>' +
+      '<div class="uidlg-hint">Strg+Enter legt ab · Esc bricht ab</div>' +
+      '<div class="uidlg-akt">' +
+      '<button class="uidlg-b hell" data-ui="nein">Abbrechen</button>' +
+      '<button class="uidlg-b" data-ui="ok">Ablegen</button>' +
+      '</div>', (w) => fertig(w), true);
+    const ta = o.querySelector('[data-ui="auftrag"]');
+    const frist = o.querySelector('[data-ui="frist"]');
+    const melden = o.querySelector('[data-ui="melden"]');
+    for (const b of o.querySelectorAll('.mkd-schnell button')) {
+      b.onclick = () => { ta.value = b.dataset.v; ta.focus(); };
+    }
+    o.querySelector('[data-ui="ok"]').onclick = () => schliessen({
+      auftrag: ta.value.trim(), frist: frist.value || null, melden: melden.value || null });
+    o.querySelector('[data-ui="nein"]').onclick = () => schliessen(null);
+    ta.focus();
+  });
 }
 
 // Der Zug muss synchron ausgelesen werden — nach dem ersten await ist dataTransfer leer.
@@ -1662,15 +1730,20 @@ function mailsAusZug(e, sp) {
       : 'Aus diesem Zug kam keine Mail an. Im neuen Outlook zieht man aus der Liste, nicht aus dem Lesebereich.');
     return;
   }
-  (async () => { for (const f of mails) {
-    const name = f.name.replace(MAIL_ENDUNG, '').trim();
-    const zeile = zeilen.find((z) => z.betreff && (z.betreff === name || name.startsWith(z.betreff.slice(0, 40))))
-      || (mails.length === 1 && zeilen.length === 1 ? zeilen[0] : null);
-    await mailAblegen(f, zeile, sp);
-  } })();
+  (async () => {
+    const erste = mails[0].name.replace(MAIL_ENDUNG, '').trim();
+    const wunsch = await mailWunschDialog(erste, mails.length, mailOrt());
+    if (wunsch === null) return; // abgebrochen: keine Karte, nichts hochgeladen
+    for (const f of mails) {
+      const name = f.name.replace(MAIL_ENDUNG, '').trim();
+      const zeile = zeilen.find((z) => z.betreff && (z.betreff === name || name.startsWith(z.betreff.slice(0, 40))))
+        || (mails.length === 1 && zeilen.length === 1 ? zeilen[0] : null);
+      await mailAblegen(f, zeile, sp, wunsch);
+    }
+  })();
 }
 
-async function mailAblegen(datei, zeile, sp) {
+async function mailAblegen(datei, zeile, sp, wunsch) {
   const ort = mailOrt();
   const betreff = ((zeile && zeile.betreff) || datei.name.replace(MAIL_ENDUNG, '')).trim() || 'Mail ohne Betreff';
   uiHinweis('Mail wird abgelegt: ' + betreff);
@@ -1679,7 +1752,8 @@ async function mailAblegen(datei, zeile, sp) {
     r = await lotse('todo_create', {
       titel: betreff,
       projekt: S.active.typ === 'projekt' ? S.active.name : null,
-      notiz: mailNotiz(zeile, datei, ort),
+      notiz: mailNotiz(zeile, datei, ort, wunsch),
+      faellig: (wunsch && wunsch.frist) || null,
     });
   } catch (err) { r = { fehler: err.message }; }
   if (!r || !r.todo_id) {
@@ -1688,7 +1762,8 @@ async function mailAblegen(datei, zeile, sp) {
   }
   if (sp && !sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
   await ladeDateienHoch([datei], r.todo_id);
-  await mut('kommentar_anlegen', { todo_id: r.todo_id, text: mailAuftrag(ort) });
+  await mut('kommentar_anlegen', { todo_id: r.todo_id, text: mailAuftrag(ort, wunsch) });
+  await mailMelden(wunsch, betreff, r.todo_id);
   await ladeBoard();
   uiHinweis('Mail liegt als Karte "' + betreff + '" — der Agent liest sie gerade.', 'ok');
 }
