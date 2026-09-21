@@ -1687,7 +1687,7 @@ function mailWunschDialog(betreff, anzahl, ort) {
   return new Promise((fertig) => {
     const { o, schliessen } = uiModal(
       '<div class="uidlg-t">Was soll damit passieren?</div>' +
-      '<div class="uidlg-x">' + uiEsc(anzahl > 1 ? anzahl + ' Mails' : '„' + betreff + '"') + ' · landet auf ' + uiEsc(ort.kurz) + '</div>' +
+      '<div class="uidlg-x">' + uiEsc(anzahl > 1 ? anzahl + ' Mails' : '„' + betreff + '"') + ' · Ziel: ' + uiEsc(ort.kurz) + '</div>' +
       '<div class="mkd-schnell">' + schnell.map(([k, v]) =>
         '<button class="uidlg-b hell" data-v="' + uiEsc(v) + '">' + uiEsc(k) + '</button>').join('') + '</div>' +
       '<textarea class="uidlg-i uidlg-ta" data-ui="auftrag" rows="3" placeholder="z. B. Nachtrag erst prüfen, dann den Nachtrag erstellen"></textarea>' +
