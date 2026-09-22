@@ -47,10 +47,14 @@ const AGENT_GROUPS=[
     {id:'ingest',ic:'↑',t:'Schnell-Sync',s:'DB aus letztem Scan aktualisieren'}]},
   {h:'Verfolgung',items:[
     {id:'nachhaken',ic:'⏰',t:'Nachhaken-Prüfung',s:'Überfällige Vorgänge markieren'}]},
-  {h:'LPH-Berichte',items:[
+  {h:'LPH-Berichte (HOAI)',items:[
+    {id:'lph2',ic:'2',t:'LPH 2 · Vorentwurf',s:'Vorentwurfsbericht erzeugen'},
     {id:'lph3',ic:'3',t:'LPH 3 · Entwurf',s:'Entwurfsbericht erzeugen'},
-    {id:'lph4',ic:'4',t:'LPH 4 · Genehmigung',s:'Genehmigungsbericht'},
-    {id:'lph5',ic:'5',t:'LPH 5 · Ausführung',s:'Ausführungsbericht'}]}];
+    {id:'lph4',ic:'4',t:'LPH 4 · Genehmigung',s:'Genehmigungsbericht erzeugen'},
+    {id:'lph5',ic:'5',t:'LPH 5 · Ausführung',s:'Ausführungsbericht erzeugen'},
+    {id:'lph6',ic:'6',t:'LPH 6 · Vergabe-Vorb.',s:'Bericht Vorbereitung der Vergabe'},
+    {id:'lph7',ic:'7',t:'LPH 7 · Vergabe',s:'Bericht Mitwirkung bei der Vergabe'},
+    {id:'lph8',ic:'8',t:'LPH 8 · ObjektÜW',s:'Bericht Objektüberwachung'}]}];
 const AGENT_VIEWS=[
   {id:'aktivitaet',key:'aktivitaet',ico:'mail',kicker:'Agent · E-Mail-Wissensbasis',title:'Aktivität seit letztem Stand',desc:'Neue Mails & Vorgänge seit dem letzten Dashboard-Stand — chronologisch aus der Mail-Wissensbasis.'},
   {id:'fachplaner',key:'fachplaner',ico:'users',kicker:'Agent · Multi-Persona-Analyse',title:'Fachplaner & Schnittstellen',desc:'Alle beteiligten Fachplaner und Büro-Schnittstellen mit aktuellem Status.'},
@@ -251,9 +255,12 @@ function renderSidebar(){
   for(const v of AGENT_VIEWS){let cnt=v.key&&D[v.key]?D[v.key].length:0;if(v.id==='termine'&&D.vorausschau)cnt=(D.vorausschau.zwangspunkte||[]).length+(D.vorausschau.diese_woche||[]).length;h+=navItem(v.id,v.title,navIco(v.ico),cnt||null);}
   h+=navItem('system','System & Automatik',navIco('cog'),null);
   h+='</div>';
-  h+='<div class="sb-group"><div class="sb-group-h">Werkzeuge<span class="ln"></span></div>';
-  for(const g of AGENT_GROUPS)for(const a of g.items)h+='<button class="sb-ag'+(a.doku?' doku':'')+'" data-agent="'+a.id+'"><span class="ai">'+a.ic+'</span><span class="sb-ag-tx"><span class="at">'+esc(a.t)+'</span><span class="as">'+esc(a.s)+'</span></span></button>';
-  h+='</div><div class="page-sub" style="font-size:10px;padding:0 2px 10px;line-height:1.4">Läuft, wenn der <strong>Runner</strong> aktiv ist (Status oben rechts).</div>';
+  for(const g of AGENT_GROUPS){
+    h+='<div class="sb-group"><div class="sb-group-h">'+esc(g.h)+'<span class="ln"></span></div>';
+    for(const a of g.items)h+='<button class="sb-ag'+(a.doku?' doku':'')+'" data-agent="'+a.id+'"><span class="ai">'+a.ic+'</span><span class="sb-ag-tx"><span class="at">'+esc(a.t)+'</span><span class="as">'+esc(a.s)+'</span></span></button>';
+    h+='</div>';
+  }
+  h+='<div class="page-sub" style="font-size:10px;padding:0 2px 10px;line-height:1.4">Läuft, wenn der <strong>Runner</strong> aktiv ist (Status oben rechts).</div>';
   box.innerHTML=h;
   box.querySelectorAll('.sb-nav').forEach(b=>b.onclick=()=>{pview=b.dataset.pview;openWin=null;document.body.style.overflow='';setDrawer(false);renderSidebar();render();window.scrollTo(0,0);});
   box.querySelectorAll('button[data-agent]').forEach(b=>b.onclick=()=>queueAgent(b.dataset.agent,{},b));
