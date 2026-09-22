@@ -1038,6 +1038,10 @@ function renderAktivitaet(recent){if(!recent.length)return '<div class="empty">K
 // Gliederungsbaum wie ein LV: 'gruppe' = Ueberschrift, 'eintrag' = Beteiligter.
 // Die Analyse ist nur noch Zulieferer ueber den Knopf "Aus Analyse".
 // ---------------------------------------------------------------------------
+const BET_Z_SVG=d=>'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" '+
+  'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+d+'</svg>';
+const BET_Z_HOERER=BET_Z_SVG('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8.1 9.7a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/>');
+const BET_Z_BRIEF=BET_Z_SVG('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/>');
 const BET_KONTAKTARTEN=[['telefon','Telefon'],['mobil','Mobil'],['fax','Fax'],['email','E-Mail'],['web','Web']];
 const BET_KONTEXTE=[['arbeit','Arbeit'],['zentrale','Zentrale'],['privat','Privat']];
 const betName=r=>[r.anrede,r.namenstitel,r.vorname,r.nachname].filter(Boolean).join(' ').trim();
@@ -1167,14 +1171,12 @@ function betListe(L){
     if(r.art==='gruppe'){
       const kinder=L.filter(x=>x.parent_id===r.id);
       const n=kinder.filter(x=>x.art==='eintrag').length;
-      h+='<div class="bet-g t'+Math.min(r.tiefe,2)+'" data-betfold="'+r.id+'"'+
-         ' title="Klick: auf- und zuklappen · Rechtsklick: Zeile oder Überschrift einfügen">'+
+      h+='<div class="bet-g t'+Math.min(r.tiefe,2)+'" data-betfold="'+r.id+'" draggable="true"'+
+         ' title="Ziehen zum Verschieben · Klick: auf- und zuklappen · Rechtsklick für alles Weitere">'+
          '<span class="bet-g-nr">'+(kinder.length?(zu(r.id)&&!f?'▸ ':'▾ '):'')+esc(r.nummer)+'</span>'+
          '<span class="bet-g-t">'+esc(r.titel||'(ohne Titel)')+'</span>'+
          (n?'<span class="bet-g-n">'+n+'</span>':'')+
          '<span class="z-akt">'+
-           '<button class="bet-t" data-betup="'+r.id+'" title="Überschrift samt Inhalt eine Stelle nach oben">↑</button>'+
-           '<button class="bet-t" data-betdown="'+r.id+'" title="Überschrift samt Inhalt eine Stelle nach unten">↓</button>'+
            '<button class="bet-t wort" data-betadd="'+r.id+'" title="Hier einen Beteiligten einsortieren">+ Beteiligter</button>'+
          '</span></div>';
       return;}
@@ -1190,28 +1192,20 @@ function betListe(L){
       (vater.firma||'').trim().toLowerCase()===(r.firma||'').trim().toLowerCase();
     h+='<div class="bet-z t'+Math.min(r.tiefe,3)+(betSel===r.id?' sel':'')+
        (istFirma?' firmenzeile':'')+
-       (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'"'+
-       ' title="Klick: ansehen und bearbeiten · Rechtsklick: Zeile einfügen, verschieben, löschen">'+
+       (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'" draggable="true"'+
+       ' title="Ziehen zum Verschieben · Klick: ansehen und bearbeiten · Rechtsklick: Zeile einfügen">'+
        '<span class="z-nr">'+esc(r.nummer)+'</span>'+
        '<span class="z-rolle">'+esc(r.titel||'—')+'</span>'+
        '<span class="z-firma">'+esc(firmaGleich?'':(r.firma||(r.status==='offen'?'— noch nicht vergeben —':'')))+'</span>'+
        '<span class="z-person">'+esc(nm)+(r.funktion?' <span class="z-funk">'+esc(r.funktion)+'</span>':'')+'</span>'+
-       '<span class="z-kon">'+(tel?'<i title="'+esc(tel.wert)+'">☎</i>':'')+(mail?'<i title="'+esc(mail.wert)+'">✉</i>':'')+'</span>'+
+       '<span class="z-kon">'+(tel?'<i title="'+esc(tel.wert)+'">'+BET_Z_HOERER+'</i>':'')+
+         (mail?'<i title="'+esc(mail.wert)+'">'+BET_Z_BRIEF+'</i>':'')+'</span>'+
        '<span class="z-tags">'+
          (r.ist_bauherr?'<span class="bet-tag bh">BH</span>':'')+
          (r.ist_intern?'<span class="bet-tag in">intern</span>':'')+
          (r.quelle==='crm'?'<span class="bet-tag crm">CRM</span>':'')+
          (r.quelle==='pdf'?'<span class="bet-tag pdf">PDF</span>':'')+
          (r.quelle==='analyse'?'<span class="bet-tag an">Analyse</span>':'')+
-       '</span>'+
-       // Verschieben und Ergaenzen direkt an der Zeile. Beides gab es vorher
-       // nur rechts im Detail -- Marcel und die Kollegen haben es dort nicht
-       // gefunden und dachten, neue Zeilen liessen sich nicht einsortieren.
-       '<span class="z-akt">'+
-         '<button class="bet-t" data-betup="'+r.id+'" title="eine Zeile nach oben">↑</button>'+
-         '<button class="bet-t" data-betdown="'+r.id+'" title="eine Zeile nach unten">↓</button>'+
-         '<button class="bet-t" data-betfill="'+r.id+'" title="'+
-           (r.firma?'Ansprechpartner dieser Firma ergänzen':'Firma aus dem Adressbuch einsetzen')+'">+</button>'+
        '</span></div>';});
   if(f&&!gezeigt)h='<div class="bet-leer">Kein Eintrag passt zu „'+esc(betFilter)+'“.</div>';
   return h;
@@ -1768,6 +1762,46 @@ function betZeilenMenue(e,id){
   punkte.push({txt:'Löschen',danger:true,do:()=>{
     betLoeschFrage=id;betEdit=null;betCrmOffen=false;betNurSeite();}});
   window.ctxMenu(e.clientX,e.clientY,punkte);
+}
+
+// Ziehen wie auf dem Board (Marcel 22.09.: "wie unsere Karten im Dashboard so
+// richtig smooth packen und verschieben"). Die obere und die untere Kante einer
+// Zeile ordnen davor bzw. danach ein, die MITTE haengt die gezogene Zeile unter
+// das Ziel -- damit ersetzt das Ziehen auch das fruehere Ein- und Ausruecken.
+let betZieht=null;
+const BET_ZIELE=['zielvor','zielnach','zielrein'];
+function betZielZone(e,knoten){
+  const k=knoten.getBoundingClientRect();
+  const p=(e.clientY-k.top)/(k.height||1);
+  return p<0.3?'vor':p>0.7?'nach':'rein';
+}
+function betZieleWeg(M){
+  M.querySelectorAll('.'+BET_ZIELE.join(',.')).forEach(x=>x.classList.remove(...BET_ZIELE));
+}
+async function betZiehAblegen(id,zielId,zone){
+  if(!id||id===zielId)return;
+  const ziel=betL.find(r=>r.id===zielId);if(!ziel)return;
+  // Eine Zeile darf nicht in den eigenen Zweig wandern -- sonst haengt sich der
+  // Baum in sich selbst und die Zeilen verschwinden aus der Liste.
+  for(let x=ziel;x;x=betL.find(r=>r.id===x.parent_id))
+    if(x.id===id){betHinweis('Eine Zeile kann nicht unter sich selbst.');return;}
+  if(zone==='rein'){
+    const kinder=betL.filter(r=>(r.parent_id||null)===ziel.id&&r.id!==id);
+    const{error}=await sb.from('beteiligte').update({parent_id:ziel.id,pos:(kinder.length+1)*10}).eq('id',id);
+    if(error){betHinweis('Nicht verschoben: '+betFehler(error));return;}
+  }else{
+    const parent=ziel.parent_id||null;
+    const gesch=betL.filter(r=>(r.parent_id||null)===parent&&r.id!==id);
+    const i=gesch.findIndex(r=>r.id===zielId);
+    const reihe=gesch.map(r=>r.id);
+    reihe.splice(zone==='vor'?i:i+1,0,id);
+    const{error}=await sb.from('beteiligte').update({parent_id:parent}).eq('id',id);
+    if(error){betHinweis('Nicht verschoben: '+betFehler(error));return;}
+    const e2=await betZweigSchreiben(reihe);
+    if(e2){betHinweis('Verschoben, aber nicht einsortiert: '+betFehler(e2));}
+  }
+  betSel=id;
+  await betNeuZeichnen();
 }
 
 // Umsortieren: pos der Geschwister neu vergeben (10,20,30 …) und tauschen.
@@ -2342,6 +2376,29 @@ function wireBet(){
     betCrmOffen=false;betCrmFirma=null;betMitRolle='';
     M.querySelectorAll('[data-betrow]').forEach(x=>x.classList.toggle('sel',x===z));
     betNurSeite();});
+  // Ziehen und Ablegen -- Zeilen wie Ueberschriften.
+  M.querySelectorAll('[data-betrow],[data-betfold]').forEach(z=>{
+    const id=z.dataset.betrow||z.dataset.betfold;
+    z.ondragstart=e=>{betZieht=id;
+      if(e.dataTransfer)e.dataTransfer.effectAllowed='move';
+      // Erst im naechsten Bild blass werden, sonst nimmt der Browser die halb
+      // durchsichtige Zeile als Ziehbild (gleiche Falle wie bei den Karten).
+      requestAnimationFrame(()=>z.classList.add('zieht'));};
+    z.ondragend=()=>{betZieht=null;z.classList.remove('zieht');betZieleWeg(M);};
+    z.ondragover=e=>{
+      if(!betZieht||betZieht===id)return;
+      e.preventDefault();
+      const zone=betZielZone(e,z);
+      z.classList.remove(...BET_ZIELE);
+      z.classList.add('ziel'+zone);};
+    z.ondragleave=()=>z.classList.remove(...BET_ZIELE);
+    z.ondrop=e=>{
+      if(!betZieht)return;
+      e.preventDefault();e.stopPropagation();
+      const zone=betZielZone(e,z),gezogen=betZieht;
+      betZieht=null;betZieleWeg(M);
+      betZiehAblegen(gezogen,id,zone);};
+  });
   // Rechtsklick auf Zeile und Ueberschrift: einfuegen, verschieben, loeschen.
   M.querySelectorAll('[data-betrow]').forEach(z=>z.oncontextmenu=e=>betZeilenMenue(e,z.dataset.betrow));
   M.querySelectorAll('[data-betfold]').forEach(g=>g.oncontextmenu=e=>betZeilenMenue(e,g.dataset.betfold));
