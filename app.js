@@ -2129,7 +2129,7 @@ let dashTab = 'laufend';
 // mit Standardfiltern wie bei competitionline und MEHREREN speicherbaren Filtern.
 // Die Daten kommen direkt ueber PostgREST (Such-RPC + Filter-Tabelle, Migration 129) —
 // der Lotse bleibt aussen vor, damit kein Edge-Deploy noetig ist.
-let marktZ = { krit: null, aktiv: null, liste: null };
+let marktZ = { krit: null, aktiv: null, liste: null, ansicht: '' };
 const MARKT_CPV = [['', 'Alle Bereiche'], ['71', 'Planungsleistungen · CPV 71'], ['712', 'Architekturleistungen · CPV 712'],
   ['7122', 'Objektplanung Gebäude / Freianlagen · CPV 7122'], ['713', 'Ingenieurleistungen · CPV 713'],
   ['714', 'Stadtplanung / Landschaft · CPV 714'], ['45', 'Bauleistungen · CPV 45']];
@@ -2170,6 +2170,24 @@ function lphText(lph) {
 // Radar-Regel: unter 10 Tagen ist ein VgV-Teilnahmeantrag nicht mehr seriös zu bauen.
 const MARKT_TAGE = [['', 'Restzeit egal'], ['10', 'noch ≥ 10 Tage'], ['21', 'noch ≥ 21 Tage'], ['30', 'noch ≥ 30 Tage']];
 
+// Verfahrensmodell als auswählbare Ansicht (Marcels Auftrag 22.09.: GP/GÜ/TÜ): Nur diese
+// drei Vertragsmodelle kann das Büro führen. Ableiten lässt sich das heute nur als
+// Schlagwort-Treffer über Titel, Verfahrensart und Beschreibung — GÜ/TÜ tauchen fast nur
+// in Bau-Ausschreibungen (CPV 45) auf, nicht in der Planungssuche; die verlässliche
+// Kennzeichnung klärt die Rücksprache (Daniela, Joachim, Julian). Bis dahin filtert die
+// Ansicht rein sichtseitig über die geladenen Treffer, ohne den gespeicherten Filter zu
+// verändern.
+const MARKT_MODELL = [['', 'Alle Verfahren'], ['GP', 'nur Generalplaner'], ['GÜ', 'nur Generalübernehmer'], ['TÜ', 'nur Totalübernehmer']];
+function verfahrensmodell(z) {
+  // Weitwinkel-Kandidaten tragen `begruendung` statt `beschreibung` -- ohne sie fehlten
+  // drei von neun GP-Treffern (gemessen 22.09. an den 69 offenen Kandidaten).
+  const s = ((z.titel || '') + ' ' + (z.verfahrensart || '') + ' ' + (z.beschreibung || '') + ' ' + (z.begruendung || '')).toLowerCase();
+  if (/totalübernehm|totalübernahme|totalunternehm/.test(s)) return 'TÜ';
+  if (/generalübernehm|generalübernahme/.test(s)) return 'GÜ';
+  if (/generalplan/.test(s)) return 'GP';
+  return null;
+}
+
 // Beide Direktwege an PostgREST erneuern bei 401 einmal den Token (wie lotse) — vorher
 // lief die Ausschreibungs-Ansicht nach Ablauf des Tokens (~1 h) nur noch auf Fehler
 // und half sich mit "einmal neu laden" (Marcels Befund 07.09.).
@@ -2196,6 +2214,8 @@ function marktZeile(z) {
   const rest = vgvRest(z.frist);
   const kopf = el('div', { class: 'krow' }, el('span', { class: 'kt2', title: z.titel }, z.titel || '(ohne Titel)'));
   if (z.art === 'ContractAwardNotice') kopf.append(el('span', { class: 'vtag', style: 'background:#ECECE8;color:#75756E' }, 'ZUSCHLAG ERTEILT'));
+  const modell = verfahrensmodell(z);
+  if (modell) kopf.append(el('span', { class: 'vtag', style: 'background:#E7EEF7;color:#2C4B6E' }, modell));
   if (rest && rest.tage >= 0) kopf.append(ampelChip(rest, 'vtag'));
   // Go/No-Go direkt aus der Suche (Marcel 31.08.): Go legt die Karte an und startet die
   // Aufnahme sofort — dieselbe Mechanik wie beim Weitwinkel-Kandidaten.
@@ -2322,10 +2342,12 @@ async function renderDashMarkt(wrap) {
     catch (e) { stat.textContent = 'Suche fehlgeschlagen (' + e.message + ') — einmal neu laden hilft meist.'; return; }
     if (!liste.isConnected) return;
     if (d.fehler) { stat.textContent = d.fehler; return; }
+    const zeilen = d.zeilen;
     stat.textContent = `${d.treffer} Treffer`
       + (d.treffer > d.zeilen.length ? ` — die ersten ${d.zeilen.length} angezeigt, Filter enger stellen` : '')
-      + (d.nogo_versteckt ? ` · ${d.nogo_versteckt} als No-Go ausgeblendet` : '');
-    for (const z of d.zeilen) liste.append(marktZeile(z));
+      + (d.nogo_versteckt ? ` · ${d.nogo_versteckt} als No-Go ausgeblendet` : '')
+      ;
+    for (const z of zeilen) liste.append(marktZeile(z));
   }
   sucheJetzt();
 }
@@ -2478,6 +2500,29 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
   if (!kandidaten.length) {
     rechts.append(el('div', { class: 'dleer' }, 'Keine offenen Kandidaten. Die Weitwinkel-Suche läuft täglich — alle Themengebiete mit Referenzlage, bis 250 km um Donaustauf und Bogen.'));
   }
+  // Ansicht nach Verfahrensmodell (22.09., Marcels Ansage: das gehört in die Empfehlungen,
+  // nicht in die Ausschreibungen). Rein sichtseitig -- die Zeilen bleiben stehen und werden
+  // nur aus- und eingeblendet, also kein Neuladen und kein Serverweg. Gemessen an den 69
+  // offenen Kandidaten: GP trifft 9, GÜ und TÜ null -- die stecken in Bau-Ausschreibungen
+  // (CPV 45), die das Weitwinkel gar nicht sucht. Die Reihe sagt das ehrlich statt leer zu bleiben.
+  const kviews = el('div', { class: 'mchips mviews' });
+  const kstat = el('span', { class: 'scope', style: 'margin-left:8px' });
+  const kzeige = (wahl) => {
+    let sichtbar = 0;
+    for (const z of liste.querySelectorAll('.kand2')) {
+      const passt = !wahl || z.dataset.modell === wahl;
+      z.style.display = passt ? '' : 'none';
+      if (passt) sichtbar++;
+    }
+    for (const b of kviews.querySelectorAll('.mchip')) b.classList.toggle('an', b.dataset.wahl === wahl);
+    kstat.textContent = wahl ? sichtbar + ' von ' + kandidaten.length + ' passen' : '';
+  };
+  for (const [v, txt] of MARKT_MODELL) {
+    kviews.append(el('button', { class: 'mchip' + (v ? '' : ' an'), 'data-wahl': v,
+      onclick: () => kzeige(v) }, txt));
+  }
+  kviews.append(kstat);
+  rechts.append(kviews);
   const liste = el('div', { class: 'klist' });
   for (const k of kandidaten) {
     const zeile = el('div', { class: 'kand2' });
@@ -2496,6 +2541,9 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
     const kopf = el('div', { class: 'krow' },
       punkteChip(k.score),
       el('span', { class: 'kt2', title: k.titel }, k.titel));
+    const kmodell = verfahrensmodell(k);
+    zeile.dataset.modell = kmodell || '';
+    if (kmodell) kopf.append(el('span', { class: 'vtag', style: 'background:#E7EEF7;color:#2C4B6E' }, kmodell));
     if (krest) kopf.append(ampelChip(krest, 'vtag'));
     kopf.append(
       el('button', { class: 'kbtn go', title: 'Go — Karte in „Neu", Aufnahme startet automatisch', onclick: (ev) => entscheide('go', ev) }, '✓ Go'),
