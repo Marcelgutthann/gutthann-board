@@ -3709,8 +3709,38 @@ function liveBretter() {
     { typ: 'dev', id: null, name: 'DEV' },
     ...(S.liste?.boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
     ...(S.liste?.team_boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
-    ...(S.projects || []).map((p) => ({ typ: 'projekt', id: p.id, name: p.name })),
+    ...(S.projects || []).map((p) => ({ typ: 'projekt', id: p.id, name: p.name, begriffe: p.begriffe || [] })),
   ];
+}
+
+// Wie Marcel ein Haus ruft, steht im Glossar (public.projekt_begriffe, Migration 176)
+// und kommt mit der Projektliste mit. Ohne das fand board_oeffnen "Hemau GS" nicht:
+// im Projektnamen steht "3901 GS u MS Hemau", dieselben Wörter in anderer Reihenfolge.
+// Am 22.09. hat das gereicht, damit Tony etwas anderes tat, statt nachzufragen.
+const LIVE_FUELL = new Set(['dashboard', 'board', 'projekt', 'projekts', 'karte', 'karten',
+  'ansicht', 'liste', 'das', 'dem', 'den', 'der', 'die', 'von', 'vom', 'zum', 'zur', 'zu',
+  'ins', 'in', 'im', 'auf', 'bei', 'fuer', 'mit', 'und', 'u', 'mir', 'mich', 'mal', 'bitte',
+  'mach', 'oeffne', 'zeig', 'zeige', 'geh', 'wechsle', 'ich', 'will', 'moechte', 'rein',
+  'hier', 'da', 'ein', 'eine', 'einen']);
+const liveNorm = (t) => String(t ?? '').toLowerCase()
+  .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+function liveBrettTreffer(ziel) {
+  const bretter = liveBretter();
+  const direkt = liveTreffer(bretter, ziel);
+  if (direkt) return direkt;
+  const woerter = liveNorm(ziel).split(' ').filter((w) => w && !LIVE_FUELL.has(w));
+  if (!woerter.length) return null;
+  const punkte = bretter
+    .map((b) => {
+      const heu = [liveNorm(b.name), ...(b.begriffe || [])].join(' ');
+      return { b, n: woerter.filter((w) => heu.includes(w)).length };
+    })
+    .filter((x) => x.n > 0)
+    .sort((x, y) => y.n - x.n);
+  // Gleichstand heisst nicht raten: dann sagt Tony, dass er nachfragen muss.
+  if (!punkte.length || (punkte[1] && punkte[1].n === punkte[0].n)) return null;
+  return punkte[0].b;
 }
 const LIVE_ANSICHTEN = { aufgaben: 'board', board: 'board', karten: 'board', dashboard: 'dash', dash: 'dash',
   kalender: 'kal', termine: 'kal', terminplan: 'termin', terminplanung: 'termin' };
@@ -3834,7 +3864,7 @@ async function liveOberflaeche(befehle) {
         closeDrawer();
         liveZeile('bildschirm', 'Karte geschlossen.');
       } else if (b.tu === 'board_oeffnen') {
-        const t = liveTreffer(liveBretter(), ziel);
+        const t = liveBrettTreffer(ziel);
         if (!t) { schiefging('Kein Board und kein Projekt zu „' + ziel + '“.'); continue; }
         await wechsle(t.typ, t.id, t.name);
         liveZeile('bildschirm', 'Offen: ' + t.name);
@@ -3845,12 +3875,15 @@ async function liveOberflaeche(befehle) {
         // „Mein Dashboard" ist dagegen der persönliche Bereich — die beiden werden im
         // Gespräch regelmäßig verwechselt, deshalb hier abgefangen statt ins Leere laufen.
         if (w !== 'board' && S.active?.typ !== 'projekt') {
-          if (w === 'dash') {
-            await wechsle('radar', null, 'Mein Dashboard');
-            liveZeile('bildschirm', 'Offen: Mein Dashboard.');
-          } else {
-            schiefging('Kalender und Terminplan gibt es nur in einem Projekt — welches Projekt soll ich aufmachen?');
-          }
+          // 22.09.: Marcel wollte in das Dashboard von Hemau, um dort an die
+          // Beteiligtenliste zu kommen. Tony rief ansicht dashboard, ohne vorher das
+          // Projekt zu öffnen -- und hier sprang die Anwendung still auf "Mein
+          // Dashboard". Von aussen sah das aus, als habe Tony das Projekt in den
+          // persönlichen Bereich gelegt. Wer nicht weiss, welches Dashboard gemeint
+          // ist, fragt: geraten wird hier nicht mehr.
+          schiefging(w === 'dash'
+            ? 'Das Dashboard gehört zu einem Projekt — welches Projekt soll ich aufmachen? („Mein Dashboard“ ist der persönliche Bereich, den mache ich als Board auf.)'
+            : 'Kalender und Terminplan gibt es nur in einem Projekt — welches Projekt soll ich aufmachen?');
           continue;
         }
         zeigeAnsicht(w);
