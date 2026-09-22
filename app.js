@@ -3870,7 +3870,13 @@ async function liveOberflaeche(befehle) {
 // und schaltet sofort um. Tony redet trotzdem -- aber das Bild wartet nicht auf die Stimme.
 // Bewusst nur Navigation: umkehrbar, beliebig oft ausführbar, nichts wird geschrieben.
 // Klick, Tippen und Bestätigen bleiben beim Backend, weil sie das nicht sind.
-const LIVE_REFLEX_VERB = /^(?:tony\s+)?(?:bitte\s+)?(?:mach|mache|öffne|oeffne|zeig|zeige|geh|gehe|wechsle|wechsel|spring|springe|ruf)\s+(.+)$/;
+// Marcel spricht nicht in Befehlsform. Aus dem Gespräch vom 22.09., 08:54, wörtlich:
+// „Dann machen wir das VGV-Radar auf" und „ähm Dann öffne jetzt meine Aufgaben". Beide
+// sind am ersten Entwurf vorbeigelaufen, weil der das Verb am Satzanfang verlangte und
+// „machen wir … auf" gar nicht kannte. Deshalb wird erst der Vorlauf abgeschnitten --
+// gesprochene Sätze fangen mit Räuspern, „dann", „also", „so" an, nicht mit dem Verb.
+const LIVE_REFLEX_VORLAUF = /^(?:(?:ähm|ähh|äh|öhm|hm|so|okay|ok|dann|jetzt|also|und|ja|gut|tony|bitte|hey|komm)\b[\s,]*)+/;
+const LIVE_REFLEX_VERB = /^(?:machen wir|öffnen wir|gehen wir|wechseln wir|springen wir|mach|mache|machen|öffne|oeffne|öffnen|zeig|zeige|zeigen|geh|gehe|gehen|wechsle|wechsel|wechseln|spring|springe|ruf|rufe|hol|hole)\s+(.+)$/;
 // Zwei Stufen, weil ein Boardname selbst aus Füllwörtern bestehen kann: „Meine Aufgaben"
 // wäre nach einem pauschalen Streichen nur noch „aufgaben" und damit die Ansicht statt
 // das Board. Deshalb wird erst nur der Artikel entfernt, und die Gattungswörter erst,
@@ -3898,11 +3904,14 @@ function liveReflexTreffer(kandidaten, teil) {
 // nichts genau passt, zählen Ansichtsnamen, und ungefähre Treffer kommen zuletzt.
 function liveReflexBefehl(satz) {
   const roh = String(satz || '').toLowerCase().replace(/[.,!?;:]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!roh) return null;
+  // Der Vorlauf fällt weg, bevor irgendetwas geprüft wird -- auch die festen Wendungen
+  // sollen nach einem "dann" noch greifen.
+  const satzOhneVorlauf = roh.replace(LIVE_REFLEX_VORLAUF, '').trim();
+  if (!satzOhneVorlauf) return null;
   for (const [muster, befehl] of LIVE_REFLEX_FEST) {
-    if (muster.test(roh)) return { ...befehl, schluessel: befehl.tu };
+    if (muster.test(satzOhneVorlauf)) return { ...befehl, schluessel: befehl.tu };
   }
-  const m = roh.match(LIVE_REFLEX_VERB);
+  const m = satzOhneVorlauf.match(LIVE_REFLEX_VERB);
   if (!m) return null;
   const lang = m[1].replace(LIVE_REFLEX_ARTIKEL, ' ').replace(/\s+/g, ' ').trim();
   if (!lang) return null;
