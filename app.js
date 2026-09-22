@@ -33,7 +33,7 @@ const S = {
   session: null, liste: null, projects: [],
   active: null, // {typ:'board'|'projekt', id, name}
   ansicht: 'board', // im Projekt: 'board' (Aufgaben) oder 'dash' (Projekt-Dashboard)
-  board: null, detail: null, drag: null, newCardCol: null, newCardText: '', poll: null,
+  board: null, detail: null, drag: null, spaltenDrag: null, newCardCol: null, newCardText: '', poll: null,
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
@@ -1398,18 +1398,48 @@ function renderBoard() {
     const cntEl = el('span', { class: 'cnt' }, String(sichtbar.length));
     const colEl = el('div', {
       class: 'col',
+      'data-spalte': sp.id,
       // Karten verschieben — und seit 21.09. auch Mails aus Outlook annehmen: die Mail
       // wird zur Karte in genau der Spalte, auf der sie losgelassen wurde.
-      ondragover: (e) => { if (!S.drag && !istDateiZug(e)) return; e.preventDefault(); colEl.classList.add('dragover'); },
-      ondragleave: () => colEl.classList.remove('dragover'),
+      ondragover: (e) => {
+        // Zieht jemand eine ganze Spalte (22.09.), ist nicht die Spalte das Ziel,
+        // sondern die Luecke links oder rechts von ihr.
+        if (S.spaltenDrag) { spaltenZug(e, colEl, sp, spalten); return; }
+        if (!S.drag && !istDateiZug(e)) return; e.preventDefault(); colEl.classList.add('dragover');
+      },
+      ondragleave: () => colEl.classList.remove('dragover', 'einlinks', 'einrechts'),
       ondrop: (e) => {
+        if (S.spaltenDrag) {
+          e.preventDefault(); e.stopPropagation();
+          const davor = colEl.classList.contains('einlinks');
+          colEl.classList.remove('einlinks', 'einrechts');
+          const q = S.spaltenDrag; S.spaltenDrag = null;
+          ordneSpalten(q, sp.id, davor); // ohne await: die Spalte rutscht sofort
+          return;
+        }
         e.preventDefault(); colEl.classList.remove('dragover');
         if (!S.drag) { if (istDateiZug(e)) { e.stopPropagation(); mailsAusZug(e, sp); } return; }
         const id = S.drag; S.drag = null;
         verschiebeKarte(id, sp); // bewusst ohne await: die Karte rutscht sofort hinueber
       },
     });
-    colEl.append(el('div', { class: 'colhead' },
+    colEl.append(el('div', {
+      class: 'colhead',
+      // Der Kopf ist der Griff: hier angefasst wandert die ganze Spalte, ueberall sonst
+      // bleibt es beim Karten-Drag. Das Ziehbild ist die Spalte selbst, nicht der Streifen.
+      draggable: 'true',
+      title: 'Am Kopf ziehen, um die Spalte zu verschieben',
+      ondragstart: (e) => {
+        S.spaltenDrag = sp.id;
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', sp.id); } catch (_) { /* Firefox braucht Nutzdaten */ }
+          try { e.dataTransfer.setDragImage(colEl, 60, 18); } catch (_) { /* ohne Bild geht es auch */ }
+        }
+        requestAnimationFrame(() => colEl.classList.add('spdrag'));
+      },
+      ondragend: () => { S.spaltenDrag = null; colEl.classList.remove('spdrag'); markenWeg(); },
+    },
       sp.ist_agent ? el('span', { class: 'roledot', title: 'Agenten-Spalte' }) : '',
       sp.auto_status === 'rueckfrage' ? el('span', { class: 'roledot', style: 'background:#E29A2E', title: 'Rückfragen wandern automatisch her' }) : '',
       sp.auto_status === 'fertig' ? el('span', { class: 'roledot', style: 'background:#4F7A4B', title: 'Fertige Agenten-Ergebnisse landen hier' }) : '',
@@ -1483,6 +1513,69 @@ function renderBoard() {
 // zaeh und abgehackt an. Jetzt aendert sich das Bild sofort, der Server faehrt hinterher.
 // Dafuer merken wir uns vor dem Neu-Aufbau, wo jede Karte lag (FLIP): danach starten
 // die Karten optisch an ihrem alten Platz und gleiten an den neuen.
+// ---------- Spalten umsortieren (Marcels Auftrag 22.09.) ----------
+// Dieselbe Bewegung wie bei den Karten: das Bild aendert sich sofort, die Nachbarn
+// gleiten an ihren neuen Platz, der Server faehrt hinterher.
+function markenWeg() {
+  for (const c of document.querySelectorAll('#board .col.einlinks, #board .col.einrechts')) {
+    c.classList.remove('einlinks', 'einrechts');
+  }
+}
+function spaltenZug(e, colEl, sp, spalten) {
+  if (S.spaltenDrag === sp.id) return;
+  const q = spalten.find((x) => x.id === S.spaltenDrag);
+  // Phasenbaender (VgV-Radar) bleiben heil: ein Band ist ein Block aufeinanderfolgender
+  // Spalten — eine Spalte quer hineingezogen wuerde es in zwei Blocke gleichen Namens reissen.
+  if (!q || (q.gruppe || null) !== (sp.gruppe || null)) return;
+  e.preventDefault();
+  const r = colEl.getBoundingClientRect();
+  const davor = e.clientX < r.left + r.width / 2;
+  colEl.classList.toggle('einlinks', davor);
+  colEl.classList.toggle('einrechts', !davor);
+}
+function spaltenPositionen() {
+  const m = new Map();
+  for (const c of document.querySelectorAll('#board .col[data-spalte]')) m.set(c.dataset.spalte, c.getBoundingClientRect());
+  return m;
+}
+function spaltenGleiten(vorher) {
+  if (!vorher || !vorher.size) return;
+  for (const c of document.querySelectorAll('#board .col[data-spalte]')) {
+    const alt = vorher.get(c.dataset.spalte); if (!alt) continue;
+    const neu = c.getBoundingClientRect();
+    const dx = alt.left - neu.left, dy = alt.top - neu.top;
+    if (!dx && !dy) continue;
+    c.style.transition = 'none';
+    c.style.transform = `translate(${dx}px,${dy}px)`;
+    requestAnimationFrame(() => {
+      c.style.transition = 'transform .26s cubic-bezier(.2,.75,.3,1)';
+      c.style.transform = '';
+      setTimeout(() => { c.style.transition = ''; c.style.transform = ''; }, 320);
+    });
+  }
+}
+// Die Spalte an ihren neuen Platz legen. Der Server bekommt die vollstaendige neue
+// Reihenfolge; geht es schief, springt das Board zurueck und sagt warum.
+async function ordneSpalten(id, zielId, davor) {
+  const liste = S.board?.spalten; if (!liste) return;
+  const alt = liste.slice();
+  const von = liste.findIndex((x) => x.id === id);
+  const bis = liste.findIndex((x) => x.id === zielId);
+  if (von < 0 || bis < 0 || von === bis) return;
+  const [q] = liste.splice(von, 1);
+  const ziel = liste.findIndex((x) => x.id === zielId);
+  liste.splice(davor ? ziel : ziel + 1, 0, q);
+  if (liste.every((x, i) => x.id === alt[i].id)) return;
+  liste.forEach((x, i) => { x.position = i; });
+  const vorher = spaltenPositionen();
+  renderBoard();
+  spaltenGleiten(vorher);
+  const r = await mut('spalten_ordnen', { ids: liste.map((x) => x.id) });
+  if (r && r.fehler) { S.board.spalten = alt; renderBoard(); return; }
+  // Nachladen erst, wenn die Bewegung durch ist — sonst zuckt das Board mittendrin.
+  setTimeout(() => { if (!S.newCardCol && !S.detail && !S.drag && !S.spaltenDrag) ladeBoard(); }, 320);
+}
+
 function kartenPositionen() {
   const m = new Map();
   for (const c of document.querySelectorAll('#board .card[data-id]')) m.set(c.dataset.id, c.getBoundingClientRect());
@@ -4222,7 +4315,7 @@ async function start() {
   // Cursor in einem Eingabefeld) — sonst raeumt der Neu-Aufbau die Eingabe weg.
   S.poll = setInterval(async () => {
     const tippt = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
-    if (S.detail || S.newCardCol || S.drag || S.kalDrag || tippt) return;
+    if (S.detail || S.newCardCol || S.drag || S.spaltenDrag || S.kalDrag || tippt) return;
     try {
       await ladeBoard();
       // Offener Kalender-Tab bekommt Frist-Aenderungen anderer auch mit.
