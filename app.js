@@ -3142,7 +3142,7 @@ function renderDrawer() {
   }
 
   // Kommentare -- der Chat. Eigene, feste linke Spalte (Redesign 26.08.): der Kopf
-  // der Spalte traegt die Ueberschrift, darum entfaellt das fruehere Inline-Label.
+  // der Spalte traegt die Ueberschrift, darum entfällt das fruehere Inline-Label.
   const sk = el('div', { class: 'dchat-verlauf' });
   if (!d.kommentare.length) sk.append(el('div', { class: 'dchat-leer' },
     'Schreib hier mit dem Team, oder ruf @agent — er kennt Titel, Notiz, Unterpunkte, Dateien und den ganzen Verlauf dieser Karte.'));
@@ -3858,6 +3858,95 @@ async function liveOberflaeche(befehle) {
   return misslungen;
 }
 
+// ---------- Reflexbahn: Navigation ohne Umweg über das Denkmodell (22.09.2026) ----------
+// Gemessen am 22.09. über 30 Tage journald: 98 Delegationen, keine einzige unter 3 s
+// (Median 8,6 s), auch dann nicht, wenn Tony gar nichts nachschlägt (9,5 s im Schnitt).
+// Die Zeit geht ins Formulieren, nicht ins Suchen -- das steht seit dem 11.09. in
+// live-backend (r = 0,77 bis 0,85 zwischen Antwortlänge und Dauer). Ein Satz wie
+// "öffne das VGV-Board" hat darin nichts verloren: er fährt heute vom Browser über die
+// Edge Function zum Modell, von dort zum MCP-Server, der nur quittiert, und wieder
+// zurück -- um am Ende wechsle() zu rufen, das zwei Zeilen neben dem Mikrofon liegt.
+// Deshalb greift der Browser solche Sätze selbst ab, sobald sie im Transkript stehen,
+// und schaltet sofort um. Tony redet trotzdem -- aber das Bild wartet nicht auf die Stimme.
+// Bewusst nur Navigation: umkehrbar, beliebig oft ausführbar, nichts wird geschrieben.
+// Klick, Tippen und Bestätigen bleiben beim Backend, weil sie das nicht sind.
+const LIVE_REFLEX_VERB = /^(?:tony\s+)?(?:bitte\s+)?(?:mach|mache|öffne|oeffne|zeig|zeige|geh|gehe|wechsle|wechsel|spring|springe|ruf)\s+(.+)$/;
+// Zwei Stufen, weil ein Boardname selbst aus Füllwörtern bestehen kann: „Meine Aufgaben"
+// wäre nach einem pauschalen Streichen nur noch „aufgaben" und damit die Ansicht statt
+// das Board. Deshalb wird erst nur der Artikel entfernt, und die Gattungswörter erst,
+// wenn die längere Fassung nichts trifft. Gefunden am 22.09. vom Prüfstand, nicht von mir.
+const LIVE_REFLEX_ARTIKEL = /\b(?:mir|uns|mal|bitte|doch|jetzt|kurz|nochmal|auf|zu|in|ins|im|zum|zur|das|der|die|den|dem|ein|eine|einen|hier|hin|auch|noch)\b/g;
+const LIVE_REFLEX_GATTUNG = /\b(?:board|brett|projekt|ansicht|seite|karte|mein|meine|meinen|unser|unsere)\b/g;
+const LIVE_REFLEX_FEST = [
+  [/^(?:karte\s+zu|karte\s+schließen|karte\s+schliessen|schließ(?:e)?\s+die\s+karte|schliess(?:e)?\s+die\s+karte|mach\s+die\s+karte\s+zu)$/, { tu: 'karte_schliessen' }],
+  [/^(?:aktualisier(?:e|en)?|neu\s+laden|lad(?:e)?\s+neu|board\s+neu\s+laden)$/, { tu: 'aktualisieren' }],
+];
+// Der gesprochene Rest muss IM Namen stecken, nicht der Name irgendwo im Satz: sonst trifft
+// "zeig mir mal was auf dem Radar alles liegen geblieben ist" das Radar-Board, der Reflex
+// meldet es als erledigt und verschluckt die Frage. Genau so am 22.09. vom Prüfstand
+// gefunden -- liveTreffer darf das (dort hat das Modell das Ziel schon herausgelöst),
+// der Reflex bekommt den rohen Satz und darf es nicht.
+function liveReflexTreffer(kandidaten, teil) {
+  return kandidaten.find((k) => String(k.name || '').toLowerCase() === teil)
+    || kandidaten.find((k) => String(k.name || '').toLowerCase().includes(teil))
+    || null;
+}
+// Aus einem gesprochenen Satz einen Bildschirmbefehl machen -- oder nichts, dann geht der
+// Satz den normalen Weg. Nichts zu finden ist der Regelfall und keine Störung: der Reflex
+// darf nur greifen, wenn der ganze Satz aufgeht, sonst verschluckt er halbe Aufträge.
+// Die Reihenfolge entscheidet: ein Name, der genau passt, schlägt jede Ansicht; erst wenn
+// nichts genau passt, zählen Ansichtsnamen, und ungefähre Treffer kommen zuletzt.
+function liveReflexBefehl(satz) {
+  const roh = String(satz || '').toLowerCase().replace(/[.,!?;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!roh) return null;
+  for (const [muster, befehl] of LIVE_REFLEX_FEST) {
+    if (muster.test(roh)) return { ...befehl, schluessel: befehl.tu };
+  }
+  const m = roh.match(LIVE_REFLEX_VERB);
+  if (!m) return null;
+  const lang = m[1].replace(LIVE_REFLEX_ARTIKEL, ' ').replace(/\s+/g, ' ').trim();
+  if (!lang) return null;
+  const kurz = lang.replace(LIVE_REFLEX_GATTUNG, ' ').replace(/\s+/g, ' ').trim();
+  const fassungen = kurz && kurz !== lang ? [lang, kurz] : [lang];
+  const bretter = liveBretter();
+  const alsBrett = (t) => ({ tu: 'board_oeffnen', ziel: t.name, schluessel: 'board:' + t.typ + ':' + t.id });
+  for (const f of fassungen) {
+    const t = bretter.find((k) => String(k.name || '').toLowerCase() === f);
+    if (t) return alsBrett(t);
+  }
+  for (const f of fassungen) {
+    if (LIVE_ANSICHTEN[f]) return { tu: 'ansicht', ziel: f, schluessel: 'ansicht:' + LIVE_ANSICHTEN[f] };
+  }
+  for (const f of fassungen) {
+    const t = liveReflexTreffer(bretter, f);
+    if (t) return alsBrett(t);
+  }
+  const karten = (S.board?.todos || []).map((t) => ({ id: t.id, name: t.titel }));
+  for (const f of fassungen) {
+    const k = liveReflexTreffer(karten, f);
+    if (k) return { tu: 'karte_oeffnen', ziel: k.id, schluessel: 'karte:' + k.id };
+  }
+  return null;
+}
+// Feuert, sobald der Satz im Transkript steht -- nicht erst nach der Sprechpause von 2,5 s,
+// die das Modell abwartet, bevor es überhaupt delegiert. Zweimal derselbe Befehl in Folge
+// wird verworfen, weil das Transkript in Stücken wächst und jedes Stück hier ankommt.
+async function liveReflexFeuern(satz) {
+  const b = liveReflexBefehl(satz);
+  if (!b || !S.live) return;
+  if (S.live.reflex?.schluessel === b.schluessel) return;
+  const t0 = performance.now();
+  S.live.reflex = { schluessel: b.schluessel, satz: '' };
+  const misslungen = await liveOberflaeche([{ tu: b.tu, ziel: b.ziel }]);
+  const ms = Math.round(performance.now() - t0);
+  // Misslingt es, hat der Reflex nichts erledigt -- die Delegation muss dann doch laufen.
+  if (misslungen.length) { S.live.reflex = null; return; }
+  const letzte = S.live.zeilen[S.live.zeilen.length - 1];
+  S.live.reflex.satz = letzte?.rolle === 'bildschirm' ? letzte.text : 'Erledigt.';
+  S.live.reflex.ms = ms;
+  console.log('[live] Reflex ' + b.schluessel + ' in ' + ms + ' ms');
+}
+
 async function liveRuecknahme(zeile) {
   const r = zeile.ruecknahme;
   if (!r || r.laeuft || r.erledigt) return;
@@ -3961,6 +4050,8 @@ function liveEreignis(ev) {
     if (!text) return;
     const rolle = /input|user/i.test(typ) || ev.role === 'user' ? 'nutzer' : 'assistent';
     liveZeile(rolle, text, /delta/i.test(typ) ? ev : null);
+    // Navigationssätze schaltet der Browser sofort selbst, ohne auf die Delegation zu warten.
+    if (rolle === 'nutzer') liveReflexFeuern(S.live?.zeilen[S.live.zeilen.length - 1]?.text);
   }
 }
 async function liveDelegation(ev) {
@@ -3974,6 +4065,14 @@ async function liveDelegation(ev) {
   const id = d.id || ev.delegation_id || d.delegation_id;
   if (!aufgabe) return liveFehler('Delegation, aber noch kein Nutzertext im Transkript (siehe Konsole)');
   liveZeile('backend', 'Aufgabe: ' + aufgabe);
+  // Hat die Reflexbahn den Satz schon erledigt, entfällt die Delegation -- sonst kostet die
+  // bloße Bestätigung noch einmal die volle Denkstufe (gemessen 4 bis 19 s).
+  const reflex = liveReflexBefehl(aufgabe);
+  if (reflex && S.live.reflex?.schluessel === reflex.schluessel && S.live.reflex.satz) {
+    liveZeile('backend', 'Direkt erledigt, ohne Umweg über das Backend (' + S.live.reflex.ms + ' ms).');
+    liveSenden({ type: 'session.commentary.append', delegation_id: id, content: S.live.reflex.satz });
+    return;
+  }
   const verlauf = S.live.zeilen.filter((z) => z.rolle === 'nutzer' || z.rolle === 'assistent').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
   let text;
   // Nach 20 s ohne Antwort ein Lebenszeichen ins Gespraech, sonst schweigt der Moderator bis zu
