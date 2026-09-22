@@ -103,6 +103,11 @@ button{cursor:pointer;background:none;border:none}
 .phasehead .pline{flex:1;height:1px;background:rgba(28,28,26,.13)}
 .phasecols{flex:1;min-height:0;display:flex;gap:14px;align-items:flex-start}
 .col.dragover{background:rgba(163,213,66,.16);box-shadow:inset 0 0 0 2px rgba(124,169,40,.55)}
+/* Spalte am Kopf ziehen (22.09.): die gezogene wird blass wie eine gezogene Karte,
+   die Zielspalte zeigt die Luecke, in die sie faellt. */
+.col.spdrag{opacity:.32}
+.col.einlinks{box-shadow:inset 4px 0 0 #7CA928}
+.col.einrechts{box-shadow:inset -4px 0 0 #7CA928}
 #radar-root.dragover{box-shadow:inset 0 0 0 2px rgba(124,169,40,.55);border-radius:12px}
 .mailkachel{padding:9px 12px;margin-bottom:8px;border:1.5px dashed #C9C9C1;border-radius:10px;background:#fff;transition:border-color .12s,background .12s}
 .mailkachel .mk-kopf{font-size:12.5px;font-weight:600;color:#4A4A44}
@@ -114,13 +119,15 @@ button{cursor:pointer;background:none;border:none}
 .mkd-zeile{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap}
 .mkd-zeile label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:#75756E;flex:1;min-width:150px}
 .mkd-zeile .uidlg-i{margin:0;font-size:13px}
-.colhead{padding:14px 14px 10px 16px;display:flex;align-items:center;gap:7px;flex:none}
+.colhead{cursor:grab;padding:14px 14px 10px 16px;display:flex;align-items:center;gap:7px;flex:none}
 .colhead .name{font-size:13px;font-weight:600;letter-spacing:.01em}
 .colhead .cnt{font-size:11.5px;font-weight:600;color:#75756E;background:rgba(28,28,26,.06);border-radius:10px;padding:1px 8px}
 .colhead .roledot{width:7px;height:7px;border-radius:50%;background:#A3D542}
 .colhead .menu{margin-left:auto;color:#8A8A83;padding:2px 6px;border-radius:5px;opacity:0;transition:opacity .12s ease}
 .col:hover .colhead .menu{opacity:1}
 .colhead .menu:hover{background:rgba(28,28,26,.07)}
+.colhead:active{cursor:grabbing}
+.colhead .menu,.colhead .autochip{cursor:pointer}
 .colhead .autochip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:#E8F5C4;color:#3E5312;cursor:pointer;white-space:nowrap}
 .colhead .autochip:hover{background:#DCEFA8}
 .cards{overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:10px;min-height:30px}
@@ -768,7 +775,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mucg0jfv">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mucgtfkl">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -849,7 +856,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mucg0jfv"></script>
-<script type="module" src="dashboard.js?v=mucg0jfv"></script>
+<script src="app.js?v=mucgtfkl"></script>
+<script type="module" src="dashboard.js?v=mucgtfkl"></script>
 </body>
 </html>
