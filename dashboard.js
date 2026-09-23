@@ -296,6 +296,7 @@ async function renderProject(){
     sb.from('item_feedback').select('item_type,item_title,kommentar').eq('project_id',current).order('created_at'),
     sb.from('wissens_abdeckung').select('dokumente,mit_text,mit_embedding,text_pct,embedding_pct,soll_bestand,ballast,letzter_ingest').eq('project_id',current).maybeSingle()]);
   if(!proj){go('cockpit');return;}
+  {const{data:ks,error:ksErr}=await sb.rpc('kostenstand',{p_project:current});if(ksErr)uiHinweis('Kostenstand nicht geladen: '+ksErr.message);else kostenAusWahrheit(proj,ks);}
   await betLaden();
   currentName=proj.name;lastD=proj.dashboard||{};lastStand=proj.dashboard_stand;lastChecklist=proj.checklist||{};lastL1=proj.lph1||null;renderSidebar();
   fbClosed={};(fbRows||[]).forEach(r=>{fbClosed[fbKey(r.item_type,r.item_title)]=r;});
@@ -318,6 +319,7 @@ async function renderProject(){
   const kk=D&&D.kosten,kBudget=(kk&&kk.budget!=null&&!isNaN(+kk.budget)&&+kk.budget>0)?+kk.budget:null;
   let kostenSub=kostenVal?('brutto'+(kk&&kk.stand?' · Stand '+esc(kk.stand):' · Stand lt. Analyse')):'Tiefenanalyse nötig',kostenBar='';
   if(kostenVal&&kBudget){const dlt=kostenVal-kBudget;kostenSub=(dlt>0?'<span class="up">+':'<span class="okc">−')+Math.abs(Math.round(dlt/1000)).toLocaleString('de-DE')+' T€</span> vs. Budget '+(kBudget/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €';kostenBar='<div class="kpi-bar"><i class="'+(dlt>0?'over':'')+'" style="width:'+Math.min(100,Math.round(kostenVal/kBudget*100))+'%"></i></div>';}
+  {const zp=(kk&&kk.zu_pruefen&&kk.zu_pruefen.length)||0;if(zp)kostenSub+=' · <span class="up">'+zp+' neue Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>';if(!kostenVal)kostenSub=zp?'<span class="up">'+zp+' Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>':'kein geprüfter Kostenstand';}
   h+='<div class="kpi-strip">'+kpi('accent','Aktive Phase',lph?gl('LPH')+' '+lph:'—','','HOAI § 34')+
     kpi(kostenVal?'':'','Kosten aktuell',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio €':'',kostenSub,kostenBar)+
     kpi(cOver?'alert':'','Überfällige Vorgänge',cOver,'',cOver?'Nachhaken nötig · '+cOpen+' offen gesamt':(cOpen?cOpen+' offen · nichts überfällig':'nichts offen'))+
@@ -892,6 +894,43 @@ function renderVorausschau(vs){
   return h;
 }
 function eur(n){return (Number(n)||0).toLocaleString('de-DE')+' €';}
+// Kostenstand seit Migration 180 aus kostenstand(): geprüft, mit Beleg-Datei und Textstelle --
+// nicht mehr aus der LLM-Analyse (dashboard.kosten / kennzahlen.kosten), die je Lauf eine andere
+// Zahl schreiben konnte. Beides wird hier überschrieben, damit keine Kachel eine zweite Zahl zeigt.
+const STUFE_TXT={Kostenrahmen:'Kostenrahmen',Kostenschaetzung:'Kostenschätzung',Kostenberechnung:'Kostenberechnung',Kostenanschlag:'Kostenanschlag',Kostenfeststellung:'Kostenfeststellung'};
+const STUFE_LPH={Kostenrahmen:1,Kostenschaetzung:2,Kostenberechnung:3,Kostenanschlag:7,Kostenfeststellung:8};
+function kostenAusWahrheit(proj,ks){
+  if(!ks)return;const a=ks.aktuell||null,D=proj.dashboard=Object.assign({},proj.dashboard||{});
+  D.kosten={summe_brutto:a?+a.betrag_brutto:null,stand:a?fmtD(a.stichtag)+' · '+STUFE_TXT[a.stufe]:null,
+    quelle:a?a.datei+(a.kg_umfang?' · KG '+a.kg_umfang:''):null,beleg:a?a.beleg_stelle:null,bemerkung:a?a.bemerkung:null,
+    geprueft:a&&a.geprueft_von?a.geprueft_von+(a.geprueft_am?', '+fmtD(a.geprueft_am):''):null,
+    budget:ks.budget?ks.budget.betrag_brutto:null,kg:[],
+    verlauf:(ks.verlauf||[]).map(v=>({stufe:v.stufe,lph:STUFE_LPH[v.stufe],betrag:+v.betrag_brutto,stand:v.stichtag,quelle:v.datei})),
+    zu_pruefen:ks.zu_pruefen||[]};
+  const KK=proj.kennzahlen&&proj.kennzahlen.kosten;
+  if(KK){if(a){const q={stand:a.stichtag,quelle:a.datei,status:'belegt'};Object.assign(KK,{gesamt_brutto:Object.assign({wert:+a.betrag_brutto},q),kostenstufe:Object.assign({wert:a.stufe},q),kostenstand:Object.assign({wert:a.stichtag},q)});}
+    else{const q={wert:null,stand:null,quelle:'kein geprüfter Kostenstand',status:'offen'};Object.assign(KK,{gesamt_brutto:q,kostenstufe:q,kostenstand:q});}}
+}
+function renderKostenPruefen(k){
+  let h='';
+  if(k.beleg)h+='<div class="page-sub" style="margin-top:10px">Beleg: „'+esc(k.beleg)+'“</div>';
+  if(k.bemerkung)h+='<div class="page-sub">'+esc(k.bemerkung)+'</div>';
+  if(k.geprueft)h+='<div class="page-sub">Geprüft: '+esc(k.geprueft)+'</div>';
+  const z=k.zu_pruefen||[];
+  if(z.length)h+='<div class="kt-h" style="margin-top:14px">Neue Kostendateien · zu prüfen ('+z.length+')</div>'+z.map(c=>
+    '<div class="act-row"><span class="af">'+esc(STUFE_TXT[c.stufe]||c.stufe)+' '+fmtD(c.stichtag)+' · '+
+    (c.betrag_brutto!=null?(+c.betrag_brutto).toLocaleString('de-DE',{minimumFractionDigits:2})+' € brutto':'kein eindeutiger Betrag')+
+    '<br><small>'+esc(c.datei)+(c.bemerkung?' — '+esc(c.bemerkung):'')+'</small></span><span class="ad">'+
+    (c.betrag_brutto!=null?'<button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="1">Bestätigen</button> ':'')+
+    '<button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="0">Verwerfen</button></span></div>').join('');
+  return h;
+}
+document.addEventListener('click',async function(e){
+  const b=e.target.closest&&e.target.closest('[data-kk]');if(!b)return;e.preventDefault();b.disabled=true;
+  const{data,error}=await sb.rpc('kostenkandidat_entscheiden',{p_id:b.dataset.kk,p_bestaetigen:b.dataset.ok==='1'});
+  if(error||(data&&data.fehler)){uiHinweis('Nicht gespeichert: '+(error?error.message:data.fehler));b.disabled=false;return;}
+  await render();
+});
 function renderKostenTrend(k){
   const v=(k.verlauf||[]).filter(s=>s&&s.betrag!=null).slice().sort((a,b)=>(a.lph||0)-(b.lph||0));
   const budget=(k.budget!=null&&!isNaN(+k.budget))?+k.budget:null;
@@ -923,9 +962,11 @@ function renderKosten(D,costDocs){
       h+=ovHero([ovK('',(k.summe_brutto/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+'<span class="ov-k-u"> Mio € brutto</span>','Stand '+(k.stand||'?')),dlt!=null?ovK(dlt>0?'bad':'ok',(dlt>0?'+':'−')+Math.abs(Math.round(dlt/1000)).toLocaleString('de-DE')+'<span class="ov-k-u"> T€</span>','vs. Budget '+(bud/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €'):null,ho&&ho.offene_nachtraege?ovK('warn',ho.offene_nachtraege,'offene Nachträge'):null]);}
     h+=renderKostenTrend(k);
     if(k.kg&&k.kg.length){h+='<div class="kt-h" style="margin-top:14px">Kostengruppen · DIN 276</div><table class="kg-table"><tr><th>'+gl('KG','Kostengruppe nach DIN 276 — z. B. KG 300 Bauwerk, KG 400 Technik.')+' (DIN 276)</th><th style="text-align:right">Betrag</th></tr>'+k.kg.map(r=>'<tr><td>KG '+esc(''+r.kg)+'</td><td class="n">'+(Number(r.betrag)||0).toLocaleString('de-DE')+' €</td></tr>').join('')+'</table>';}
-    h+=renderHonorar(D);
+    if(!k.summe_brutto)h+='<div class="empty">Kein geprüfter Kostenstand — nicht schätzen.</div>';
     if(k.quelle)h+='<div class="page-sub" style="margin-top:10px">Quelle: '+esc(k.quelle)+'</div>';
-    return h||'<div class="empty">Analyse ohne Kostenwerte.</div>';}
+    h+=renderKostenPruefen(k);
+    h+=renderHonorar(D);
+    return h;}
   let h='<div class="cta"><p>Kosten (KG 200–700), Verträge und Trend werden von der <strong>Dashboard-Analyse</strong> aus deinen Kosten-Dokumenten ermittelt. Noch nicht gelaufen.</p><button class="btn-sm" data-agent="dashboard-analyse">Tiefenanalyse starten</button></div>';
   if(costDocs.length)h+='<h4 style="font-family:var(--f-mono);font-size:9.5px;text-transform:uppercase;color:var(--c-slate-500);letter-spacing:.6px;margin:16px 0 6px">Gefundene Kosten-Dokumente ('+costDocs.length+')</h4>'+costDocs.map(d=>'<div class="act-row"><span class="af">'+esc(d.filename)+'</span><span class="ad">'+fmtD(d.modified_at)+'</span></div>').join('');
   return h;}
