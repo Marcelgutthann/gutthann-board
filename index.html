@@ -449,6 +449,18 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kom .txt .txt-liste li::before{content:"";position:absolute;left:-12px;top:8px;width:4px;height:4px;border-radius:50%;background:#B8B8AE}
 .kom.kom-agent .txt .txt-liste li::before{background:#D8B856}
 .kom .txt b{font-weight:600;color:#1C1C1A}
+/* Freie Antwortform (27.09.): Tabellen, Nummern, Code -- die Form waehlt der Agent. */
+.kom .txt .txt-nummern{margin:0 0 7px;padding-left:20px}
+.kom .txt .txt-nummern li{margin-bottom:4px}
+.kom .txt .txt-nummern:last-child{margin-bottom:0}
+.kom .txt code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:rgba(28,28,26,.06);border-radius:4px;padding:1px 4px}
+.kom .txt .txt-code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:rgba(28,28,26,.05);border-radius:6px;padding:8px 10px;margin:0 0 7px;white-space:pre-wrap;overflow-x:auto}
+.kom .txt .txt-tabelle{overflow-x:auto;margin:2px 0 8px}
+.kom .txt .txt-tabelle:last-child{margin-bottom:0}
+.kom .txt table{border-collapse:collapse;font-size:12.5px;line-height:1.4;width:100%}
+.kom .txt th{text-align:left;font-weight:600;color:#1C1C1A;border-bottom:1px solid rgba(28,28,26,.18);padding:4px 10px 4px 0}
+.kom .txt td{border-bottom:1px solid rgba(28,28,26,.07);padding:4px 10px 4px 0;vertical-align:top}
+.kom .txt tr:last-child td{border-bottom:0}
 .kom.kom-agent .txt{background:#FEFCF6;border-color:#E8DFC5;border-radius:4px 12px 12px 12px}
 /* Lange Antworten falten (Marcel, 27.08.): seit der Agent im Netz recherchieren darf, kommen
    Antworten, die den ganzen Chat zuschuetten. Stehen bleibt der Anfang -- also das Ergebnis --,
@@ -775,7 +787,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mue57w60">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mukb7h68">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -856,7 +868,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mue57w60"></script>
-<script type="module" src="dashboard.js?v=mue57w60"></script>
+<script src="app.js?v=mukb7h68"></script>
+<script type="module" src="dashboard.js?v=mukb7h68"></script>
 </body>
 </html>
