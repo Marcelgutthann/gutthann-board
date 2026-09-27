@@ -977,21 +977,55 @@ function meldePanel(anker) {
 // Chat-Nachricht als Text-Block. Der Agent formatiert seine Antworten seit 26.08.
 // bewusst strukturiert (Listen, Fettes, Zwischenueberschriften) -- ohne diese Umsetzung
 // stuenden die Markdown-Zeichen als Rohtext da und die Antwort waere ein Fliesstext-Klotz.
-// BEWUSST NUR VIER DINGE, kein Markdown-Parser: Zwischenueberschrift, Aufzaehlung,
-// **fett**, Absatz. Alles andere bleibt Text. Escaping laeuft ueber uiEsc, bevor
-// irgendetwas als HTML gesetzt wird -- Kommentartext kommt von Menschen UND vom Agenten
-// und darf nie als Markup wirken.
+// Seit 27.09. (Marcel: "es soll sich anfuehlen wie Claude in der App") auch Tabellen,
+// nummerierte Listen, `Code`, *kursiv* und Codebloecke -- der Agent entscheidet die Form
+// selbst, also muss die Anzeige jede Form tragen, die er waehlt. Weiter kein fremder
+// Markdown-Parser: Escaping laeuft ueber uiEsc, bevor irgendetwas als HTML gesetzt wird --
+// Kommentartext kommt von Menschen UND vom Agenten und darf nie als Markup wirken.
 function chatText(roh) {
   const box = el('div', { class: 'txt' });
   const zeilen = String(roh ?? '').split('\n');
-  let liste = null;
-  const fett = (s) => uiEsc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
-  for (const z of zeilen) {
-    const t = z.trim();
+  let liste = null, listeArt = '';
+  const fett = (s) => uiEsc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, '$1<i>$2</i>');
+  const zellen = (t) => t.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+  const istTrenner = (t) => /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/.test(t);
+  for (let i = 0; i < zeilen.length; i++) {
+    const t = zeilen[i].trim();
+    if (t.startsWith('```')) {
+      const code = [];
+      while (++i < zeilen.length && !zeilen[i].trim().startsWith('```')) code.push(zeilen[i]);
+      box.append(el('pre', { class: 'txt-code' }, code.join('\n')));
+      liste = null; continue;
+    }
+    if (t.startsWith('|') && i + 1 < zeilen.length && istTrenner(zeilen[i + 1].trim())) {
+      const tab = el('table', {});
+      const kopf = el('tr', {});
+      for (const c of zellen(t)) { const th = el('th', {}); th.innerHTML = fett(c); kopf.append(th); }
+      tab.append(el('thead', {}, kopf));
+      const rumpf = el('tbody', {});
+      i++;
+      while (i + 1 < zeilen.length && zeilen[i + 1].trim().startsWith('|')) {
+        const tr = el('tr', {});
+        for (const c of zellen(zeilen[++i].trim())) { const td = el('td', {}); td.innerHTML = fett(c); tr.append(td); }
+        rumpf.append(tr);
+      }
+      tab.append(rumpf);
+      box.append(el('div', { class: 'txt-tabelle' }, tab));
+      liste = null; continue;
+    }
     const li = t.match(/^[-*•]\s+(.*)$/);
-    if (li) {
-      if (!liste) { liste = el('ul', { class: 'txt-liste' }); box.append(liste); }
-      const punkt = el('li', {}); punkt.innerHTML = fett(li[1]); liste.append(punkt);
+    const nr = t.match(/^(\d+)[.)]\s+(.*)$/);
+    if (li || nr) {
+      const art = li ? 'ul' : 'ol';
+      if (!liste || listeArt !== art) {
+        liste = el(art, { class: li ? 'txt-liste' : 'txt-nummern' });
+        if (nr && nr[1] !== '1') liste.setAttribute('start', nr[1]);
+        listeArt = art; box.append(liste);
+      }
+      const punkt = el('li', {}); punkt.innerHTML = fett(li ? li[1] : nr[2]); liste.append(punkt);
       continue;
     }
     liste = null;
