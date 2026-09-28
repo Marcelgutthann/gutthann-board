@@ -821,7 +821,7 @@ function renderSidebar() {
   gR.append(el('div', {
     class: 'row' + (S.active?.typ === 'dev' ? ' active' : ''),
     onclick: () => wechsle('dev', null, 'DEV'),
-    title: 'Sag, was die Anwendung koennen soll — der Klaerer fragt zurueck, die Werkstatt baut',
+    title: 'Sag, was die Anwendung koennen soll — der Klaerer fragt zurueck, der Coding Agent baut',
   }, '⌁ ', 'DEV',
     (S.devOffen || 0) > 0
       ? el('span', { class: 'badge', title: 'Fragen des Klärers warten auf deine Antwort' }, String(S.devOffen))
@@ -1261,9 +1261,9 @@ function devDetail(root, a) {
   } else if (a.stand === 'uebergeben' || a.stand === 'fertig') {
     // 2b. Nichts zu tun — der Stand der Werkstatt.
     const s = el('div', { class: 'dsec' });
-    s.append(el('div', { class: 'slbl' }, 'Die Werkstatt'));
+    s.append(el('div', { class: 'slbl' }, 'Der Coding Agent'));
     s.append(el('div', { class: 'devtext' }, 'Übergeben' + (a.werkstatt_status ? ' · Lauf ' + a.werkstatt_status : '') + '.'));
-    if (a.werkstatt_ergebnis) s.append(devKlapp('Bericht der Werkstatt', a.werkstatt_ergebnis));
+    if (a.werkstatt_ergebnis) s.append(devKlapp('Bericht des Coding Agents', a.werkstatt_ergebnis));
     root.append(s);
   } else {
     // 2a. Alles beantwortet: Ziel bestaetigen und uebergeben.
@@ -1272,12 +1272,12 @@ function devDetail(root, a) {
     const ziel = el('textarea', { class: 'devta', style: 'min-height:56px', placeholder: 'Ein Satz. Er schlägt ihn vor, du korrigierst ihn.' });
     ziel.value = a.ziel || '';
     s.append(ziel);
-    const geben = el('button', { class: 'btn', style: 'margin-top:10px' }, 'An die Werkstatt geben');
+    const geben = el('button', { class: 'btn', style: 'margin-top:10px' }, 'An den Coding Agent geben');
     geben.onclick = async () => {
-      if (!ziel.value.trim()) return uiHinweis('Ohne Ziel fängt die Werkstatt nicht an.');
+      if (!ziel.value.trim()) return uiHinweis('Ohne Ziel fängt der Coding Agent nicht an.');
       geben.disabled = true; geben.textContent = 'übergibt…';
       const r = await lotse('dev_uebergeben', { auftrag_id: a.auftrag_id, ziel: ziel.value.trim(), trotzdem: a.baubar === false });
-      if (r.fehler) { geben.disabled = false; geben.textContent = 'An die Werkstatt geben'; return uiHinweis(r.fehler); }
+      if (r.fehler) { geben.disabled = false; geben.textContent = 'An den Coding Agent geben'; return uiHinweis(r.fehler); }
       uiHinweis('Übergeben. Sie baut, testet und meldet sich an der Karte.');
       await ladeDev();
     };
@@ -1303,7 +1303,7 @@ function renderTopbar() {
   if (!S.active) return;
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
-    : S.active.typ === 'dev' ? 'Sag, was die Anwendung können soll · der Klärer fragt zurück, die Werkstatt baut'
+    : S.active.typ === 'dev' ? 'Sag, was die Anwendung können soll · der Klärer fragt zurück, der Coding Agent baut'
     : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
