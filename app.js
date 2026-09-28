@@ -4312,6 +4312,12 @@ async function liveDelegation(ev) {
     // Hat das Backend an der Karte geschrieben, zieht der Drawer sofort nach -- Marcel
     // soll das Ergebnis sehen, ohne die Karte neu zu oeffnen.
     await liveNachziehen(antwort.werkzeuge, vorher).catch((e) => console.warn('[live] nachziehen:', e));
+    // Die Stimme erfaehrt leise (nicht gesprochen), was wirklich getan wurde -- wie am Telefon
+    // (voice/live-sip.mjs): "was hast du gerade angelegt?" beantwortet sie dann ohne neue Delegation.
+    if (antwort.aktionen?.length) {
+      liveSenden({ type: 'session.thinking.append', delegation_id: id,
+        content: 'Tatsächlich ausgeführt (nicht vorlesen, nur wissen): ' + antwort.aktionen.map((a) => a.replace(/\s*\([0-9a-f-]{36}\)/, '')).join('; ') + '.' });
+    }
   } catch (e) {
     liveFehler('Backend: ' + e.message);
     text = 'Das Backend hat nicht geantwortet. Bitte später noch einmal versuchen.';
