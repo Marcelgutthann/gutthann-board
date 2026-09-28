@@ -138,6 +138,14 @@ button{cursor:pointer;background:none;border:none}
 .card.aura{box-shadow:0 0 0 2px rgba(163,213,66,.45),0 2px 8px rgba(28,28,26,.05)}
 .card.rf{background:#FBF3E2;box-shadow:0 0 0 1.5px #E29A2E,0 2px 8px rgba(28,28,26,.05)}
 .card .chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;margin-bottom:6px}
+/* Migration 195: "selbst erledigt"-Leiste ueber dem Board — weisses Blatt, oliv nur als Schrift. */
+.selbstband{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 16px 0;padding:10px 14px;background:#fff;border:1px solid #E8E8E6;border-radius:10px;font-size:13px}
+.selbstband[hidden]{display:none}
+.selbstband .sbkopf{font-weight:600;color:#4E6117;margin-right:4px}
+.selbstband .sbkarte{border:1px solid #E8E8E6;background:#FAFAF8;border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selbstband .sbkarte:hover{border-color:#4E6117}
+.selbstband .sbmehr{color:#6b6b66}
+.selbstband .sbgesehen{margin-left:auto;border:none;background:none;font:inherit;color:#6b6b66;cursor:pointer;text-decoration:underline}
 .card .chip .cdot{width:6px;height:6px;border-radius:50%}
 .card .t{font-size:15px;font-weight:600;line-height:1.38;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .card .meta{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#75756E;flex-wrap:nowrap;overflow:hidden;min-width:0}
@@ -787,7 +795,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mukb7h68">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mulsnui2">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -868,7 +876,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mul5gsoo"></script>
-<script type="module" src="dashboard.js?v=mukb7h68"></script>
+<script src="app.js?v=mulsnui2"></script>
+<script type="module" src="dashboard.js?v=mulsnui2"></script>
 </body>
 </html>
