@@ -13,6 +13,8 @@ const CHIPS = {
   arbeitet: { txt: 'Agent arbeitet', bg: '#E8F5C4', fg: '#3E5312', dot: '#7CA928', anim: true },
   fertig: { txt: 'Fertig', bg: 'rgba(28,28,26,.07)', fg: '#4F7A4B', dot: '#4F7A4B', anim: false },
   fehlgeschlagen: { txt: 'Fehlgeschlagen', bg: '#F4E0DC', fg: '#B4432E', dot: '#B4432E', anim: false },
+  // Migration 195: Karte hat ein Agent ohne Auftrag uebernommen und fertig abgelegt.
+  selbst: { txt: 'Selbst erledigt', bg: '#EEF1E4', fg: '#4E6117', dot: '#4E6117', anim: false },
 };
 
 // Tags (Migration 155): freie Etiketten an der Karte — auf dem VgV-Board vor allem
@@ -1382,11 +1384,34 @@ function renderTopbar() {
   }
 }
 
+// "Erledigt, waehrend du weg warst" (Migration 195): was ein Agent ohne Auftrag fertig
+// abgelegt hat, steht oben, bis man es als gesehen wegklickt. Gesehen merkt sich der
+// Browser — das ist Bequemlichkeit, keine Wahrheit; die Karten bleiben in Erledigt.
+function selbstBand(bw, todos) {
+  let band = document.getElementById('selbstband');
+  if (!band) { band = el('div', { id: 'selbstband', class: 'selbstband' }); bw.parentNode.insertBefore(band, bw); }
+  band.innerHTML = '';
+  let gesehen = [];
+  try { gesehen = JSON.parse(localStorage.getItem('gb_selbst_gesehen') || '[]'); } catch { gesehen = []; }
+  const neu = todos.filter((t) => t.selbst?.entscheid === 'erledigt' && !gesehen.includes(t.id));
+  band.hidden = !neu.length;
+  if (!neu.length) return;
+  band.append(
+    el('span', { class: 'sbkopf' }, neu.length === 1 ? 'Eine Karte selbst erledigt' : `${neu.length} Karten selbst erledigt`),
+    ...neu.slice(0, 6).map((t) => el('button', { class: 'sbkarte', onclick: () => openCard(t.id) }, t.titel)),
+    neu.length > 6 ? el('span', { class: 'sbmehr' }, `+${neu.length - 6} in Erledigt`) : '',
+    el('button', { class: 'sbgesehen', onclick: () => {
+      try { localStorage.setItem('gb_selbst_gesehen', JSON.stringify([...gesehen, ...neu.map((t) => t.id)].slice(-300))); } catch {}
+      band.hidden = true;
+    } }, 'Gesehen'));
+}
+
 function renderBoard() {
   const bw = document.getElementById('board'); bw.innerHTML = '';
   const b = S.board;
   if (!b) { bw.append(el('div', { class: 'empty', style: 'padding:20px' }, 'Lade…')); return; }
   if (b.fehler) { bw.append(el('div', { class: 'empty', style: 'padding:20px' }, b.fehler)); return; }
+  selbstBand(bw, b.todos || []);
   const spalten = b.spalten || [];
   const erste = spalten[0]?.id;
   // Erstes Phasenband = die Sichtung. Nur dort heisst eine verstrichene Abgabefrist, dass
@@ -2791,7 +2816,7 @@ function projektMenu(x, y, todoId, danach) {
 
 function renderCard(t) {
   const st = statusVon(t);
-  const chip = st && CHIPS[st];
+  const chip = t.selbst?.entscheid === 'erledigt' ? CHIPS.selbst : st && CHIPS[st];
   const due = fmtDatum(t.faellig);
   const vrest = vgvRest(t.vgv_frist);
   const c = el('div', {
