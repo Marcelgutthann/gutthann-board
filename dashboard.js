@@ -1163,6 +1163,8 @@ function renderBet(){
        '<button class="btn-sm ghost" data-bet="pdf" title="Eine bestehende Beteiligtenliste als PDF einlesen">Aus PDF einlesen</button>'+
        '<button class="btn-sm ghost" data-bet="verteiler" title="Alle E-Mail-Adressen dieser Liste in die Zwischenablage">E-Mail-Verteiler kopieren</button>'+
        '<span class="bet-bar-sep"></span>'+
+       '<button class="btn-sm ghost" data-bet="crm-sync" id="bet_crmsync" title="Holt alle Firmen und Personen neu aus Poool in das Adressbuch (etwa 3 Minuten). Zeilen dieser Liste ändern sich dabei nicht."'+
+         (betCrmLauf?' disabled':'')+'>'+(betCrmLauf?'Adressbuch wird geholt …':'Adressbuch aus Poool auffrischen')+'</button>'+
        '<span class="bet-hint" id="bet_crmstand">'+esc(betCrmStandText())+'</span>'+
        '</div>';
   h+='<div class="bet-split"><div class="bet-liste">'+betListe(L)+'</div>'+
