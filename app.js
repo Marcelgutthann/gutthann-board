@@ -1677,6 +1677,7 @@ function renderTopbar() {
     if (r.fehler) { uiHinweis(r.fehler); rufBtn.textContent = alt; rufBtn.disabled = false; }
     else setTimeout(() => { rufBtn.textContent = alt; rufBtn.disabled = false; }, 20000);
   } }, '📞 Ruf mich an');
+  if (S.active.typ === 'chat') tb.append(chatDokKnopf()); // Zwei-Fenster-Knopf (chat-dokument.js)
   tb.append(rufBtn);
   tb.append(liveKnopf());
   // Glocke direkt neben dem Anruf-Knopf: die eine Stelle, an der alles auflaeuft,
