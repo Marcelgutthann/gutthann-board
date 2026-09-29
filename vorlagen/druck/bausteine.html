@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>GHIW-Druckstandard – Bausteine</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../ghiw-druck.css">
+</head>
+<body>
+<div class="blatt">
+  <header class="kopf">
+    <img src="../ghiw-logo.png" alt="Gutthann HIW Architekten">
+    <div class="absender"><strong>Gutthann HIW Architekten GmbH</strong><br>Stand 29.09.2026</div>
+  </header>
+
+  <p class="dachzeile">Projektbericht · 4028 RS Regenstauf</p>
+  <h1 class="titel">Musterdokument für den Druckstandard</h1>
+  <p class="meta"><span><b>Projekt</b> 4028 Realschule Regenstauf</span><span><b>Leistungsphase</b> 5</span><span><b>Verfasser</b> M. Gutthann</span><span><b>Fassung</b> intern</span></p>
+
+  <main>
+    <div class="kernaussage">Die Kernaussage steht oben auf Seite 1: ein bis zwei Sätze, die man lesen kann, ohne den Rest zu kennen.</div>
+
+    <div class="kennzahlen">
+      <div class="kennzahl"><div class="wert">4,82 Mio €</div><div class="name">Kostenberechnung KG 300+400</div></div>
+      <div class="kennzahl"><div class="wert">+3,1 %</div><div class="name">gegenüber Kostenschätzung</div></div>
+      <div class="kennzahl"><div class="wert">14</div><div class="name">offene Punkte</div></div>
+      <div class="kennzahl"><div class="wert">KW 46</div><div class="name">nächster Meilenstein</div></div>
+    </div>
+
+    <h2>1. Überschrift eines Abschnitts</h2>
+    <p>Fließtext in Hanken Grotesk, 10 pt. Überschriften in Space Grotesk. Die Seitenzahl erscheint erst ab Seite 2, links unten steht auf jeder Seite der Büroname. Links sehen <a href="#">so aus</a>.</p>
+    <ul><li>Aufzählungen bleiben schlicht.</li><li>Keine farbigen Randbalken, keine Emojis.</li></ul>
+
+    <div class="hinweis"><div class="hinweis-titel">Hinweis</div>Ein umrandeter Kasten für Annahmen, Quellen oder Einschränkungen.</div>
+    <div class="hinweis kritisch"><div class="hinweis-titel">Kritisch</div>Derselbe Kasten für Risiken, die eine Entscheidung brauchen.</div>
+
+    <h2>2. Tabelle über mehrere Seiten</h2>
+    <p>Der Tabellenkopf wiederholt sich auf jeder Folgeseite, Zeilen werden nicht zerrissen.</p>
+    <table>
+      <thead><tr><th>Nr.</th><th>Gewerk</th><th>Status</th><th class="zahl">Kosten netto</th></tr></thead>
+      <tbody id="zeilen"></tbody>
+    </table>
+
+    <h3>Unterüberschrift</h3>
+    <p>Status-Marken: <span class="marke gut">erledigt</span> <span class="marke achtung">in Prüfung</span> <span class="marke kritisch">überfällig</span> <span class="marke">offen</span></p>
+
+    <div class="unterschriften"><div>Ort, Datum · Verfasser</div><div>Ort, Datum · Freigabe</div></div>
+  </main>
+
+  <footer class="fuss"><span>Gutthann HIW · 4028 RS Regenstauf · Projektbericht</span><span>Stand 29.09.2026</span></footer>
+</div>
+<script>
+// Nur fürs Muster: genug Zeilen, damit die Tabelle auf Seite 2 umbricht.
+const g = ['Rohbau','Dach','Fenster','Trockenbau','Estrich','Fliesen','Maler','Elektro','Heizung','Lüftung','Sanitär','Aufzug'];
+const s = ['<span class="marke gut">vergeben</span>','<span class="marke achtung">in Prüfung</span>','<span class="marke">offen</span>'];
+let h = '<tr class="gruppe"><td colspan="4">KG 300 Baukonstruktion</td></tr>', sum = 0;
+for (let i = 0; i < 36; i++) { const k = 18000 + (i * 7919) % 240000; sum += k;
+  if (i === 18) h += '<tr class="gruppe"><td colspan="4">KG 400 Technische Anlagen</td></tr>';
+  h += `<tr><td>${String(i + 1).padStart(2, '0')}</td><td>${g[i % g.length]} – Los ${Math.floor(i / 12) + 1}</td><td>${s[i % 3]}</td><td class="zahl">${k.toLocaleString('de-DE')} €</td></tr>`; }
+h += `<tr class="summe"><td></td><td>Summe</td><td></td><td class="zahl">${sum.toLocaleString('de-DE')} €</td></tr>`;
+document.getElementById('zeilen').innerHTML = h;
+</script>
+</body></html>
