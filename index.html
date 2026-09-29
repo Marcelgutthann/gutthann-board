@@ -760,7 +760,30 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kidokplan .awp{color:#75756E}
 #chat-root .kidokplan .awp.in_progress{color:#1C1C1A;font-weight:600}
 #chat-root .kidokplan .awp.completed{color:#9A9A93}
-#chat-root .kiagenten{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+#chat-root .kiagenten{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;position:relative}
+#chat-root .kiplus{width:30px;height:30px;border-radius:50%;border:1px solid rgba(28,28,26,.14);background:#FFFFFF;color:#1C1C1A;font:inherit;font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:transform .25s cubic-bezier(.175,.885,.32,1.275),border-color .2s}
+#chat-root .kiplus:hover{border-color:rgba(28,28,26,.35)}
+#chat-root .kiagenten:has(.kiplusmenue.auf) .kiplus{transform:rotate(45deg)}
+#chat-root .kiplusmenue{position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;width:320px;max-width:calc(100vw - 32px);background:#FFFFFF;border:1px solid rgba(28,28,26,.12);border-radius:14px;box-shadow:0 12px 32px rgba(28,28,26,.14);padding:6px;display:flex;flex-direction:column;gap:2px;opacity:0;transform:translateY(24px) scale(.92);transform-origin:bottom left;transition:transform .32s cubic-bezier(.175,.885,.32,1.275),opacity .16s ease-out;pointer-events:none}
+#chat-root .kiplusmenue.auf{opacity:1;transform:none;pointer-events:auto}
+#chat-root .kiplusmenue>button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;border-radius:9px;padding:8px 10px;font:inherit;color:#1C1C1A;cursor:pointer}
+#chat-root .kiplusmenue>button:hover{background:#F1F1EE}
+#chat-root .kiplusico{width:28px;height:28px;border-radius:8px;background:#F1F1EE;display:grid;place-items:center;flex:none}
+#chat-root .kiplusico .ico svg{width:15px;height:15px}
+#chat-root .kipluswas{display:flex;flex-direction:column;min-width:0}
+#chat-root .kipluswas b{font-weight:600;font-size:13px}
+#chat-root .kipluswas span{font-size:12px;color:#75756E}
+#chat-root .kiplusmenue>.kipluszurueck{font-size:12.5px;color:#75756E;padding:6px 10px}
+#chat-root .kiplussuch{margin:2px 4px 4px;height:30px;border:1px solid rgba(28,28,26,.14);border-radius:8px;padding:0 10px;font:inherit;font-size:13px;outline:0}
+#chat-root .kiplusliste{max-height:260px;overflow:auto;display:flex;flex-direction:column}
+#chat-root .kiplusliste button{border:0;background:none;text-align:left;font:inherit;font-size:13px;padding:7px 10px;border-radius:8px;cursor:pointer;color:#1C1C1A}
+#chat-root .kiplusliste button:hover{background:#F1F1EE}
+#chat-root .kiplusleer{font-size:12.5px;color:#75756E;padding:8px 10px}
+#chat-root .kiwahl{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 10px;border-radius:999px;background:#F1F1EE;font-size:12.5px;color:#1C1C1A;max-width:260px}
+#chat-root .kiwahl>span:not(.ico){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chat-root .kiwahl .ico svg{width:13px;height:13px}
+#chat-root .kiwahl button{border:0;background:none;cursor:pointer;color:#75756E;font-size:14px;line-height:1;padding:0 4px}
+#chat-root .kihaupt.filedrag{outline:2px dashed rgba(28,28,26,.25);outline-offset:-8px;border-radius:12px}
 #chat-root .kichip{height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(28,28,26,.14);background:#FFFFFF;color:#1C1C1A;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
 #chat-root .kichip:hover{border-color:rgba(28,28,26,.35)}
 #chat-root .kichip.leise{border-color:transparent;background:none;color:#75756E}
@@ -894,6 +917,18 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kwunten{margin-top:-4px}
 #chat-root .kwfassungleiste{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid rgba(28,28,26,.10);background:#FAFAF8;font-size:12.5px;color:#55554F}
 #chat-root .kidokflaeche .kwfassungleiste + .kidokframe{height:calc(100% - 50px)}
+#chat-root .kwprojekt{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
+#chat-root .kwspalte{display:flex;flex-direction:column;gap:16px;min-width:0}
+#chat-root .kwkartechat{display:flex;flex-direction:column;gap:12px;padding:4px 0 8px}
+#chat-root .kwkom{display:flex;flex-direction:column;gap:3px;max-width:78%;min-width:0}
+#chat-root .kizeile.nutzer .kwkom{align-items:flex-end}
+#chat-root .kwwer{font-size:11.5px;color:#75756E;padding:0 4px}
+#chat-root .kwzeiletext .kwdringend{color:#9A4C0E;font-weight:600}
+#chat-root .kwkarteeingabe{position:sticky;bottom:-48px;display:flex;gap:10px;align-items:flex-end;background:#F3F3F1;padding:10px 0 12px;margin-top:auto}
+#chat-root .kwkarteeingabe .kwfeld{flex:1;resize:none;background:#FFFFFF}
+#chat-root .kwchatprojekt{width:100%;max-width:904px;padding:4px 22px 0;display:flex;align-items:baseline;gap:12px}
+#chat-root .kwchatprojekt .kwzurueck{margin:0}
+@media (max-width:900px){#chat-root .kwprojekt{grid-template-columns:minmax(0,1fr)}}
 #chat-root .kwknopf:focus-visible,#chat-root .kwf:focus-visible,#chat-root .kwkarte:focus-visible,#chat-root .kwwahlk:focus-visible,#chat-root .kwzeile:focus-visible,#chat-root .kwzeiletext:focus-visible,#chat-root .kwmehr:focus-visible{outline:2px solid #1C1C1A;outline-offset:2px}
 #dev-root[hidden]{display:none}
 #dev-root .dsec{margin-left:0;margin-right:0;max-width:900px}
@@ -996,7 +1031,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumm2tg3">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mummg7x2">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1079,9 +1114,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumm2tg3"></script>
-<script src="chat-dokument.js?v=mumm2tg3"></script>
-<script src="chat-werkstatt.js?v=mumm2tg3"></script>
-<script type="module" src="dashboard.js?v=mumm2tg3"></script>
+<script src="app.js?v=mummg7x2"></script>
+<script src="chat-dokument.js?v=mummg7x2"></script>
+<script src="chat-werkstatt.js?v=mummg7x2"></script>
+<script type="module" src="dashboard.js?v=mummg7x2"></script>
 </body>
 </html>
