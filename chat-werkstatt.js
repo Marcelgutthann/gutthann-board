@@ -57,18 +57,35 @@ function chatNav(seite) {
 // die Projekte aus dem Blick.
 const KW_VERLAEUFE = 12;
 function kiChatsSichtbar() { return (S.kichats || []).slice(0, S.kiAlleChats ? undefined : KW_VERLAEUFE); }
+// Marcel 29.09. (Skizze): die Projektliste steht nicht mehr doppelt in der Chat-Spalte. Gewaehlt wird
+// links in der Hauptleiste, dort ist das Projekt markiert; hier unten steht dann sein Verlauf.
+function kiProjektGewaehlt() {
+  const v = kwAnsicht();
+  if (v?.art === 'projekt') return v.id;
+  if (v?.art === 'karte') return v.projekt;
+  return S.kichat?.projekt?.id || S.kiProjekt || null;
+}
+function kiProjektKlick(id) { S.kiProjekt = id; chatAnsicht('projekt', { id }); }
 function chatProjekteNav(seite) {
   const n = (S.kichats || []).length;
   if (n > KW_VERLAEUFE) seite.append(el('div', { class: 'row addrow', onclick: () => { S.kiAlleChats = !S.kiAlleChats; chatSeite(); } },
     el('span', { class: 'kititel' }, S.kiAlleChats ? 'Weniger zeigen' : 'Alle Verläufe (' + n + ')')));
-  const projekte = [...(S.projects || [])].sort((x, y) => String(x.name).localeCompare(String(y.name), 'de'));
-  if (!projekte.length) return;
-  const v = kwAnsicht();
-  seite.append(el('div', { class: 'kilbl' }, 'Projekte'));
-  for (const p of projekte) seite.append(el('div', {
-    class: 'row' + ((v?.art === 'projekt' && v.id === p.id) || (v?.art === 'karte' && v.projekt === p.id) || (!v && S.kichat?.projekt?.id === p.id) ? ' active' : ''), title: p.name,
-    onclick: () => chatAnsicht('projekt', { id: p.id }),
-  }, ico('folder'), el('span', { class: 'kititel' }, p.name)));
+  const pid = kiProjektGewaehlt();
+  if (pid) S.kiProjekt = pid;
+  // Hauptleiste nur neu zeichnen, wenn sich das gewaehlte Projekt aendert (renderChat laeuft oft).
+  if (S.kiSbProjekt !== pid) { S.kiSbProjekt = pid; renderSidebar(); }
+  const p = (S.projects || []).find((x) => x.id === pid);
+  if (!p) { seite.append(el('div', { class: 'kilbl' }, 'Projekt'), el('div', { class: 'kihinweis' }, 'Links ein Projekt wählen — hier steht dann sein Verlauf.')); return; }
+  const k = S.kichat;
+  seite.append(el('div', { class: 'kilbl', title: p.name }, 'Verlauf · ' + p.name));
+  seite.append(el('div', { class: 'row addrow', onclick: () => kiProjektChatNeu(p) }, ico('plus'), el('span', { class: 'kititel' }, 'Neuer Chat im Projekt')));
+  const chats = (S.kichats || []).filter((c) => c.project_id === p.id);
+  if (!chats.length && S.kichats != null) seite.append(el('div', { class: 'kihinweis' }, 'Noch kein Chat zu diesem Projekt.'));
+  for (const c of chats) seite.append(el('div', {
+    class: 'row' + (c.id === k?.id && kiImChat() ? ' active' : ''), title: c.titel,
+    onclick: () => chatOeffnen(c.id),
+    oncontextmenu: (e) => { e.preventDefault(); chatMenu(e, c); },
+  }, ico('chat'), el('span', { class: 'kititel' }, c.titel)));
 }
 
 function chatAnsicht(art, extra = {}) {
