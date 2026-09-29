@@ -495,7 +495,7 @@ function zeigeAnsicht(welche) {
   if (devRoot) devRoot.hidden = !istDev;
   if (istDev) ladeDev();
   if (chatRoot) chatRoot.hidden = !istChat;
-  if (istChat) renderChat();
+  if (istChat) renderChat(); else chatDiktatEnde();
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
@@ -1321,12 +1321,7 @@ function renderChat() {
   if (!verlauf) {
     root.innerHTML = '';
     verlauf = el('div', { class: 'kiverlauf' });
-    const ta = el('textarea', { class: 'kita', rows: '2', placeholder: 'Schreib Tony … (Enter sendet, Umschalt+Enter neue Zeile)' });
-    ta.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSenden(ta); }
-    });
-    const knopf = el('button', { class: 'kisend', onclick: () => chatSenden(ta) }, 'Senden');
-    root.append(verlauf, el('div', { class: 'kieingabe' }, ta, knopf));
+    root.append(verlauf, chatEingabe());
   }
   verlauf.innerHTML = '';
   if (!k.zeilen.length) verlauf.append(el('div', { class: 'kileer' }, 'Frag Tony nach Karten, Projekten, Terminen oder Dokumenten — oder lass ihn etwas anlegen.'));
@@ -1335,14 +1330,112 @@ function renderChat() {
       el('div', { class: 'kiblase' }, z.text)));
   }
   if (k.denkt) verlauf.append(el('div', { class: 'kizeile assistent' }, el('div', { class: 'kiblase kidenkt' }, 'Tony denkt …')));
-  root.querySelector('.kisend').disabled = k.denkt;
+  chatKnopf();
   verlauf.scrollTop = verlauf.scrollHeight;
+}
+
+// Eingabe nach dem Vorbild "ai-chat-input" (21st.dev, 29.09.): eine Pille, die beim
+// Tippen aufwaechst; rechts EIN runder Knopf, der zwischen Mikrofon, Senden und Stopp
+// wechselt. Modellwahl und Bild-Anhaenge der Vorlage fehlen bewusst -- der Chat spricht
+// immer mit Tony, und live-backend nimmt nur Text. Diktiert wird mit der Spracherkennung
+// des Browsers (Edge/Chrome); kann der Browser das nicht, gibt es keinen Mikrofonknopf.
+const KI_SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const KI_ICON = {
+  pfeil: '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M7 12V2M7 2L2.5 6.5M7 2L11.5 6.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  mic: '<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="5" y="1" width="4" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M2.75 6.5V7a4.25 4.25 0 0 0 8.5 0v-.5M7 11.25V13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  stop: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="currentColor"/></svg>',
+};
+
+function chatEingabe() {
+  const ta = el('textarea', { class: 'kita', rows: '1', placeholder: 'Frag Tony …', 'aria-label': 'Nachricht an Tony' });
+  const knopf = el('button', { class: 'kiknopf', type: 'button' });
+  for (const n of ['pfeil', 'mic', 'stop']) { const s = el('span', { class: 'kiic ' + n }); s.innerHTML = KI_ICON[n]; knopf.append(s); }
+  const welle = el('div', { class: 'kiwelle' }, ...[0, 1, 2, 3, 4].map((i) => el('span', { style: 'animation-delay:' + i * 110 + 'ms' })));
+  const pille = el('div', { class: 'kipille' }, ta, welle, knopf);
+  // Klick auf die Pille (nicht auf den Knopf) setzt den Cursor ins Feld.
+  pille.addEventListener('mousedown', (e) => { if (e.target === pille) { e.preventDefault(); ta.focus(); } });
+  knopf.addEventListener('mousedown', (e) => e.preventDefault()); // Fokus bleibt im Feld
+  knopf.addEventListener('click', () => {
+    const k = S.kichat;
+    if (k.rec) chatDiktatEnde();
+    else if (ta.value.trim()) chatSenden(ta);
+    else if (KI_SR) chatDiktat(ta);
+  });
+  ta.addEventListener('input', () => chatKnopf());
+  ta.addEventListener('focus', () => chatKnopf());
+  ta.addEventListener('blur', () => chatKnopf());
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSenden(ta); }
+    if (e.key === 'Escape' && !ta.value.trim()) ta.blur();
+  });
+  return el('div', { class: 'kieingabe' }, pille);
+}
+
+// Zieht Hoehe der Pille und Zustand des Knopfes nach. Hoehe in Pixeln, damit die
+// Feder-Kurve der Vorlage (cubic-bezier .175,.885,.32,1.275) greifen kann.
+function chatKnopf() {
+  const root = document.getElementById('chat-root');
+  const ta = root?.querySelector('.kita');
+  if (!ta) return;
+  const k = S.kichat, pille = ta.parentElement, knopf = pille.querySelector('.kiknopf');
+  const voll = !!ta.value.trim();
+  const offen = voll || !!k.rec || document.activeElement === ta;
+  // Messen ohne Uebergang -- sonst liefert scrollHeight die alte, noch animierte Hoehe.
+  const alt = ta.style.height;
+  ta.style.transition = 'none'; ta.style.height = '0px';
+  const h = Math.max(22, Math.min(ta.scrollHeight - 26, 160));
+  ta.style.height = alt; void ta.offsetHeight; ta.style.transition = '';
+  ta.style.height = (h + 26) + 'px';
+  ta.style.overflowY = ta.scrollHeight - 26 > 160 ? 'auto' : 'hidden';
+  pille.style.height = (offen ? Math.max(96, h + 26 + 40) : 48) + 'px';
+  pille.classList.toggle('offen', offen);
+  pille.classList.toggle('hoert', !!k.rec);
+  const modus = k.rec ? 'stop' : (voll || !KI_SR) ? 'pfeil' : 'mic';
+  knopf.dataset.modus = modus;
+  knopf.disabled = modus === 'pfeil' && (k.denkt || !voll);
+  knopf.setAttribute('aria-label', { pfeil: 'Senden', mic: 'Diktieren', stop: 'Diktat beenden' }[modus]);
+  knopf.title = knopf.getAttribute('aria-label');
+}
+
+function chatDiktat(ta) {
+  const k = S.kichat;
+  const rec = new KI_SR();
+  rec.lang = 'de-DE'; rec.continuous = true; rec.interimResults = true;
+  let fest = ta.value.trim();
+  rec.onresult = (e) => {
+    if (k.rec !== rec) return; // nach Stopp nachgereichte Ergebnisse verwerfen
+    let vorlaeufig = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) fest += (fest ? ' ' : '') + e.results[i][0].transcript.trim();
+      else vorlaeufig += e.results[i][0].transcript;
+    }
+    ta.value = (fest + (vorlaeufig ? ' ' + vorlaeufig.trim() : '')).trim();
+    chatKnopf();
+  };
+  rec.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      k.zeilen.push({ rolle: 'fehler', text: 'Mikrofon ist für diese Seite nicht freigegeben.' });
+      renderChat();
+    }
+  };
+  rec.onend = () => { if (k.rec === rec) { k.rec = null; chatKnopf(); ta.focus(); } };
+  k.rec = rec;
+  rec.start();
+  chatKnopf();
+}
+function chatDiktatEnde() {
+  const k = S.kichat;
+  if (!k?.rec) return;
+  const rec = k.rec; k.rec = null;
+  try { rec.stop(); } catch {}
+  chatKnopf();
 }
 
 async function chatSenden(ta) {
   const k = S.kichat;
   const text = ta.value.trim();
   if (!text || k.denkt) return;
+  chatDiktatEnde();
   const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
   k.zeilen.push({ rolle: 'nutzer', text });
   ta.value = ''; k.denkt = true; renderChat();
