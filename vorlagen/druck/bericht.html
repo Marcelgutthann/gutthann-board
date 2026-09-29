@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>Vorlage – Bericht und Auswertung</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../ghiw-druck.css">
+</head>
+<body>
+<!-- Vorlage Bericht / Auswertung / Entscheidungsvorlage (Projektbericht, Kostenvergleich, Planstandsvergleich).
+     Aufbau: Kernaussage oben -> Kennzahlen -> Abschnitte -> Belege. Jede Zahl mit Sicherheitsgrad
+     (siehe Skill "auswertung"). [eckige Klammern] = Platzhalter. -->
+<div class="blatt">
+  <header class="kopf">
+    <img src="../ghiw-logo.png" alt="Gutthann HIW Architekten">
+    <div class="absender"><strong>Gutthann HIW Architekten GmbH</strong><br><span class="ph">[intern / für Bauherr]</span></div>
+  </header>
+
+  <p class="dachzeile"><span class="ph">[Projektbericht / Auswertung / Entscheidungsvorlage]</span> · <span class="ph">[Projektnummer Projekt]</span></p>
+  <h1 class="titel"><span class="ph">[Titel, der die Frage nennt]</span></h1>
+  <p class="meta"><span><b>Projekt</b> <span class="ph">[Projekt]</span></span><span><b>Leistungsphase</b> <span class="ph">[5]</span></span><span><b>Verfasser</b> <span class="ph">[Name]</span></span><span><b>Stand</b> <span class="ph">[Datum]</span></span></p>
+
+  <main>
+    <div class="kernaussage"><span class="ph">[Die Antwort in ein bis zwei Sätzen. Wer nur das liest, weiß genug.]</span></div>
+
+    <div class="kennzahlen">
+      <div class="kennzahl"><div class="wert"><span class="ph">[Wert]</span></div><div class="name"><span class="ph">[was gemessen wird]</span></div></div>
+      <div class="kennzahl"><div class="wert"><span class="ph">[Wert]</span></div><div class="name"><span class="ph">[was gemessen wird]</span></div></div>
+      <div class="kennzahl"><div class="wert"><span class="ph">[Wert]</span></div><div class="name"><span class="ph">[was gemessen wird]</span></div></div>
+    </div>
+
+    <h2>1. <span class="ph">[Erster Befund als Aussage]</span></h2>
+    <p><span class="ph">[Begründung in ganzen Sätzen.]</span></p>
+    <div class="balken">
+      <h4><span class="ph">[Aussage der Grafik]</span></h4>
+      <div class="zeile"><span><span class="ph">[Stand A]</span></span><div class="spur"><i style="width:80%"></i></div><span class="zahl"><span class="ph">[0]</span></span></div>
+      <div class="zeile"><span><span class="ph">[Stand B]</span></span><div class="spur"><i class="marke" style="width:92%"></i></div><span class="zahl"><span class="ph">[0]</span></span></div>
+      <p class="einheit">Werte in <span class="ph">[Einheit]</span></p>
+    </div>
+
+    <h2>2. <span class="ph">[Zweiter Befund]</span></h2>
+    <p><span class="ph">[…]</span></p>
+    <div class="hinweis"><div class="hinweis-titel">Annahmen</div><span class="ph">[Was nicht belegt ist und was das für das Ergebnis heißt.]</span></div>
+
+    <h2>Nächste Schritte</h2>
+    <table>
+      <thead><tr><th>Was</th><th style="width:30mm">Wer</th><th style="width:22mm">Bis</th><th style="width:24mm">Status</th></tr></thead>
+      <tbody><tr><td><span class="ph">[Schritt]</span></td><td><span class="ph">[Name]</span></td><td><span class="ph">[TT.MM.]</span></td><td><span class="marke">offen</span></td></tr></tbody>
+    </table>
+
+    <h2>Belege</h2>
+    <table>
+      <thead><tr><th style="width:22mm">Grad</th><th>Aussage</th><th>Fundstelle</th></tr></thead>
+      <tbody>
+        <tr><td><span class="grad belegt">belegt</span></td><td><span class="ph">[Aussage]</span></td><td class="klein"><span class="ph">[Datei, Seite]</span></td></tr>
+        <tr><td><span class="grad annahme">annahme</span></td><td>Annahme: <span class="ph">[…]</span></td><td class="klein">—</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <footer class="fuss"><span>Gutthann HIW · <span class="ph">[Projekt]</span> · <span class="ph">[Dokumentart]</span></span><span>Stand <span class="ph">[Datum]</span></span></footer>
+</div>
+</body></html>
