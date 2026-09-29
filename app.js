@@ -844,6 +844,7 @@ function renderSidebar() {
     el('div', { class: 'sub' }, el('span', { class: 'dot' }), 'Digitaler Mitarbeiter aktiv')));
   const li = S.liste; if (!li) return;
   const grp = (label) => { const g = el('div', { class: 'sect' }); g.append(el('div', { class: 'lbl' }, label)); sb.append(g); return g; };
+  const imChat = S.active?.typ === 'chat';
 
   // Radar zuerst: der Einstieg, nicht ein Board unter vielen.
   const gR = el('div', { class: 'sect' });
@@ -909,10 +910,10 @@ function renderSidebar() {
     for (const p of li.pins) {
       const istProjekt = p.art !== 'board';
       const aktiv = istProjekt
-        ? (S.active?.typ === 'projekt' && S.active.name === p.name)
+        ? (imChat ? S.kiProjekt === p.project_id : S.active?.typ === 'projekt' && S.active.name === p.name)
         : (S.active?.typ === 'board' && S.active.id === p.board_id);
       g3.append(el('div', { class: 'row' + (aktiv ? ' active' : ''),
-        onclick: () => wechsle(istProjekt ? 'projekt' : 'board',
+        onclick: () => istProjekt && imChat ? kiProjektKlick(p.project_id) : wechsle(istProjekt ? 'projekt' : 'board',
           istProjekt ? p.project_id : p.board_id, p.name) },
         istProjekt ? el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }) : ico('team'),
         p.name,
@@ -931,8 +932,9 @@ function renderSidebar() {
   const gepinnt = new Set((li.pins || []).filter((p) => p.art !== 'board').map((p) => p.name));
   for (const p of S.projects) {
     if (gepinnt.has(p.name)) continue;
-    const aktiv = S.active?.typ === 'projekt' && S.active.name === p.name;
-    g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => wechsle('projekt', p.id, p.name) },
+    // Im Chat waehlt die Hauptleiste das Projekt des Chats (chat-werkstatt.js, kiProjektKlick).
+    const aktiv = imChat ? S.kiProjekt === p.id : S.active?.typ === 'projekt' && S.active.name === p.name;
+    g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => imChat ? kiProjektKlick(p.id) : wechsle('projekt', p.id, p.name) },
       el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }), p.name,
       el('button', { class: 'pin', title: 'Ins Dashboard aufnehmen', onclick: async (e) => {
         e.stopPropagation();
