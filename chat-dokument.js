@@ -1,11 +1,10 @@
 // ---------- Chat: Agent losschicken, Dokument rechts (Migration 201, 29.09.) ----------
 // Aus dem Board-Chat laesst sich ein Agent losschicken (LPH 2-8). Sobald der Chat ein Dokument
-// hat, rueckt er nach links und das Dokument steht rechts. Jede weitere Nachricht geht dann als
-// Aenderungsauftrag an einen Claude-Agenten auf dem Buero-PC (Runner 'dokument-aendern'), der
-// die Datei bearbeitet; rechts laedt die neue Fassung, links steht seine Antwort.
+// hat, rueckt er nach links und das Dokument steht rechts. Der Chat bleibt ein Gespraech mit Tony;
+// sagt man ausdruecklich, dass sich das Dokument aendern soll, gibt Tony das an einen Claude-Agenten
+// auf dem Buero-PC weiter (Runner 'dokument-aendern'); rechts laedt die neue Fassung.
 // Eigene Datei neben app.js, damit parallele Arbeit am Chat nicht in dieselben Zeilen faehrt.
-// Einhaengen in app.js: renderChat -> chatDokRender(), chatSenden -> chatDokSenden(),
-// chatOeffnen/chatNeu -> chatDokLaden().
+// Einhaengen in app.js: renderChat -> chatDokRender(), chatOeffnen/chatNeu -> chatDokLaden().
 
 const KIDOK_LPH = [[2, 'Vorplanung'], [3, 'Entwurfsplanung'], [4, 'Genehmigungsplanung'], [5, 'Ausführungsplanung'],
   [6, 'Vorbereitung der Vergabe'], [7, 'Mitwirkung bei der Vergabe'], [8, 'Objektüberwachung']];
@@ -27,14 +26,8 @@ function chatDokRender() {
     if (!leiste) { leiste = el('div', { class: 'kiagenten' }); eing.prepend(leiste); }
     leiste.innerHTML = '';
     leiste.append(el('button', { class: 'kichip', type: 'button', onclick: (e) => chatAgentWahl(e) }, '+ Agent losschicken'));
-    // Tonys eigene Dokumente aendert Tony selbst; nur Agenten-Dokumente brauchen die Weiche.
-    if (zeigen && d && d.agent !== 'tony') {
-      leiste.append(el('span', { class: 'kiziel' }, k.anTony ? 'Nachricht geht an Tony' : 'Nachricht ändert das Dokument'),
-        el('button', { class: 'kichip leise', type: 'button', onclick: () => { k.anTony = !k.anTony; renderChat(); } },
-          k.anTony ? 'ans Dokument' : 'lieber Tony fragen'));
-    }
-    const ta = eing.querySelector('.kita');
-    if (ta) ta.placeholder = zeigen && d && (d.agent === 'tony' || !k.anTony) ? 'Was soll im Dokument anders werden?' : 'Frag Tony …';
+    // Jede Nachricht geht an Tony (29.09.). Aendern soll sich das Dokument nur, wenn man es
+    // ausdruecklich sagt -- das erkennt Tony und gibt es an den Agenten weiter (dokument_aendern_lassen).
   }
 
   let panel = root.querySelector('.kidok');
@@ -208,38 +201,10 @@ async function chatAgentStarten(lph, p) {
   if (j.fehler || j.error) { uiHinweis(j.fehler || j.error); return; }
   k.zeilen.push({ rolle: 'assistent', text: 'Agent LPH ' + lph + ' für ' + p.name + ' ist losgeschickt. Das Dokument erscheint rechts, sobald er fertig ist.' });
   k.dok = { id: j.dok_id, titel: j.titel, status: 'arbeitet', version: 0, lauf_status: 'queued' };
-  k.dokZu = false; k.anTony = false;
+  k.dokZu = false;
   renderChat();
   ladeChats();
   chatDokTakt(k);
-}
-
-// Aus chatSenden: true heisst "erledigt, nicht an Tony".
-function chatDokSenden(ta) {
-  const k = S.kichat;
-  if (!k?.dok || k.dokZu || k.anTony || k.dok.agent === 'tony') return false;
-  const text = ta.value.trim();
-  if (!text || k.denkt) return true;
-  if (k.dok.status === 'arbeitet') { uiHinweis('Der Agent arbeitet noch am Dokument.'); return true; }
-  chatDiktatEnde();
-  k.zeilen.push({ rolle: 'nutzer', text });
-  const z = { rolle: 'assistent', text: '', laeuft: true, tut: 'arbeitet am Dokument' };
-  k.zeilen.push(z);
-  k.dokZeile = z;
-  ta.value = ''; k.denkt = true; renderChat();
-  chatAktion('dok_aendern', { dok_id: k.dok.id, anweisung: text }).catch((e) => ({ fehler: e.message })).then((j) => {
-    if (j.fehler || j.error) {
-      k.zeilen.splice(k.zeilen.indexOf(z), 1);
-      k.zeilen.push({ rolle: 'fehler', text: j.fehler || j.error });
-      k.denkt = false; k.dokZeile = null;
-      if (S.kichat === k) renderChat();
-      return;
-    }
-    k.dok.status = 'arbeitet'; k.dok.lauf_status = 'queued';
-    if (S.kichat === k) renderChat();
-    chatDokTakt(k);
-  });
-  return true;
 }
 
 // Tony schreibt selbst ein Dokument (Werkzeug dokument_zeigen, Migration 203). Aus dem Stream:
@@ -262,7 +227,12 @@ function chatDokStrom(e, z) {
 }
 // Schluss der Antwort: gespeicherte Fassung (id, Version) uebernehmen.
 function chatDokEnde(antwort) {
-  const k = S.kichat, d = antwort?.dokument;
+  const k = S.kichat, d = antwort?.dokument, auftrag = antwort?.dok_auftrag;
+  // Tony hat einen Aenderungsauftrag an den Dokument-Agenten weitergegeben: rechts "arbeitet" zeigen und nachfragen.
+  if (auftrag && k.dok) {
+    if (auftrag.fehler || auftrag.error) k.zeilen.push({ rolle: 'fehler', text: auftrag.fehler || auftrag.error });
+    else { k.dok = { ...k.dok, status: 'arbeitet', lauf_status: 'queued' }; k.dokZu = false; chatDokTakt(k); }
+  }
   if (!d) {
     // Werkzeug gestartet, aber kein Dokument entstanden: die Wartefläche nicht stehen lassen.
     if (k.dok?.agent === 'tony' && k.dok.status === 'arbeitet') k.dok = k.dok.html ? { ...k.dok, status: 'fertig' } : null;
@@ -278,7 +248,7 @@ async function chatDokLaden() {
   const j = await chatAktion('dok_stand', { chat_id: k.id }).catch(() => ({}));
   if (S.kichat !== k) return;
   k.dok = j.dok || null;
-  if (k.dok?.status === 'arbeitet') { k.denkt = !!k.dok.version; chatDokTakt(k); }
+  if (k.dok?.status === 'arbeitet') chatDokTakt(k); // Tony bleibt ansprechbar, waehrend der Agent arbeitet
   renderChat();
 }
 
@@ -296,7 +266,6 @@ function chatDokTakt(k) {
       clearInterval(k.dokTakt); k.dokTakt = null;
       if (k.dokZeile) { k.dokZeile.text = j.dok.antwort || 'Fertig.'; k.dokZeile.laeuft = false; k.dokZeile = null; }
       else if (j.dok.antwort && vorher?.status === 'arbeitet') k.zeilen.push({ rolle: 'assistent', text: j.dok.antwort });
-      k.denkt = false;
     }
     if (S.active?.typ === 'chat') renderChat();
   }, 4000);
