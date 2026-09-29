@@ -316,6 +316,7 @@ async function ladeBoard() {
   if (!S.active) return;
   const token = ++ladeToken;
   ladeMeldungen(); // blockiert nichts; zeichnet die Topbar selbst nach
+  if (S.active.typ === 'chat') return;
   if (S.active.typ === 'radar') {
     const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (token !== ladeToken) return;
@@ -463,7 +464,7 @@ async function wechsle(typ, id, name) {
   S.newCardCol = null; S.newCardText = '';
   zeigeAnsicht('board'); // beim Wechsel immer zuerst die Aufgaben zeigen
   renderSidebar(); renderTopbar();
-  if (typ === 'dev') return; // DEV hat kein Board zu laden
+  if (typ === 'dev' || typ === 'chat') return; // DEV und Chat haben kein Board zu laden
   renderBoard(); await ladeBoard();
 }
 
@@ -481,16 +482,20 @@ function zeigeAnsicht(welche) {
   const istProjekt = S.active?.typ === 'projekt';
   const istRadar = S.active?.typ === 'radar';
   const istDev = S.active?.typ === 'dev';
+  const istChat = S.active?.typ === 'chat';
+  const chatRoot = document.getElementById('chat-root');
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
   const termAn = welche === 'termin' && istProjekt;
-  board.style.display = (dashAn || kalAn || termAn || istRadar || istDev) ? 'none' : '';
+  board.style.display = (dashAn || kalAn || termAn || istRadar || istDev || istChat) ? 'none' : '';
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
   if (term) term.hidden = !termAn;
   if (radar) radar.hidden = !istRadar;
   if (devRoot) devRoot.hidden = !istDev;
   if (istDev) ladeDev();
+  if (chatRoot) chatRoot.hidden = !istChat;
+  if (istChat) renderChat();
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
@@ -826,6 +831,13 @@ function renderSidebar() {
     (S.devOffen || 0) > 0
       ? el('span', { class: 'badge', title: 'Fragen des Klärers warten auf deine Antwort' }, String(S.devOffen))
       : ''));
+  // Chat: freies Gespraech mit Tony per Text -- dieselbe Denkstufe wie der Moderator
+  // (live-backend, kanal board), nur ohne Mikrofon.
+  gR.append(el('div', {
+    class: 'row' + (S.active?.typ === 'chat' ? ' active' : ''),
+    onclick: () => wechsle('chat', null, 'Chat'),
+    title: 'Mit Tony schreiben — er kennt Board, Projekte und Dokumente',
+  }, '✎ ', 'Chat'));
   sb.append(gR);
 
   const g1 = grp('Meine Boards');
@@ -1297,6 +1309,58 @@ function devDetail(root, a) {
 }
 
 
+// ---------- Chat: Tony per Text ----------
+// Der Verlauf lebt nur in dieser Sitzung (S.kichat); neu laden beginnt von vorn.
+// Tonys Gedaechtnis (merken) bleibt davon unberuehrt, das liegt im Backend.
+function renderChat() {
+  const root = document.getElementById('chat-root');
+  if (!root) return;
+  S.kichat = S.kichat || { zeilen: [], denkt: false };
+  const k = S.kichat;
+  let verlauf = root.querySelector('.kiverlauf');
+  if (!verlauf) {
+    root.innerHTML = '';
+    verlauf = el('div', { class: 'kiverlauf' });
+    const ta = el('textarea', { class: 'kita', rows: '2', placeholder: 'Schreib Tony … (Enter sendet, Umschalt+Enter neue Zeile)' });
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSenden(ta); }
+    });
+    const knopf = el('button', { class: 'kisend', onclick: () => chatSenden(ta) }, 'Senden');
+    root.append(verlauf, el('div', { class: 'kieingabe' }, ta, knopf));
+  }
+  verlauf.innerHTML = '';
+  if (!k.zeilen.length) verlauf.append(el('div', { class: 'kileer' }, 'Frag Tony nach Karten, Projekten, Terminen oder Dokumenten — oder lass ihn etwas anlegen.'));
+  for (const z of k.zeilen) {
+    verlauf.append(el('div', { class: 'kizeile ' + z.rolle },
+      el('div', { class: 'kiblase' }, z.text)));
+  }
+  if (k.denkt) verlauf.append(el('div', { class: 'kizeile assistent' }, el('div', { class: 'kiblase kidenkt' }, 'Tony denkt …')));
+  root.querySelector('.kisend').disabled = k.denkt;
+  verlauf.scrollTop = verlauf.scrollHeight;
+}
+
+async function chatSenden(ta) {
+  const k = S.kichat;
+  const text = ta.value.trim();
+  if (!text || k.denkt) return;
+  const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
+  k.zeilen.push({ rolle: 'nutzer', text });
+  ta.value = ''; k.denkt = true; renderChat();
+  try {
+    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe: text, verlauf, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm() });
+    let t = antwort.text || '';
+    const misslungen = await liveOberflaeche(antwort.oberflaeche);
+    if (misslungen.length) t = (t ? t + ' ' : '') + misslungen.join(' ');
+    k.zeilen.push({ rolle: 'assistent', text: t || '(keine Antwort)' });
+    for (const pr of antwort.probleme || []) k.zeilen.push({ rolle: 'fehler', text: 'Werkzeug ' + pr.werkzeug + ': ' + pr.meldung });
+  } catch (e) {
+    k.zeilen.push({ rolle: 'fehler', text: 'Fehler: ' + (e?.message || e) });
+  } finally {
+    k.denkt = false;
+    if (S.active?.typ === 'chat') renderChat();
+  }
+}
+
 // ---------- Topbar + Board ----------
 function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
@@ -1304,6 +1368,7 @@ function renderTopbar() {
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'dev' ? 'Sag, was die Anwendung können soll · der Klärer fragt zurück, der Coding Agent baut'
+    : S.active.typ === 'chat' ? 'Mit Tony schreiben · er kennt Board, Projekte und Dokumente'
     : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
@@ -3790,6 +3855,7 @@ function liveFenster() {
 // (gemessen 11.09.). Ein Stueck haengt an den letzten Zug derselben Rolle, wenn es
 // nahtlos anschliesst; eine Pause ab 2,5 s ist ein neuer Zug.
 function liveZeile(rolle, text, ev) {
+  if (!S.live) return; // aus dem Chat gerufen: kein Gespraechsfenster offen
   const zl = S.live.zeilen, letzte = zl[zl.length - 1];
   if (ev && letzte && letzte.rolle === rolle && letzte.bis != null && ev.start_ms - letzte.bis <= 2500) {
     letzte.text += text; letzte.bis = ev.end_ms;
@@ -3859,6 +3925,7 @@ function liveBretter() {
   return [
     { typ: 'radar', id: null, name: 'Mein Dashboard' },
     { typ: 'dev', id: null, name: 'DEV' },
+    { typ: 'chat', id: null, name: 'Chat' },
     ...(S.liste?.boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
     ...(S.liste?.team_boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
     ...(S.projects || []).map((p) => ({ typ: 'projekt', id: p.id, name: p.name, begriffe: p.begriffe || [] })),
