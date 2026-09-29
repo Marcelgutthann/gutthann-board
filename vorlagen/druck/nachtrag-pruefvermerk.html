@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>Vorlage – Prüfvermerk Nachtrag</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../ghiw-druck.css">
+</head>
+<body>
+<!-- Vorlage Nachtragsprüfung (Prüfvermerk, 02_Pruefvermerk_NA<nn>_<Thema>).
+     Inhaltliche Regeln: nachtragspruefung/STANDARD.md — Kapitel 1–9 fest, jede Aussage mit Sicherheitsgrad.
+     Form: ein Gutachten, kein Dashboard. Keine Kästen, keine eingefärbten Flächen; Farbe nur als
+     Ampel-Quadrat, als Balken und als Schriftfarbe eines Labels. [eckige Klammern] = Platzhalter. -->
+<div class="blatt gutachten">
+  <header class="kopf">
+    <img src="../ghiw-logo.png" alt="Gutthann HIW Architekten">
+    <div class="absender"><strong>Gutthann HIW Architekten GmbH</strong><br>Prüfvermerk · <span class="ph">[Prüfdatum]</span></div>
+  </header>
+
+  <p class="dachzeile">Nachtragsprüfung · <span class="ph">[Projektnummer Projekt]</span></p>
+  <h1 class="titel">Nachtrag <span class="ph">[NA-Nr.]</span> · <span class="ph">[Thema in drei bis fünf Worten]</span></h1>
+
+  <div class="felder">
+    <div><span>Projekt</span><span class="ph">[Projekt]</span></div>
+    <div><span>Gewerk</span><span class="ph">[Gewerk]</span></div>
+    <div><span>Auftragnehmer</span><span class="ph">[Firma]</span></div>
+    <div><span>Nachtragsnummer</span><span class="ph">[NA-Nr.]</span></div>
+    <div><span>Angebot vom</span><span class="ph">[Datum]</span></div>
+    <div><span>Angebotssumme netto</span><span class="ph">[Betrag] €</span></div>
+    <div><span>Vertrags-LV</span><span class="ph">[Datei]</span></div>
+    <div><span>Prüfer</span><span class="ph">[Name]</span></div>
+    <div><span>Stand der Prüfung</span><span class="ph">[vorläufig / abgeschlossen]</span></div>
+  </div>
+
+  <main>
+    <h2><span class="nr">1</span>Ergebnis in Kürze</h2>
+    <p class="ergebnis"><i class="ampel teilweise"></i>Der Nachtrag trägt teilweise.</p>
+    <p><span class="ph">[Ein Satz: was anerkannt wird, was nicht, und warum.]</span></p>
+    <table>
+      <thead><tr><th>Betrag</th><th class="zahl">netto</th></tr></thead>
+      <tbody>
+        <tr><td>Gefordert</td><td class="zahl"><span class="ph">[0,00] €</span></td></tr>
+        <tr><td>Geprüft und anerkannt</td><td class="zahl"><span class="ph">[0,00] €</span></td></tr>
+        <tr class="summe"><td>Differenz</td><td class="zahl"><span class="ph">[0,00] €</span></td></tr>
+      </tbody>
+    </table>
+    <div class="balken">
+      <h4>Die Forderung liegt über jedem Maßstab <span class="ph">[Aussage der Grafik]</span></h4>
+      <div class="zeile"><span>Forderung AN</span><div class="spur"><i class="warn" style="width:100%"></i></div><span class="zahl"><span class="ph">[0]</span></span></div>
+      <div class="zeile"><span>Eigene LVs, Median</span><div class="spur"><i class="marke" style="width:62%"></i></div><span class="zahl"><span class="ph">[0]</span></span></div>
+      <div class="zeile"><span>Marktpreis</span><div class="spur"><i style="width:70%"></i></div><span class="zahl"><span class="ph">[0]</span></span></div>
+      <div class="zeile"><span>Vertragspreis</span><div class="spur"><i style="width:55%"></i></div><span class="zahl"><span class="ph">[0]</span></span></div>
+      <p class="einheit">Werte in <span class="ph">[€/m²]</span> netto</p>
+    </div>
+    <p class="klein">Diese Prüfung ist keine Freigabe. Die Entscheidung trifft der Bauherr.</p>
+
+    <h2><span class="nr">2</span>Sachverhalt</h2>
+    <p><span class="ph">[Was gefordert wird, seit wann, auf welcher Vertragsgrundlage.]</span></p>
+
+    <h2><span class="nr">3</span>Prüfung dem Grunde nach</h2>
+    <p><span class="ph">[Ist die Leistung im Vertrag schon enthalten? Positionsüberschrift und Positionstext getrennt lesen.]</span></p>
+
+    <h2><span class="nr">4</span>Prüfung der Höhe nach</h2>
+    <h3>4.1 Material</h3><p><span class="ph">[gegen Belege des AN und gegen den Markt]</span></p>
+    <h3>4.2 Lohn und Gerät</h3><p><span class="ph">[gegen Formblätter 221/222/223]</span></p>
+    <h3>4.3 Marktvergleich</h3><p><span class="ph">[Internet mit Link und Abrufdatum — oder „gesucht am …, kein Treffer“ mit Suchanfrage]</span></p>
+    <h3>4.4 Eigene LVs</h3><p><span class="ph">[Preisspiegel des Projekts und LV-Korpus, Spanne, Median, drei Fundstellen]</span></p>
+
+    <h2><span class="nr">5</span>Mengen und Rechnerisches</h2>
+    <table>
+      <thead><tr><th>Pos.</th><th>Leistung</th><th class="zahl">Menge</th><th class="zahl">EP</th><th class="zahl">GP</th><th>Prüfung</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ph">[01]</span></td><td><span class="ph">[Kurztext]</span></td><td class="zahl"><span class="ph">[0 m²]</span></td><td class="zahl"><span class="ph">[0,00]</span></td><td class="zahl"><span class="ph">[0,00]</span></td><td><span class="grad gerechnet">gerechnet</span></td></tr>
+        <tr class="summe"><td></td><td>Summe netto</td><td></td><td></td><td class="zahl"><span class="ph">[0,00] €</span></td><td></td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="nr">6</span>Bewertung und Empfehlung</h2>
+    <table>
+      <thead><tr><th>Option</th><th>Inhalt</th><th class="zahl">Betrag netto</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td><span class="ph">[anerkennen wie geprüft]</span></td><td class="zahl"><span class="ph">[0,00] €</span></td></tr>
+        <tr><td>B</td><td><span class="ph">[nachverhandeln auf …]</span></td><td class="zahl"><span class="ph">[0,00] €</span></td></tr>
+        <tr><td>C</td><td><span class="ph">[zurückweisen, weil …]</span></td><td class="zahl"><span class="ph">[0,00] €</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="nr">7</span>Unsicherheiten</h2>
+    <table>
+      <thead><tr><th>Grad</th><th>Aussage</th><th>Fundstelle</th></tr></thead>
+      <tbody>
+        <tr><td><span class="grad belegt">belegt</span></td><td><span class="ph">[steht wörtlich in einer Unterlage]</span></td><td class="klein"><span class="ph">[Datei, Seite]</span></td></tr>
+        <tr><td><span class="grad gerechnet">gerechnet</span></td><td><span class="ph">[aus belegten Zahlen hergeleitet]</span><span class="rechenweg">[Menge × EP = GP]</span></td><td class="klein"><span class="ph">[Datei]</span></td></tr>
+        <tr><td><span class="grad markt">markt</span></td><td><span class="ph">[externe Quelle]</span></td><td class="klein"><span class="ph">[Link · abgerufen am]</span></td></tr>
+        <tr><td><span class="grad annahme">annahme</span></td><td>Annahme: <span class="ph">[fachliche Einschätzung ohne Beleg]</span></td><td class="klein">—</td></tr>
+        <tr><td><span class="grad offen">offen</span></td><td><span class="ph">[nicht ermittelbar — Frage an den Menschen?]</span></td><td class="klein">—</td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="nr">8</span>Folgerungen für das Büro</h2>
+    <p><span class="ph">[Was beim nächsten LV anders formuliert gehört.]</span></p>
+
+    <h2><span class="nr">9</span>Quellen</h2>
+    <h3>Projektunterlagen</h3><ul><li><span class="ph">[Datei · Stand]</span></li></ul>
+    <h3>Internetquellen</h3><ul><li><span class="ph">[Titel · Link · abgerufen am]</span></li></ul>
+  </main>
+
+  <footer class="fuss"><span>Gutthann HIW · <span class="ph">[Projekt]</span> · Prüfvermerk NA <span class="ph">[Nr.]</span></span><span>Stand <span class="ph">[Datum]</span></span></footer>
+</div>
+</body></html>
