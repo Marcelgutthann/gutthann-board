@@ -1649,6 +1649,8 @@ function chatMd(roh) {
 function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
   if (!S.active) return;
+  document.getElementById('app')?.classList.toggle('seitezu', S.active.typ === 'chat' && chatSeiteZu());
+  if (S.active.typ === 'chat') tb.append(chatSeitenKnopf()); // Seitenleiste ein-/ausklappen (chat-dokument.js)
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'dev' ? 'Sag, was die Anwendung können soll · der Klärer fragt zurück, der Coding Agent baut'
