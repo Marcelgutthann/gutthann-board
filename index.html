@@ -81,6 +81,14 @@ button{cursor:pointer;background:none;border:none}
 .agenttippt .arbeitsweg{flex-basis:100%;padding-left:24px;margin-top:4px;color:#9A9A93;font-size:12px;line-height:1.5}
 .agenttippt .awkopf{color:#75756E;margin-bottom:3px}
 .agenttippt .awzeile{display:flex;gap:8px;overflow-wrap:anywhere}
+.agenttippt .awstill{color:#8A6A1C;margin:2px 0 4px}
+.agenttippt .awstill.lang{color:#A3321F}
+.agenttippt .awplan{margin:4px 0 6px}
+.agenttippt .awp{display:flex;gap:6px;color:#75756E}
+.agenttippt .awp.in_progress{color:#1C1C1A;font-weight:600}
+.agenttippt .awp.completed{color:#9A9A93}
+.agenttippt .awhaken{width:12px;flex:none;text-align:center}
+.agenttippt .awp.completed .awhaken{color:#4E6117}
 .agenttippt .awzeit{flex:0 0 34px;font-variant-numeric:tabular-nums;color:#B5B5AE}
 .agenttippt .awmehr{color:#B5B5AE}
 .agenttippt .punkte{letter-spacing:2px;color:#7CA928;animation:tippt 1.4s ease-in-out infinite}
@@ -672,6 +680,10 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .tchip .tdot{width:7px;height:7px;border-radius:50%;background:#7CA928;flex:none}
 .tchip small{font-weight:500;color:#8A8A83}
 .tchip.warte{color:#8A8A83;cursor:default}
+.tchip.haengt .tdot{background:#C98A1B}
+.tchip.haengt small{color:#8A6A1C}
+.tchip.gescheitert{color:#A3321F}
+.tchip.gescheitert .tdot{background:#A3321F}
 .inarbeit{flex-basis:100%;display:flex;align-items:center;gap:8px;font-size:11.5px;color:#55554F;flex-wrap:wrap;padding-top:2px}
 .inarbeit .who{display:flex;align-items:center;gap:6px;background:rgba(28,28,26,.05);border-radius:12px;padding:3px 10px;white-space:nowrap}
 .inarbeit .av{width:17px;height:17px;border-radius:50%;color:#fff;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
@@ -736,6 +748,12 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kidokwarte{padding:22px 24px;font-size:13.5px;color:#1C1C1A}
 #chat-root .kidokwartetitel{margin-bottom:12px}
 #chat-root .kidokprot{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:#75756E;white-space:pre-wrap;margin:0;max-height:60vh;overflow:auto}
+#chat-root .kidokpuls{font-size:12px;color:#4E6117;margin:4px 0 8px}
+#chat-root .kidokpuls.haengt{color:#A3321F}
+#chat-root .kidokplan{font-size:13px;margin:0 0 10px;display:grid;gap:3px}
+#chat-root .kidokplan .awp{color:#75756E}
+#chat-root .kidokplan .awp.in_progress{color:#1C1C1A;font-weight:600}
+#chat-root .kidokplan .awp.completed{color:#9A9A93}
 #chat-root .kiagenten{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 #chat-root .kichip{height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(28,28,26,.14);background:#FFFFFF;color:#1C1C1A;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
 #chat-root .kichip:hover{border-color:rgba(28,28,26,.35)}
@@ -764,6 +782,10 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .md th{text-align:left;font-weight:600;color:#55554F;border-bottom:1px solid rgba(28,28,26,.16);padding:5px 10px 5px 0}
 #chat-root .md td{border-bottom:1px solid rgba(28,28,26,.07);padding:5px 10px 5px 0;vertical-align:top}
 #chat-root .kidenkt{color:#75756E}
+#chat-root .kiweg{font-size:12px;color:#75756E;margin:0 0 6px}
+#chat-root .kiweg summary{cursor:pointer;color:#75756E}
+#chat-root .kiwegz{padding-left:14px;line-height:1.5;overflow-wrap:anywhere}
+#chat-root .kiwegz.fehl{color:#A3321F}
 #chat-root .kiantwort{display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%;min-width:0}
 #chat-root .kikarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;width:100%;padding:2px 2px 4px}
 #chat-root .kieingabe{padding-top:10px}
@@ -884,7 +906,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumkva04">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumll0zz">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -967,8 +989,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumkva04"></script>
-<script src="chat-dokument.js?v=mumkva04"></script>
-<script type="module" src="dashboard.js?v=mumkva04"></script>
+<script src="app.js?v=mumll0zz"></script>
+<script src="chat-dokument.js?v=mumll0zz"></script>
+<script type="module" src="dashboard.js?v=mumll0zz"></script>
 </body>
 </html>
