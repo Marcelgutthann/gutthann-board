@@ -732,6 +732,12 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root[hidden]{display:none}
 /* Chat mit Dokument (chat-dokument.js, Migr. 201): Chat links, Dokument rechts als weisses Blatt. */
 /* Seitenknopf im Chat: Board-Navigation und Chatverlaeufe zusammen weg. */
+/* Projekte in der Hauptleiste, solange der Chat offen ist (app.js renderSidebar, 29.09.) */
+.sect.kiprojekte{flex:1 0 auto;display:flex;flex-direction:column;padding:14px 0 0}
+.kiprojknopf{align-self:flex-start;margin:0 10px 10px;padding:6px 12px;background:#fff;border:1px solid rgba(28,28,26,.14);border-radius:7px;font-size:10.5px;letter-spacing:.09em;font-weight:600;color:#55554F;text-transform:uppercase}
+.kiprojknopf:hover{border-color:rgba(28,28,26,.3);color:#1C1C1A}
+.kiprojliste{flex:1 0 auto;padding:6px 10px 12px;border-top:1px solid rgba(28,28,26,.10)}
+.kiprojekte.imchat .kiprojliste{background:#F3F3F1}
 #app.seitezu #sidebar,#app.seitezu #chat-root .kiseite{display:none}
 .seitenbtn{width:34px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-left:-6px}
 .seitenbtn:hover{background:rgba(28,28,26,.08)}
@@ -1036,7 +1042,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumocho8">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumor00m">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1119,9 +1125,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumocho8"></script>
-<script src="chat-dokument.js?v=mumocho8"></script>
-<script src="chat-werkstatt.js?v=mumocho8"></script>
-<script type="module" src="dashboard.js?v=mumocho8"></script>
+<script src="app.js?v=mumor00m"></script>
+<script src="chat-dokument.js?v=mumor00m"></script>
+<script src="chat-werkstatt.js?v=mumor00m"></script>
+<script type="module" src="dashboard.js?v=mumor00m"></script>
 </body>
 </html>
