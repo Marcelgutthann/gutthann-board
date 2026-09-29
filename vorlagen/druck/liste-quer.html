@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>Vorlage – Liste A4 quer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../ghiw-druck.css">
+</head>
+<body>
+<!-- Vorlage Liste im Querformat: Beteiligtenliste, Mängelliste, Terminliste, Planliste, Kostenaufstellung.
+     Breite Tabellen immer quer; Gruppenzeilen gliedern, Kopfzeile wiederholt sich. [eckige Klammern] = Platzhalter. -->
+<div class="blatt quer">
+  <header class="kopf">
+    <img src="../ghiw-logo.png" alt="Gutthann HIW Architekten">
+    <div class="absender"><strong>Gutthann HIW Architekten GmbH</strong><br>Stand <span class="ph">[Datum]</span></div>
+  </header>
+
+  <p class="dachzeile"><span class="ph">[Beteiligtenliste / Mängelliste / Planliste]</span> · <span class="ph">[Projektnummer Projekt]</span></p>
+  <h1 class="titel"><span class="ph">[Titel der Liste]</span></h1>
+  <p class="meta"><span><b>Einträge</b> <span class="ph">[n]</span></span><span><b>Filter</b> <span class="ph">[alle / nur offene]</span></span><span><b>Verfasser</b> <span class="ph">[Name]</span></span></p>
+
+  <main>
+    <table>
+      <thead><tr><th style="width:12mm">Nr.</th><th>Bezeichnung</th><th>Firma</th><th>Ansprechpartner</th><th>Telefon</th><th>E-Mail</th><th style="width:22mm">Status</th></tr></thead>
+      <tbody>
+        <tr class="gruppe"><td colspan="7"><span class="ph">[Gruppe, z. B. Bauherr]</span></td></tr>
+        <tr><td>01</td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="marke gut">aktuell</span></td></tr>
+        <tr class="gruppe"><td colspan="7"><span class="ph">[Gruppe, z. B. Fachplaner]</span></td></tr>
+        <tr><td>02</td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="ph">[…]</span></td><td><span class="marke">offen</span></td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <footer class="fuss"><span>Gutthann HIW · <span class="ph">[Projekt]</span> · <span class="ph">[Listenname]</span></span><span>Stand <span class="ph">[Datum]</span></span></footer>
+</div>
+</body></html>
