@@ -112,13 +112,16 @@ td.kw { word-break: break-word; }
 td.ki svg { width: 3.2mm; height: 3.2mm; display: block; margin-top: .35mm; }
 
 /* ---- Fusszeile -------------------------------------------------------- */
-/* Ohne Seitenzahl-Zaehler des Browsers: der Druckdialog blendet Kopf- und
-   Fusszeilen selbst ein, wenn gewuenscht. Hier steht nur das Erstelldatum. */
-.fuss {
-  position: fixed; bottom: 6mm; left: 0; right: 0;
-  border-top: .75pt solid #a6a6a6;
-  padding-top: 1.5mm;
-  font-size: 8pt; text-align: right;
+/* Im unteren Seitenrand (@page-Randfeld), nicht im Satzspiegel. Frueher stand
+   hier ein position:fixed-Block -- der lag INNERHALB des Satzspiegels und strich
+   mit seiner Linie die letzte Person jeder Seite durch (29.09.). */
+@page {
+  @bottom-right {
+    content: "Erstellt am {{DATUM}}  |  Seite " counter(page) " von " counter(pages);
+    font-family: Verdana, Geneva, sans-serif; font-size: 8pt;
+    vertical-align: top; padding-top: 2mm;
+    border-top: .75pt solid #a6a6a6;
+  }
 }
 </style>
 
@@ -143,5 +146,3 @@ td.ki svg { width: 3.2mm; height: 3.2mm; display: block; margin-top: .35mm; }
 <div class="titel-linie"></div>
 
 {{INHALT}}
-
-<div class="fuss">Erstellt am {{DATUM}}</div>
