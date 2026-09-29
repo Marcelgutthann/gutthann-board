@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>Vorlage – Besprechungsprotokoll</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../ghiw-druck.css">
+</head>
+<body>
+<!-- Vorlage Besprechungsprotokoll / Jour fixe. Jeder Punkt ist eine Tabellenzeile mit Art (I = Information,
+     F = Festlegung, A = Aufgabe), Wer und Bis. Laufende Nummer je Protokoll (Sitzung.Punkt), damit Punkte über
+     mehrere Protokolle verfolgbar bleiben. [eckige Klammern] = Platzhalter. -->
+<div class="blatt">
+  <header class="kopf">
+    <img src="../ghiw-logo.png" alt="Gutthann HIW Architekten">
+    <div class="absender"><strong>Gutthann HIW Architekten GmbH</strong><br>Protokoll Nr. <span class="ph">[07]</span></div>
+  </header>
+
+  <p class="dachzeile">Besprechungsprotokoll · <span class="ph">[Projektnummer Projekt]</span></p>
+  <h1 class="titel"><span class="ph">[Jour fixe Bauherr / Planerbesprechung / Baubesprechung]</span></h1>
+
+  <div class="felder">
+    <div><span>Datum</span><span class="ph">[TT.MM.JJJJ, hh:mm–hh:mm]</span></div>
+    <div><span>Ort</span><span class="ph">[Baustelle / Büro / Teams]</span></div>
+    <div><span>Protokoll</span><span class="ph">[Name]</span></div>
+    <div><span>Verteiler</span><span class="ph">[alle Teilnehmer + …]</span></div>
+    <div><span>Nächster Termin</span><span class="ph">[TT.MM.JJJJ]</span></div>
+    <div><span>Einwände bis</span><span class="ph">[TT.MM.JJJJ]</span></div>
+  </div>
+
+  <main>
+    <h2>Teilnehmer</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Firma / Rolle</th><th>anwesend</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ph">[Name]</span></td><td><span class="ph">[Bauherr]</span></td><td>ja</td></tr>
+        <tr><td><span class="ph">[Name]</span></td><td>Gutthann HIW Architekten</td><td>ja</td></tr>
+        <tr><td><span class="ph">[Name]</span></td><td><span class="ph">[Tragwerksplanung]</span></td><td>entschuldigt</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Besprechungspunkte</h2>
+    <table>
+      <thead><tr><th style="width:12mm">Nr.</th><th>Thema und Inhalt</th><th style="width:10mm">Art</th><th style="width:26mm">Wer</th><th style="width:20mm">Bis</th></tr></thead>
+      <tbody>
+        <tr class="gruppe"><td colspan="5"><span class="ph">[1 · Termine]</span></td></tr>
+        <tr><td>7.1</td><td><span class="ph">[Was besprochen wurde, in ganzen Sätzen.]</span></td><td>I</td><td>—</td><td>—</td></tr>
+        <tr><td>7.2</td><td><span class="ph">[Was festgelegt wurde.]</span></td><td>F</td><td>—</td><td>—</td></tr>
+        <tr class="gruppe"><td colspan="5"><span class="ph">[2 · Planung]</span></td></tr>
+        <tr><td>7.3</td><td><span class="ph">[Was jemand bis wann erledigt.]</span></td><td>A</td><td><span class="ph">[Firma]</span></td><td><span class="ph">[TT.MM.]</span></td></tr>
+        <tr><td>6.4</td><td><span class="ph">[Offener Punkt aus dem Vorprotokoll]</span> <span class="marke achtung">aus Nr. 6</span></td><td>A</td><td><span class="ph">[Firma]</span></td><td><span class="warn"><span class="ph">[überfällig]</span></span></td></tr>
+      </tbody>
+    </table>
+    <p class="klein">Art: I = Information · F = Festlegung · A = Aufgabe. Einwände gegen dieses Protokoll bitte bis zum genannten Datum schriftlich, sonst gilt es als anerkannt.</p>
+  </main>
+
+  <footer class="fuss"><span>Gutthann HIW · <span class="ph">[Projekt]</span> · Protokoll Nr. <span class="ph">[07]</span></span><span>Stand <span class="ph">[Datum]</span></span></footer>
+</div>
+</body></html>
