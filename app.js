@@ -844,7 +844,7 @@ function renderSidebar() {
     el('div', { class: 'sub' }, el('span', { class: 'dot' }), 'Digitaler Mitarbeiter aktiv')));
   const li = S.liste; if (!li) return;
   const grp = (label) => { const g = el('div', { class: 'sect' }); g.append(el('div', { class: 'lbl' }, label)); sb.append(g); return g; };
-  const imChat = S.active?.typ === 'chat';
+  const imChat = S.active?.typ === 'chat' && !S.kiProjekteFrei;
 
   // Radar zuerst: der Einstieg, nicht ein Board unter vielen.
   const gR = el('div', { class: 'sect' });
@@ -928,13 +928,23 @@ function renderSidebar() {
   }
 
   // Darunter der Rest -- was oben steht, steht hier nicht noch einmal.
-  const g4 = grp('Projekte');
+  // Im Chat (Marcel 29.09.): „Projekte" wird ein weisser Knopf, darunter ein Strich und die Liste
+  // grau wie die Chat-Spalte -- sie gehoert dann zum Chat. Knopf: Projekte wieder normal anklicken.
+  let g4;
+  if (S.active?.typ === 'chat') {
+    const box = el('div', { class: 'sect kiprojekte' + (imChat ? ' imchat' : '') });
+    box.append(el('button', { class: 'kiprojknopf', type: 'button',
+      title: imChat ? 'Projekte wieder normal öffnen' : 'Projekte an den Chat binden',
+      onclick: () => { S.kiProjekteFrei = !S.kiProjekteFrei; renderSidebar(); } }, 'Projekte'));
+    g4 = el('div', { class: 'kiprojliste' });
+    box.append(g4); sb.append(box);
+  } else g4 = grp('Projekte');
   const gepinnt = new Set((li.pins || []).filter((p) => p.art !== 'board').map((p) => p.name));
   for (const p of S.projects) {
     if (gepinnt.has(p.name)) continue;
     // Im Chat waehlt die Hauptleiste das Projekt des Chats (chat-werkstatt.js, kiProjektKlick).
     const aktiv = imChat ? S.kiProjekt === p.id : S.active?.typ === 'projekt' && S.active.name === p.name;
-    g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => imChat ? kiProjektKlick(p.id) : wechsle('projekt', p.id, p.name) },
+    g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => { if (imChat) return kiProjektKlick(p.id); S.kiProjekteFrei = false; wechsle('projekt', p.id, p.name); } },
       el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }), p.name,
       el('button', { class: 'pin', title: 'Ins Dashboard aufnehmen', onclick: async (e) => {
         e.stopPropagation();
