@@ -442,7 +442,7 @@ function tagMenu(x, y, todoId, danach) {
   } });
   // Aufraeumen: der einzige Weg, einen Vertipper wieder aus dem Board zu bekommen —
   // abgenommene Tags bleiben seit Migration 156 sonst dauerhaft stehen.
-  if (S.tags.liste.length) items.push({ txt: '🗑 Tag aus dem Board löschen…', danger: true, do: () => setTimeout(() => {
+  if (S.tags.liste.length) items.push({ txt: 'Tag aus dem Board löschen…', danger: true, do: () => setTimeout(() => {
     ctxMenu(x, y, S.tags.liste.map((t) => ({ txt: t.name, danger: true, do: async () => {
       const n = S.tags.proKarte ? Object.values(S.tags.proKarte).filter((l) => l.some((x2) => x2.id === t.id)).length : 0;
       if (!await uiFrage(`Tag „${t.name}" ganz aus dem Board löschen?`
@@ -702,7 +702,7 @@ function renderRadar() {
     springe((k) => k.ueberfaellig)));
   kopf.append(kpis);
   kopf.append(el('button', { class: 'rwahlbtn', onclick: () => radarAuswahlDialog() },
-    '⊞ Dashboard konfigurieren'));
+    ico('settings'), 'Dashboard konfigurieren'));
   root.append(kopf);
 
   const fest = bloecke.filter((b) => b.fest);
@@ -802,6 +802,41 @@ function radarAuswahlDialog() {
 }
 
 // ---------- Sidebar ----------
+// Strich-Icons (Lucide-Formen, 24er Raster) statt Unicode-Zeichen -- einheitliche
+// Strichstaerke, Farbe kommt ueber currentColor aus der Zeile.
+const ICO = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  dev: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  board: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/>',
+  team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  pin: '<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  weg: '<path d="M18 6 6 18M6 6l12 12"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/>',
+  settings: '<path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  refresh: '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>',
+  swap: '<path d="m16 3 4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"/>',
+  pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/>',
+  bild: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
+  trash: '<path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  bot: '<path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/>',
+  tastatur: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>',
+};
+function ico(name) {
+  const s = el('span', { class: 'ico' });
+  s.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' + ICO[name] + '</svg>';
+  return s;
+}
+
 function renderSidebar() {
   const sb = document.getElementById('sidebar'); sb.innerHTML = '';
   sb.append(el('div', { class: 'brand' },
@@ -815,7 +850,7 @@ function renderSidebar() {
   gR.append(el('div', {
     class: 'row' + (S.active?.typ === 'radar' ? ' active' : ''),
     onclick: () => wechsle('radar', null, 'Mein Dashboard'),
-  }, '◎ ', 'Mein Dashboard',
+  }, ico('dashboard'), 'Mein Dashboard',
     (S.radar?.kpi?.rueckfragen || 0) > 0
       ? el('span', { class: 'badge', title: 'Rückfragen warten auf dich' }, String(S.radar.kpi.rueckfragen))
       : (S.radar?.kpi?.gesamt || 0) > 0
@@ -827,7 +862,7 @@ function renderSidebar() {
     class: 'row' + (S.active?.typ === 'dev' ? ' active' : ''),
     onclick: () => wechsle('dev', null, 'DEV'),
     title: 'Sag, was die Anwendung koennen soll — der Klaerer fragt zurueck, der Coding Agent baut',
-  }, '⌁ ', 'DEV',
+  }, ico('dev'), 'DEV',
     (S.devOffen || 0) > 0
       ? el('span', { class: 'badge', title: 'Fragen des Klärers warten auf deine Antwort' }, String(S.devOffen))
       : ''));
@@ -837,7 +872,7 @@ function renderSidebar() {
     class: 'row' + (S.active?.typ === 'chat' ? ' active' : ''),
     onclick: () => wechsle('chat', null, 'Chat'),
     title: 'Mit Tony schreiben — er kennt Board, Projekte und Dokumente',
-  }, '✎ ', 'Chat'));
+  }, ico('chat'), 'Chat'));
   sb.append(gR);
 
   const g1 = grp('Meine Boards');
@@ -851,9 +886,9 @@ function renderSidebar() {
       class: 'row' + (aktiv ? ' active' : ''),
       onclick: () => wechsle('board', b.id, b.name),
       oncontextmenu: (e) => { e.preventDefault(); boardMenu(e, b, li.boards.length <= 1); },
-    }, '▦ ', b.name, badge));
+    }, ico('board'), b.name, badge));
   }
-  g1.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('privat') }, '+ Neues Board'));
+  g1.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('privat') }, ico('plus'), 'Neues Board'));
 
   const g2 = grp('Büro intern');
   const bGepinnt = new Set((li.pins || []).filter((p) => p.art === 'board').map((p) => p.board_id));
@@ -863,9 +898,9 @@ function renderSidebar() {
       class: 'row' + (aktiv ? ' active' : ''),
       onclick: () => wechsle('board', b.id, b.name),
       oncontextmenu: (e) => { e.preventDefault(); boardMenu(e, b, false); },
-    }, '▤ ', b.name));
+    }, ico('team'), b.name));
   }
-  g2.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('team') }, '+ Neues Board'));
+  g2.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('team') }, ico('plus'), 'Neues Board'));
 
   // Was im Dashboard steht, steht auch hier oben -- in derselben Reihenfolge
   // (Migration 105). Ein Pin ist ein Projekt ODER ein internes Board.
@@ -879,7 +914,7 @@ function renderSidebar() {
       g3.append(el('div', { class: 'row' + (aktiv ? ' active' : ''),
         onclick: () => wechsle(istProjekt ? 'projekt' : 'board',
           istProjekt ? p.project_id : p.board_id, p.name) },
-        istProjekt ? el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }) : '▤ ',
+        istProjekt ? el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }) : ico('team'),
         p.name,
         el('button', { class: 'pin', title: 'Aus dem Dashboard nehmen', onclick: async (e) => {
           e.stopPropagation();
@@ -887,7 +922,7 @@ function renderSidebar() {
             .map((x) => ({ art: x.art === 'board' ? 'board' : 'projekt', id: x.project_id || x.board_id }));
           await lotse('radar_auswahl', { ziele: rest });
           S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
-        } }, '✕')));
+        } }, ico('weg'))));
     }
   }
 
@@ -903,7 +938,7 @@ function renderSidebar() {
         e.stopPropagation();
         await mut('pin', { projekt: p.name, an: true });
         S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
-      } }, '⌖')));
+      } }, ico('pin'))));
   }
 }
 
@@ -1324,6 +1359,7 @@ function renderChat() {
     root.append(el('div', { class: 'kiseite' }), el('div', { class: 'kihaupt' }, verlauf, chatEingabe()));
   }
   chatSeite();
+  if (chatAnsichtRender(root)) return; // Agenten, Routinen, Artefakte … statt des Verlaufs (chat-werkstatt.js)
   verlauf.innerHTML = '';
   if (!k.zeilen.length) verlauf.append(el('div', { class: 'kileer' }, 'Frag Tony nach Karten, Projekten, Terminen oder Dokumenten — oder lass ihn etwas anlegen.'));
   for (const z of k.zeilen) verlauf.append(chatZeile(z));
@@ -1339,17 +1375,18 @@ function chatSeite() {
   if (!seite) return;
   const k = S.kichat;
   seite.innerHTML = '';
-  seite.append(el('div', { class: 'row kineu', onclick: () => chatNeu() }, '+ Neuer Chat'));
+  chatNav(seite); // Neuer Chat, Routinen, Agenten, GHIW Docs (chat-werkstatt.js, Marcels Skizze 29.09.)
   seite.append(el('div', { class: 'kilbl' }, 'Verläufe'));
-  if (S.kichats == null) { seite.append(el('div', { class: 'kihinweis' }, 'lädt …')); return; }
-  if (!S.kichats.length) { seite.append(el('div', { class: 'kihinweis' }, 'Noch keine Chats.')); return; }
-  for (const c of S.kichats) {
+  if (S.kichats == null) seite.append(el('div', { class: 'kihinweis' }, 'lädt …'));
+  else if (!S.kichats.length) seite.append(el('div', { class: 'kihinweis' }, 'Noch keine Chats.'));
+  for (const c of kiChatsSichtbar()) {
     seite.append(el('div', {
-      class: 'row' + (c.id === k.id ? ' active' : ''), title: c.titel,
+      class: 'row' + (c.id === k.id && kiImChat() ? ' active' : ''), title: c.titel,
       onclick: () => chatOeffnen(c.id),
       oncontextmenu: (e) => { e.preventDefault(); chatMenu(e, c); },
-    }, el('span', { class: 'kititel' }, c.titel)));
+    }, ico('chat'), el('span', { class: 'kititel' }, c.titel)));
   }
+  chatProjekteNav(seite); // „Alle Verläufe" und darunter Projekte (chat-werkstatt.js)
 }
 
 async function chatAktion(aktion, extra = {}) {
@@ -1363,12 +1400,15 @@ async function ladeChats() {
 function chatNeu() {
   if (S.kichat?.denkt) return;
   chatDiktatEnde();
+  S.kiansicht = null;
   S.kichat = { id: null, zeilen: [], denkt: false };
   renderChat();
   document.querySelector('#chat-root .kita')?.focus();
 }
 async function chatOeffnen(id) {
-  if (S.kichat?.denkt || S.kichat?.id === id) return;
+  if (S.kichat?.denkt) return;
+  if (S.kichat?.id === id) { if (S.kiansicht) { S.kiansicht = null; renderChat(); } return; }
+  S.kiansicht = null;
   chatDiktatEnde();
   const j = await chatAktion('laden', { chat_id: id }).catch((e) => ({ fehler: e.message }));
   if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
@@ -1511,6 +1551,7 @@ async function chatSenden(ta) {
         chatLetzte();
       });
     chatDokEnde(antwort);
+    chatWerkstattEnde(antwort); // Agent entworfen oder losgeschickt (chat-werkstatt.js)
     let t = antwort.text || '';
     const misslungen = await liveOberflaeche(antwort.oberflaeche);
     if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
@@ -1584,6 +1625,7 @@ function chatWeg(z) {
   return d;
 }
 function chatZeile(z) {
+  if (z.agentLink) return el('div', { class: 'kizeile assistent' }, kwAgentKachel(z.agentLink)); // chat-werkstatt.js
   const blase = el('div', { class: 'kiblase' });
   // Die Markerzeile [karten: …] (live-backend, Migration 200) wird zu Kacheln; beim Streamen
   // kommt sie Stueck fuer Stueck an und darf auch halb nicht als Text aufblitzen.
@@ -1683,16 +1725,16 @@ function renderTopbar() {
   }
   // Dashboard neben dem Boardnamen — vorerst nur fuer das VgV-Radar-Board (Marcels Auftrag 24.07.)
   if (S.board?.ist_team && S.active.name === 'VgV-Radar') {
-    tb.append(el('button', { class: 'dashbtn', onclick: openVgvDashboard }, '▦ Dashboard'));
+    tb.append(el('button', { class: 'dashbtn', onclick: openVgvDashboard }, ico('dashboard'), 'Dashboard'));
   }
   // "Ruf mich an" (24.07.): Assistent ruft die eigene hinterlegte Nummer an —
   // kostenlos telefonieren, solange die deutsche Nummer noch in der Twilio-Freigabe haengt.
   const rufBtn = el('button', { class: 'callbtn', title: 'Der Assistent ruft dich auf deiner hinterlegten Nummer an', onclick: async () => {
-    rufBtn.disabled = true; const alt = rufBtn.textContent; rufBtn.textContent = '📞 Anruf kommt…';
+    rufBtn.disabled = true; const alt = [...rufBtn.childNodes]; rufBtn.replaceChildren(ico('phone'), 'Anruf kommt…');
     const r = await lotse('ruf_mich_an').catch(() => ({ fehler: 'Netzwerkfehler' }));
-    if (r.fehler) { uiHinweis(r.fehler); rufBtn.textContent = alt; rufBtn.disabled = false; }
-    else setTimeout(() => { rufBtn.textContent = alt; rufBtn.disabled = false; }, 20000);
-  } }, '📞 Ruf mich an');
+    if (r.fehler) { uiHinweis(r.fehler); rufBtn.replaceChildren(...alt); rufBtn.disabled = false; }
+    else setTimeout(() => { rufBtn.replaceChildren(...alt); rufBtn.disabled = false; }, 20000);
+  } }, ico('phone'), 'Ruf mich an');
   if (S.active.typ === 'chat') tb.append(chatDokKnopf()); // Zwei-Fenster-Knopf (chat-dokument.js)
   tb.append(rufBtn);
   tb.append(liveKnopf());
@@ -1702,12 +1744,12 @@ function renderTopbar() {
   const bell = el('button', { class: 'bellbtn',
     title: offen ? offen + (offen === 1 ? ' neue Benachrichtigung' : ' neue Benachrichtigungen') : 'Benachrichtigungen',
     onclick: (e) => { e.stopPropagation(); meldePanel(bell); } },
-    '\u{1F514}', offen ? el('span', { class: 'cnt' }, offen > 99 ? '99+' : String(offen)) : '');
+    ico('bell'), offen ? el('span', { class: 'cnt' }, offen > 99 ? '99+' : String(offen)) : '');
   tb.append(bell);
   const rf = (S.board?.todos || []).filter((t) => statusVon(t) === 'rueckfrage');
   if (rf.length) tb.append(el('button', {
     class: 'alertbtn', onclick: () => openCard(rf[0].id),
-  }, '⚠ ', rf.length === 1 ? '1 Rückfrage wartet auf dich' : rf.length + ' Rückfragen warten auf dich'));
+  }, ico('alert'), rf.length === 1 ? '1 Rückfrage wartet auf dich' : rf.length + ' Rückfragen warten auf dich'));
   // Agenten-Taskbar (Loop D): was die Flotte JETZT tut — klickbar zur Karte.
   const laufend = (S.laeufe || []).filter((l) => l.status === 'running').slice(0, 3);
   const wartend = (S.laeufe || []).filter((l) => l.status === 'queued').length;
@@ -1885,7 +1927,7 @@ function renderBoard() {
       sp.automatik?.auftrag ? el('span', {
         class: 'autochip', title: 'Automatik: ' + (sp.automatik.auftrag || '').slice(0, 200),
         onclick: (e) => { e.stopPropagation(); spalteAutomatikDialog(sp); },
-      }, '⚙ Auto') : '',
+      }, ico('bot'), 'Auto') : '',
       cntEl,
       sp.ist_erledigt ? el('span', { class: 'cnt' }, '✓') : '',
       el('button', { class: 'menu', onclick: (e) => { e.stopPropagation(); spaltenMenu(e, sp, spalten.length); } }, '···')));
@@ -2111,7 +2153,7 @@ function mailKachel(sp) {
       mailsAusZug(e, sp);
     },
   },
-    el('div', { class: 'mk-kopf' }, '✉ E-Mail-Aufgabe'),
+    el('div', { class: 'mk-kopf' }, ico('mail'), 'E-Mail-Aufgabe'),
     el('div', { class: 'mk-sub' }, 'Mail aus Outlook hierher ziehen'));
   return k;
 }
@@ -2439,7 +2481,7 @@ function neuBewertenDialog(d, danach) {
   box.append(el('div', { class: 'slbl' }, 'Neu an der Karte seit der letzten Bewertung'));
   box.append(neue.length
     ? el('div', { style: 'font-size:12.5px;line-height:1.6;margin:2px 0 4px' },
-        ...neue.map((a) => el('div', {}, '📎 ' + a.name)))
+        ...neue.map((a) => el('div', {}, ico('clip'), a.name)))
     : el('div', { style: 'font-size:12.5px;color:#8A8A83;margin:2px 0 4px;line-height:1.5' },
         'Nichts — der Agent schaut trotzdem in „4-Bieterfragen" und „1-Unterlagen_Download" nach Nachträgen. '
         + 'Wenn du eine Datei hast, zieh sie besser vorher auf die Karte.'));
@@ -3025,7 +3067,7 @@ function renderDashEmpfehlungen(grid, vorschlaege, kandidaten, d, abgelaufen) {
       setTimeout(pruefe, 15000);
     };
     setTimeout(pruefe, 5000);
-  } }, '↻ Aktualisieren');
+  } }, ico('refresh'), 'Aktualisieren');
   kopfR.append(stat, knopf);
   rechts.append(kopfR);
   if (!kandidaten.length) {
@@ -3161,8 +3203,8 @@ function kartenMenu(e, t) {
   // Auf Team-Boards keine Projekt-Zuordnung — Projekt-Karten gehoeren nicht auf
   // Team-Boards (Server lehnt ab, Migration 79).
   if (!S.board?.ist_team) {
-    items.push({ txt: '⌖ ' + (t.projekt_name ? 'Projekt ändern…' : 'Projekt zuweisen…'), do: () => setTimeout(() => projektMenu(x, y, t.id)) });
-    if (t.projekt_name) items.push({ txt: '⌖ Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
+    items.push({ txt: (t.projekt_name ? 'Projekt ändern…' : 'Projekt zuweisen…'), do: () => setTimeout(() => projektMenu(x, y, t.id)) });
+    if (t.projekt_name) items.push({ txt: 'Projekt entfernen', do: async () => { await mut('todo_projekt', { todo_id: t.id, projekt: null }); await ladeBoard(); } });
   }
   items.push({ txt: '＋ Tag setzen…', do: () => setTimeout(() => tagMenu(x, y, t.id,
     async () => { await ladeTags(S.board?.board_id); })) });
@@ -3177,7 +3219,7 @@ function kartenMenu(e, t) {
   // Auf dem VgV-Radar ist Aussortieren der normale Weg — das endgueltige Loeschen bleibt
   // daneben stehen, fuer Karten, die gar kein Verfahren sind (Notizen, Fehleintraege).
   if (S.active?.name === 'VgV-Radar' && !t.vgv_papierkorb) {
-    items.push({ txt: '🗑 Aussortieren…', do: () => aussortierDialog(t) });
+    items.push({ txt: 'Aussortieren…', do: () => aussortierDialog(t) });
   }
   items.push({ txt: 'Löschen…', danger: true, do: async () => {
     if (!await uiFrage(`Karte "${t.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
@@ -3215,10 +3257,10 @@ function renderCard(t) {
     onclick: () => openCard(t.id),
     oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); kartenMenu(e, t); },
   });
-  if (t.zuarbeit) c.append(el('div', { class: 'chip zu' }, '⇄ Zuarbeit · vom Agenten'));
+  if (t.zuarbeit) c.append(el('div', { class: 'chip zu' }, ico('swap'), 'Zuarbeit · vom Agenten'));
   if (chip) c.append(el('div', { class: 'chip', style: `background:${chip.bg};color:${chip.fg}` },
     el('span', { class: 'cdot', style: `background:${chip.dot}` }),
-    chip.txt, st === 'fertig' && t.anhaenge_n ? ' 📎' : ''));
+    chip.txt, st === 'fertig' && t.anhaenge_n ? ico('clip') : ''));
   c.append(el('div', { class: 't' }, t.titel));
   // Tags direkt unter dem Titel: auf dem VgV-Board soll ohne Aufklappen stehen,
   // mit wem ein Verfahren laeuft (Wunsch aus der Karte "TAGS", 17.09.).
@@ -3233,7 +3275,7 @@ function renderCard(t) {
   // Aussortiert: was hier steht, ist gleich weg — Restzeit und Grund gehoeren aufs Deckblatt.
   const pk = papierkorbRest(t);
   if (pk) c.append(el('div', { class: 'chip', style: 'background:#E8DFC5;color:#4A3B14' },
-    '🗑 ' + pk + ' zum Zurückholen'));
+    ico('trash'), pk + ' zum Zurückholen'));
   // Zielbild-Pflicht (Marcels Regel): das WOFUER steht sichtbar VOR der Bitte.
   if (t.zuarbeit && t.zielbild) c.append(el('div', { class: 'wofuer' }, el('b', {}, 'Wofür: '), t.zielbild));
   // VgV-Karte: Empfehlung + Abgabefrist direkt auf der Kachel (Radar-Board)
@@ -3251,7 +3293,7 @@ function renderCard(t) {
   const meta = el('div', { class: 'meta' });
   // Redesign 10.08.: die Kachel zeigt nur Frist, Personen, Herkunft, Projekt — Zaehler
   // (Unterpunkte/Kommentare) und das ⌨-Icon stehen im Detail, nicht auf der Karte.
-  if (t.quelle === 'voice') meta.append(el('span', { title: 'Per Anruf erstellt' }, '📞'));
+  if (t.quelle === 'voice') meta.append(el('span', { title: 'Per Anruf erstellt' }, ico('phone')));
   // Poool-Klammer: die Karte ist zugleich ein Ticket im CRM und laeuft synchron.
   if (t.poool_ticket_id) meta.append(el('span', {
     class: 'pchip', title: 'Läuft synchron mit Poool-Ticket ' + (t.poool_nr || t.poool_ticket_id)
@@ -3433,9 +3475,9 @@ function renderDrawer() {
   const head = el('div', { class: 'dsec dhead' });
   const chipRow = el('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' });
   if (chip) chipRow.append(el('span', { class: 'chip', style: `display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${chip.bg};color:${chip.fg}` }, chip.txt));
-  if (d.zuarbeit) chipRow.append(el('span', { class: 'chip zu', style: 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px' }, '⇄ Zuarbeit · vom Agenten' + (d.projekt ? ' für ' + d.projekt.name : '')));
+  if (d.zuarbeit) chipRow.append(el('span', { class: 'chip zu', style: 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px' }, ico('swap'), 'Zuarbeit · vom Agenten' + (d.projekt ? ' für ' + d.projekt.name : '')));
   chipRow.append(el('span', { style: 'font-size:12px;color:#75756E' },
-    d.quelle === 'agent' ? '⚙ vom Agenten angelegt' : d.quelle === 'voice' ? '📞 per Anruf erstellt' : '⌨ in der App erstellt'));
+    ...(d.quelle === 'agent' ? [ico('bot'), 'vom Agenten angelegt'] : d.quelle === 'voice' ? [ico('phone'), 'per Anruf erstellt'] : [ico('tastatur'), 'in der App erstellt'])));
   // Tags stehen oben rechts im Kopf (Marcels Stelle, 17.09.) — beim Aufklappen als
   // Erstes im Blick, mit dem Anlege-Knopf direkt daneben.
   const tagNeu = async () => { await ladeTags(S.board?.board_id); renderDrawer(); };
@@ -3457,7 +3499,7 @@ function renderDrawer() {
     el('button', { title: 'Titel bearbeiten', style: 'font-size:13px;color:#9A9A93', onclick: async () => {
       const t2 = await uiEingabe('Titel bearbeiten:', d.titel);
       if (t2 !== null && t2.trim() && t2.trim() !== d.titel) { await mut('todo_update', { todo_id: d.id, titel: t2.trim() }); await openCard(d.id); await ladeBoard(); }
-    } }, '✎'));
+    } }, ico('pencil')));
   head.append(chipRow, titelZeile);
   const meta = el('div', { class: 'meta' });
   // Projekt: klickbar — zuweisen, aendern, entfernen (Migration 78).
@@ -3469,7 +3511,7 @@ function renderDrawer() {
     if (d.projekt) items.push({ txt: 'Projekt entfernen', danger: true, do: async () => { await mut('todo_projekt', { todo_id: d.id, projekt: null }); await danach(); } });
     if (!items.length) { uiHinweis('Keine aktiven Projekte gefunden.'); return; }
     ctxMenu(x, y, items);
-  } }, d.projekt ? '⌖ ' + d.projekt.name : '⌖ Projekt zuweisen'));
+  } }, ico('folder'), d.projekt ? d.projekt.name : 'Projekt zuweisen'));
   // Frist: klickbar — Schnellwahl, freies Datum, entfernen (Migration 78: leerbar).
   const inTagen = (n) => { const dt = new Date(); dt.setDate(dt.getDate() + n);
     return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); };
@@ -3487,7 +3529,7 @@ function renderDrawer() {
       } },
       ...(d.faellig ? [{ txt: 'Frist entfernen', danger: true, do: () => setze({ faellig_leeren: true }) }] : []),
     ]);
-  } }, d.faellig ? '📅 fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : '📅 Frist setzen');
+  } }, ico('calendar'), d.faellig ? 'fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : 'Frist setzen');
   meta.append(fristBtn);
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta);
@@ -3586,12 +3628,12 @@ function renderDrawer() {
     const kopf = el('div', { class: 'slbl', style: 'margin-top:12px;display:flex;gap:8px;align-items:center' },
       `Unterlagen aus dem Portal (${dat.length})`,
       v.vollstaendig ? el('span', { style: 'color:#3C5D1E;font-weight:700;font-size:11px' }, '✓ vollständig')
-        : el('span', { style: 'color:#B4540A;font-weight:700;font-size:11px' }, '⚠ unvollständig'));
+        : el('span', { style: 'color:#B4540A;font-weight:700;font-size:11px' }, ico('alert'), 'unvollständig'));
     sec.append(kopf);
     if (!v.vollstaendig && v.fehlend) sec.append(el('div', { style: 'font-size:12px;color:#B4540A;margin-bottom:5px' }, 'Fehlt: ' + v.fehlend));
     if (dat.length) {
       const box = el('div', { class: 'vgvdat' });
-      for (const f2 of dat) box.append(el('div', {}, '📄 ' + (f2.name || f2) + (f2.kb ? ` (${f2.kb} KB)` : '')));
+      for (const f2 of dat) box.append(el('div', {}, ico('file'), (f2.name || f2) + (f2.kb ? ` (${f2.kb} KB)` : '')));
       sec.append(box);
     }
     // Analyse-Dateien (Agent-Anhaenge) direkt oeffnen
@@ -3617,7 +3659,7 @@ function renderDrawer() {
     const inputs = [];
     offene.forEach((f, i) => {
       sec.append(el('div', { class: 'frage' }, `${i + 1}. ${f.frage}`,
-        f.status === 'entwurf' ? el('span', { style: 'font-size:11px;color:#5A6E1E;font-weight:700' }, ' 💾 zwischengespeichert') : ''));
+        f.status === 'entwurf' ? el('span', { style: 'font-size:11px;color:#5A6E1E;font-weight:700' }, ' zwischengespeichert') : ''));
       const inp = el('input', { placeholder: 'Deine Antwort…' });
       inp.value = f.antwort || '';
       inputs.push({ f, inp }); sec.append(inp);
@@ -3729,7 +3771,7 @@ function renderDrawer() {
     el('a', { href: '#', style: 'color:#1C1C1A;font-weight:500', onclick: async (e) => {
       e.preventDefault();
       if (istBild(a.name) || istPdf(a.name)) anhangGross(a); else await downloadAnhang(a);
-    } }, (istBild(a.name) ? '🖼 ' : istPdf(a.name) ? '📄 ' : '📎 ') + a.name),
+    } }, ico(istBild(a.name) ? 'bild' : istPdf(a.name) ? 'file' : 'clip'), a.name),
     el('span', { style: 'color:#9A9A93;font-size:11.5px' }, a.groesse ? Math.round(a.groesse / 1024) + ' KB' : ''),
     el('button', { class: 'del', onclick: async () => { await mut('anhang_loeschen',{ anhang_id: a.id }); await openCard(d.id); } }, '✕')));
   const fileInp = el('input', { type: 'file', multiple: '', style: 'display:none',
@@ -3757,7 +3799,7 @@ function renderDrawer() {
         if (neu === null || !neu.trim() || neu.trim() === k.text) return;
         const r = await mut('kommentar_bearbeiten', { kommentar_id: k.id, text: neu.trim() });
         if (r && r.ok) await openCard(d.id);
-      } }, '✎'));
+      } }, ico('pencil')));
       kopf.append(el('button', { class: 'del', title: 'Kommentar löschen', onclick: async () => {
         if (!await uiFrage('Diesen Kommentar löschen?')) return;
         const r = await mut('kommentar_loeschen', { kommentar_id: k.id });
@@ -3775,9 +3817,9 @@ function renderDrawer() {
     // Beschriftung je Vorschlagsart -- neue Arten (Migration 117: 'folgekarte') brauchen
     // hier nur eine weitere Zeile, nicht noch einen Block wie oben.
     const vorschlagTxt = k.vorschlag_art === 'frist' && k.vorschlag?.datum
-      ? '📅 Frist ' + new Date(k.vorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE')
+      ? 'Frist ' + new Date(k.vorschlag.datum + 'T00:00:00').toLocaleDateString('de-DE')
       : k.vorschlag_art === 'folgekarte' && k.vorschlag?.titel
-        ? '➕ Folgekarte „' + k.vorschlag.titel + '“'
+        ? 'Folgekarte „' + k.vorschlag.titel + '“'
         : null;
     if (vorschlagTxt) {
       if (!k.vorschlag_status) {
@@ -3903,7 +3945,7 @@ function renderDrawer() {
   // VgV-Verfahren werden aussortiert, nicht geloescht: der Grund ist das Wertvolle daran.
   if (S.active?.name === 'VgV-Radar' && d.vgv && !d.vgv.papierkorb_ab) {
     sf.append(el('button', { class: 'btn ghost', onclick: () => aussortierDialog(
-      { id: d.id, titel: d.titel }, async () => { closeDrawer(); }) }, '🗑 Aussortieren…'));
+      { id: d.id, titel: d.titel }, async () => { closeDrawer(); }) }, ico('trash'), 'Aussortieren…'));
   }
   sf.append(el('button', { class: 'btn ghost gefahr', style: 'margin-left:auto', onclick: async () => {
     if (!await uiFrage(`Karte "${d.titel}" endgültig löschen? Unterpunkte, Kommentare und Dateien gehen mit verloren.`)) return;
@@ -3948,7 +3990,7 @@ function vgvUnterlagenTeil(d, dateien) {
   if (voll) {
     const liste = el('div', { class: 'subliste' });
     for (const f of dateien.slice(0, 60)) liste.append(el('div', { class: 'sub' },
-      el('span', { style: 'color:#1C1C1A' }, (istPdf(f.name) ? '📄 ' : '📎 ') + f.name),
+      el('span', { style: 'color:#1C1C1A' }, ico(istPdf(f.name) ? 'file' : 'clip'), f.name),
       el('span', { style: 'color:#9A9A93;font-size:11.5px' }, f.kb ? f.kb + ' KB' : '')));
     box.append(liste);
     if (dateien.length > 60) box.append(el('div', { style: 'font-size:11.5px;color:#75756E;margin-top:4px' },
@@ -4148,7 +4190,7 @@ function liveKnopf() {
   return el('button', { class: 'micbtn ' + z, id: 'micbtn',
     title: z === 'aus' ? 'Mit dem Moderator sprechen' : 'Gespräch beenden',
     onclick: () => (z === 'aus' ? liveStart() : liveEnde()) },
-  el('span', { class: 'mdot' }), '🎙 ' + { aus: 'Moderator', verbindet: 'verbindet…', spricht: 'spricht' }[z]);
+  el('span', { class: 'mdot' }), ico('mic'), { aus: 'Moderator', verbindet: 'verbindet…', spricht: 'spricht' }[z]);
 }
 function liveProjekt() { return S.detail?.projekt || (S.active?.typ === 'projekt' ? S.active.name : undefined); }
 function liveZustand(z) {
