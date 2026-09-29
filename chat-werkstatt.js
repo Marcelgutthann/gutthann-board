@@ -66,8 +66,8 @@ function chatProjekteNav(seite) {
   const v = kwAnsicht();
   seite.append(el('div', { class: 'kilbl' }, 'Projekte'));
   for (const p of projekte) seite.append(el('div', {
-    class: 'row' + (v?.art === 'artefakte' && v.projekt === p.id ? ' active' : ''), title: p.name,
-    onclick: () => chatAnsicht('artefakte', { projekt: p.id }),
+    class: 'row' + ((v?.art === 'projekt' && v.id === p.id) || (v?.art === 'karte' && v.projekt === p.id) || (!v && S.kichat?.projekt?.id === p.id) ? ' active' : ''), title: p.name,
+    onclick: () => chatAnsicht('projekt', { id: p.id }),
   }, ico('folder'), el('span', { class: 'kititel' }, p.name)));
 }
 
@@ -75,7 +75,9 @@ function chatAnsicht(art, extra = {}) {
   if (S.kichat?.denkt && art !== 'chat') { /* Antwort laeuft weiter und landet im Verlauf */ }
   chatDiktatEnde();
   S.kiansicht = art === 'chat' ? null : { art, ...extra };
-  if (art === 'artefakte') kiLadeArtefakte();
+  if (art === 'artefakte' || art === 'projekt') kiLadeArtefakte();
+  if (art === 'projekt') { const p = (S.projects || []).find((x) => x.id === extra.id); if (p && S.kiprojBoard?.[p.id]) kiLadeProjektBoard(p); }
+  if (art === 'karte' && S.kikarte?.id !== extra.id) S.kikarte = null;
   if (art === 'agenten' || art === 'agent') kiLadeAgenten();
   if (art === 'routinen') kiLadeRoutinen();
   renderChat();
@@ -88,7 +90,8 @@ function chatAnsichtRender(root) {
   const v = kwAnsicht();
   haupt.querySelector('.kiverlauf').hidden = !!v;
   haupt.querySelector('.kieingabe').hidden = !!v;
-  if (!v) { box?.remove(); return false; }
+  if (!v) { box?.remove(); kiChatProjektKopf(root); return false; }
+  haupt.querySelector('.kwchatprojekt')?.remove();
   root.classList.remove('mitdok');
   root.querySelector('.kidok')?.remove(); root.querySelector('.kiteiler')?.remove();
   haupt.style.flexBasis = '';
@@ -96,7 +99,7 @@ function chatAnsichtRender(root) {
   const scroll = box.scrollTop;
   box.innerHTML = '';
   const bau = { agenten: kwAgenten, agent: kwAgent, bauen: kwBauen, routinen: kwRoutinen, routine: kwRoutineForm,
-    artefakte: kwArtefakte }[v.art];
+    artefakte: kwArtefakte, projekt: kwProjekt, karte: kwKarte }[v.art];
   if (bau) bau(box, v);
   const schluessel = v.art + ':' + (v.id || v.projekt || '');
   if (schluessel === box.dataset.art) box.scrollTop = scroll;
@@ -591,3 +594,156 @@ async function kiProjektAgent(r, p) {
     { note: '' }, { txt: 'Anderer Agent …', do: () => chatAnsicht('agenten') }]);
 }
 
+
+// ---------- Projektbereich (Migration 207, Marcel 29.09.) ----------
+// „Warum hat man in den Projekten selber keinen Chat?" Klick auf ein Projekt links: Aufgaben,
+// Chats und GHIW Docs dieses Projekts. Klick auf eine Aufgabe: Gespraech mit dem Karten-Agenten.
+async function kiLadeProjektBoard(p) {
+  S.kiprojBoard = S.kiprojBoard || {};
+  try { S.kiprojBoard[p.id] = await lotse('board', { projekt: p.name }); }
+  catch (e) { S.kiprojBoard[p.id] = { fehler: e.message }; }
+  const v = kwAnsicht();
+  if (S.active?.typ === 'chat' && v?.art === 'projekt' && v.id === p.id) renderChat();
+}
+function kiProjektChatNeu(p) {
+  chatNeu();
+  S.kichat.projekt = { id: p.id, name: p.name };
+  renderChat();
+  document.querySelector('#chat-root .kita')?.focus();
+}
+function kwAufgabeZeile(t, spalte, p) {
+  const f = fmtDatum(t.faellig);
+  const st = statusVon(t);
+  return el('button', { class: 'kwzeile knopf', type: 'button', onclick: () => chatAnsicht('karte', { id: t.id, projekt: p.id }) },
+    el('span', { class: 'kwzeiletext' }, el('b', {}, t.titel || '(ohne Titel)'),
+      el('span', {}, spalte || '', f && spalte ? ' · ' : '', f ? el('span', { class: f.urgent ? 'kwdringend' : '' }, (f.urgent ? '' : 'fällig ') + f.txt) : '')),
+    st === 'arbeitet' ? kwChip('Agent arbeitet', 'oliv') : st === 'rueckfrage' ? kwChip('Rückfrage', 'amber') : el('span'));
+}
+function kwProjekt(box, v) {
+  const p = (S.projects || []).find((x) => x.id === v.id);
+  if (!p) { box.append(kwLeer('Projekt nicht gefunden.')); return; }
+  box.append(kwKopf(p.name, (p.lph ? 'Leistungsphase ' + p.lph + ' · ' : '') + 'Aufgaben, Chats und GHIW Docs dieses Projekts. Ein Klick auf eine Aufgabe öffnet das Gespräch mit ihrem Agenten.',
+    kwKnopf('Agent losschicken', (e) => kiProjektAgent(e.currentTarget.getBoundingClientRect(), p)),
+    kwKnopf('Neuer Chat im Projekt', () => kiProjektChatNeu(p), 'voll')));
+  const raster = el('div', { class: 'kwprojekt' });
+  // Aufgaben: offene Karten des Projekt-Boards in Spaltenreihenfolge.
+  const aufgaben = el('section', { class: 'kwblatt' }, el('h4', {}, 'Aufgaben'));
+  const b = S.kiprojBoard?.[p.id];
+  if (!b) { aufgaben.append(kwLeer('lädt …')); kiLadeProjektBoard(p); }
+  else if (b.fehler) aufgaben.append(kwLeer('Aufgaben nicht geladen: ' + b.fehler));
+  else {
+    const spalten = b.spalten || [];
+    const offen = (b.todos || []).filter((t) => t.status !== 'erledigt' && !t.spiegel);
+    const name = (t) => spalten.find((s) => s.id === t.spalte_id)?.name || spalten[0]?.name || '';
+    const rang = (t) => { const i = spalten.findIndex((s) => s.id === t.spalte_id); return i < 0 ? 0 : i; };
+    offen.sort((x, y) => rang(x) - rang(y) || String(x.faellig || '9').localeCompare(String(y.faellig || '9')));
+    if (!offen.length) aufgaben.append(kwLeer('Keine offenen Aufgaben.'));
+    else aufgaben.append(el('div', { class: 'kwliste' }, ...offen.map((t) => kwAufgabeZeile(t, name(t), p))));
+  }
+  const rechts = el('div', { class: 'kwspalte' });
+  const chats = (S.kichats || []).filter((c) => c.project_id === p.id);
+  rechts.append(el('section', { class: 'kwblatt' }, el('h4', {}, 'Chats'),
+    chats.length ? el('div', { class: 'kwliste' }, ...chats.map((c) => el('button', { class: 'kwzeile knopf', type: 'button', onclick: () => chatOeffnenAus(c.id) },
+      el('span', { class: 'kwzeiletext' }, el('b', {}, c.titel), el('span', {}, kwDatum(c.geaendert))))))
+      : kwLeer('Noch kein Chat zu diesem Projekt.')));
+  const docs = (S.kiartefakte || []).filter((d) => d.project_id === p.id);
+  if (S.kiartefakte == null) kiLadeArtefakte();
+  rechts.append(el('section', { class: 'kwblatt' }, el('h4', {}, 'GHIW Docs'),
+    docs.length ? el('div', { class: 'kwliste' }, ...docs.slice(0, 12).map(kwArtefaktZeile)) : kwLeer(S.kiartefakte == null ? 'lädt …' : 'Noch keine GHIW Docs.')));
+  raster.append(aufgaben, rechts);
+  box.append(raster);
+}
+
+// Gespraech mit dem Karten-Agenten: die Kommentare der Karte als Chat. Was man schreibt, geht als
+// @agent-Zuruf an die Karte (kommentar-auftrag, Agent SDK); er kennt Karte, Verlauf und Unterlagen.
+async function kiLadeKarte(id) {
+  try { const d = await lotse('todo_detail', { todo_id: id }); if (!d.fehler) S.kikarte = d; }
+  catch { /* naechster Takt versucht es wieder */ }
+  const v = kwAnsicht();
+  if (S.active?.typ === 'chat' && v?.art === 'karte' && v.id === id) renderChat();
+}
+// Nachfragen, bis der Agent geantwortet hat. Der Zuruf-Agent legt sofort einen Platzhalter
+// („Bin dran: …") an und ersetzt dessen Text am Ende; fertig ist es erst, wenn es mehr
+// Agenten-Kommentare gibt als beim Absenden, der letzte kein Platzhalter mehr ist und die
+// Karte nicht mehr „arbeitet".
+function kiKarteTakt(id) {
+  if (S.kikarteTakt?.id === id) return;
+  clearInterval(S.kikarteTakt?.h);
+  const bis = Date.now() + 13 * 60000;
+  const stopp = () => { clearInterval(h); if (S.kikarteTakt?.h === h) S.kikarteTakt = null; };
+  const h = setInterval(async () => {
+    const v = kwAnsicht();
+    if (v?.art !== 'karte' || v.id !== id || Date.now() > bis) return stopp();
+    await kiLadeKarte(id);
+    const d = S.kikarte;
+    if (!d || d.id !== id) return;
+    const agent = (d.kommentare || []).filter((k) => k.von === 'agent');
+    const z = S.kizuruf;
+    if (z && z.id === id && agent.length > z.nAgent && !/^Bin dran:/.test(agent.at(-1).text || '') && statusVon(d) !== 'arbeitet') S.kizuruf = null;
+    if (z && Date.now() - z.seit > 13 * 60000) S.kizuruf = null;
+    if (!(S.kizuruf && S.kizuruf.id === id) && statusVon(d) !== 'arbeitet') { stopp(); renderChat(); }
+  }, 4000);
+  S.kikarteTakt = { id, h };
+}
+function kwKarte(box, v) {
+  const d = S.kikarte && S.kikarte.id === v.id ? S.kikarte : null;
+  const p = (S.projects || []).find((x) => x.id === v.projekt);
+  box.append(el('button', { class: 'kwzurueck', type: 'button', onclick: () => p ? chatAnsicht('projekt', { id: p.id }) : chatAnsicht('agenten') }, '← ' + (p ? p.name : 'zurück')));
+  if (!d) {
+    box.append(kwLeer('lädt …'));
+    if (!S.kikarteLaedt) { S.kikarteLaedt = true; kiLadeKarte(v.id).finally(() => { S.kikarteLaedt = false; if (statusVon(S.kikarte || {}) === 'arbeitet') kiKarteTakt(v.id); }); }
+    return;
+  }
+  const f = fmtDatum(d.faellig);
+  const pname = d.projekt && typeof d.projekt === 'object' ? d.projekt.name : d.projekt;
+  box.append(kwKopf(d.titel, [pname, f ? 'fällig ' + f.txt : ''].filter(Boolean).join(' · ') || 'Aufgabe',
+    kwKnopf('Karte öffnen', () => openCard(d.id))));
+  const verlauf = el('div', { class: 'kwkartechat' });
+  const kom = d.kommentare || [];
+  if (!kom.length) verlauf.append(kwLeer('Frag den Agenten dieser Aufgabe. Er kennt Titel, Notiz, Unterpunkte, Dateien und den Verlauf der Karte und liest bei Bedarf in den Projektunterlagen nach. Eine Antwort dauert meist ein bis drei Minuten.'));
+  for (const k of kom) {
+    const agent = k.von === 'agent';
+    const text = k.meiner ? String(k.text || '').replace(/^\s*@agent\b\s*/i, '') : String(k.text || '');
+    const blase = el('div', { class: 'kiblase' + (agent ? ' md' : '') });
+    if (agent) blase.innerHTML = chatMd(text); else blase.textContent = text;
+    const wer = agent ? 'Agent · ' : k.meiner ? '' : k.von + ' · ';
+    verlauf.append(el('div', { class: 'kizeile ' + (k.meiner ? 'nutzer' : 'assistent') },
+      el('div', { class: 'kwkom' }, el('span', { class: 'kwwer' }, wer + kwDatum(k.am)), blase)));
+  }
+  const wartet = S.kizuruf && S.kizuruf.id === d.id;
+  if (statusVon(d) === 'arbeitet' || wartet) verlauf.append(el('div', { class: 'kizeile assistent' },
+    el('div', { class: 'kiblase kidenkt' }, 'Agent arbeitet …' + (d.agent_fortschritt ? ' ' + d.agent_fortschritt : ''))));
+  const ta = el('textarea', { class: 'kwfeld', rows: '2', placeholder: 'Nachricht an den Agenten dieser Aufgabe …', 'aria-label': 'Nachricht an den Agenten' });
+  ta.value = S.kikarteEntwurf?.[d.id] || '';
+  ta.addEventListener('input', () => { S.kikarteEntwurf = { ...(S.kikarteEntwurf || {}), [d.id]: ta.value }; });
+  const senden = async () => {
+    const t = ta.value.trim(); if (!t) return;
+    ta.value = ''; S.kikarteEntwurf = { ...(S.kikarteEntwurf || {}), [d.id]: '' };
+    S.kizuruf = { id: d.id, seit: Date.now(), nAgent: kom.filter((k) => k.von === 'agent').length };
+    d.kommentare = [...kom, { von: '', meiner: true, text: t, am: new Date().toISOString() }];
+    renderChat();
+    const r = await mut('kommentar_anlegen', { todo_id: d.id, text: /@agent\b/i.test(t) ? t : '@agent ' + t });
+    if (r && r.fehler) S.kizuruf = null;
+    await kiLadeKarte(d.id);
+    if (S.kikarteTakt?.id !== d.id) kiKarteTakt(d.id);
+  };
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); senden(); } });
+  box.append(verlauf, el('div', { class: 'kwkarteeingabe' }, ta, kwKnopf('Senden', senden, 'voll')));
+  setTimeout(() => { box.scrollTop = box.scrollHeight; });
+}
+
+// Kopfzeile ueber einem Chat, der zu einem Projekt gehoert (Migration 207).
+function kiChatProjektKopf(root) {
+  const haupt = root.querySelector('.kihaupt');
+  let kopf = haupt.querySelector('.kwchatprojekt');
+  const p = S.kichat?.projekt;
+  if (!p || S.kiansicht) { kopf?.remove(); return; }
+  if (!kopf) { kopf = el('div', { class: 'kwchatprojekt' }); haupt.prepend(kopf); }
+  kopf.innerHTML = '';
+  kopf.append(el('button', { class: 'kwzurueck', type: 'button', onclick: () => chatAnsicht('projekt', { id: p.id }) }, '← ' + p.name),
+    el('span', { class: 'kwleise' }, 'Chat in diesem Projekt · Tony kennt es'));
+}
+function kiChatProjekt(chatId) {
+  const c = (S.kichats || []).find((x) => x.id === chatId);
+  return c && c.project_id ? { id: c.project_id, name: c.projekt || (S.projects || []).find((p) => p.id === c.project_id)?.name } : null;
+}
