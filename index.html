@@ -694,6 +694,21 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 /* ---- Mein Radar (Startansicht): alles Offene einer Person, nach Bereich ---- */
 #radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
 #dev-root{flex:1;min-height:0;overflow:auto;padding:2px 0 28px}
+/* ---- Chat: Tony per Text ---- */
+#chat-root{flex:1;min-height:0;display:flex;flex-direction:column;max-width:904px;width:100%;padding:0 22px 18px}
+#chat-root[hidden]{display:none}
+#chat-root .kiverlauf{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px 16px}
+#chat-root .kileer{font-size:13.5px;color:#75756E;padding:18px 2px}
+#chat-root .kizeile{display:flex}
+#chat-root .kizeile.nutzer{justify-content:flex-end}
+#chat-root .kiblase{max-width:72ch;font-size:13.5px;line-height:1.55;white-space:pre-wrap;padding:10px 13px;border-radius:10px;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);color:#1C1C1A}
+#chat-root .nutzer .kiblase{background:#1C1C1A;border-color:#1C1C1A;color:#FFFFFF}
+#chat-root .fehler .kiblase{background:#FBF3E2;border-color:rgba(138,86,6,.22);color:#8A5606;font-size:12.5px}
+#chat-root .kidenkt{color:#75756E}
+#chat-root .kieingabe{display:flex;gap:10px;align-items:flex-end;border-top:1px solid rgba(28,28,26,.09);padding-top:12px}
+#chat-root .kita{flex:1;min-height:44px;max-height:200px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:10px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
+#chat-root .kisend{font:inherit;font-size:13px;font-weight:600;padding:10px 16px;border-radius:9px;border:0;background:#1C1C1A;color:#fff;cursor:pointer}
+#chat-root .kisend:disabled{opacity:.45;cursor:default}
 #dev-root[hidden]{display:none}
 #dev-root .dsec{margin-left:0;margin-right:0;max-width:900px}
 #dev-root .devta{width:100%;min-height:86px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:11px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
@@ -795,7 +810,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mulu72ra">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumgazwg">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -842,6 +857,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
     <!-- DEV: das Wunschbuch. Sieht aus wie das Kartendetail (weisse Blaetter, .dsec),
          damit es keine zweite Formsprache in der App gibt. -->
     <div id="dev-root" hidden></div>
+    <!-- Chat: Tony per Text (live-backend, kanal board) -->
+    <div id="chat-root" hidden></div>
     <!-- Projekt-Dashboard: eigener Container, damit die Dashboard-Styles (auf
          #dash-root gekapselt) das Board nicht anfassen. Die oberste Leiste des
          Dashboards bleibt verborgen -- Marke, Konto und Abmelden stehen in der
@@ -876,7 +893,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mulu72ra"></script>
-<script type="module" src="dashboard.js?v=mulu72ra"></script>
+<script src="app.js?v=mumgazwg"></script>
+<script type="module" src="dashboard.js?v=mumgazwg"></script>
 </body>
 </html>
