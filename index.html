@@ -44,7 +44,15 @@ button{cursor:pointer;background:none;border:none}
 .topbar .scope{font-size:12px;color:#75756E}
 .alertbtn{background:#E29A2E;color:#231602;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:18px;display:flex;align-items:center;gap:7px}
 .callbtn{margin-left:auto;background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:18px;white-space:nowrap}
-.callbtn:hover{background:#33332F}.callbtn:disabled{opacity:.55;cursor:default}
+.callbtn:hover{background:#33332F}
+/* Zwei-Fenster-Knopf im Chat: Chat und Dokument nebeneinander an/aus. */
+.splitbtn{margin-left:auto;width:34px;height:30px;border-radius:18px;background:rgba(28,28,26,.06);display:flex;align-items:center;justify-content:center}
+.splitbtn:hover{background:rgba(28,28,26,.12)}
+.splitbtn.on{background:#1C1C1A}
+.splitbtn~.callbtn{margin-left:0}
+.spliticon{width:16px;height:12px;border:1.5px solid #1C1C1A;border-radius:2px;position:relative}
+.spliticon::after{content:'';position:absolute;top:0;bottom:0;left:50%;border-left:1.5px solid #1C1C1A}
+.splitbtn.on .spliticon,.splitbtn.on .spliticon::after{border-color:#F7F7F5}.callbtn:disabled{opacity:.55;cursor:default}
 /* Glocke (Migration 113): Ereignisse, die mich betreffen — Erwaehnung, Zuweisung,
    Kommentar, Aenderung. Der Zaehler zeigt nur Ungelesenes; gelesene Zeilen bleiben
    ausgegraut stehen, damit niemand suchen muss, was er gerade weggeklickt hat. */
@@ -707,6 +715,11 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 /* Chat mit Dokument (chat-dokument.js, Migr. 201): Chat links, Dokument rechts als weisses Blatt. */
 #chat-root.mitdok .kiseite{display:none}
 #chat-root.mitdok .kihaupt{flex:0 0 min(40%,520px);border-right:1px solid rgba(28,28,26,.09)}
+#chat-root .kiteiler{flex:0 0 9px;margin:0 -4px;cursor:col-resize;position:relative;z-index:2;touch-action:none}
+#chat-root .kiteiler::after{content:'';position:absolute;top:0;bottom:0;left:4px;width:1px;background:transparent;transition:background .15s}
+#chat-root .kiteiler:hover::after,#chat-root.ziehen .kiteiler::after{background:rgba(28,28,26,.35)}
+#chat-root.ziehen{cursor:col-resize;user-select:none}
+#chat-root.ziehen .kidokframe{pointer-events:none}
 #chat-root .kidok{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 18px 18px}
 #chat-root .kidokkopf{display:flex;align-items:center;gap:8px;padding:6px 0 10px;min-width:0}
 #chat-root .kidoktitel{font-size:14px;font-weight:600;color:#1C1C1A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
@@ -866,7 +879,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumisrbm">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumk5xpp">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -949,8 +962,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumisrbm"></script>
-<script src="chat-dokument.js?v=mumisrbm"></script>
-<script type="module" src="dashboard.js?v=mumisrbm"></script>
+<script src="app.js?v=mumk5xpp"></script>
+<script src="chat-dokument.js?v=mumk5xpp"></script>
+<script type="module" src="dashboard.js?v=mumk5xpp"></script>
 </body>
 </html>
