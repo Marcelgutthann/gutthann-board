@@ -120,9 +120,14 @@ function chatDokPanel(panel, d) {
   kopf.innerHTML = '';
   const wer = d.agent === 'tony' ? 'Tony' : 'Agent';
   const zustand = arbeitet ? (d.version ? wer + ' ändert …' : wer + ' schreibt …') : d.status === 'fehler' ? 'Fehler' : 'Stand ' + (d.version || 1);
+  // Arbeitsweg (Migr. 205) auch dann sichtbar, wenn schon ein Dokument steht (Aenderungslauf).
+  const weg = arbeitet && d.lauf_weg ? d.lauf_weg : null;
+  const wegPlan = weg && Array.isArray(weg.plan) && weg.plan.length ? `${weg.plan.filter((p) => p.s === 'completed').length}/${weg.plan.length}` : '';
+  const wegText = !weg ? '' : [wegPlan && 'Arbeitsliste ' + wegPlan, weg.jetzt,
+    d.still_s >= 180 ? `kein Lebenszeichen seit ${Math.floor(d.still_s / 60)} min` : d.still_s >= 60 ? `still seit ${Math.floor(d.still_s / 60)}:${String(d.still_s % 60).padStart(2, '0')}` : ''].filter(Boolean).join(' · ');
   kopf.append(
     el('div', { class: 'kidoktitel', title: d.titel }, d.titel),
-    el('span', { class: 'kidokzustand' + (arbeitet ? ' laeuft' : '') }, zustand),
+    el('span', { class: 'kidokzustand' + (arbeitet ? ' laeuft' : ''), title: wegText }, zustand + (wegText && d.html ? ' · ' + wegText : '')),
     // Tonys Seiten haben einen eigenen Druckknopf; von hier aus loest ihn eine Nachricht aus.
     ...(d.html ? [el('button', { class: 'kichip', type: 'button', title: 'Drucken oder als PDF speichern',
       onclick: () => panel.querySelector('.kidokframe')?.contentWindow?.postMessage({ ghiw: 'drucken' }, '*') }, 'PDF'),
