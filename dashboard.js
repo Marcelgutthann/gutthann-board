@@ -1998,6 +1998,150 @@ function betPdfEintrag(b){
   if(!e.titel&&!e.firma&&!e.nachname)return null;
   return e;
 }
+// --- Aktuelles Buero-Format ("Projektbeteiligte … inkl Logo") -----------------
+// Dort steht die Nummer NICHT eingerueckt links, sondern bei x≈50 und die Rolle
+// in derselben Zeile direkt dahinter ("1.1.2  Bauherrenvertreter"). Darunter,
+// ebenfalls bei x≈50: Funktion, Person, Firma, Strasse, PLZ Ort. Kontakte rechts
+// als "( Arbeit ) +49 …". Die Ebene ergibt sich aus der Nummer selbst.
+// Nummern-Anker hoechstens zweistellig je Stufe — sonst wird eine PLZ (93047),
+// die bei x≈50 allein in der Zeile steht, zur Gliederungsnummer.
+const BET_NR=/^\d{1,2}(\.\d{1,3})*$/;
+function betPdfIstLogo(seiten){
+  let anker=0,mitTitel=0;
+  seiten.forEach(items=>{
+    const breite=(items[0]||{}).breite||595;
+    items.filter(i=>i.x<breite*0.2&&BET_NR.test(i.text)).forEach(a=>{anker++;
+      if(items.some(i=>i!==a&&Math.abs(i.y-a.y)<2&&i.x>a.x+5&&i.x<a.x+60))mitTitel++;});});
+  return mitTitel>=3&&mitTitel>=anker*0.6;
+}
+// Schnipsel mit gleicher Hoehe zu einer Zeile verbinden ("93047" + "Regensburg").
+function betPdfZeilen(items){
+  const z=[];
+  [...items].sort((a,b)=>a.y-b.y||a.x-b.x).forEach(i=>{
+    const l=z[z.length-1];
+    if(l&&Math.abs(l.y-i.y)<2)l.teile.push(i);else z.push({y:i.y,teile:[i]});});
+  return z.map(l=>l.teile.sort((a,b)=>a.x-b.x).map(i=>i.text).join(' ').replace(/\s+/g,' ').trim());
+}
+// Eine Datei kann mehrere Listen hintereinander enthalten (Hemau: die aktuelle
+// und ab Seite 12 "ZALT!!!!!!250626_Beteiligtenliste …"). Deren Ueberschrift
+// steht links VOR der Nummernspalte (x≈43 statt 50) und beginnt einen neuen
+// Abschnitt; sie beendet auch den Block davor.
+function betPdfBloeckeLogo(seiten){
+  const alle=[];let abschnitt='';
+  seiten.forEach((items,s)=>{
+    const breite=(items[0]||{}).breite||595,gKon=breite*0.5;
+    // Fusszeile "Erstellt am … | Seite x von y" und der Seitenkopf ab Seite 2 fallen raus
+    const nutz=items.filter(i=>!/^Erstellt am /.test(i.text)&&(s===0||i.y>60));
+    const anker=nutz.filter(i=>i.x<breite*0.2&&BET_NR.test(i.text)).sort((a,b)=>a.y-b.y);
+    const ax=anker.length?Math.min(...anker.map(a=>a.x)):0;
+    const kopf=nutz.filter(i=>i.x<ax-3&&!BET_NR.test(i.text)).sort((a,b)=>a.y-b.y);
+    const bloeckeVor=alle.length;
+    anker.forEach((n,idx)=>{
+      const k=kopf.filter(i=>i.y<n.y).pop();if(k)abschnitt=k.text;
+      const naechsterKopf=(kopf.find(i=>i.y>n.y)||{y:Infinity}).y;
+      const vonY=n.y-6,bisY=Math.min(idx+1<anker.length?anker[idx+1].y-6:Infinity,naechsterKopf-6);
+      const drin=nutz.filter(i=>i!==n&&!kopf.includes(i)&&i.y>=vonY&&i.y<bisY);
+      const titel=drin.filter(i=>i.x<gKon&&Math.abs(i.y-n.y)<2);
+      alle.push({nummer:n.text,ebene:n.text.split('.').length-1,abschnitt,
+        titel:betPdfZeilen(titel)[0]||'',
+        zeilen:betPdfZeilen(drin.filter(i=>i.x<gKon&&!titel.includes(i))),
+        kontakte:betPdfZeilen(drin.filter(i=>i.x>=gKon))});});
+    // Oberhalb der ersten Nummer: Fortsetzung des letzten Blocks der Vorseite
+    // (auf Seite 1 ist es der Dokumentkopf und bleibt draussen).
+    if(s>0&&bloeckeVor>0){
+      const bis=Math.min(anker.length?anker[0].y-6:Infinity,kopf.length?kopf[0].y-6:Infinity);
+      const rest=nutz.filter(i=>i.y<bis),vor=alle[bloeckeVor-1];
+      vor.zeilen.push(...betPdfZeilen(rest.filter(i=>i.x<gKon)));
+      vor.kontakte.push(...betPdfZeilen(rest.filter(i=>i.x>=gKon)));}
+  });
+  alle.forEach((b,i)=>{const n=alle[i+1];
+    b.istGruppe=!b.kontakte.length&&!b.zeilen.length&&!!n&&n.ebene>b.ebene;});
+  return alle;
+}
+const BET_PLZ_LAND=/^(?:[A-Z]{1,2}[- ])?(\d{4,5})\s+(\S.*)$/;
+// Firmenwoerter: eine Zeile damit ist nie ein Personenname ohne Herr/Frau.
+const BET_FIRMENWORT=/\d|&|\+|GmbH|mbH|\bAG\b|\bKG\b|e\.\s?V|Büro|Buero|Amt|Stadt|Gemeinde|Markt|Landkreis|Landratsamt|Regierung|Verband|Ingenieur|Architekt|Planung|Schule|Bau|Werk|Partner|Gesellschaft|Institut|Kirche|Diözese|Bistum/i;
+function betPdfEintragLogo(b){
+  const e={titel:b.titel||null,firma:null,anrede:null,vorname:null,nachname:null,namenstitel:null,funktion:null,
+           strasse:null,plz:null,ort:null,kontakte:[],status:'aktiv'};
+  b.kontakte.forEach(t=>{
+    const m=t.match(/^\(\s*([^)]*?)\s*\)\s*(.+)$/);if(!m)return;
+    const k=m[1].toLowerCase(),wert=m[2].trim();
+    if(!wert||k.startsWith('leitweg'))return;   // Rechnungs-ID, kein Kontaktweg
+    // Die Kontaktart steht im Ausdruck nur als Symbol — sie folgt aus dem Wert.
+    const art=wert.includes('@')?'email':/^(www\.|https?:)/i.test(wert)?'web'
+              :(k.startsWith('mobil')||/^(\+49\s?|0)1[5-7]/.test(wert))?'mobil':'telefon';
+    const kontext=k.includes('privat')?'privat':k.includes('zentral')?'zentrale':'arbeit';
+    if(!e.kontakte.some(x=>x.wert===wert))e.kontakte.push({art,kontext,wert});});
+  const z=[...b.zeilen];
+  const pi=z.findIndex(t=>BET_PLZ_LAND.test(t));
+  if(pi>=0){const p=z[pi].match(BET_PLZ_LAND);e.plz=p[1];e.ort=p[2].trim();
+    const vor=z.slice(0,pi);
+    if(vor.length&&/\d/.test(vor[vor.length-1]))e.strasse=vor.pop();
+    z.length=0;z.push(...vor);}
+  // Reihenfolge im Ausdruck: [Funktion] [Person] [Firma]
+  let pers=null;
+  const hi=z.findIndex(t=>/^(Herr|Frau)\s/.test(t));
+  if(hi>=0){pers=z[hi];e.funktion=z.slice(0,hi).join(', ')||null;e.firma=z.slice(hi+1).join(' ')||null;}
+  else if(z.length>=2&&!BET_FIRMENWORT.test(z[z.length-2])&&/^\p{Lu}\S*(\s+\p{Lu}\S*){1,3}$/u.test(z[z.length-2])){
+    pers=z[z.length-2];e.funktion=z.slice(0,-2).join(', ')||null;e.firma=z[z.length-1];}
+  else e.firma=z.join(' ')||null;
+  if(pers){
+    const per=pers.match(/^(Herr|Frau)\s+(.*)$/);
+    let n=per?per[2].trim():pers;if(per)e.anrede=per[1];
+    const tit=n.match(/^((?:Dipl\.?[-\w.()]*|Prof\.?|Dr\.?|Ing\.?|\(FH\))(?:\s+(?:Dipl\.?[-\w.()]*|Prof\.?|Dr\.?|Ing\.?|\(FH\)))*)\s+(.+)$/);
+    if(tit){e.namenstitel=tit[1].trim();n=tit[2].trim();}
+    const teile=n.split(/\s+/);
+    e.nachname=teile.pop()||null;e.vorname=teile.join(' ')||null;}
+  if(!e.titel&&!e.firma&&!e.nachname)return null;
+  return e;
+}
+// Abgleich mit dem Poool-Spiegel: Die Poool-Daten gelten, das PDF liefert nur
+// Rolle und Gliederung — und die Werte fuer alles, was Poool nicht kennt.
+// Person: gleicher Nachname UND (gleicher Vorname oder Firma passt), und die
+// beste Bewertung muss genau EINE Person treffen (wie beteiligte_crm_treffer,
+// nur ohne dessen Treffer bei blossem Nachnamen). Firmenzeile: gleicher Name.
+async function betPdfCrmAbgleich(F){
+  const klein=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const namen=[...new Set(F.filter(e=>!e.istGruppe&&e.nachname).map(e=>e.nachname))];
+  const firmen=[...new Set(F.filter(e=>!e.istGruppe&&e.firma).map(e=>e.firma))];
+  const PS='crm_id,crm_company_id,firma_name,anrede,namenstitel,vorname,nachname,funktion,strasse,plz,ort,kontakte,ist_intern';
+  const FS='crm_id,name,name_legal,strasse,plz,ort,kontakte,ist_operator';
+  const[rp,rf]=await Promise.all([
+    namen.length?sb.from('crm_personen').select(PS).in('nachname',namen).eq('ausgeblendet',false):{data:[]},
+    firmen.length?sb.from('crm_firmen').select(FS).in('name',firmen).eq('ausgeblendet',false):{data:[]}]);
+  if(rp.error||rf.error)throw new Error((rp.error||rf.error).message);
+  const P=rp.data||[],C=[...(rf.data||[])];
+  const fehlen=[...new Set(P.map(p=>p.crm_company_id).filter(id=>id&&!C.some(c=>c.crm_id===id)))];
+  if(fehlen.length){const{data}=await sb.from('crm_firmen').select(FS).in('crm_id',fehlen);C.push(...(data||[]));}
+  let treffer=0;
+  F.forEach(e=>{
+    if(e.istGruppe)return;
+    let p=null,c=null;
+    if(e.nachname){
+      const kand=P.filter(x=>klein(x.nachname)===klein(e.nachname)).map(x=>({x,g:
+        (e.vorname&&klein(x.vorname)===klein(e.vorname)?2:0)+(e.firma&&klein(x.firma_name).includes(klein(e.firma))?2:0)}));
+      const max=Math.max(0,...kand.map(k=>k.g)),beste=kand.filter(k=>k.g===max);
+      if(max>=2&&beste.length===1)p=beste[0].x;
+      if(p)c=C.find(x=>x.crm_id===p.crm_company_id)||null;
+    }else if(e.firma){
+      const kand=C.filter(x=>klein(x.name)===klein(e.firma)||klein(x.name_legal)===klein(e.firma));
+      if(kand.length===1)c=kand[0];
+    }
+    if(!p&&!c){e.crm=false;return;}
+    treffer++;e.crm=true;
+    e.crm_person_id=p?p.crm_id:null;e.crm_company_id=c?c.crm_id:(p?p.crm_company_id:null);
+    const q=p||c;
+    if(p){e.anrede=p.anrede||e.anrede;e.namenstitel=p.namenstitel||e.namenstitel;
+      e.vorname=p.vorname||e.vorname;e.nachname=p.nachname||e.nachname;e.funktion=p.funktion||e.funktion;}
+    e.firma=(c&&c.name)||(p&&p.firma_name)||e.firma;
+    if(q.strasse||q.plz||q.ort){e.strasse=q.strasse||null;e.plz=q.plz||null;e.ort=q.ort||null;}
+    else if(c&&(c.strasse||c.plz||c.ort)){e.strasse=c.strasse||null;e.plz=c.plz||null;e.ort=c.ort||null;}
+    if((q.kontakte||[]).length)e.kontakte=q.kontakte;
+    e.ist_intern=!!((p&&p.ist_intern)||(c&&c.ist_operator));
+  });
+  return treffer;
+}
 async function betPdfImport(datei){
   const box=el('main').querySelector('#bet_pdfres');
   if(box)box.innerHTML='<div class="empty">Lese '+esc(datei.name)+' …</div>';
@@ -2005,14 +2149,21 @@ async function betPdfImport(datei){
   try{seiten=await betPdfSchnipsel(datei);}
   catch(e){if(box)box.innerHTML='<div class="empty">PDF nicht lesbar: '+esc(e.message)+'</div>';return;}
   const gefunden=[];
-  betPdfBloecke(seiten).forEach(b=>{
-    const e=betPdfEintrag(b);
+  const logo=betPdfIstLogo(seiten);
+  (logo?betPdfBloeckeLogo(seiten):betPdfBloecke(seiten)).forEach(b=>{
+    const e=logo?betPdfEintragLogo(b):betPdfEintrag(b);
     if(!e)return;
-    if(/^(Projekt-?Beteiligte|Beteiligte|Nummer|Projekt|Tel\.?\/Fax)/i.test(e.titel||''))return;
-    e.nummer=b.nummer;e.ebene=b.ebene;e.istGruppe=b.istGruppe;
+    // Kopfzeilen des alten Formulars; im neuen Format gibt es nur Nummern-Bloecke
+    // (dort wuerde der Filter echte Rollen wie "Projektleitung" verschlucken).
+    if(!logo&&/^(Projekt-?Beteiligte|Beteiligte|Nummer|Projekt|Tel\.?\/Fax)/i.test(e.titel||''))return;
+    e.nummer=b.nummer;e.ebene=b.ebene;e.istGruppe=b.istGruppe;e.abschnitt=b.abschnitt||'';
     // Zeile ohne Firma, Person und Kontakte = noch nicht vergebenes Gewerk
     if(!e.istGruppe&&!e.firma&&!e.nachname&&!e.kontakte.length)e.status='offen';
     gefunden.push(e);});
+  if(gefunden.length){
+    if(box)box.innerHTML='<div class="empty">Gleiche '+gefunden.length+' Zeilen mit dem Poool-Adressbuch ab …</div>';
+    try{await betPdfCrmAbgleich(gefunden);}
+    catch(e){betHinweis('Poool-Abgleich nicht möglich ('+e.message+') — es gelten die Werte aus dem PDF.');}}
   betPdfFunde=gefunden;betPdfName=datei.name;
   betEdit=null;betCrmOffen=false;betCrmFirma=null;
   betNurSeite();
@@ -2026,28 +2177,40 @@ function betPdfVorschau(){
     'Bitte eine Liste im Büro-Format hochladen oder die Zeilen von Hand anlegen.</p>'+
     '<div class="bet-form-foot"><button class="btn-sm ghost" data-bet="pdf-abbrechen">Schließen</button></div></div>';
   const da=e=>!e.istGruppe&&betL.some(r=>r.art==='eintrag'
-    &&(r.firma||'').toLowerCase().trim()===(e.firma||'').toLowerCase().trim()
-    &&(r.nachname||'').toLowerCase().trim()===(e.nachname||'').toLowerCase().trim());
+    &&((e.crm_person_id&&r.crm_person_id===e.crm_person_id)
+    ||((r.firma||'').toLowerCase().trim()===(e.firma||'').toLowerCase().trim()
+    &&(r.nachname||'').toLowerCase().trim()===(e.nachname||'').toLowerCase().trim())));
   const neu=F.filter(e=>!da(e)).length,gruppen=F.filter(e=>e.istGruppe).length;
   const mitGliederung=F.some(e=>e.ebene>0);
+  const zeilen=F.filter(e=>!e.istGruppe&&e.status!=='offen'),inPoool=zeilen.filter(e=>e.crm).length;
   let h='<div class="bet-imp"><div class="bet-imp-head">'+esc(betPdfName||'PDF')+' — '+F.length+
     ' Zeilen erkannt, davon '+neu+' neu<button class="bet-t" data-bet="pdf-abbrechen" title="schließen">✕</button></div>'+
     '<p class="bet-imp-p">Haken setzen, was übernommen werden soll. Was schon in der Liste steht, ist vorentfernt. '+
     (mitGliederung?'Die Gliederung des PDFs ('+gruppen+' Gruppen) wird mit übernommen — die Zeilen hängen danach so untereinander wie im Ausdruck. ':'')+
     'Die Gliederungsnummern werden dabei neu und lückenlos vergeben; die alten stehen hier zum Vergleich. '+
     'Alles Übernommene trägt die Herkunft „PDF“ mit Dateinamen.</p>'+
+    '<p class="bet-imp-p"><b>Poool-Abgleich: '+inPoool+' von '+zeilen.length+' Zeilen im Adressbuch gefunden.</b> '+
+    'Dort gelten Name, Firma, Anschrift und Kontaktdaten aus Poool; die Zeile bleibt mit dem Poool-Kontakt verknüpft. '+
+    'Für „nicht in Poool“ bleiben die Werte aus dem PDF.</p>'+
     '<label class="bet-imp-ziel">Einhängen unter <select id="bet_imp_ziel">'+
     '<option value="">— oberste Ebene —</option>'+
     betL.filter(r=>r.art==='gruppe').map(g=>'<option value="'+g.id+'">'+esc(g.nummer+' '+(g.titel||''))+'</option>').join('')+
     '</select></label><div class="bet-imp-list">';
+  // Mehrere Listen in einer Datei: nur die erste ist vorausgewaehlt, sonst
+  // stuende jeder Beteiligte doppelt drin.
+  const erster=F[0].abschnitt||'',mehrere=F.some(e=>(e.abschnitt||'')!==erster);
   F.forEach((e,i)=>{
-    const vorhanden=da(e);
+    const vorhanden=da(e),spaeter=(e.abschnitt||'')!==erster;
+    if(mehrere&&(i===0||(F[i-1].abschnitt||'')!==(e.abschnitt||'')))
+      h+='<div class="bet-imp-p"><b>'+esc(e.abschnitt||'—')+'</b>'+
+        (spaeter?' — weitere Liste in derselben Datei, nicht vorausgewählt':'')+'</div>';
     const nm=[e.anrede,e.namenstitel,e.vorname,e.nachname].filter(Boolean).join(' ');
     h+='<label class="bet-imp-row'+(vorhanden?' da':'')+(e.istGruppe?' grp':'')+'" style="--ilvl:'+(e.ebene||0)+'">'+
-       '<input type="checkbox" data-impi="'+i+'"'+(vorhanden?'':' checked')+'>'+
+       '<input type="checkbox" data-impi="'+i+'"'+(vorhanden||spaeter?'':' checked')+'>'+
        '<span class="bet-imp-tx"><b>'+(e.nummer?'<span class="nr">'+esc(e.nummer)+'</span> ':'')+esc(e.titel||'—')+
        (e.istGruppe?'<span class="bet-tag an">Gruppe</span>':'')+
-       (e.status==='offen'?'<span class="bet-tag off">noch offen</span>':'')+'</b>'+
+       (e.status==='offen'?'<span class="bet-tag off">noch offen</span>':'')+
+       (e.crm?'<span class="bet-tag crm">Poool</span>':(!e.istGruppe&&e.status!=='offen'&&e.crm===false?'<span class="bet-tag off">nicht in Poool</span>':''))+'</b>'+
        (e.firma?'<span>'+esc(e.firma)+'</span>':'')+
        (nm?'<span>'+esc(nm)+'</span>':'')+
        ((e.plz||e.ort)?'<span class="q">'+esc([e.strasse,[e.plz,e.ort].filter(Boolean).join(' ')].filter(Boolean).join(', '))+'</span>':'')+
@@ -2092,9 +2255,10 @@ async function betPdfUebernehmen(){
       return{project_id:current,listen_id:betListeId,parent_id:vater!==undefined?vater:wurzel,
         art:e.istGruppe?'gruppe':'eintrag',pos:(basis+1)*10+z.i*10,
         titel:e.titel,firma:e.istGruppe?null:e.firma,anrede:e.anrede,namenstitel:e.namenstitel,
-        vorname:e.vorname,nachname:e.nachname,strasse:e.strasse,plz:e.plz,ort:e.ort,
+        vorname:e.vorname,nachname:e.nachname,funktion:e.funktion||null,strasse:e.strasse,plz:e.plz,ort:e.ort,
         kontakte:e.istGruppe?[]:e.kontakte,status:e.istGruppe?'aktiv':(e.status||'aktiv'),
-        ist_bauherr:/bauherr|auftraggeber/i.test(e.titel||''),
+        ist_bauherr:/bauherr|auftraggeber/i.test(e.titel||''),ist_intern:!!e.ist_intern,
+        crm_person_id:e.crm_person_id||null,crm_company_id:e.crm_company_id||null,
         quelle:'pdf',importiert_aus:betPdfName,importiert_am:stempel};});
     const{data,error}=await sb.from('beteiligte').insert(zeilen).select('id');
     if(error){betHinweis('Nicht übernommen: '+betFehler(error));return;}
