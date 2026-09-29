@@ -1910,7 +1910,7 @@ async function betPdfSchnipsel(datei){
   for(let s=1;s<=doc.numPages;s++){
     const p=await doc.getPage(s),vp=p.getViewport({scale:1}),tc=await p.getTextContent();
     const items=tc.items.filter(i=>(i.str||'').trim()).map(i=>({
-      text:i.str.trim(),x:i.transform[4],y:vp.height-i.transform[5],breite:vp.width}));
+      text:i.str.trim(),x:i.transform[4],y:vp.height-i.transform[5],breite:vp.width,groesse:Math.abs(i.transform[0])}));
     seiten.push(items);
   }
   return seiten;
@@ -2026,12 +2026,20 @@ function betPdfZeilen(items){
 // und ab Seite 12 "ZALT!!!!!!250626_Beteiligtenliste …"). Deren Ueberschrift
 // steht links VOR der Nummernspalte (x≈43 statt 50) und beginnt einen neuen
 // Abschnitt; sie beendet auch den Block davor.
+// Unsere eigene Druckfassung (vorlagen/beteiligte-druck.html) hat dasselbe Raster,
+// aber keinen Seitenkopf ab Seite 2, Kontexte am Stueck "(Arbeit)" statt
+// "(" "Arbeit" ")" und keine Fusszeile "| Seite x von y". Daran wird sie erkannt.
 function betPdfBloeckeLogo(seiten){
   const alle=[];let abschnitt='';
+  const druck=!seiten.some(items=>items.some(i=>i.text==='('||/\| Seite \d+ von \d+/.test(i.text)));
   seiten.forEach((items,s)=>{
-    const breite=(items[0]||{}).breite||595,gKon=breite*0.5;
-    // Fusszeile "Erstellt am … | Seite x von y" und der Seitenkopf ab Seite 2 fallen raus
-    const nutz=items.filter(i=>!/^Erstellt am /.test(i.text)&&(s===0||i.y>60));
+    const breite=(items[0]||{}).breite||595;
+    // Kontaktspalte beginnt beim "(Arbeit)" — im Buero-Format bei ~54 %, in der
+    // Druckfassung je nach Hoch-/Querformat weiter links. Ohne Kontakte: Seitenmitte.
+    const kx=items.filter(i=>i.text.startsWith('(')&&i.x>breite*0.3).map(i=>i.x);
+    const gKon=kx.length?Math.min(...kx)-2:breite*0.5;
+    // Fusszeile "Erstellt am …" und (nur Buero-Format) der Seitenkopf ab Seite 2 fallen raus
+    const nutz=items.filter(i=>!/^Erstellt am /.test(i.text)&&(s===0||druck||i.y>60));
     const anker=nutz.filter(i=>i.x<breite*0.2&&BET_NR.test(i.text)).sort((a,b)=>a.y-b.y);
     const ax=anker.length?Math.min(...anker.map(a=>a.x)):0;
     const kopf=nutz.filter(i=>i.x<ax-3&&!BET_NR.test(i.text)).sort((a,b)=>a.y-b.y);
@@ -2042,7 +2050,7 @@ function betPdfBloeckeLogo(seiten){
       const vonY=n.y-6,bisY=Math.min(idx+1<anker.length?anker[idx+1].y-6:Infinity,naechsterKopf-6);
       const drin=nutz.filter(i=>i!==n&&!kopf.includes(i)&&i.y>=vonY&&i.y<bisY);
       const titel=drin.filter(i=>i.x<gKon&&Math.abs(i.y-n.y)<2);
-      alle.push({nummer:n.text,ebene:n.text.split('.').length-1,abschnitt,
+      alle.push({nummer:n.text,ebene:n.text.split('.').length-1,abschnitt,druck,
         titel:betPdfZeilen(titel)[0]||'',
         zeilen:betPdfZeilen(drin.filter(i=>i.x<gKon&&!titel.includes(i))),
         kontakte:betPdfZeilen(drin.filter(i=>i.x>=gKon))});});
@@ -2056,6 +2064,9 @@ function betPdfBloeckeLogo(seiten){
   });
   alle.forEach((b,i)=>{const n=alle[i+1];
     b.istGruppe=!b.kontakte.length&&!b.zeilen.length&&!!n&&n.ebene>b.ebene;});
+  // Person unter einer Firmenzeile: der naechste hoehere Block hat selbst Inhalt
+  alle.forEach((b,i)=>{
+    for(let k=i-1;k>=0;k--)if(alle[k].ebene<b.ebene){b.unterFirma=alle[k].zeilen.length>0;break;}});
   return alle;
 }
 const BET_PLZ_LAND=/^(?:[A-Z]{1,2}[- ])?(\d{4,5})\s+(\S.*)$/;
@@ -2065,7 +2076,7 @@ function betPdfEintragLogo(b){
   const e={titel:b.titel||null,firma:null,anrede:null,vorname:null,nachname:null,namenstitel:null,funktion:null,
            strasse:null,plz:null,ort:null,kontakte:[],status:'aktiv'};
   b.kontakte.forEach(t=>{
-    const m=t.match(/^\(\s*([^)]*?)\s*\)\s*(.+)$/);if(!m)return;
+    const m=t.match(/^\(\s*([^)]*?)\s*\)\s*(.+)$/)||(b.druck?['', 'arbeit',t]:null);if(!m)return;
     const k=m[1].toLowerCase(),wert=m[2].trim();
     if(!wert||k.startsWith('leitweg'))return;   // Rechnungs-ID, kein Kontaktweg
     // Die Kontaktart steht im Ausdruck nur als Symbol — sie folgt aus dem Wert.
@@ -2074,15 +2085,27 @@ function betPdfEintragLogo(b){
     const kontext=k.includes('privat')?'privat':k.includes('zentral')?'zentrale':'arbeit';
     if(!e.kontakte.some(x=>x.wert===wert))e.kontakte.push({art,kontext,wert});});
   const z=[...b.zeilen];
+  // Umgebrochene Rolle: "Kaemmerin (Ansprechpartnerin" / "Bauherr)"
+  const offen=t=>(t.match(/\(/g)||[]).length>(t.match(/\)/g)||[]).length;
+  while(e.titel&&offen(e.titel)&&z.length)e.titel+=' '+z.shift();
   const pi=z.findIndex(t=>BET_PLZ_LAND.test(t));
   if(pi>=0){const p=z[pi].match(BET_PLZ_LAND);e.plz=p[1];e.ort=p[2].trim();
     const vor=z.slice(0,pi);
     if(vor.length&&/\d/.test(vor[vor.length-1]))e.strasse=vor.pop();
     z.length=0;z.push(...vor);}
-  // Reihenfolge im Ausdruck: [Funktion] [Person] [Firma]
+  // Reihenfolge im Buero-Ausdruck: [Funktion] [Person] [Firma];
+  // in unserer Druckfassung: [Firma] [Person] [Funktion], unter einer Firma nur
+  // [Person] [Funktion] (Firma und Anschrift stehen eine Zeile hoeher).
   let pers=null;
   const hi=z.findIndex(t=>/^(Herr|Frau)\s/.test(t));
-  if(hi>=0){pers=z[hi];e.funktion=z.slice(0,hi).join(', ')||null;e.firma=z.slice(hi+1).join(' ')||null;}
+  const namensartig=t=>!!t&&!BET_FIRMENWORT.test(t)&&/^\p{Lu}\S*(\s+\p{Lu}\S*){1,3}$/u.test(t);
+  if(b.druck){
+    // Ohne Person gehoert alles zur Firma (lange Namen brechen um: "Kiendl &
+    // Moosbauer Diplom" / "Ingenieure"); eine Funktion gibt es nur mit Person.
+    const pi=b.unterFirma?(z.length?0:-1):z.findIndex((t,i)=>/^(Herr|Frau)\s/.test(t)||(i>0&&namensartig(t)));
+    if(pi>=0){e.firma=z.slice(0,pi).join(' ')||null;pers=z[pi];e.funktion=z.slice(pi+1).join(', ')||null;}
+    else e.firma=z.join(' ')||null;
+  }else if(hi>=0){pers=z[hi];e.funktion=z.slice(0,hi).join(', ')||null;e.firma=z.slice(hi+1).join(' ')||null;}
   else if(z.length>=2&&!BET_FIRMENWORT.test(z[z.length-2])&&/^\p{Lu}\S*(\s+\p{Lu}\S*){1,3}$/u.test(z[z.length-2])){
     pers=z[z.length-2];e.funktion=z.slice(0,-2).join(', ')||null;e.firma=z[z.length-1];}
   else e.firma=z.join(' ')||null;
@@ -2095,6 +2118,75 @@ function betPdfEintragLogo(b){
     e.nachname=teile.pop()||null;e.vorname=teile.join(' ')||null;}
   if(!e.titel&&!e.firma&&!e.nachname)return null;
   return e;
+}
+// --- Planfred-Export ("<Projekt> – BETEILIGTE") ------------------------------
+// Tabelle mit Spalten E-Mail | Name | Firma | Telefon | Funktion | Rolle |
+// Benachrichtigung, je Person darunter eine Zeile "Adresse: Strasse , PLZ Ort ,
+// Land | Notiz: …". Gruppen (Projekteigentuemer, Projekt-Administratoren,
+// Projekt-Beteiligte) stehen allein links in groesserer Schrift. Keine Nummern:
+// die Gruppen werden Ueberschriften, die Personen Zeilen darunter.
+// Planfred trennt Woerter mit U+2010 ("Ar‐" / "chitekten") — das faellt beim
+// Zusammensetzen weg, ein echter Bindestrich bleibt ("Maxhütte-" / "Haidhof").
+function betPdfIstPlanfred(seiten){
+  let mail=0,adr=0;
+  seiten.forEach(items=>{const br=(items[0]||{}).breite||595;
+    items.forEach(i=>{if(i.x<br*0.1){if(i.text.includes('@'))mail++;if(i.text==='Adresse:')adr++;}});});
+  return mail>=3&&adr>=1;
+}
+function betPdfPlanfredText(teile,ohneLuecke){
+  let t='',y=null;
+  teile.sort((a,b)=>a.y-b.y||a.x-b.x).forEach(i=>{
+    if(!t)t=i.text;
+    else if(Math.abs(i.y-y)<2)t+=' '+i.text;
+    else if(t.endsWith('\u2010'))t=t.slice(0,-1)+i.text;
+    else if(t.endsWith('-')||ohneLuecke)t+=i.text;
+    else t+=' '+i.text;
+    y=i.y;});
+  return t.trim();
+}
+function betPdfPlanfred(seiten){
+  // Alle Seiten auf eine y-Achse legen, dann laeuft eine Zeile auch ueber den Seitenwechsel.
+  const alle=[];
+  seiten.forEach((items,s)=>items.forEach(i=>alle.push({...i,y:s*10000+i.y})));
+  const br=(alle[0]||{}).breite||595;
+  const allein=i=>!alle.some(j=>j!==i&&Math.abs(j.y-i.y)<2);
+  const kopf=alle.filter(i=>i.x<br*0.1&&(i.groesse||0)>=7.5&&(i.groesse||0)<12&&!i.text.includes('@')&&allein(i));
+  const anker=alle.filter(i=>i.x<br*0.1&&i.text.includes('@')&&!alle.some(j=>j.x<br*0.1&&j.text.includes('@')&&j.y<i.y&&i.y-j.y<12));
+  const marken=[...kopf,...anker].sort((a,b)=>a.y-b.y);
+  const grenzen=[0.2,0.37,0.485,0.613,0.736].map(f=>f*br);   // Mail|Name|Firma|Telefon|Funktion|Rest
+  const spalte=i=>grenzen.filter(g=>i.x>=g).length;
+  const F=[];
+  marken.forEach((m,idx)=>{
+    if(kopf.includes(m)){F.push({titel:m.text,istGruppe:true,ebene:0,nummer:'',kontakte:[],status:'aktiv'});return;}
+    const bis=idx+1<marken.length?marken[idx+1].y-2:Infinity;
+    const drin=alle.filter(i=>i.y>=m.y-2&&i.y<bis&&i.text!=='Ich');
+    const a=drin.find(i=>i.text==='Adresse:'||/^Notiz:/.test(i.text)&&i.x<br*0.1);
+    const haupt=a?drin.filter(i=>i.y<a.y-2):drin;
+    const sp=k=>haupt.filter(i=>spalte(i)===k);
+    const e={titel:betPdfPlanfredText(sp(4))||null,firma:betPdfPlanfredText(sp(2))||null,anrede:null,vorname:null,
+      nachname:null,namenstitel:null,funktion:null,strasse:null,plz:null,ort:null,notiz:null,kontakte:[],status:'aktiv',
+      ebene:1,nummer:'',istGruppe:false};
+    const mail=betPdfPlanfredText(sp(0),true);
+    const name=sp(1).filter(i=>i.text!=='-').sort((a,b)=>a.y-b.y||a.x-b.x);
+    const nm=betPdfPlanfredText([...name]);
+    // Firmenzeile (z. B. Projekteigentuemer): in der Namensspalte steht die Firma
+    if(name.length&&!(e.firma&&e.firma.replace(/\s/g,'').startsWith(nm.replace(/\s/g,'')))){
+      e.nachname=name[0].text.replace(/\u2010$/,'');e.vorname=name.slice(1).map(i=>i.text).join(' ')||null;}
+    if(mail&&mail.includes('@'))e.kontakte.push({art:'email',kontext:'arbeit',wert:mail});
+    const tel=betPdfPlanfredText(sp(3),true);
+    if(tel)e.kontakte.push({art:/^(\+49\s?|0049\s?|0)1[5-7]/.test(tel)?'mobil':'telefon',kontext:'arbeit',wert:tel});
+    if(a){
+      const txt=betPdfPlanfredText(drin.filter(i=>Math.abs(i.y-a.y)<2&&i!==a&&i.text!=='Adresse:'));
+      const [adr,...rest]=(a.text==='Adresse:'?txt:'| '+a.text+' '+txt).split('|');
+      const notiz=rest.join('|').replace(/^\s*Notiz:\s*/,'').trim();
+      if(notiz)e.notiz=notiz;
+      adr.split(/\s*,\s*/).map(t=>t.trim()).filter(Boolean).forEach(t=>{
+        const p=t.match(/^(\d{4,5})\s+(.+)$/);
+        if(p){e.plz=p[1];e.ort=p[2];}
+        else if(!/^(Deutschland|Österreich|Schweiz)$/i.test(t))e.strasse=t;});}
+    if(!e.titel&&!e.firma&&!e.nachname&&!e.kontakte.length)return;
+    F.push(e);});
+  return F;
 }
 // Abgleich mit dem Poool-Spiegel: Die Poool-Daten gelten, das PDF liefert nur
 // Rolle und Gliederung — und die Werte fuer alles, was Poool nicht kennt.
@@ -2119,8 +2211,16 @@ async function betPdfCrmAbgleich(F){
     if(e.istGruppe)return;
     let p=null,c=null;
     if(e.nachname){
-      const kand=P.filter(x=>klein(x.nachname)===klein(e.nachname)).map(x=>({x,g:
-        (e.vorname&&klein(x.vorname)===klein(e.vorname)?2:0)+(e.firma&&klein(x.firma_name).includes(klein(e.firma))?2:0)}));
+      // Gleiche E-Mail zaehlt am meisten. Widerspricht die E-Mail und passt die
+      // Firma nicht, ist es ein Namensvetter (Planfred: Martin Dietl von derori
+      // gegen Martin Dietl bei Autohaus Hofmann) — dann kein Treffer.
+      const mails=k=>(k||[]).filter(x=>x.art==='email').map(x=>klein(x.wert));
+      const pdfMail=mails(e.kontakte);
+      const kand=P.filter(x=>klein(x.nachname)===klein(e.nachname)).map(x=>{
+        const firmaPasst=!!e.firma&&klein(x.firma_name).includes(klein(e.firma));
+        const crmMail=mails(x.kontakte),mailPasst=pdfMail.some(m=>crmMail.includes(m));
+        if(pdfMail.length&&crmMail.length&&!mailPasst&&!firmaPasst)return{x,g:-1};
+        return{x,g:(e.vorname&&klein(x.vorname)===klein(e.vorname)?2:0)+(firmaPasst?2:0)+(mailPasst?3:0)};});
       const max=Math.max(0,...kand.map(k=>k.g)),beste=kand.filter(k=>k.g===max);
       if(max>=2&&beste.length===1)p=beste[0].x;
       if(p)c=C.find(x=>x.crm_id===p.crm_company_id)||null;
@@ -2149,8 +2249,9 @@ async function betPdfImport(datei){
   try{seiten=await betPdfSchnipsel(datei);}
   catch(e){if(box)box.innerHTML='<div class="empty">PDF nicht lesbar: '+esc(e.message)+'</div>';return;}
   const gefunden=[];
-  const logo=betPdfIstLogo(seiten);
-  (logo?betPdfBloeckeLogo(seiten):betPdfBloecke(seiten)).forEach(b=>{
+  const planfred=betPdfIstPlanfred(seiten),logo=!planfred&&betPdfIstLogo(seiten);
+  if(planfred)gefunden.push(...betPdfPlanfred(seiten));
+  else (logo?betPdfBloeckeLogo(seiten):betPdfBloecke(seiten)).forEach(b=>{
     const e=logo?betPdfEintragLogo(b):betPdfEintrag(b);
     if(!e)return;
     // Kopfzeilen des alten Formulars; im neuen Format gibt es nur Nummern-Bloecke
@@ -2255,7 +2356,7 @@ async function betPdfUebernehmen(){
       return{project_id:current,listen_id:betListeId,parent_id:vater!==undefined?vater:wurzel,
         art:e.istGruppe?'gruppe':'eintrag',pos:(basis+1)*10+z.i*10,
         titel:e.titel,firma:e.istGruppe?null:e.firma,anrede:e.anrede,namenstitel:e.namenstitel,
-        vorname:e.vorname,nachname:e.nachname,funktion:e.funktion||null,strasse:e.strasse,plz:e.plz,ort:e.ort,
+        vorname:e.vorname,nachname:e.nachname,funktion:e.funktion||null,notiz:e.notiz||null,strasse:e.strasse,plz:e.plz,ort:e.ort,
         kontakte:e.istGruppe?[]:e.kontakte,status:e.istGruppe?'aktiv':(e.status||'aktiv'),
         ist_bauherr:/bauherr|auftraggeber/i.test(e.titel||''),ist_intern:!!e.ist_intern,
         crm_person_id:e.crm_person_id||null,crm_company_id:e.crm_company_id||null,
