@@ -713,7 +713,12 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kihaupt>.kiverlauf,#chat-root .kihaupt>.kieingabe{width:100%;max-width:904px;padding-left:22px;padding-right:22px}
 #chat-root[hidden]{display:none}
 /* Chat mit Dokument (chat-dokument.js, Migr. 201): Chat links, Dokument rechts als weisses Blatt. */
-#chat-root.mitdok .kiseite{display:none}
+/* Seitenknopf im Chat: Board-Navigation und Chatverlaeufe zusammen weg. */
+#app.seitezu #sidebar,#app.seitezu #chat-root .kiseite{display:none}
+.seitenbtn{width:34px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-left:-6px}
+.seitenbtn:hover{background:rgba(28,28,26,.08)}
+.seitenicon{width:16px;height:12px;border:1.5px solid #1C1C1A;border-radius:2px;position:relative}
+.seitenicon::after{content:'';position:absolute;top:0;bottom:0;left:4px;border-left:1.5px solid #1C1C1A}
 #chat-root.mitdok .kihaupt{flex:0 0 min(40%,520px);border-right:1px solid rgba(28,28,26,.09)}
 #chat-root .kiteiler{flex:0 0 9px;margin:0 -4px;cursor:col-resize;position:relative;z-index:2;touch-action:none}
 #chat-root .kiteiler::after{content:'';position:absolute;top:0;bottom:0;left:4px;width:1px;background:transparent;transition:background .15s}
@@ -879,7 +884,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumk5xpp">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumkkvog">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -962,8 +967,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumk5xpp"></script>
-<script src="chat-dokument.js?v=mumk5xpp"></script>
-<script type="module" src="dashboard.js?v=mumk5xpp"></script>
+<script src="app.js?v=mumkkvog"></script>
+<script src="chat-dokument.js?v=mumkkvog"></script>
+<script type="module" src="dashboard.js?v=mumkkvog"></script>
 </body>
 </html>
