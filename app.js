@@ -1492,7 +1492,6 @@ function chatDiktatEnde() {
 async function chatSenden(ta) {
   const k = S.kichat;
   const text = ta.value.trim();
-  if (chatDokSenden(ta)) return; // Dokument offen: Nachricht geht an den Dokument-Agenten
   if (!text || k.denkt) return;
   chatDiktatEnde();
   const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
