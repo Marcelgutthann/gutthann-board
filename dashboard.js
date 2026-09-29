@@ -1788,29 +1788,133 @@ async function betZeileDarunter(id,modus){
     :uebernehmen&&(r.titel||r.firma)?'Zeile eingefügt — Rolle und Firma sind übernommen.':'Zeile eingefügt.');
 }
 
+// Ueberschriften frei setzen (Marcel 29.09.: "mit Rechtsklick die verschiedensten
+// Ueberschriften einfuegen ... nach dem Prinzip maximale Flexibilitaet").
+// Regel wie in Word: was unter einer Ueberschrift STEHT, GEHOERT auch zu ihr.
+// Vorher blieb eine mitten in die Liste gesetzte Ueberschrift leer, die Zeilen
+// darunter liefen als Geschwister weiter (1.2 [neu], 1.3 Bauherrnvertreter).
+//   vor   : auf gleicher Ebene davor; diese und die folgenden Zeilen wandern hinein
+//   nach  : auf gleicher Ebene dahinter; die folgenden Zeilen wandern hinein
+//   fassen: nur diese eine Zeile in eine neue Ueberschrift
+//   unter : Unterueberschrift am Ende einer Ueberschrift (leer)
+//   hoch  : eine Ebene hoeher hinter der eigenen Ueberschrift; alles, was nach
+//           der Zeile in ihrer Ueberschrift steht, zieht mit
+//   oben  : oberste Ebene ganz unten (Rechtsklick auf freie Flaeche)
+// "Folgende Zeilen" endet an der naechsten Ueberschrift derselben Ebene.
+let betTitelFokus=false;
+async function betUeberschrift(id,modus){
+  const r=id?betL.find(x=>x.id===id):null;
+  if(id&&!r)return;
+  const kinderVon=pid=>betL.filter(x=>(x.parent_id||null)===(pid||null));
+  let parent,reihe,stelle,mit=[];
+  if(modus==='oben'){parent=null;reihe=kinderVon(null);stelle=reihe.length;}
+  else if(modus==='unter'){parent=r.id;reihe=kinderVon(r.id);stelle=reihe.length;}
+  else if(modus==='hoch'){
+    const vater=betL.find(x=>x.id===r.parent_id);if(!vater)return;
+    parent=vater.parent_id||null;reihe=kinderVon(parent);stelle=reihe.findIndex(x=>x.id===vater.id)+1;
+    const gesch=kinderVon(vater.id);mit=gesch.slice(gesch.findIndex(x=>x.id===r.id)+1);
+  }else{
+    parent=r.parent_id||null;reihe=kinderVon(parent);
+    const i=reihe.findIndex(x=>x.id===r.id);
+    stelle=modus==='nach'?i+1:i;
+    if(modus==='fassen')mit=[r];
+    else{const ab=modus==='nach'?i+1:i;
+      for(let k=ab;k<reihe.length&&reihe[k].art!=='gruppe';k++)mit.push(reihe[k]);}
+  }
+  const{data,error}=await sb.from('beteiligte').insert({project_id:current,listen_id:betListeId,
+    parent_id:parent,art:'gruppe',pos:(stelle+1)*10,quelle:'hand'}).select('id').single();
+  if(error){betHinweis('Nicht eingefügt: '+betFehler(error));return;}
+  // Mitwandernde Zeilen unter die neue Ueberschrift, Reihenfolge bleibt
+  for(let k=0;k<mit.length;k++){
+    const{error:e}=await sb.from('beteiligte').update({parent_id:data.id,pos:(k+1)*10}).eq('id',mit[k].id);
+    if(e){betHinweis('Eingefügt, aber nicht alle Zeilen umgehängt: '+betFehler(e));break;}}
+  // Neue Reihenfolge der Ebene: Mitgewanderte raus, die Ueberschrift an ihre Stelle
+  const ids=reihe.filter(x=>!mit.includes(x)).map(x=>x.id);
+  ids.splice(stelle-mit.filter(x=>reihe.indexOf(x)<stelle).length,0,data.id);
+  const e2=await betZweigSchreiben(ids);
+  if(e2)betHinweis('Eingefügt, aber nicht einsortiert: '+betFehler(e2));
+  await betNeuZeichnen();
+  // Titel sofort tippen: Feld hat den Fokus, Enter speichert.
+  const neu=(betL||[]).find(x=>x.id===data.id);
+  if(neu){betSel=neu.id;betEdit=Object.assign({},neu,{kontakte:[],_inline:true});
+    betFormAuf=true;betCrmOffen=false;betTitelFokus=true;betNurSeite();}
+  if(!e2)betHinweis('Überschrift eingefügt'+(mit.length?' — '+mit.length+(mit.length===1?' Zeile gehört':' Zeilen gehören')+' jetzt dazu':'')+'. Titel eingeben, Enter speichert.');
+}
+// Eine Ebene tiefer: unter die Zeile direkt darueber (ans Ende ihres Zweigs).
+// Eine Ebene hoeher: direkt hinter die eigene Ueberschrift.
+async function betEbene(id,richtung){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  const gesch=betL.filter(x=>(x.parent_id||null)===(r.parent_id||null));
+  const i=gesch.findIndex(x=>x.id===id);
+  if(richtung==='tiefer'){
+    if(i<1){betHinweis('Darüber steht keine Zeile derselben Ebene, unter die sie rücken könnte.');return;}
+    await betZiehAblegen(id,gesch[i-1].id,'rein');
+  }else{
+    if(!r.parent_id){betHinweis('Die Zeile steht schon auf oberster Ebene.');return;}
+    await betZiehAblegen(id,r.parent_id,'nach');
+  }
+}
+// Zeile <-> Ueberschrift. Eine Zeile mit Firma, Person oder Kontakten bleibt
+// Zeile — als Ueberschrift waeren die Daten unsichtbar.
+async function betUmwandeln(id){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  const zuGruppe=r.art!=='gruppe';
+  if(zuGruppe&&(r.firma||r.nachname||r.vorname||betKont(r).length)){
+    betHinweis('Die Zeile trägt Firma, Person oder Kontakte — erst leeren, dann zur Überschrift machen.');return;}
+  const{error}=await sb.from('beteiligte').update({art:zuGruppe?'gruppe':'eintrag',
+    status:zuGruppe?'aktiv':'offen'}).eq('id',id);
+  if(error){betHinweis('Nicht umgewandelt: '+betFehler(error));return;}
+  await betNeuZeichnen();betHinweis(zuGruppe?'Ist jetzt eine Überschrift.':'Ist jetzt eine Zeile.');
+}
+function betTitelBearbeiten(id){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  betSel=id;betEdit=Object.assign({},r,{kontakte:betKont(r),_inline:true});
+  betFormAuf=true;betTitelFokus=true;betCrmOffen=false;betNurSeite();
+}
+
 // Rechtsklick-Menue einer Zeile. Nutzt das Menue der Board-Huelle (app.js);
 // fehlt es, passiert nichts -- die gleichen Wege stehen auch als Knoepfe da.
 function betZeilenMenue(e,id){
   const r=betL.find(x=>x.id===id);if(!r||!window.ctxMenu)return;
-  e.preventDefault();
+  e.preventDefault();e.stopPropagation();
   const M=el('main');
   M.querySelectorAll('[data-betrow],[data-betfold]').forEach(x=>
     x.classList.toggle('sel',x.dataset.betrow===id||x.dataset.betfold===id));
-  const istG=r.art==='gruppe';
-  const punkte=[{txt:istG?'Zeile in dieser Überschrift':'Zeile darunter einfügen',
-                 do:()=>betZeileDarunter(id,istG?'kind':'gleich')}];
-  if(!istG)punkte.push({txt:r.firma?'Ansprechpartner dieser Firma darunter':'Zeile eine Ebene tiefer',
-                        do:()=>betZeileDarunter(id,'kind')});
-  punkte.push({txt:'Überschrift darunter einfügen',do:()=>betZeileDarunter(id,'gruppe')});
-  punkte.push({txt:'Nach oben',do:()=>betVerschieben(id,'up')});
-  punkte.push({txt:'Nach unten',do:()=>betVerschieben(id,'down')});
-  if(!istG)punkte.push({txt:'Aus dem Adressbuch füllen',do:()=>{
+  const istG=r.art==='gruppe',P=[];
+  P.push({note:'Zeile'});
+  if(istG)P.push({txt:'Zeile in dieser Überschrift',do:()=>betZeileDarunter(id,'kind')});
+  else{
+    P.push({txt:'Zeile darunter einfügen',do:()=>betZeileDarunter(id,'gleich')});
+    P.push({txt:r.firma?'Ansprechpartner dieser Firma darunter':'Zeile eine Ebene tiefer',do:()=>betZeileDarunter(id,'kind')});}
+  P.push({note:'Überschrift'});
+  P.push({txt:'Überschrift darüber',do:()=>betUeberschrift(id,'vor')});
+  P.push({txt:'Überschrift darunter',do:()=>betUeberschrift(id,'nach')});
+  if(istG)P.push({txt:'Unterüberschrift hier drin',do:()=>betUeberschrift(id,'unter')});
+  P.push({txt:'In eine neue Überschrift fassen',do:()=>betUeberschrift(id,'fassen')});
+  if(r.parent_id)P.push({txt:'Überschrift eine Ebene höher',do:()=>betUeberschrift(id,'hoch')});
+  P.push({txt:'Oberste Überschrift ganz unten',do:()=>betUeberschrift(null,'oben')});
+  P.push({note:'Anordnen'});
+  if(istG)P.push({txt:'Umbenennen',do:()=>betTitelBearbeiten(id)});
+  P.push({txt:istG?'In Zeile umwandeln':'In Überschrift umwandeln',do:()=>betUmwandeln(id)});
+  P.push({txt:'Nach oben',do:()=>betVerschieben(id,'up')});
+  P.push({txt:'Nach unten',do:()=>betVerschieben(id,'down')});
+  P.push({txt:'Eine Ebene tiefer (einrücken)',do:()=>betEbene(id,'tiefer')});
+  if(r.parent_id)P.push({txt:'Eine Ebene höher (ausrücken)',do:()=>betEbene(id,'hoeher')});
+  if(!istG)P.push({txt:'Aus dem Adressbuch füllen',do:()=>{
     const z=betL.find(x=>x.id===id);
     betSel=id;betEdit=Object.assign({},z,{kontakte:betKont(z)});
     betCrmOffen=true;betCrmFirma=null;betNurSeite();}});
-  punkte.push({txt:'Löschen',danger:true,do:()=>{
+  P.push({txt:'Löschen',danger:true,do:()=>{
     betLoeschFrage=id;betEdit=null;betCrmOffen=false;betNurSeite();}});
-  window.ctxMenu(e.clientX,e.clientY,punkte);
+  window.ctxMenu(e.clientX,e.clientY,P);
+}
+// Rechtsklick auf freie Flaeche der Liste (unter der letzten Zeile)
+function betListenMenue(e){
+  if(!window.ctxMenu||!betListeId||e.target.closest('[data-betrow],[data-betfold]'))return;
+  e.preventDefault();
+  window.ctxMenu(e.clientX,e.clientY,[
+    {txt:'Überschrift ganz unten anlegen',do:()=>betUeberschrift(null,'oben')},
+    {txt:'Beteiligten anlegen',do:()=>{const b=el('main').querySelector('[data-bet="neu-eintrag"]');if(b)b.click();}}]);
 }
 
 // Ziehen wie auf dem Board (Marcel 22.09.: "wie unsere Karten im Dashboard so
@@ -2716,6 +2820,11 @@ function wireBet(){
   // Rechtsklick auf Zeile und Ueberschrift: einfuegen, verschieben, loeschen.
   M.querySelectorAll('[data-betrow]').forEach(z=>z.oncontextmenu=e=>betZeilenMenue(e,z.dataset.betrow));
   M.querySelectorAll('[data-betfold]').forEach(g=>g.oncontextmenu=e=>betZeilenMenue(e,g.dataset.betfold));
+  const liste=M.querySelector('.bet-liste');if(liste)liste.oncontextmenu=betListenMenue;
+  // Titel einer frisch eingefuegten oder umzubenennenden Ueberschrift: Fokus, Enter speichert.
+  const tf=M.querySelector('#bf_titel');
+  if(tf&&betTitelFokus){betTitelFokus=false;tf.focus();tf.select();}
+  if(tf&&betEdit&&betEdit.art==='gruppe')tf.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();betSpeichern();}};
   // "Firma / Person hinzufügen" an einer Rolle: Adressbuch mit dieser Zeile als Ziel.
   // Ansprechpartner hinzufuegen: die neue Person wird ANGEHAENGT, nicht die
   // angeklickte Zeile ueberschrieben. Deshalb bekommt betEdit KEINE id --
