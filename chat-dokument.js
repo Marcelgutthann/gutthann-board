@@ -22,9 +22,11 @@ function chatDokRender() {
     let leiste = eing.querySelector('.kiagenten');
     if (!leiste) { leiste = el('div', { class: 'kiagenten' }); eing.prepend(leiste); }
     leiste.innerHTML = '';
-    leiste.append(el('button', { class: 'kichip', type: 'button', onclick: (e) => chatAgentWahl(e) }, '+ Agent losschicken'));
+    leiste.append(el('button', { class: 'kiplus', type: 'button', title: 'Datei, Projekt oder Agent hinzufügen', 'aria-label': 'Hinzufügen',
+      onclick: (e) => { e.stopPropagation(); chatPlusMenue(leiste); } }, '+'), ...chatPlusChips());
     // Jede Nachricht geht an Tony (29.09.). Aendern soll sich das Dokument nur, wenn man es
     // ausdruecklich sagt -- das erkennt Tony und gibt es an den Agenten weiter (dokument_aendern_lassen).
+    chatDateiZiel(root.querySelector('.kihaupt'));
   }
 
   let panel = root.querySelector('.kidok');
@@ -189,6 +191,112 @@ function chatDokPanel(panel, d) {
       .catch(() => { flaeche.innerHTML = ''; flaeche.append(el('div', { class: 'kidokwarte' }, 'Dokument nicht abrufbar.')); });
   }
   flaeche.classList.toggle('arbeitet', arbeitet);
+}
+
+// ---------- Plus ueber der Eingabe (Marcel, 29.09.) ----------
+// Ein „+" statt „Agent losschicken": es schiesst ein Menue nach oben mit Datei, Projekt, Agent.
+// Datei: Tony liest sie mit (live-backend gibt sie dem Modell als Anhang). Projekt: hoechstens eins;
+// der Chat bezieht sich darauf und liegt danach unter dem Projekt (Migration 207). Nach anderen
+// Projekten suchen kann Tony trotzdem. Agent: die Agentenuebersicht, dort startet „+" einen neuen.
+const KI_DATEI_MAX = 8 * 1024 * 1024; // alle Dateien einer Nachricht zusammen, der Body geht als JSON
+
+function chatPlusChips() {
+  const k = S.kichat;
+  const p = chatProjektVon(k);
+  const chips = [];
+  if (p) chips.push(el('span', { class: 'kiwahl' }, ico('folder'), el('span', {}, p.name),
+    // Ein bestehender Chat bleibt bei seinem Projekt; nur vor der ersten Nachricht laesst es sich abnehmen.
+    !k.id ? el('button', { type: 'button', title: 'Projekt entfernen', onclick: () => { k.projekt = null; renderChat(); } }, '×') : ''));
+  for (const d of k.dateien || []) chips.push(el('span', { class: 'kiwahl' }, el('span', {}, d.name),
+    el('button', { type: 'button', title: 'Datei entfernen', onclick: () => { k.dateien = k.dateien.filter((x) => x !== d); renderChat(); } }, '×')));
+  return chips;
+}
+// Projekt des Chats: frisch gewaehlt, sonst das, unter dem der Chat schon liegt.
+function chatProjektVon(k) {
+  if (k?.projekt) return k.projekt;
+  const c = k?.id && (S.kichats || []).find((x) => x.id === k.id);
+  return c?.project_id ? { id: c.project_id, name: c.projekt || 'Projekt' } : null;
+}
+
+function chatPlusMenue(leiste) {
+  const alt = leiste.querySelector('.kiplusmenue');
+  if (alt) return chatPlusZu(alt);
+  const k = S.kichat;
+  const m = el('div', { class: 'kiplusmenue', role: 'menu' });
+  const punkt = (icon, txt, sub, tu) => el('button', { type: 'button', role: 'menuitem', onclick: (e) => { e.stopPropagation(); tu(); } },
+    el('span', { class: 'kiplusico' }, icon), el('span', { class: 'kipluswas' }, el('b', {}, txt), el('span', {}, sub)));
+  const hauptliste = () => {
+    m.innerHTML = '';
+    m.append(
+      punkt(ico('clip'), 'Datei', 'PDF, Bild oder Text – oder einfach in den Chat ziehen', () => { chatPlusZu(m); chatDateiWahl(); }),
+      punkt(ico('folder'), 'Projekt', chatProjektVon(k) ? 'Chat bezieht sich auf ' + chatProjektVon(k).name : 'Chat bezieht sich auf ein Projekt', () => {
+        if (k.id && chatProjektVon(k)) return uiHinweis('Dieser Chat liegt schon unter ' + chatProjektVon(k).name + '. Für ein anderes Projekt einen neuen Chat anfangen.');
+        projektliste();
+      }),
+      punkt(ico('bot'), 'Agent', 'Agentenübersicht – losschicken oder neu anlegen', () => { chatPlusZu(m); chatAnsicht('agenten'); }));
+  };
+  const projektliste = () => {
+    m.innerHTML = '';
+    const such = el('input', { class: 'kiplussuch', type: 'search', placeholder: 'Projekt suchen …', 'aria-label': 'Projekt suchen' });
+    const liste = el('div', { class: 'kiplusliste' });
+    const zeichne = () => {
+      const q = such.value.toLowerCase().trim();
+      liste.innerHTML = '';
+      for (const p of [...(S.projects || [])].sort((x, y) => String(x.name).localeCompare(String(y.name), 'de'))
+        .filter((p) => !q || String(p.name).toLowerCase().includes(q))) {
+        liste.append(el('button', { type: 'button', onclick: (e) => { e.stopPropagation(); k.projekt = { id: p.id, name: p.name }; chatPlusZu(m); renderChat(); } }, p.name));
+      }
+      if (!liste.childElementCount) liste.append(el('div', { class: 'kiplusleer' }, 'Kein Projekt gefunden.'));
+    };
+    such.addEventListener('input', zeichne);
+    such.addEventListener('click', (e) => e.stopPropagation());
+    m.append(el('button', { type: 'button', class: 'kipluszurueck', onclick: (e) => { e.stopPropagation(); hauptliste(); } }, '← Projekt wählen'), such, liste);
+    zeichne();
+    such.focus();
+  };
+  hauptliste();
+  leiste.append(m);
+  requestAnimationFrame(() => m.classList.add('auf'));
+  const weg = (e) => { if (!m.contains(e.target)) chatPlusZu(m); };
+  m._weg = weg;
+  setTimeout(() => addEventListener('click', weg));
+}
+function chatPlusZu(m) {
+  if (m._weg) removeEventListener('click', m._weg);
+  m.classList.remove('auf');
+  setTimeout(() => m.remove(), 160);
+}
+
+function chatDateiWahl() {
+  const inp = el('input', { type: 'file', multiple: '' });
+  inp.addEventListener('change', () => chatDateienNehmen(inp.files));
+  inp.click();
+}
+// Dateien auf die Chatflaeche ziehen (einmal je Element anmelden).
+function chatDateiZiel(haupt) {
+  if (!haupt || haupt._dateiZiel) return;
+  haupt._dateiZiel = true;
+  const istDatei = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+  haupt.addEventListener('dragover', (e) => { if (!istDatei(e) || S.kiansicht) return; e.preventDefault(); haupt.classList.add('filedrag'); });
+  haupt.addEventListener('dragleave', (e) => { if (!haupt.contains(e.relatedTarget)) haupt.classList.remove('filedrag'); });
+  haupt.addEventListener('drop', (e) => {
+    haupt.classList.remove('filedrag');
+    if (!istDatei(e) || S.kiansicht) return;
+    e.preventDefault(); e.stopPropagation();
+    chatDateienNehmen(e.dataTransfer.files);
+  });
+}
+async function chatDateienNehmen(dateien) {
+  const k = S.kichat;
+  if (!k) return;
+  k.dateien = k.dateien || [];
+  let summe = k.dateien.reduce((s, d) => s + d.groesse, 0);
+  for (const f of Array.from(dateien || [])) {
+    if (summe + f.size > KI_DATEI_MAX) { uiHinweis(f.name + ' passt nicht mehr dazu – zusammen höchstens 8 MB je Nachricht.'); continue; }
+    summe += f.size;
+    k.dateien.push({ name: f.name, mime: f.type || 'application/octet-stream', groesse: f.size, base64: await dateiAlsBase64(f) });
+  }
+  if (S.kichat === k) { renderChat(); document.querySelector('#chat-root .kita')?.focus(); }
 }
 
 // Menue aus dem Agenten-Katalog (Migration 204): erst der Agent, dann das Projekt (chat-werkstatt.js).
