@@ -695,7 +695,14 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
 #dev-root{flex:1;min-height:0;overflow:auto;padding:2px 0 28px}
 /* ---- Chat: Tony per Text ---- */
-#chat-root{flex:1;min-height:0;display:flex;flex-direction:column;max-width:904px;width:100%;margin:0 auto;padding:0 22px 18px}
+#chat-root{flex:1;min-height:0;display:flex}
+#chat-root .kiseite{width:236px;flex:none;overflow-y:auto;border-right:1px solid rgba(28,28,26,.09);padding:4px 12px 18px 2px}
+#chat-root .kiseite .row{display:flex;align-items:center;min-width:0}
+#chat-root .kititel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+#chat-root .kilbl{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8A8A83;padding:16px 10px 6px}
+#chat-root .kihinweis{font-size:12.5px;color:#8A8A83;padding:4px 10px}
+#chat-root .kihaupt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding-bottom:18px}
+#chat-root .kihaupt>.kiverlauf,#chat-root .kihaupt>.kieingabe{width:100%;max-width:904px;padding-left:22px;padding-right:22px}
 #chat-root[hidden]{display:none}
 #chat-root .kiverlauf{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px 16px}
 #chat-root .kileer{font-size:13.5px;color:#75756E;padding:18px 2px}
@@ -838,7 +845,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumhh91i">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumhv1zt">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -921,7 +928,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumhh91i"></script>
-<script type="module" src="dashboard.js?v=mumhh91i"></script>
+<script src="app.js?v=mumhv1zt"></script>
+<script type="module" src="dashboard.js?v=mumhv1zt"></script>
 </body>
 </html>
