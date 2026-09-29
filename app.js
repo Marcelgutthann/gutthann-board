@@ -1371,7 +1371,7 @@ async function chatOeffnen(id) {
   chatDiktatEnde();
   const j = await chatAktion('laden', { chat_id: id }).catch((e) => ({ fehler: e.message }));
   if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
-  S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text })), denkt: false };
+  S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten })), denkt: false };
   renderChat();
 }
 function chatMenu(e, c) {
@@ -1509,7 +1509,8 @@ async function chatSenden(ta) {
     const misslungen = await liveOberflaeche(antwort.oberflaeche);
     if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
     // Die Schlussfassung gilt: sie kann nachgefasst sein, wenn der Lauf ohne Satz endete.
-    z.text = t || '(keine Antwort)';
+    z.karten = antwort.karten || [];
+    z.text = t || (z.karten.length ? '' : '(keine Antwort)');
     if (antwort.chat_id) { const neu = !k.id; k.id = antwort.chat_id; if (neu || S.kichats?.[0]?.id !== k.id) ladeChats(); }
   } catch (e) {
     k.zeilen.splice(k.zeilen.indexOf(z), 1);
@@ -1566,14 +1567,33 @@ function chatLetzte() {
 
 function chatZeile(z) {
   const blase = el('div', { class: 'kiblase' });
-  if (z.rolle === 'assistent' && z.laeuft && !z.text) {
+  // Die Markerzeile [karten: …] (live-backend, Migration 200) wird zu Kacheln; beim Streamen
+  // kommt sie Stueck fuer Stueck an und darf auch halb nicht als Text aufblitzen.
+  const text = z.rolle === 'assistent'
+    ? String(z.text || '').replace(/\[karten:[^\]]*\]/gi, '').replace(/\[(?:k(?:a(?:r(?:t(?:e(?:n(?::[^\]]*)?)?)?)?)?)?)?$/i, '').trim()
+    : z.text;
+  if (z.rolle === 'assistent' && z.laeuft && !text) {
     blase.classList.add('kidenkt');
     blase.textContent = 'Tony ' + (z.tut || 'denkt') + ' …';
   } else if (z.rolle === 'assistent') {
     blase.classList.add('md');
-    blase.innerHTML = chatMd(z.text);
-  } else blase.textContent = z.text;
-  return el('div', { class: 'kizeile ' + z.rolle }, blase);
+    blase.innerHTML = chatMd(text);
+  } else blase.textContent = text;
+  if (!z.karten?.length) return el('div', { class: 'kizeile ' + z.rolle }, blase);
+  return el('div', { class: 'kizeile ' + z.rolle }, el('div', { class: 'kiantwort' }, text ? blase : null, chatKacheln(z.karten)));
+}
+
+// Dieselben Kacheln wie auf dem Board (renderCard). Klick oeffnet die Karte; Ziehen und das
+// Spalten-Kontextmenue gehoeren aufs Board und sind hier abgeschaltet.
+function chatKacheln(karten) {
+  const raster = el('div', { class: 'kikarten' });
+  raster.addEventListener('contextmenu', (e) => { e.stopPropagation(); e.preventDefault(); }, true);
+  for (const t of karten) {
+    const c = renderCard(t);
+    c.removeAttribute('draggable');
+    raster.append(c);
+  }
+  return raster;
 }
 
 // Kleines, sicheres Markdown fuer Tonys Antworten: erst alles escapen, dann nur Absaetze,
