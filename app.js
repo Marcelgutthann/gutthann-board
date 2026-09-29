@@ -495,7 +495,7 @@ function zeigeAnsicht(welche) {
   if (devRoot) devRoot.hidden = !istDev;
   if (istDev) ladeDev();
   if (chatRoot) chatRoot.hidden = !istChat;
-  if (istChat) renderChat(); else chatDiktatEnde();
+  if (istChat) { renderChat(); ladeChats(); } else chatDiktatEnde();
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
@@ -1315,19 +1315,79 @@ function devDetail(root, a) {
 function renderChat() {
   const root = document.getElementById('chat-root');
   if (!root) return;
-  S.kichat = S.kichat || { zeilen: [], denkt: false };
+  S.kichat = S.kichat || { id: null, zeilen: [], denkt: false };
   const k = S.kichat;
   let verlauf = root.querySelector('.kiverlauf');
   if (!verlauf) {
     root.innerHTML = '';
     verlauf = el('div', { class: 'kiverlauf' });
-    root.append(verlauf, chatEingabe());
+    root.append(el('div', { class: 'kiseite' }), el('div', { class: 'kihaupt' }, verlauf, chatEingabe()));
   }
+  chatSeite();
   verlauf.innerHTML = '';
   if (!k.zeilen.length) verlauf.append(el('div', { class: 'kileer' }, 'Frag Tony nach Karten, Projekten, Terminen oder Dokumenten — oder lass ihn etwas anlegen.'));
   for (const z of k.zeilen) verlauf.append(chatZeile(z));
   chatKnopf();
   verlauf.scrollTop = verlauf.scrollHeight;
+}
+
+// Linke Spalte im Chat: neuer Chat und die eigenen Verlaeufe (Migration 198). Jeder Account
+// sieht nur seine; gespeichert wird in live-backend, das auch die Liste liefert.
+function chatSeite() {
+  const seite = document.querySelector('#chat-root .kiseite');
+  if (!seite) return;
+  const k = S.kichat;
+  seite.innerHTML = '';
+  seite.append(el('div', { class: 'row kineu', onclick: () => chatNeu() }, '+ Neuer Chat'));
+  seite.append(el('div', { class: 'kilbl' }, 'Verläufe'));
+  if (S.kichats == null) { seite.append(el('div', { class: 'kihinweis' }, 'lädt …')); return; }
+  if (!S.kichats.length) { seite.append(el('div', { class: 'kihinweis' }, 'Noch keine Chats.')); return; }
+  for (const c of S.kichats) {
+    seite.append(el('div', {
+      class: 'row' + (c.id === k.id ? ' active' : ''), title: c.titel,
+      onclick: () => chatOeffnen(c.id),
+      oncontextmenu: (e) => { e.preventDefault(); chatMenu(e, c); },
+    }, el('span', { class: 'kititel' }, c.titel)));
+  }
+}
+
+async function chatAktion(aktion, extra = {}) {
+  return liveFetch(LIVE_BACKEND, { chat_aktion: aktion, ...extra });
+}
+async function ladeChats() {
+  try { S.kichats = (await chatAktion('liste')).chats || []; }
+  catch { S.kichats = S.kichats || []; }
+  if (S.active?.typ === 'chat') chatSeite();
+}
+function chatNeu() {
+  if (S.kichat?.denkt) return;
+  chatDiktatEnde();
+  S.kichat = { id: null, zeilen: [], denkt: false };
+  renderChat();
+  document.querySelector('#chat-root .kita')?.focus();
+}
+async function chatOeffnen(id) {
+  if (S.kichat?.denkt || S.kichat?.id === id) return;
+  chatDiktatEnde();
+  const j = await chatAktion('laden', { chat_id: id }).catch((e) => ({ fehler: e.message }));
+  if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
+  S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text })), denkt: false };
+  renderChat();
+}
+function chatMenu(e, c) {
+  ctxMenu(e.clientX, e.clientY, [
+    { txt: 'Umbenennen', do: async () => {
+      const n = await uiEingabe('Neuer Name:', c.titel);
+      if (!n?.trim()) return;
+      await chatAktion('umbenennen', { chat_id: c.id, titel: n.trim() }); await ladeChats();
+    } },
+    { txt: 'Löschen', danger: true, do: async () => {
+      if (!await uiFrage('Chat „' + c.titel + '" löschen? Was Tony daraus gelernt hat, bleibt in seinem Gedächtnis.')) return;
+      await chatAktion('loeschen', { chat_id: c.id });
+      if (S.kichat?.id === c.id) chatNeu();
+      await ladeChats();
+    } },
+  ]);
 }
 
 // Eingabe nach dem Vorbild "ai-chat-input" (21st.dev, 29.09.): eine Pille, die beim
@@ -1439,7 +1499,7 @@ async function chatSenden(ta) {
   k.zeilen.push(z);
   ta.value = ''; k.denkt = true; renderChat();
   try {
-    const antwort = await chatStrom({ aufgabe: text, verlauf, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true },
+    const antwort = await chatStrom({ aufgabe: text, verlauf, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true, chat_id: k.id },
       (e) => {
         if (e.t === 'd') z.text += e.x;
         else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : 'sieht nach';
@@ -1450,6 +1510,7 @@ async function chatSenden(ta) {
     if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
     // Die Schlussfassung gilt: sie kann nachgefasst sein, wenn der Lauf ohne Satz endete.
     z.text = t || '(keine Antwort)';
+    if (antwort.chat_id) { const neu = !k.id; k.id = antwort.chat_id; if (neu || S.kichats?.[0]?.id !== k.id) ladeChats(); }
   } catch (e) {
     k.zeilen.splice(k.zeilen.indexOf(z), 1);
     k.zeilen.push({ rolle: 'fehler', text: 'Das hat nicht geklappt: ' + (e?.message || e) });
