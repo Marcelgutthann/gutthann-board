@@ -28,9 +28,15 @@ button{cursor:pointer;background:none;border:none}
 .sect .lbl{font-size:10.5px;letter-spacing:.09em;color:#8A8A83;font-weight:600;padding:0 8px 6px;text-transform:uppercase}
 .row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:#33332F;user-select:none}
 .row:hover{background:rgba(28,28,26,.05)}
-.row.active{background:#E8DFC5;font-weight:600;color:#1C1C1A}
-.row .pdot{width:10px;height:10px;border-radius:3px;flex:none}
-.row .badge{margin-left:auto;background:#E29A2E;color:#231602;font-size:10.5px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.row.active{background:rgba(28,28,26,.07);font-weight:600;color:#1C1C1A}
+.ico{display:inline-flex;width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;margin-right:.4em}
+.ico svg{width:100%;height:100%}
+.bellbtn .ico{margin:0;vertical-align:-.15em}
+.row .ico{width:17px;height:17px;margin:0;color:#75756E}
+.row.active .ico,.row:hover .ico{color:#1C1C1A}
+.row .pin .ico{width:13px;height:13px}
+.row .pdot{width:10px;height:10px;border-radius:3px;flex:none;margin:0 3.5px}
+.row .badge{margin-left:auto;background:rgba(28,28,26,.08);color:#3C3C38;font-size:10.5px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 6px}
 .row .zahl{margin-left:auto;font-size:11px;font-weight:600;color:#75756E;background:rgba(28,28,26,.07);border-radius:9px;padding:1px 7px}
 .row.active .zahl{background:rgba(28,28,26,.10)}
 .row .pin{margin-left:auto;color:#9A9A93;font-size:12px;visibility:hidden;background:none}
@@ -103,7 +109,7 @@ button{cursor:pointer;background:none;border:none}
 /* @-Vorschlag im Kommentarfeld — ohne ihn kennt niemand die Kuerzel. */
 .mention{position:fixed;z-index:70;background:#FBFBFA;border:1px solid rgba(28,28,26,.12);border-radius:10px;box-shadow:0 10px 28px rgba(28,28,26,.16);padding:4px;min-width:196px}
 .mention button{display:block;width:100%;text-align:left;padding:6px 9px;border-radius:6px;font-size:12.5px;white-space:nowrap}
-.mention button:hover,.mention button.an{background:#E8DFC5}
+.mention button:hover,.mention button.an{background:rgba(28,28,26,.07)}
 .mention button small{color:#8A8A83;margin-left:6px}
 .boardwrap{flex:1;overflow-x:auto;overflow-y:hidden;padding:12px 28px 24px;display:flex;gap:20px;align-items:flex-start}
 .col{width:392px;flex:none;display:flex;flex-direction:column;background:rgba(28,28,26,.055);border:none;border-radius:16px;max-height:100%;transition:background .16s ease,box-shadow .16s ease}
@@ -279,7 +285,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dtab:hover{color:#1C1C1A}
 .dtab.an{background:#FCFCFB;color:#1C1C1A;box-shadow:0 1px 3px rgba(28,28,26,.12)}
 .dtab .n{font-size:11px;font-weight:700;color:#8A8A83;background:#E4E4DE;border-radius:8px;padding:0 6px}
-.dtab.an .n{background:#E8DFC5;color:#3C3C38}
+.dtab.an .n{background:rgba(28,28,26,.08);color:#3C3C38}
 .vgrp{font-size:10.5px;letter-spacing:.08em;color:#8A8A83;font-weight:700;text-transform:uppercase;margin:16px 0 8px}
 .klist .vgrp:first-child{margin-top:2px}
 .vtag{flex:none;font-size:10.5px;font-weight:700;border-radius:9px;padding:2px 8px}
@@ -805,6 +811,90 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kipille.hoert .kiwelle span{animation:kiwelle .9s ease-in-out infinite}
 @keyframes kiwelle{0%,100%{height:5px}50%{height:20px}}
 @media (prefers-reduced-motion:reduce){#chat-root .kipille,#chat-root .kiic,#chat-root .kiwelle{transition:none}#chat-root .kipille.hoert .kiwelle span{animation:none;height:12px}}
+/* Agentenwerkstatt (chat-werkstatt.js, Migr. 204): Routinen, Agenten, GHIW Docs, Projekte in der Chat-Seitenleiste. */
+#chat-root .kiverlauf[hidden],#chat-root .kieingabe[hidden]{display:none}
+#chat-root .kwlauf{margin-left:auto;font-size:11px;font-weight:600;color:#4E6117;display:flex;align-items:center;gap:5px;white-space:nowrap}
+#chat-root .kwlauf::before{content:'';width:6px;height:6px;border-radius:50%;background:#4E6117}
+#chat-root .kwansicht{flex:1;min-height:0;overflow-y:auto;width:100%;max-width:980px;padding:6px 22px 48px;display:flex;flex-direction:column;gap:16px}
+#chat-root .kwkopf{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+#chat-root .kwkopftext{min-width:0}
+#chat-root .kwkopftext h2{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;margin:0;line-height:1.2;text-wrap:balance}
+#chat-root .kwkopftext p{margin:5px 0 0;font-size:13px;line-height:1.5;color:#75756E;max-width:70ch}
+#chat-root .kwkopfrechts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#chat-root .kwknopf{height:32px;padding:0 14px;border-radius:999px;border:1px solid rgba(28,28,26,.16);background:#FFFFFF;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;color:#1C1C1A}
+#chat-root .kwknopf:hover{border-color:rgba(28,28,26,.36)}
+#chat-root .kwknopf.voll{background:#1C1C1A;border-color:#1C1C1A;color:#FFFFFF}
+#chat-root .kwknopf.voll:hover{opacity:.88}
+#chat-root .kwknopf.leise{border-color:transparent;background:none;color:#55554F;font-weight:500}
+#chat-root .kwknopf.leise:hover{background:rgba(28,28,26,.05)}
+#chat-root .kwknopf:disabled{opacity:.45;cursor:default}
+#chat-root .kwfilter{display:flex;gap:6px;flex-wrap:wrap}
+#chat-root .kwf{height:28px;padding:0 12px;border-radius:999px;border:1px solid rgba(28,28,26,.12);background:#FFFFFF;font-size:12.5px;cursor:pointer;color:#33332F}
+#chat-root .kwf:hover{border-color:rgba(28,28,26,.3)}
+#chat-root .kwf.an{background:#1C1C1A;border-color:#1C1C1A;color:#FFFFFF}
+#chat-root .kwleiste{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#chat-root .kwraster{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+#chat-root .kwkarte{display:flex;flex-direction:column;gap:8px;text-align:left;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:12px;padding:14px 16px;cursor:pointer;font:inherit;color:inherit;min-width:0}
+#chat-root .kwkarte:hover{border-color:rgba(28,28,26,.28)}
+#chat-root .kwkarte.klein{max-width:380px;width:100%}
+#chat-root .kwkartekopf{display:flex;align-items:center;gap:10px;min-width:0}
+#chat-root .kwkartekopf h3{margin:0;font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
+#chat-root .kwsym{width:30px;height:30px;border-radius:8px;background:#F1F1EE;display:flex;align-items:center;justify-content:center;flex:none;color:#1C1C1A}
+#chat-root .kwsym .ico{width:16px;height:16px;margin:0;display:flex}
+#chat-root .kwsym .ico svg{width:16px;height:16px}
+#chat-root .kwkarte p{margin:0;font-size:12.5px;line-height:1.45;color:#75756E;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#chat-root .kwkartefuss{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:4px;min-height:24px}
+#chat-root .kwchips{display:flex;gap:6px;flex-wrap:wrap}
+#chat-root .kwchip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:rgba(28,28,26,.06);font-size:11.5px;font-weight:600;color:#3C3C38;white-space:nowrap}
+#chat-root .kwchip.amber{background:rgba(217,112,30,.12);color:#9A4C0E}
+#chat-root .kwchip.oliv{background:rgba(78,97,23,.10);color:#4E6117}
+#chat-root .kwchip.rot{background:rgba(201,58,46,.10);color:#A3281D}
+#chat-root .kwleise{font-size:12px;color:#75756E}
+#chat-root .kwleer{font-size:13.5px;line-height:1.5;color:#75756E;padding:14px 2px;max-width:70ch}
+#chat-root .kwzurueck{align-self:flex-start;border:0;background:none;padding:0;font-size:12.5px;color:#75756E;cursor:pointer;margin-bottom:-6px}
+#chat-root .kwzurueck:hover{color:#1C1C1A}
+#chat-root .kwblatt{background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+#chat-root .kwblatt h4{margin:0;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#75756E}
+#chat-root .kwblatt h5{margin:6px 0 0;font-size:12.5px;font-weight:600;color:#33332F}
+#chat-root .kwform{display:flex;flex-direction:column;gap:12px}
+#chat-root .kwfeldzeile{display:flex;flex-direction:column;gap:5px}
+#chat-root .kwfeldzeile label{font-size:12px;font-weight:600;color:#55554F}
+#chat-root .kwfeld{width:100%;border:1px solid rgba(28,28,26,.18);border-radius:9px;background:#FAFAF8;padding:8px 11px;font-size:13.5px;line-height:1.5;resize:vertical}
+#chat-root .kwfeld:focus{outline:0;border-color:rgba(28,28,26,.5);background:#FFFFFF}
+#chat-root .kwfeld.gross{min-height:150px}
+#chat-root .kwfeld.schmal{width:140px}
+#chat-root .kwsuchfeld{max-width:320px;flex:1;min-width:180px;background:#FFFFFF;height:32px;padding:0 12px}
+#chat-root .kwhilfe{margin:0;font-size:12px;line-height:1.45;color:#75756E}
+#chat-root .kwaktionen{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#chat-root .kwanweisung{white-space:pre-wrap;font-size:13.5px;line-height:1.55;background:#FAFAF8;border:1px solid rgba(28,28,26,.08);border-radius:9px;padding:12px 14px}
+#chat-root .kwdl{display:grid;grid-template-columns:110px 1fr;gap:8px 16px;margin:0;font-size:13px;line-height:1.45}
+#chat-root .kwdl dt{color:#75756E}
+#chat-root .kwdl dd{margin:0}
+#chat-root .kwhaken{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+#chat-root .kwhaken.eingerueckt{margin-left:26px}
+#chat-root .kwhaken input{width:15px;height:15px;accent-color:#1C1C1A;margin:0}
+#chat-root .kwhakenraster{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 16px}
+#chat-root .kwtextfeld{display:flex;gap:10px;align-items:center}
+#chat-root .kwtextfeld .kwfeld{flex:1}
+#chat-root .kwwahl{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+#chat-root .kwwahlk{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid rgba(28,28,26,.14);border-radius:10px;background:#FFFFFF;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
+#chat-root .kwwahlk b{font-size:13px;font-weight:600}
+#chat-root .kwwahlk span{font-size:12px;color:#75756E}
+#chat-root .kwwahlk.an{border-color:#1C1C1A;box-shadow:inset 0 0 0 1px #1C1C1A}
+#chat-root .kwliste{display:flex;flex-direction:column;gap:6px}
+#chat-root .kwzeile{display:flex;align-items:center;gap:12px;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:10px 12px;font:inherit;color:inherit;text-align:left;min-width:0}
+#chat-root .kwzeile.knopf{cursor:pointer;width:100%}
+#chat-root .kwzeile.knopf:hover{border-color:rgba(28,28,26,.28)}
+#chat-root .kwzeiletext{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;border:0;background:none;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+#chat-root .kwzeiletext b{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chat-root .kwzeiletext span{font-size:12px;color:#75756E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chat-root .kwmehr{border:0;background:none;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:16px;line-height:1;color:#55554F;flex:none}
+#chat-root .kwmehr:hover{background:rgba(28,28,26,.06)}
+#chat-root .kwtage{display:flex;gap:6px;flex-wrap:wrap}
+#chat-root .kwunten{margin-top:-4px}
+#chat-root .kwfassungleiste{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid rgba(28,28,26,.10);background:#FAFAF8;font-size:12.5px;color:#55554F}
+#chat-root .kidokflaeche .kwfassungleiste + .kidokframe{height:calc(100% - 50px)}
+#chat-root .kwknopf:focus-visible,#chat-root .kwf:focus-visible,#chat-root .kwkarte:focus-visible,#chat-root .kwwahlk:focus-visible,#chat-root .kwzeile:focus-visible,#chat-root .kwzeiletext:focus-visible,#chat-root .kwmehr:focus-visible{outline:2px solid #1C1C1A;outline-offset:2px}
 #dev-root[hidden]{display:none}
 #dev-root .dsec{margin-left:0;margin-right:0;max-width:900px}
 #dev-root .devta{width:100%;min-height:86px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:11px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
@@ -906,7 +996,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumll0zz">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumls3vb">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -962,7 +1052,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
     <div id="dash-root" hidden>
       <div id="shell">
         <div class="top" style="display:none">
-          <button class="menu-btn" id="menubtn" aria-label="Menü">☰</button><span class="brand">Gutthann HIW</span><span class="crumb" id="crumb"></span>
+          <button class="menu-btn" id="menubtn" aria-label="Menü"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span class="brand">Gutthann HIW</span><span class="crumb" id="crumb"></span>
           <span class="right"><button class="glossbtn" id="glossbtn" title="Glossar &amp; Legende">?</button><span class="rstatus off" id="rstatus"><span class="d"></span><span id="rstext">Runner aus</span></span><span class="user" id="useremail"></span><button class="lnk" id="logout">abmelden</button></span>
         </div>
         <div id="runbanner" class="runbanner" hidden></div>
@@ -989,8 +1079,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumll0zz"></script>
-<script src="chat-dokument.js?v=mumll0zz"></script>
-<script type="module" src="dashboard.js?v=mumll0zz"></script>
+<script src="app.js?v=mumls3vb"></script>
+<script src="chat-dokument.js?v=mumls3vb"></script>
+<script src="chat-werkstatt.js?v=mumls3vb"></script>
+<script type="module" src="dashboard.js?v=mumls3vb"></script>
 </body>
 </html>
