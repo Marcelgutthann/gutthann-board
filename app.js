@@ -1505,6 +1505,8 @@ async function chatSenden(ta) {
       (e) => {
         if (e.t === 'd') z.text += e.x;
         else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : 'sieht nach';
+        // Arbeitsweg (Migr. 205): jeder Werkzeugaufruf bleibt als Zeile stehen, auch wenn Text kommt.
+        else if (e.t === 'wx') (z.weg = z.weg || []).push({ was: chatWerkzeugWort(e.name), x: e.x || '', ok: e.ok !== false });
         chatDokStrom(e, z); // Tony schreibt ein Dokument ins rechte Feld (chat-dokument.js)
         chatLetzte();
       });
@@ -1569,6 +1571,18 @@ function chatLetzte() {
   if (unten) verlauf.scrollTop = verlauf.scrollHeight;
 }
 
+function chatWerkzeugWort(name) {
+  if (name === 'websuche') return 'sucht im Internet';
+  return String(name || 'Werkzeug').replace(/^assistant_/, '').replace(/_/g, ' ');
+}
+// Einklappbarer Arbeitsweg ueber Tonys Antwort: offen, solange er arbeitet.
+function chatWeg(z) {
+  if (!z.weg?.length) return null;
+  const d = el('details', { class: 'kiweg' }, el('summary', {}, `Arbeitsweg · ${z.weg.length} Schritt${z.weg.length === 1 ? '' : 'e'}`));
+  if (z.laeuft) d.open = true;
+  for (const w of z.weg) d.append(el('div', { class: 'kiwegz' + (w.ok ? '' : ' fehl') }, w.was + (w.x ? ': ' + w.x : '') + (w.ok ? '' : ' (fehlgeschlagen)')));
+  return d;
+}
 function chatZeile(z) {
   const blase = el('div', { class: 'kiblase' });
   // Die Markerzeile [karten: …] (live-backend, Migration 200) wird zu Kacheln; beim Streamen
@@ -1583,8 +1597,9 @@ function chatZeile(z) {
     blase.classList.add('md');
     blase.innerHTML = chatMd(text);
   } else blase.textContent = text;
-  if (!z.karten?.length) return el('div', { class: 'kizeile ' + z.rolle }, blase);
-  return el('div', { class: 'kizeile ' + z.rolle }, el('div', { class: 'kiantwort' }, text ? blase : null, chatKacheln(z.karten)));
+  const weg = z.rolle === 'assistent' ? chatWeg(z) : null;
+  if (!z.karten?.length) return el('div', { class: 'kizeile ' + z.rolle }, weg ? el('div', { class: 'kiantwort' }, weg, blase) : blase);
+  return el('div', { class: 'kizeile ' + z.rolle }, el('div', { class: 'kiantwort' }, weg, text ? blase : null, chatKacheln(z.karten)));
 }
 
 // Dieselben Kacheln wie auf dem Board (renderCard). Klick oeffnet die Karte; Ziehen und das
@@ -1696,15 +1711,28 @@ function renderTopbar() {
   // Agenten-Taskbar (Loop D): was die Flotte JETZT tut — klickbar zur Karte.
   const laufend = (S.laeufe || []).filter((l) => l.status === 'running').slice(0, 3);
   const wartend = (S.laeufe || []).filter((l) => l.status === 'queued').length;
-  if (laufend.length || wartend) {
+  // Kein stilles Ende (Migr. 205): gescheiterte Laeufe der letzten 2 h stehen mit Grund in der Leiste.
+  const gescheitert = (S.laeufe || []).filter((l) => l.status === 'failed').slice(0, 2);
+  if (laufend.length || wartend || gescheitert.length) {
     const tb2 = el('div', { class: 'taskbar' });
-    for (const l of laufend) tb2.append(el('button', {
-      class: 'tchip', title: (l.titel || l.agent) + (l.projekt ? ' · ' + l.projekt : ''),
-      onclick: () => { if (l.todo_id) openCard(l.todo_id); },
-    }, el('span', { class: 'tdot' }),
-      (l.projekt ? l.projekt.replace(/^\d+\s*-?\s*/, '').slice(0, 16) + ': ' : '') + (l.titel || l.agent).slice(0, 34),
-      l.seit_min != null ? el('small', {}, ' ' + l.seit_min + ' min') : ''));
+    for (const l of laufend) {
+      // Lebenszeichen: still_s = Sekunden seit dem letzten Puls (null = alter Runner, unbekannt).
+      const zustand = l.still_s == null ? '' : l.still_s >= 180 ? ' haengt' : '';
+      const plan = l.plan_gesamt ? ` ${l.plan_fertig}/${l.plan_gesamt}` : '';
+      tb2.append(el('button', {
+        class: 'tchip' + zustand,
+        title: (l.titel || l.agent) + (l.projekt ? ' · ' + l.projekt : '') + (l.jetzt ? '\nGerade: ' + l.jetzt : '')
+          + (zustand ? '\nKein Lebenszeichen seit ' + Math.floor(l.still_s / 60) + ' min' : ''),
+        onclick: () => { if (l.todo_id) openCard(l.todo_id); },
+      }, el('span', { class: 'tdot' }),
+        (l.projekt ? l.projekt.replace(/^\d+\s*-?\s*/, '').slice(0, 16) + ': ' : '') + (l.jetzt || l.titel || l.agent).slice(0, 28),
+        el('small', {}, (zustand ? ' hängt? ' : ' ') + (l.seit_min != null ? l.seit_min + ' min' : '') + plan)));
+    }
     if (wartend) tb2.append(el('span', { class: 'tchip warte' }, '+' + wartend + ' wartend'));
+    for (const l of gescheitert) tb2.append(el('button', {
+      class: 'tchip gescheitert', title: 'Gescheitert: ' + (l.grund || 'ohne Grund') + '\n' + (l.titel || l.agent),
+      onclick: () => { if (l.todo_id) openCard(l.todo_id); },
+    }, el('span', { class: 'tdot' }), 'gescheitert: ' + (l.projekt ? l.projekt.replace(/^\d+\s*-?\s*/, '').slice(0, 14) + ' · ' : '') + (l.titel || l.agent).slice(0, 26)));
     tb.append(tb2);
   }
   // "Gerade in Arbeit" (Loop D): wer im Projekt woran dran ist — nur Karten-Daten.
@@ -3264,6 +3292,11 @@ async function openCard(id) {
 const ARBEITSWEG_ZEILEN = 6;
 const ART_WORT = { denkt: 'denkt', sagt: 'Zwischenstand', leser: 'Leser', werkzeug: '', fertig: '' };
 function mmss(s) { return Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0'); }
+function stilleSek(d) {
+  const l = d && d.agent_lauf;
+  if (!l || !l.zuletzt || l.fertig || d.agent_status !== 'laeuft') return 0;
+  return Math.max(0, Math.round((Date.now() - new Date(l.zuletzt).getTime()) / 1000));
+}
 function arbeitsweg(d) {
   const l = d && d.agent_lauf;
   if (!l || !Array.isArray(l.schritte) || !l.schritte.length) return '';
@@ -3283,6 +3316,19 @@ function arbeitsweg(d) {
   if (l.turns) kopf.push(`${l.turns} Züge`);
   const zeigen = laeuft ? l.schritte.slice(-ARBEITSWEG_ZEILEN) : l.schritte.slice(-ARBEITSWEG_ZEILEN);
   const box = el('div', { class: 'arbeitsweg' }, el('div', { class: 'awkopf' }, kopf.join(' · ')));
+  // Lebenszeichen (Migr. 205): Zeit seit der letzten Zeile. „still" ist nur ein Hinweis -- bleibt der
+  // Puls des Laufs 10 min aus, bricht der Runner ab und die Karte kippt auf fehlgeschlagen.
+  const ruhe = stilleSek(d);
+  if (ruhe >= 60) box.append(el('div', { class: 'awstill' + (ruhe >= 300 ? ' lang' : '') },
+    `still seit ${mmss(ruhe)} – keine neue Zeile` + (ruhe >= 300 ? ', ungewöhnlich lang' : '')));
+  // Arbeitsliste (TodoWrite des Agenten): wo er steht und was noch kommt.
+  if (Array.isArray(l.plan) && l.plan.length) {
+    const fertigN = l.plan.filter((p) => p.s === 'completed').length;
+    const pl = el('div', { class: 'awplan' }, el('div', { class: 'awkopf' }, `Arbeitsliste ${fertigN} von ${l.plan.length}`));
+    for (const p of l.plan) pl.append(el('div', { class: 'awp ' + (p.s || 'pending') },
+      el('span', { class: 'awhaken' }, p.s === 'completed' ? '✓' : p.s === 'in_progress' ? '▸' : '○'), el('span', {}, p.t)));
+    box.append(pl);
+  }
   for (const s of zeigen) {
     const wort = ART_WORT[s.a] || '';
     box.append(el('div', { class: 'awzeile' },
@@ -3301,7 +3347,9 @@ function arbeitsweg(d) {
 // Chat-Gefuehl. Neu gezeichnet wird nur, wenn sich wirklich etwas geaendert hat.
 function kartenFinger(d) {
   const w = d?.agent_lauf?.schritte || [];
+  const still = stilleSek(d);
   return [d?.agent_status || '', d?.agent_fortschritt || '', w.length, w.at(-1)?.t || '', d?.agent_lauf?.fertig ? 'f' : '',
+    (d?.agent_lauf?.plan || []).map((p) => p.s).join(','), still >= 60 ? Math.floor(still / 15) : 0,
     (d?.anhaenge || []).length, (d?.kommentare || []).at(-1)?.text?.length || 0].join('|');
 }
 function chatTakt(id) {
@@ -4740,6 +4788,14 @@ async function start() {
       if (S.ansicht === 'kal' && S.active?.typ === 'projekt') await renderKalender();
     } catch {}
   }, 60000);
+  // Agentenleiste (Migr. 205): solange ein Lauf aktiv ist, alle 15 s nur die Leiste nachziehen --
+  // auch bei offener Karte (renderTopbar fasst Drawer und Eingaben nicht an).
+  clearInterval(S.leistePoll);
+  S.leistePoll = setInterval(async () => {
+    if (!(S.laeufe || []).some((l) => l.status === 'running' || l.status === 'queued')) return;
+    if (document.getElementById('topbar')?.contains(document.activeElement)) return;
+    try { S.laeufe = (await lotse('agent_laeufe')).laeufe || []; renderTopbar(); } catch {}
+  }, 15000);
 }
 document.getElementById('li-btn').addEventListener('click', doLogin);
 document.getElementById('li-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
