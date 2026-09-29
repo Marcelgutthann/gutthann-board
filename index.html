@@ -695,7 +695,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
 #dev-root{flex:1;min-height:0;overflow:auto;padding:2px 0 28px}
 /* ---- Chat: Tony per Text ---- */
-#chat-root{flex:1;min-height:0;display:flex;flex-direction:column;max-width:904px;width:100%;padding:0 22px 18px}
+#chat-root{flex:1;min-height:0;display:flex;flex-direction:column;max-width:904px;width:100%;margin:0 auto;padding:0 22px 18px}
 #chat-root[hidden]{display:none}
 #chat-root .kiverlauf{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px 16px}
 #chat-root .kileer{font-size:13.5px;color:#75756E;padding:18px 2px}
@@ -703,7 +703,22 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kizeile.nutzer{justify-content:flex-end}
 #chat-root .kiblase{max-width:72ch;font-size:13.5px;line-height:1.55;white-space:pre-wrap;padding:10px 13px;border-radius:10px;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);color:#1C1C1A}
 #chat-root .nutzer .kiblase{background:#1C1C1A;border-color:#1C1C1A;color:#FFFFFF}
-#chat-root .fehler .kiblase{background:#FBF3E2;border-color:rgba(138,86,6,.22);color:#8A5606;font-size:12.5px}
+#chat-root .fehler .kiblase{background:none;border:0;padding:2px 4px;color:#8A8A83;font-size:12px}
+#chat-root .kiblase.md{white-space:normal}
+#chat-root .md p{margin:0 0 8px}
+#chat-root .md>:last-child{margin-bottom:0}
+#chat-root .md h4{font-size:13.5px;font-weight:600;margin:12px 0 4px;color:#1C1C1A}
+#chat-root .md h4:first-child{margin-top:0}
+#chat-root .md ul,#chat-root .md ol{margin:0 0 8px;padding-left:20px}
+#chat-root .md li{margin:3px 0}
+#chat-root .md code{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:#F1F1EE;border-radius:4px;padding:1px 4px}
+#chat-root .md pre{background:#F1F1EE;border-radius:8px;padding:10px 12px;overflow-x:auto;margin:0 0 8px}
+#chat-root .md pre code{background:none;padding:0}
+#chat-root .md a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+#chat-root .kitab{overflow-x:auto;margin:2px 0 10px}
+#chat-root .md table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+#chat-root .md th{text-align:left;font-weight:600;color:#55554F;border-bottom:1px solid rgba(28,28,26,.16);padding:5px 10px 5px 0}
+#chat-root .md td{border-bottom:1px solid rgba(28,28,26,.07);padding:5px 10px 5px 0;vertical-align:top}
 #chat-root .kidenkt{color:#75756E}
 #chat-root .kieingabe{padding-top:10px}
 #chat-root .kipille{position:relative;width:100%;height:48px;border:1px solid rgba(28,28,26,.14);border-radius:24px;background:#FFFFFF;box-shadow:0 1px 2px rgba(28,28,26,.05);cursor:text;transition:height .4s cubic-bezier(.175,.885,.32,1.275),border-color .2s,box-shadow .2s}
@@ -823,7 +838,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumgjx2f">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumhh91i">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -906,7 +921,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumgjx2f"></script>
-<script type="module" src="dashboard.js?v=mumgjx2f"></script>
+<script src="app.js?v=mumhh91i"></script>
+<script type="module" src="dashboard.js?v=mumhh91i"></script>
 </body>
 </html>
