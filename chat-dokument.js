@@ -1,13 +1,10 @@
 // ---------- Chat: Agent losschicken, Dokument rechts (Migration 201, 29.09.) ----------
-// Aus dem Board-Chat laesst sich ein Agent losschicken (LPH 2-8). Sobald der Chat ein Dokument
+// Aus dem Board-Chat laesst sich ein Agent losschicken (Katalog, Migration 204). Sobald der Chat ein Dokument
 // hat, rueckt er nach links und das Dokument steht rechts. Der Chat bleibt ein Gespraech mit Tony;
 // sagt man ausdruecklich, dass sich das Dokument aendern soll, gibt Tony das an einen Claude-Agenten
 // auf dem Buero-PC weiter (Runner 'dokument-aendern'); rechts laedt die neue Fassung.
 // Eigene Datei neben app.js, damit parallele Arbeit am Chat nicht in dieselben Zeilen faehrt.
 // Einhaengen in app.js: renderChat -> chatDokRender(), chatOeffnen/chatNeu -> chatDokLaden().
-
-const KIDOK_LPH = [[2, 'Vorplanung'], [3, 'Entwurfsplanung'], [4, 'Genehmigungsplanung'], [5, 'Ausführungsplanung'],
-  [6, 'Vorbereitung der Vergabe'], [7, 'Mitwirkung bei der Vergabe'], [8, 'Objektüberwachung']];
 
 // Wird am Ende jedes renderChat gerufen: Agent-Leiste ueber der Eingabe, Zweiteilung, Dokument.
 function chatDokRender() {
@@ -131,6 +128,7 @@ function chatDokPanel(panel, d) {
         onclick: () => window.open(URL.createObjectURL(new Blob([d.html], { type: 'text/html' }))) }, 'Öffnen')] : []),
     ...(d.anhang_pfad ? [el('button', { class: 'kichip', type: 'button', title: 'In neuem Fenster öffnen',
       onclick: () => oeffneAnhaenge([{ pfad: d.anhang_pfad, name: d.name || 'Dokument.html' }]) }, 'Öffnen')] : []),
+    ...kiFassungKnopf(d, panel), // fruehere Fassungen (chat-werkstatt.js, Migration 204)
     el('button', { class: 'kichip', type: 'button', title: 'Dokument ausblenden', onclick: () => { S.kichat.dokZu = true; renderChat(); } }, '×'));
 
   const flaeche = panel.querySelector('.kidokflaeche');
@@ -193,31 +191,11 @@ function chatDokPanel(panel, d) {
   flaeche.classList.toggle('arbeitet', arbeitet);
 }
 
-// Menue: erst die Leistungsphase, dann das Projekt (wie die Projektwahl an der Karte).
+// Menue aus dem Agenten-Katalog (Migration 204): erst der Agent, dann das Projekt (chat-werkstatt.js).
 function chatAgentWahl(e) {
   e.stopPropagation();
-  const k = S.kichat;
-  if (k.denkt) return uiHinweis('Warte kurz, bis die Antwort da ist.');
-  const r = e.currentTarget.getBoundingClientRect();
-  ctxMenu(r.left, r.top - 8, [{ note: 'Bericht schreiben lassen' }, ...KIDOK_LPH.map(([n, name]) => ({
-    txt: 'LPH ' + n + ' · ' + name,
-    do: () => setTimeout(() => ctxMenu(r.left, r.top - 8, [{ note: 'LPH ' + n + ' für welches Projekt?' },
-      ...[...(S.projects || [])].sort((a, b) => String(a.name).localeCompare(String(b.name), 'de'))
-        .map((p) => ({ txt: p.name, do: () => chatAgentStarten(n, p) }))])),
-  }))]);
-}
-
-async function chatAgentStarten(lph, p) {
-  const k = S.kichat;
-  const j = await chatAktion('dok_starten', { chat_id: k.id, projekt: p.id, lph }).catch((e) => ({ fehler: e.message }));
-  if (j.chat_id && !k.id) k.id = j.chat_id;
-  if (j.fehler || j.error) { uiHinweis(j.fehler || j.error); return; }
-  k.zeilen.push({ rolle: 'assistent', text: 'Agent LPH ' + lph + ' für ' + p.name + ' ist losgeschickt. Das Dokument erscheint rechts, sobald er fertig ist.' });
-  k.dok = { id: j.dok_id, titel: j.titel, status: 'arbeitet', version: 0, lauf_status: 'queued' };
-  k.dokZu = false;
-  renderChat();
-  ladeChats();
-  chatDokTakt(k);
+  if (S.kichat.denkt) return uiHinweis('Warte kurz, bis die Antwort da ist.');
+  kiAgentMenue(e.currentTarget.getBoundingClientRect());
 }
 
 // Tony schreibt selbst ein Dokument (Werkzeug dokument_zeigen, Migration 203). Aus dem Stream:
@@ -258,9 +236,13 @@ function chatDokEnde(antwort) {
 async function chatDokLaden() {
   const k = S.kichat;
   if (!k?.id) { chatDokRender(); return; }
-  const j = await chatAktion('dok_stand', { chat_id: k.id }).catch(() => ({}));
+  // Aus GHIW Docs angeklickt: genau dieses Dokument, nicht das neueste des Chats (Migration 206).
+  if (S.kiDokWahl) { k.dokWahl = S.kiDokWahl; S.kiDokWahl = null; }
+  const j = await chatAktion('dok_stand', { chat_id: k.id, ...(k.dokWahl ? { dok_id: k.dokWahl } : {}) }).catch(() => ({}));
   if (S.kichat !== k) return;
   k.dok = j.dok || null;
+  // Nichts zu zeigen (Agent mit Antwort im Chat, Migration 204): Feld rechts bleibt zu.
+  if (k.dok && !k.dok.html && !k.dok.anhang_pfad && k.dok.status !== 'arbeitet') k.dokZu = true;
   if (k.dok?.status === 'arbeitet') chatDokTakt(k); // Tony bleibt ansprechbar, waehrend der Agent arbeitet
   renderChat();
 }
@@ -271,7 +253,7 @@ function chatDokTakt(k) {
   const bis = Date.now() + 40 * 60000;
   k.dokTakt = setInterval(async () => {
     if (S.kichat !== k || Date.now() > bis) { clearInterval(k.dokTakt); k.dokTakt = null; return; }
-    const j = await chatAktion('dok_stand', { chat_id: k.id }).catch(() => null);
+    const j = await chatAktion('dok_stand', { chat_id: k.id, ...(k.dokWahl ? { dok_id: k.dokWahl } : {}) }).catch(() => null);
     if (!j?.dok || S.kichat !== k) return;
     const vorher = k.dok;
     k.dok = j.dok;
@@ -279,6 +261,7 @@ function chatDokTakt(k) {
       clearInterval(k.dokTakt); k.dokTakt = null;
       if (k.dokZeile) { k.dokZeile.text = j.dok.antwort || 'Fertig.'; k.dokZeile.laeuft = false; k.dokZeile = null; }
       else if (j.dok.antwort && vorher?.status === 'arbeitet') k.zeilen.push({ rolle: 'assistent', text: j.dok.antwort });
+      kiLadeAgenten(); // „läuft" in der Seitenleiste nachziehen (chat-werkstatt.js)
     }
     if (S.active?.typ === 'chat') renderChat();
   }, 4000);
