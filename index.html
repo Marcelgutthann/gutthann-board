@@ -705,10 +705,23 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .nutzer .kiblase{background:#1C1C1A;border-color:#1C1C1A;color:#FFFFFF}
 #chat-root .fehler .kiblase{background:#FBF3E2;border-color:rgba(138,86,6,.22);color:#8A5606;font-size:12.5px}
 #chat-root .kidenkt{color:#75756E}
-#chat-root .kieingabe{display:flex;gap:10px;align-items:flex-end;border-top:1px solid rgba(28,28,26,.09);padding-top:12px}
-#chat-root .kita{flex:1;min-height:44px;max-height:200px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:10px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
-#chat-root .kisend{font:inherit;font-size:13px;font-weight:600;padding:10px 16px;border-radius:9px;border:0;background:#1C1C1A;color:#fff;cursor:pointer}
-#chat-root .kisend:disabled{opacity:.45;cursor:default}
+#chat-root .kieingabe{padding-top:10px}
+#chat-root .kipille{position:relative;width:100%;height:48px;border:1px solid rgba(28,28,26,.14);border-radius:24px;background:#FFFFFF;box-shadow:0 1px 2px rgba(28,28,26,.05);cursor:text;transition:height .4s cubic-bezier(.175,.885,.32,1.275),border-color .2s,box-shadow .2s}
+#chat-root .kipille:focus-within{border-color:rgba(28,28,26,.30);box-shadow:0 0 0 3px rgba(28,28,26,.05)}
+#chat-root .kita{position:absolute;top:0;left:0;right:0;width:100%;resize:none;border:0;outline:0;background:transparent;font:inherit;font-size:13.5px;line-height:22px;padding:13px 56px 13px 18px;color:#1C1C1A;overflow-y:hidden;transition:height .15s ease-out}
+#chat-root .kita::placeholder{color:#8A8A83;font-weight:500}
+#chat-root .kiknopf{position:absolute;right:8px;bottom:7px;width:32px;height:32px;border-radius:999px;border:0;background:#1C1C1A;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .2s,transform .2s cubic-bezier(.175,.885,.32,1.275)}
+#chat-root .kiknopf:hover{opacity:.88}
+#chat-root .kiknopf:active{transform:scale(.92)}
+#chat-root .kiknopf:disabled{opacity:.3;cursor:default;transform:none}
+#chat-root .kiic{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.5) rotate(45deg);filter:blur(1px);transition:all .3s cubic-bezier(.175,.885,.32,1.275)}
+#chat-root .kiknopf[data-modus=pfeil] .pfeil,#chat-root .kiknopf[data-modus=mic] .mic,#chat-root .kiknopf[data-modus=stop] .stop{opacity:1;transform:none;filter:none}
+#chat-root .kiwelle{position:absolute;right:48px;bottom:7px;height:32px;display:flex;align-items:center;gap:3px;opacity:0;transform:translateX(12px);pointer-events:none;transition:all .4s cubic-bezier(.175,.885,.32,1.275)}
+#chat-root .kipille.hoert .kiwelle{opacity:1;transform:none}
+#chat-root .kiwelle span{width:4px;height:6px;border-radius:2px;background:#1C1C1A}
+#chat-root .kipille.hoert .kiwelle span{animation:kiwelle .9s ease-in-out infinite}
+@keyframes kiwelle{0%,100%{height:5px}50%{height:20px}}
+@media (prefers-reduced-motion:reduce){#chat-root .kipille,#chat-root .kiic,#chat-root .kiwelle{transition:none}#chat-root .kipille.hoert .kiwelle span{animation:none;height:12px}}
 #dev-root[hidden]{display:none}
 #dev-root .dsec{margin-left:0;margin-right:0;max-width:900px}
 #dev-root .devta{width:100%;min-height:86px;resize:vertical;font:inherit;font-size:13.5px;line-height:1.5;padding:11px 13px;border:1px solid rgba(28,28,26,.16);border-radius:9px;background:#FBFBF9;color:#1C1C1A}
@@ -810,7 +823,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumgazwg">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumgjkf2">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -893,7 +906,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumgazwg"></script>
-<script type="module" src="dashboard.js?v=mumgazwg"></script>
+<script src="app.js?v=mumgjkf2"></script>
+<script type="module" src="dashboard.js?v=mumgjkf2"></script>
 </body>
 </html>
