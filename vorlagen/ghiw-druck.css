@@ -1,0 +1,157 @@
+/* GHIW-Druckstandard: EIN Druckbild fuer jedes PDF aus der GHIW-Anwendung.
+   Einbinden:  <link rel="stylesheet" href="https://marcelgutthann.github.io/gutthann-board/vorlagen/ghiw-druck.css">
+   Aufbau:     body > .blatt > header.kopf, h1.titel, p.meta, main (Inhalt), footer.fuss
+   Anleitung:  vorlagen/druck/anleitung.html  (Dokumentarten, Bausteine, Regeln)
+   Regeln:     Design "datum" (Ink, Linien #E8E8E6, Space Grotesk / Hanken Grotesk), Akzent oliv #4E6117,
+               Seitenzahl erst ab Seite 2, Tabellenkopf wiederholt sich, keine farbigen Randbalken. */
+
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap");
+
+:root {
+  --ink: #1C1C1A;
+  --text-2: #4A4A46;
+  --grau: #75756E;
+  --grau-hell: #8A8A83;
+  --linie: #E8E8E6;
+  --linie-stark: #D9D9D5;
+  --flaeche: #F4F4F2;
+  --kopfzeile: #F1F1EE;
+  --oliv: #4E6117;
+  --oliv-hell: #E4EBD2;
+  --rot: #A8321F;
+  --rot-hell: #F6E4E0;
+  --ocker: #8A5A10;
+  --ocker-hell: #F5EBD6;
+}
+
+/* ---------- Seite ---------- */
+@page {
+  size: A4 portrait;
+  margin: 18mm 16mm 20mm;
+  @bottom-left  { content: "Gutthann HIW Architekten GmbH"; font: 7.5pt "Hanken Grotesk", sans-serif; color: #8A8A83; }
+  @bottom-right { content: counter(page) " / " counter(pages); font: 7.5pt "Hanken Grotesk", sans-serif; color: #8A8A83; }
+}
+@page :first { @bottom-right { content: none; } }
+@page quer { size: A4 landscape; margin: 14mm 16mm 18mm; }
+.quer { page: quer; }
+@media screen { .blatt.quer { max-width: 297mm; padding: 14mm 16mm 18mm; } }
+
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html { background: var(--flaeche); }
+body { margin: 0; font-family: "Hanken Grotesk", "Segoe UI", Verdana, sans-serif; font-size: 10pt; line-height: 1.5; color: var(--ink); }
+
+/* Bildschirm: weisses Blatt auf grauer Flaeche. Druck: nur der Inhalt. */
+.blatt { max-width: 210mm; margin: 24px auto 40px; background: #FFFFFF; padding: 18mm 16mm 20mm; border: 1px solid var(--linie); }
+@media print {
+  html { background: none; }
+  .blatt { max-width: none; margin: 0; padding: 0; border: 0; }
+  .nur-bildschirm { display: none !important; }
+}
+@media screen and (max-width: 760px) {
+  .blatt { margin: 0 0 24px; padding: 24px 20px 32px; border-left: 0; border-right: 0; }
+  main { overflow-x: auto; }
+}
+
+/* ---------- Kopf ---------- */
+.kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 5mm; border-bottom: 1px solid var(--ink); margin-bottom: 8mm; }
+.kopf img { width: 24mm; height: auto; display: block; }
+.kopf .absender { font-size: 7.5pt; line-height: 1.5; color: var(--grau); text-align: right; }
+.kopf .absender strong { color: var(--ink); font-weight: 600; }
+
+.dachzeile { font-size: 7.5pt; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--grau); margin: 0 0 2mm; }
+h1.titel { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 20pt; line-height: 1.15; letter-spacing: -.015em; margin: 0 0 2mm; }
+.meta { display: flex; flex-wrap: wrap; gap: 0 6mm; font-size: 8.5pt; color: var(--text-2); margin: 0 0 8mm; }
+.meta b { font-weight: 600; color: var(--ink); }
+
+/* ---------- Text ---------- */
+main h2 { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 13pt; line-height: 1.25; margin: 8mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 1px solid var(--linie); break-after: avoid; }
+main h3 { font-family: "Space Grotesk", sans-serif; font-weight: 500; font-size: 10.5pt; margin: 5mm 0 2mm; break-after: avoid; }
+main p { margin: 0 0 2.5mm; orphans: 3; widows: 3; }
+main ul, main ol { margin: 0 0 3mm; padding-left: 5mm; }
+main li { margin: 1mm 0; }
+main a { color: var(--oliv); text-decoration: underline; text-underline-offset: 2px; }
+.klein { font-size: 8pt; color: var(--grau); }
+.seitenumbruch { break-before: page; }
+.zusammen { break-inside: avoid; }
+
+/* ---------- Kernaussage (oben auf Seite 1) ---------- */
+.kernaussage { background: var(--ink); color: #FFFFFF; padding: 4mm 5mm; font-size: 10.5pt; font-weight: 500; line-height: 1.45; margin: 0 0 6mm; break-inside: avoid; }
+
+/* ---------- Kennzahlen ---------- */
+.kennzahlen { display: grid; grid-template-columns: repeat(auto-fit, minmax(38mm, 1fr)); gap: 3mm; margin: 0 0 6mm; break-inside: avoid; }
+.kennzahl { border: 1px solid var(--linie); padding: 3mm 4mm; }
+.kennzahl .wert { font-family: "Space Grotesk", sans-serif; font-weight: 600; font-size: 15pt; line-height: 1.1; }
+.kennzahl .name { font-size: 7.5pt; color: var(--grau); margin-top: 1mm; }
+
+/* ---------- Tabellen ---------- */
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 5mm; font-size: 8.5pt; }
+thead { display: table-header-group; }
+th { text-align: left; font-weight: 600; background: var(--kopfzeile); padding: 2mm 2.5mm; border-bottom: 1px solid var(--linie-stark); }
+td { padding: 2mm 2.5mm; border-bottom: 1px solid var(--linie); vertical-align: top; }
+tr { break-inside: avoid; }
+td.zahl, th.zahl { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.gruppe td { background: var(--flaeche); font-weight: 600; font-size: 8pt; letter-spacing: .02em; }
+tr.summe td { font-weight: 700; border-top: 1px solid var(--ink); border-bottom: 0; }
+
+/* ---------- Kennzeichen (Status) ---------- */
+.marke { display: inline-block; font-size: 7.5pt; font-weight: 600; padding: .3mm 1.8mm; border-radius: 2px; background: var(--kopfzeile); color: var(--text-2); white-space: nowrap; }
+.marke.gut { background: var(--oliv-hell); color: var(--oliv); }
+.marke.achtung { background: var(--ocker-hell); color: var(--ocker); }
+.marke.kritisch { background: var(--rot-hell); color: var(--rot); }
+
+/* ---------- Hinweis-Kasten (ganz umrandet, kein Randbalken) ---------- */
+.hinweis { border: 1px solid var(--linie-stark); background: var(--flaeche); padding: 3mm 4mm; margin: 0 0 5mm; break-inside: avoid; }
+.hinweis .hinweis-titel { font-weight: 600; margin-bottom: 1mm; }
+.hinweis.kritisch { background: var(--rot-hell); border-color: #E6C3BB; }
+
+/* ---------- Kopffelder (Pflichtangaben als Raster) ---------- */
+.felder { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5mm 6mm; margin: 0 0 7mm; padding: 3mm 0; border-top: 1px solid var(--linie); border-bottom: 1px solid var(--linie); break-inside: avoid; }
+.felder div { font-size: 8.5pt; line-height: 1.35; }
+.felder span { display: block; font-size: 7pt; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--grau); }
+main h2 .nr { display: inline-block; min-width: 7mm; color: var(--grau); font-weight: 500; }
+
+/* ---------- Ergebniszeile mit Ampel (10-px-Quadrat, sonst keine Farbe) ---------- */
+.ergebnis { font-size: 11pt; font-weight: 600; margin: 0 0 2mm; }
+.ampel { display: inline-block; width: 10px; height: 10px; margin-right: 2.5mm; vertical-align: .05em; background: var(--grau); }
+.ampel.traegt { background: var(--oliv); }
+.ampel.teilweise { background: #B7862A; }
+.ampel.nicht { background: var(--rot); }
+
+/* ---------- Sicherheitsgrad jeder Aussage (nur Schriftfarbe) ---------- */
+.grad { font-size: 7pt; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: var(--ink); }
+.grad.markt { color: var(--oliv); }
+.grad.annahme { color: var(--ocker); }
+.grad.offen { color: var(--grau); }
+.rechenweg { display: block; font-size: 7.5pt; color: var(--grau); margin-top: .8mm; }
+.warn { color: var(--rot); font-weight: 600; }
+
+/* ---------- Balkengrafik (Vergleich weniger Groessen), grau = Normalfall ---------- */
+.balken { margin: 2mm 0 5mm; break-inside: avoid; }
+.balken h4 { font-size: 8.5pt; font-weight: 600; margin: 0 0 2mm; }
+.balken .zeile { display: grid; grid-template-columns: 42mm 1fr 26mm; align-items: center; gap: 3mm; font-size: 8pt; margin: 1.2mm 0; }
+.balken .spur { height: 3.2mm; background: transparent; }
+.balken .spur i { display: block; height: 100%; background: #B9B9B3; }
+.balken .spur i.marke { background: var(--oliv); }
+.balken .spur i.warn { background: var(--rot); }
+.balken .zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.balken .einheit { font-size: 7.5pt; color: var(--grau); margin-top: 1.5mm; }
+
+/* ---------- Variante Gutachten (Pruefvermerk, Stellungnahme): keine Flaechen, Tabellenkopf grau in Versalien ---------- */
+.gutachten th { background: none; font-size: 7pt; letter-spacing: .06em; text-transform: uppercase; color: var(--grau); border-bottom-color: var(--ink); }
+.gutachten tr.gruppe td { background: none; }
+
+/* Platzhalter in Vorlagen: werden beim Erzeugen ersetzt */
+.ph { color: var(--grau-hell); }
+
+/* ---------- Bilder ---------- */
+figure { margin: 0 0 5mm; break-inside: avoid; }
+figure img { width: 100%; height: auto; display: block; border: 1px solid var(--linie); }
+figcaption { font-size: 7.5pt; color: var(--grau); margin-top: 1.5mm; }
+.bildraster { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+
+/* ---------- Unterschrift / Freigabe ---------- */
+.unterschriften { display: grid; grid-template-columns: 1fr 1fr; gap: 12mm; margin-top: 14mm; break-inside: avoid; }
+.unterschriften div { border-top: 1px solid var(--ink); padding-top: 1.5mm; font-size: 8pt; color: var(--grau); }
+
+/* ---------- Fuss am Dokumentende ---------- */
+.fuss { margin-top: 10mm; padding-top: 3mm; border-top: 1px solid var(--linie); font-size: 7.5pt; color: var(--grau-hell); display: flex; justify-content: space-between; gap: 6mm; }
