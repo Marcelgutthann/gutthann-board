@@ -1412,7 +1412,8 @@ async function chatOeffnen(id) {
   chatDiktatEnde();
   const j = await chatAktion('laden', { chat_id: id }).catch((e) => ({ fehler: e.message }));
   if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
-  S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten })), denkt: false };
+  S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten })), denkt: false,
+    projekt: kiChatProjekt(j.id) }; // Chat im Projekt (chat-werkstatt.js, Migration 207)
   renderChat();
   chatDokLaden();
 }
@@ -1535,13 +1536,17 @@ async function chatSenden(ta) {
   if (!text || k.denkt) return;
   chatDiktatEnde();
   const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
-  k.zeilen.push({ rolle: 'nutzer', text });
+  // Angehaengte Dateien (Plus ueber der Eingabe, chat-dokument.js) gehen mit dieser einen Nachricht mit.
+  const dateien = k.dateien || [];
+  k.dateien = [];
+  k.zeilen.push({ rolle: 'nutzer', text: text + (dateien.length ? '\n\n[Dateien: ' + dateien.map((d) => d.name).join(', ') + ']' : '') });
   // Die Antwort waechst in dieser Zeile, waehrend Tony schreibt (live-backend streamt im Chat).
   const z = { rolle: 'assistent', text: '', laeuft: true, tut: '' };
   k.zeilen.push(z);
   ta.value = ''; k.denkt = true; renderChat();
   try {
-    const antwort = await chatStrom({ aufgabe: text, verlauf, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true, chat_id: k.id },
+    const antwort = await chatStrom({ aufgabe: text, verlauf, projekt: k.projekt?.name || liveProjekt(), projekt_id: k.projekt?.id,
+      ...(dateien.length ? { dateien: dateien.map((d) => ({ name: d.name, mime: d.mime, base64: d.base64 })) } : {}), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true, chat_id: k.id },
       (e) => {
         if (e.t === 'd') z.text += e.x;
         else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : 'sieht nach';
