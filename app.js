@@ -1325,11 +1325,7 @@ function renderChat() {
   }
   verlauf.innerHTML = '';
   if (!k.zeilen.length) verlauf.append(el('div', { class: 'kileer' }, 'Frag Tony nach Karten, Projekten, Terminen oder Dokumenten — oder lass ihn etwas anlegen.'));
-  for (const z of k.zeilen) {
-    verlauf.append(el('div', { class: 'kizeile ' + z.rolle },
-      el('div', { class: 'kiblase' }, z.text)));
-  }
-  if (k.denkt) verlauf.append(el('div', { class: 'kizeile assistent' }, el('div', { class: 'kiblase kidenkt' }, 'Tony denkt …')));
+  for (const z of k.zeilen) verlauf.append(chatZeile(z));
   chatKnopf();
   verlauf.scrollTop = verlauf.scrollHeight;
 }
@@ -1438,20 +1434,129 @@ async function chatSenden(ta) {
   chatDiktatEnde();
   const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
   k.zeilen.push({ rolle: 'nutzer', text });
+  // Die Antwort waechst in dieser Zeile, waehrend Tony schreibt (live-backend streamt im Chat).
+  const z = { rolle: 'assistent', text: '', laeuft: true, tut: '' };
+  k.zeilen.push(z);
   ta.value = ''; k.denkt = true; renderChat();
   try {
-    const antwort = await liveFetch(LIVE_BACKEND, { aufgabe: text, verlauf, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm() });
+    const antwort = await chatStrom({ aufgabe: text, verlauf, projekt: liveProjekt(), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true },
+      (e) => {
+        if (e.t === 'd') z.text += e.x;
+        else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : 'sieht nach';
+        chatLetzte();
+      });
     let t = antwort.text || '';
     const misslungen = await liveOberflaeche(antwort.oberflaeche);
-    if (misslungen.length) t = (t ? t + ' ' : '') + misslungen.join(' ');
-    k.zeilen.push({ rolle: 'assistent', text: t || '(keine Antwort)' });
-    for (const pr of antwort.probleme || []) k.zeilen.push({ rolle: 'fehler', text: 'Werkzeug ' + pr.werkzeug + ': ' + pr.meldung });
+    if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
+    // Die Schlussfassung gilt: sie kann nachgefasst sein, wenn der Lauf ohne Satz endete.
+    z.text = t || '(keine Antwort)';
   } catch (e) {
-    k.zeilen.push({ rolle: 'fehler', text: 'Fehler: ' + (e?.message || e) });
+    k.zeilen.splice(k.zeilen.indexOf(z), 1);
+    k.zeilen.push({ rolle: 'fehler', text: 'Das hat nicht geklappt: ' + (e?.message || e) });
   } finally {
-    k.denkt = false;
+    z.laeuft = false; k.denkt = false;
     if (S.active?.typ === 'chat') renderChat();
   }
+}
+
+// Liest die NDJSON-Zeilen von live-backend: {t:'d'} Textstueck, {t:'w'} Werkzeug,
+// {t:'ende'} die fertige Antwort. Antwortet der Dienst mit einfachem JSON (alter Stand
+// oder Fehler vor dem Start), wird das wie bisher gelesen.
+async function chatStrom(body, beiEreignis, retried = false) {
+  const r = await fetch(LIVE_BACKEND, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
+    body: JSON.stringify(body) });
+  if (r.status === 401 && !retried && await authRefresh()) return chatStrom(body, beiEreignis, true);
+  if (!(r.headers.get('content-type') || '').includes('ndjson')) {
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+    return j;
+  }
+  const leser = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  let puffer = '', ende = null;
+  for (;;) {
+    const { value, done } = await leser.read();
+    if (done) break;
+    puffer += value;
+    let i;
+    while ((i = puffer.indexOf('\n')) >= 0) {
+      const zeile = puffer.slice(0, i).trim(); puffer = puffer.slice(i + 1);
+      if (!zeile) continue;
+      const e = JSON.parse(zeile);
+      if (e.t === 'ende') ende = e;
+      else if (e.t === 'fehler') throw new Error(e.error || 'Fehler im Dienst');
+      else beiEreignis(e);
+    }
+  }
+  if (!ende) throw new Error('Verbindung abgebrochen');
+  return ende;
+}
+
+// Nur die letzte Blase neu zeichnen -- beim Streamen kommen hunderte Stuecke.
+function chatLetzte() {
+  const verlauf = document.querySelector('#chat-root .kiverlauf');
+  const letzte = verlauf?.lastElementChild;
+  const z = S.kichat?.zeilen[S.kichat.zeilen.length - 1];
+  if (!letzte || !z) return;
+  const unten = verlauf.scrollHeight - verlauf.scrollTop - verlauf.clientHeight < 60;
+  letzte.replaceWith(chatZeile(z));
+  if (unten) verlauf.scrollTop = verlauf.scrollHeight;
+}
+
+function chatZeile(z) {
+  const blase = el('div', { class: 'kiblase' });
+  if (z.rolle === 'assistent' && z.laeuft && !z.text) {
+    blase.classList.add('kidenkt');
+    blase.textContent = 'Tony ' + (z.tut || 'denkt') + ' …';
+  } else if (z.rolle === 'assistent') {
+    blase.classList.add('md');
+    blase.innerHTML = chatMd(z.text);
+  } else blase.textContent = z.text;
+  return el('div', { class: 'kizeile ' + z.rolle }, blase);
+}
+
+// Kleines, sicheres Markdown fuer Tonys Antworten: erst alles escapen, dann nur Absaetze,
+// ### Ueberschriften, Listen, Tabellen, Codeblock, **fett**, *kursiv*, `code` und
+// Links mit http(s). Kein fremdes HTML kommt durch.
+function chatMd(roh) {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const inl = (s) => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const zellen = (s) => s.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+  const zeilen = String(roh || '').replace(/\r/g, '').split('\n');
+  const aus = [];
+  const UL = /^\s*[-*•]\s+/, OL = /^\s*\d+[.)]\s+/, H = /^\s*#{1,6}\s+/, TREN = /^\s*\|?\s*:?-{2,}/;
+  for (let i = 0; i < zeilen.length;) {
+    const l = zeilen[i];
+    if (!l.trim()) { i++; continue; }
+    if (/^\s*```/.test(l)) {
+      const code = []; i++;
+      while (i < zeilen.length && !/^\s*```/.test(zeilen[i])) code.push(zeilen[i++]);
+      i++; aus.push('<pre><code>' + esc(code.join('\n')) + '</code></pre>'); continue;
+    }
+    if (H.test(l)) { aus.push('<h4>' + inl(l.replace(H, '')) + '</h4>'); i++; continue; }
+    if (l.trim().startsWith('|') && TREN.test(zeilen[i + 1] || '')) {
+      const kopf = zellen(l); i += 2;
+      const rumpf = [];
+      while (i < zeilen.length && zeilen[i].trim().startsWith('|')) rumpf.push(zellen(zeilen[i++]));
+      aus.push('<div class="kitab"><table><thead><tr>' + kopf.map((c) => '<th>' + inl(c) + '</th>').join('') + '</tr></thead><tbody>' +
+        rumpf.map((r) => '<tr>' + r.map((c) => '<td>' + inl(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
+      continue;
+    }
+    if (UL.test(l) || OL.test(l)) {
+      const re = UL.test(l) ? UL : OL, tag = re === UL ? 'ul' : 'ol', punkte = [];
+      while (i < zeilen.length && re.test(zeilen[i])) punkte.push('<li>' + inl(zeilen[i++].replace(re, '')) + '</li>');
+      aus.push('<' + tag + '>' + punkte.join('') + '</' + tag + '>'); continue;
+    }
+    const absatz = [];
+    while (i < zeilen.length && zeilen[i].trim() && !H.test(zeilen[i]) && !UL.test(zeilen[i]) && !OL.test(zeilen[i])
+      && !/^\s*```/.test(zeilen[i]) && !(zeilen[i].trim().startsWith('|') && TREN.test(zeilen[i + 1] || ''))) absatz.push(inl(zeilen[i++]));
+    aus.push('<p>' + absatz.join('<br>') + '</p>');
+  }
+  return aus.join('');
 }
 
 // ---------- Topbar + Board ----------
