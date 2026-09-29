@@ -1506,8 +1506,10 @@ async function chatSenden(ta) {
       (e) => {
         if (e.t === 'd') z.text += e.x;
         else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : 'sieht nach';
+        chatDokStrom(e, z); // Tony schreibt ein Dokument ins rechte Feld (chat-dokument.js)
         chatLetzte();
       });
+    chatDokEnde(antwort);
     let t = antwort.text || '';
     const misslungen = await liveOberflaeche(antwort.oberflaeche);
     if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
