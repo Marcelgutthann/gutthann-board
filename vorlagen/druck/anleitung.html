@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<title>GHIW-Druckstandard – Anleitung</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../ghiw-druck.css">
+<style>code { font-family: Consolas, "Courier New", monospace; font-size: 8pt; background: var(--kopfzeile); padding: 0 1mm; }</style>
+</head>
+<body>
+<div class="blatt">
+  <header class="kopf">
+    <img src="../ghiw-logo.png" alt="Gutthann HIW Architekten">
+    <div class="absender"><strong>Gutthann HIW Architekten GmbH</strong><br>Stand 29.09.2026</div>
+  </header>
+
+  <p class="dachzeile">Druckstandard · gilt für jedes PDF aus der GHIW-Anwendung</p>
+  <h1 class="titel">So sieht ein Dokument aus Gutthann HIW aus</h1>
+
+  <main>
+    <div class="kernaussage">Jedes Dokument bindet dieselbe Druckvorlage ein und beginnt mit einer der Vorlagen unten. Eigenes Layout, eigene Farben und eigene Schriften gibt es nicht.</div>
+
+    <h2>1. Einbinden</h2>
+    <p>Eine Zeile im Kopf der Seite genügt:</p>
+    <p><code>&lt;link rel="stylesheet" href="https://marcelgutthann.github.io/gutthann-board/vorlagen/ghiw-druck.css"&gt;</code></p>
+    <p>Das Logo liegt unter <code>…/gutthann-board/vorlagen/ghiw-logo.png</code>. Aus der Seite wird ein PDF über den Druck im Browser („Als PDF speichern“) oder auf dem Server per headless Edge/Chromium mit <code>--print-to-pdf --no-pdf-header-footer</code>.</p>
+
+    <h2>2. Welche Vorlage für welches Dokument</h2>
+    <table>
+      <thead><tr><th>Dokument</th><th>Vorlage</th><th>Wann</th></tr></thead>
+      <tbody>
+        <tr><td>Nachtragsprüfung</td><td><a href="nachtrag-pruefvermerk.html">nachtrag-pruefvermerk.html</a></td><td>Prüfvermerk zu einem Nachtragsangebot. Kapitel 1–9 fest, Inhalt nach <code>nachtragspruefung/STANDARD.md</code>.</td></tr>
+        <tr><td>Stellungnahme, Gutachten</td><td>wie Nachtragsprüfung</td><td>Alles, was eine Bewertung mit Belegen ist und an den Bauherrn geht.</td></tr>
+        <tr><td>Besprechungsprotokoll</td><td><a href="protokoll.html">protokoll.html</a></td><td>Jour fixe, Planer- und Baubesprechung.</td></tr>
+        <tr><td>Aktennotiz</td><td><a href="aktennotiz.html">aktennotiz.html</a></td><td>Telefonat, Ortstermin, Gespräch – eine Seite.</td></tr>
+        <tr><td>Bericht, Auswertung</td><td><a href="bericht.html">bericht.html</a></td><td>Projektbericht, Kosten- oder Planstandsvergleich, Entscheidungsvorlage, GHIW Documents.</td></tr>
+        <tr><td>Liste</td><td><a href="liste-quer.html">liste-quer.html</a></td><td>Beteiligte, Mängel, Pläne, Termine – alles mit mehr als fünf Spalten, A4 quer.</td></tr>
+        <tr><td>Brief an Dritte</td><td>nicht hier</td><td>Antwortschreiben laufen über den Hausbriefkopf als Word-Datei.</td></tr>
+      </tbody>
+    </table>
+    <p>Alle Bausteine auf einen Blick zeigt <a href="bausteine.html">bausteine.html</a>.</p>
+
+    <h2>3. Aufbau jeder Seite</h2>
+    <ol>
+      <li><b>Kopf</b> (<code>header.kopf</code>): Logo links, Büroname und Datum oder Dokumentnummer rechts, darunter eine Linie.</li>
+      <li><b>Dachzeile</b> (<code>.dachzeile</code>): Dokumentart · Projektnummer Projekt.</li>
+      <li><b>Titel</b> (<code>h1.titel</code>): sagt, worum es geht, nicht wie das Dokument heißt.</li>
+      <li><b>Pflichtangaben</b> als Raster (<code>.felder</code>) oder als Zeile (<code>.meta</code>).</li>
+      <li><b>Inhalt</b> (<code>main</code>): Abschnitte mit <code>h2</code>, bei festen Kapiteln mit <code>&lt;span class="nr"&gt;</code>.</li>
+      <li><b>Fuß</b> (<code>footer.fuss</code>): Gutthann HIW · Projekt · Dokumentart, rechts „Stand“.</li>
+    </ol>
+    <p>Seitenzahl und Büroname unten druckt die Vorlage selbst: die Seitenzahl erst ab Seite 2.</p>
+
+    <h2>4. Zwei Tonlagen</h2>
+    <table>
+      <thead><tr><th>Variante</th><th>Klasse</th><th>Für</th><th>Was sich ändert</th></tr></thead>
+      <tbody>
+        <tr><td>Standard</td><td><code>.blatt</code></td><td>Bericht, Protokoll, Liste</td><td>Kernaussage-Band, Kennzahlen-Kästen, Hinweis-Kästen, graue Tabellenköpfe</td></tr>
+        <tr><td>Gutachten</td><td><code>.blatt.gutachten</code></td><td>Prüfvermerk, Stellungnahme, Aktennotiz</td><td>keine Flächen, Tabellenkopf in grauen Versalien; Farbe nur als Ampel, Balken, Label</td></tr>
+      </tbody>
+    </table>
+
+    <h2>5. Bausteine</h2>
+    <table>
+      <thead><tr><th>Klasse</th><th>Wofür</th></tr></thead>
+      <tbody>
+        <tr><td><code>.kernaussage</code></td><td>Die Antwort in ein bis zwei Sätzen, oben auf Seite 1. Höchstens einmal.</td></tr>
+        <tr><td><code>.kennzahlen &gt; .kennzahl</code></td><td>Drei bis vier Zahlen, die man zuerst wissen muss.</td></tr>
+        <tr><td><code>.ergebnis + .ampel</code></td><td>Ergebniszeile mit 10-px-Quadrat: <code>traegt</code>, <code>teilweise</code>, <code>nicht</code>, ohne Zusatz = unklar.</td></tr>
+        <tr><td><code>.grad</code></td><td>Sicherheitsgrad jeder Aussage: <span class="grad belegt">belegt</span> <span class="grad gerechnet">gerechnet</span> <span class="grad markt">markt</span> <span class="grad annahme">annahme</span> <span class="grad offen">offen</span>. Dazu <code>.rechenweg</code>.</td></tr>
+        <tr><td><code>.balken</code></td><td>Vergleich weniger Größen. Grau ist normal, <code>.marke</code> oliv für eigene Werte, <code>.warn</code> rot für den Ausreißer.</td></tr>
+        <tr><td><code>.marke</code></td><td>Status in Tabellen: <span class="marke gut">gut</span> <span class="marke achtung">achtung</span> <span class="marke kritisch">kritisch</span> <span class="marke">neutral</span></td></tr>
+        <tr><td><code>.hinweis</code></td><td>Annahmen, Einschränkungen; <code>.hinweis.kritisch</code> für Risiken.</td></tr>
+        <tr><td><code>td.zahl</code>, <code>tr.gruppe</code>, <code>tr.summe</code></td><td>Zahlen rechtsbündig, Gruppenzeile, Summenzeile.</td></tr>
+        <tr><td><code>.unterschriften</code></td><td>Zwei Unterschriftslinien.</td></tr>
+        <tr><td><code>.seitenumbruch</code>, <code>.zusammen</code>, <code>.quer</code></td><td>Neue Seite erzwingen, Block nicht trennen, Querformat.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>6. Was nie vorkommt</h2>
+    <ul>
+      <li>Farbige Balken am linken Rand, Emojis, Verläufe, Schatten.</li>
+      <li>Andere Schriften als Space Grotesk (Überschriften) und Hanken Grotesk (Text).</li>
+      <li>Andere Farben als Tinte, Grau, Oliv – dazu Rot und Ocker nur für Ausreißer.</li>
+      <li>Eigenes CSS im Dokument, außer für Spaltenbreiten.</li>
+      <li>Leere Abschnitte: Wenn nichts gefunden wurde, steht dort, wonach wann gesucht wurde.</li>
+    </ul>
+
+    <h2>7. Prüfen vor dem Versand</h2>
+    <p>Jedes neue Dokument einmal als echtes PDF drucken und ansehen: Kopf auf Seite 1, Tabellenkopf wiederholt sich auf Folgeseiten, Seitenzahl ab Seite 2, keine Platzhalter in eckigen Klammern mehr.</p>
+  </main>
+
+  <footer class="fuss"><span>Gutthann HIW · Druckstandard · Anleitung</span><span>Stand 29.09.2026</span></footer>
+</div>
+</body></html>
