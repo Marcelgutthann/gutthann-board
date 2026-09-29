@@ -27,7 +27,6 @@ function chatDokRender() {
     if (!leiste) { leiste = el('div', { class: 'kiagenten' }); eing.prepend(leiste); }
     leiste.innerHTML = '';
     leiste.append(el('button', { class: 'kichip', type: 'button', onclick: (e) => chatAgentWahl(e) }, '+ Agent losschicken'));
-    if (d && k.dokZu) leiste.append(el('button', { class: 'kichip', type: 'button', onclick: () => { k.dokZu = false; renderChat(); } }, 'Dokument zeigen'));
     // Tonys eigene Dokumente aendert Tony selbst; nur Agenten-Dokumente brauchen die Weiche.
     if (zeigen && d && d.agent !== 'tony') {
       leiste.append(el('span', { class: 'kiziel' }, k.anTony ? 'Nachricht geht an Tony' : 'Nachricht ändert das Dokument'),
@@ -44,6 +43,20 @@ function chatDokRender() {
   if (!panel) { panel = el('div', { class: 'kidok' }); root.append(panel); }
   chatTeiler(root, haupt, panel);
   chatDokPanel(panel, d);
+}
+
+// Knopf oben links im Chat: Board-Navigation und Chatverlaeufe zusammen ein-/ausklappen.
+// Gilt nur im Chat; renderTopbar setzt die Klasse bei jedem Ansichtswechsel neu.
+function chatSeiteZu() {
+  try { return localStorage.getItem('kichat.seitezu') === '1'; } catch (_) { return false; }
+}
+function chatSeitenKnopf() {
+  return el('button', { class: 'seitenbtn', type: 'button', title: 'Seitenleiste ein-/ausblenden',
+    onclick: () => {
+      const zu = !chatSeiteZu();
+      try { localStorage.setItem('kichat.seitezu', zu ? '1' : '0'); } catch (_) {}
+      document.getElementById('app')?.classList.toggle('seitezu', zu);
+    } }, el('span', { class: 'seitenicon' }));
 }
 
 // Knopf oben rechts in der Kopfleiste: Chat und Dokument nebeneinander an/aus.
