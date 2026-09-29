@@ -16,8 +16,10 @@ function chatDokRender() {
   const k = S.kichat;
   if (!root || !k) return;
   const d = k.dok;
-  const zeigen = !!d && !k.dokZu;
+  // Ohne Dokument laesst sich die Zweiteilung ueber den Knopf oben rechts trotzdem oeffnen.
+  const zeigen = d ? !k.dokZu : !!k.zweiOffen;
   root.classList.toggle('mitdok', zeigen);
+  document.querySelector('.splitbtn')?.classList.toggle('on', zeigen);
 
   const eing = root.querySelector('.kieingabe');
   if (eing) {
@@ -27,22 +29,83 @@ function chatDokRender() {
     leiste.append(el('button', { class: 'kichip', type: 'button', onclick: (e) => chatAgentWahl(e) }, '+ Agent losschicken'));
     if (d && k.dokZu) leiste.append(el('button', { class: 'kichip', type: 'button', onclick: () => { k.dokZu = false; renderChat(); } }, 'Dokument zeigen'));
     // Tonys eigene Dokumente aendert Tony selbst; nur Agenten-Dokumente brauchen die Weiche.
-    if (zeigen && d.agent !== 'tony') {
+    if (zeigen && d && d.agent !== 'tony') {
       leiste.append(el('span', { class: 'kiziel' }, k.anTony ? 'Nachricht geht an Tony' : 'Nachricht ändert das Dokument'),
         el('button', { class: 'kichip leise', type: 'button', onclick: () => { k.anTony = !k.anTony; renderChat(); } },
           k.anTony ? 'ans Dokument' : 'lieber Tony fragen'));
     }
     const ta = eing.querySelector('.kita');
-    if (ta) ta.placeholder = zeigen && (d.agent === 'tony' || !k.anTony) ? 'Was soll im Dokument anders werden?' : 'Frag Tony …';
+    if (ta) ta.placeholder = zeigen && d && (d.agent === 'tony' || !k.anTony) ? 'Was soll im Dokument anders werden?' : 'Frag Tony …';
   }
 
   let panel = root.querySelector('.kidok');
-  if (!zeigen) { panel?.remove(); return; }
+  const haupt = root.querySelector('.kihaupt');
+  if (!zeigen) { panel?.remove(); root.querySelector('.kiteiler')?.remove(); if (haupt) haupt.style.flexBasis = ''; return; }
   if (!panel) { panel = el('div', { class: 'kidok' }); root.append(panel); }
+  chatTeiler(root, haupt, panel);
   chatDokPanel(panel, d);
 }
 
+// Knopf oben rechts in der Kopfleiste: Chat und Dokument nebeneinander an/aus.
+function chatDokKnopf() {
+  const k = S.kichat;
+  const an = !!k && (k.dok ? !k.dokZu : !!k.zweiOffen);
+  return el('button', { class: 'splitbtn' + (an ? ' on' : ''), type: 'button', title: 'Zwei Fenster: Chat und Dokument nebeneinander',
+    onclick: () => {
+      const k = S.kichat;
+      if (!k) return;
+      if (k.dok) k.dokZu = !k.dokZu; else k.zweiOffen = !k.zweiOffen;
+      renderChat();
+    } }, el('span', { class: 'spliticon' }));
+}
+
+// Senkrechter Trenner zwischen Chat und Dokument: ziehen aendert die Chatbreite, Doppelklick
+// setzt sie zurueck. Die Breite bleibt im Browser gespeichert.
+function chatTeiler(root, haupt, panel) {
+  if (!haupt) return;
+  let t = root.querySelector('.kiteiler');
+  if (!t) {
+    t = el('div', { class: 'kiteiler', title: 'Ziehen: Breite ändern · Doppelklick: zurücksetzen' });
+    t.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      t.setPointerCapture(e.pointerId);
+      root.classList.add('ziehen');
+      const links = haupt.getBoundingClientRect().left;
+      const zug = (ev) => { haupt.style.flexBasis = chatBreite(root, ev.clientX - links) + 'px'; };
+      const los = () => {
+        t.removeEventListener('pointermove', zug);
+        root.classList.remove('ziehen');
+        try { localStorage.setItem('kichat.breite', String(parseInt(haupt.style.flexBasis, 10))); } catch (_) {}
+      };
+      t.addEventListener('pointermove', zug);
+      t.addEventListener('pointerup', los, { once: true });
+      t.addEventListener('pointercancel', los, { once: true });
+    });
+    t.addEventListener('dblclick', () => {
+      haupt.style.flexBasis = '';
+      try { localStorage.removeItem('kichat.breite'); } catch (_) {}
+    });
+  }
+  if (t.nextSibling !== panel) root.insertBefore(t, panel);
+  let w = 0;
+  try { w = parseInt(localStorage.getItem('kichat.breite'), 10) || 0; } catch (_) {}
+  if (w && !root.classList.contains('ziehen')) haupt.style.flexBasis = chatBreite(root, w) + 'px';
+}
+function chatBreite(root, w) {
+  return Math.round(Math.max(300, Math.min(w, root.clientWidth - 360)));
+}
+
 function chatDokPanel(panel, d) {
+  if (!d) {
+    // Zweiteilung ohne Dokument: leeres Blatt mit Hinweis, wie eins entsteht.
+    panel.innerHTML = '';
+    panel.append(
+      el('div', { class: 'kidokkopf' }, el('div', { class: 'kidoktitel' }, 'Dokument'),
+        el('button', { class: 'kichip', type: 'button', title: 'Zweite Ansicht schließen', onclick: () => { S.kichat.zweiOffen = false; renderChat(); } }, '×')),
+      el('div', { class: 'kidokflaeche', 'data-pfad': 'leer' }, el('div', { class: 'kidokwarte' },
+        'Noch kein Dokument. Schick unten einen Agenten los oder bitte Tony, eins zu schreiben.')));
+    return;
+  }
   const arbeitet = d.status === 'arbeitet';
   let kopf = panel.querySelector('.kidokkopf');
   if (!kopf) {
