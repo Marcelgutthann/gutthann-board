@@ -100,6 +100,28 @@ function chatBreite(root, w) {
   return Math.round(Math.max(300, Math.min(w, root.clientWidth - 360)));
 }
 
+// Arbeitsliste des Agenten (Migr. 205): bleibt nach dem Ende stehen, bis man sie mit × ausblendet.
+// Gemerkt je Dokument und Lauf im Browser -- der naechste Lauf bringt wieder seine eigene Liste.
+function chatDokListeSchluessel(d) { return 'awzu:' + d.id + ':' + ((d.lauf_weg && d.lauf_weg.start) || ''); }
+function chatDokListeZu(d) { try { return localStorage.getItem(chatDokListeSchluessel(d)) === '1'; } catch { return false; } }
+function chatDokListe(panel, flaeche, d, arbeitet) {
+  panel.querySelector('.kidokliste')?.remove();
+  const plan = Array.isArray(d.lauf_weg?.plan) ? d.lauf_weg.plan : [];
+  // Ohne Dokument zeigt das Wartefeld die Liste selbst -- hier nur, wenn ein Dokument dasteht.
+  if (!plan.length || chatDokListeZu(d) || !(d.html || d.anhang_pfad)) return;
+  const fertig = plan.filter((p) => p.s === 'completed').length;
+  const box = el('div', { class: 'kidokliste' },
+    el('div', { class: 'kidoklistekopf' },
+      el('span', {}, `Arbeitsliste ${fertig} von ${plan.length}` + (arbeitet ? '' : ' · fertig')),
+      el('button', { class: 'kichip', type: 'button', title: 'Arbeitsliste ausblenden', onclick: () => {
+        try { localStorage.setItem(chatDokListeSchluessel(d), '1'); } catch { /* ohne Speicher nur fuer jetzt */ }
+        box.remove();
+      } }, '×')),
+    ...plan.map((p) => el('div', { class: 'awp ' + (p.s || 'pending') },
+      (p.s === 'completed' ? '✓ ' : p.s === 'in_progress' ? '▸ ' : '○ ') + p.t)));
+  panel.insertBefore(box, flaeche);
+}
+
 function chatDokPanel(panel, d) {
   if (!d) {
     // Zweiteilung ohne Dokument: leeres Blatt mit Hinweis, wie eins entsteht.
@@ -139,6 +161,7 @@ function chatDokPanel(panel, d) {
     el('button', { class: 'kichip', type: 'button', title: 'Dokument ausblenden', onclick: () => { S.kichat.dokZu = true; renderChat(); } }, '×'));
 
   const flaeche = panel.querySelector('.kidokflaeche');
+  chatDokListe(panel, flaeche, d, arbeitet);
   if (d.html) {
     // Tonys Seite liegt direkt im Datensatz (Migration 203). Neu laden nur, wenn sich der Inhalt
     // aendert -- nicht schon, weil die Fassungsnummer aus der Datenbank nachkommt.
@@ -163,7 +186,7 @@ function chatDokPanel(panel, d) {
     // Arbeitsweg (Migr. 205): hat der Lauf einen (SDK-Agent), Arbeitsliste + letzte Schritte statt Rohlog;
     // sonst (claude -p, schreibt erst am Ende) bleibt das Protokoll. Darueber immer das Lebenszeichen.
     const w = d.lauf_weg || {};
-    const plan = Array.isArray(w.plan) ? w.plan : [];
+    const plan = Array.isArray(w.plan) && !chatDokListeZu(d) ? w.plan : [];
     const schritte = Array.isArray(w.schritte) ? w.schritte.slice(-6) : [];
     const puls = !arbeitet || d.still_s == null ? ''
       : el('div', { class: 'kidokpuls' + (d.still_s >= 180 ? ' haengt' : '') }, d.still_s >= 180
