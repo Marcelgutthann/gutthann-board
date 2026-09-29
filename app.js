@@ -1329,6 +1329,7 @@ function renderChat() {
   for (const z of k.zeilen) verlauf.append(chatZeile(z));
   chatKnopf();
   verlauf.scrollTop = verlauf.scrollHeight;
+  chatDokRender(); // Agent-Leiste und Dokument rechts (chat-dokument.js)
 }
 
 // Linke Spalte im Chat: neuer Chat und die eigenen Verlaeufe (Migration 198). Jeder Account
@@ -1373,6 +1374,7 @@ async function chatOeffnen(id) {
   if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
   S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten })), denkt: false };
   renderChat();
+  chatDokLaden();
 }
 function chatMenu(e, c) {
   ctxMenu(e.clientX, e.clientY, [
@@ -1490,6 +1492,7 @@ function chatDiktatEnde() {
 async function chatSenden(ta) {
   const k = S.kichat;
   const text = ta.value.trim();
+  if (chatDokSenden(ta)) return; // Dokument offen: Nachricht geht an den Dokument-Agenten
   if (!text || k.denkt) return;
   chatDiktatEnde();
   const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
