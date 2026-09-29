@@ -704,6 +704,25 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kihaupt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding-bottom:18px}
 #chat-root .kihaupt>.kiverlauf,#chat-root .kihaupt>.kieingabe{width:100%;max-width:904px;padding-left:22px;padding-right:22px}
 #chat-root[hidden]{display:none}
+/* Chat mit Dokument (chat-dokument.js, Migr. 201): Chat links, Dokument rechts als weisses Blatt. */
+#chat-root.mitdok .kiseite{display:none}
+#chat-root.mitdok .kihaupt{flex:0 0 min(40%,520px);border-right:1px solid rgba(28,28,26,.09)}
+#chat-root .kidok{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 18px 18px}
+#chat-root .kidokkopf{display:flex;align-items:center;gap:8px;padding:6px 0 10px;min-width:0}
+#chat-root .kidoktitel{font-size:14px;font-weight:600;color:#1C1C1A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+#chat-root .kidokzustand{font-size:12px;color:#8A8A83;white-space:nowrap}
+#chat-root .kidokzustand.laeuft{color:#4E6117}
+#chat-root .kidokflaeche{flex:1;min-height:0;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;overflow:hidden;position:relative}
+#chat-root .kidokflaeche.arbeitet::after{content:'Agent arbeitet am Dokument …';position:absolute;top:10px;right:12px;font-size:12px;background:#1C1C1A;color:#FFFFFF;padding:5px 10px;border-radius:999px}
+#chat-root .kidokframe{width:100%;height:100%;border:0;display:block}
+#chat-root .kidokwarte{padding:22px 24px;font-size:13.5px;color:#1C1C1A}
+#chat-root .kidokwartetitel{margin-bottom:12px}
+#chat-root .kidokprot{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:#75756E;white-space:pre-wrap;margin:0;max-height:60vh;overflow:auto}
+#chat-root .kiagenten{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+#chat-root .kichip{height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(28,28,26,.14);background:#FFFFFF;color:#1C1C1A;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+#chat-root .kichip:hover{border-color:rgba(28,28,26,.35)}
+#chat-root .kichip.leise{border-color:transparent;background:none;color:#75756E}
+#chat-root .kiziel{font-size:12px;color:#8A8A83}
 #chat-root .kiverlauf{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px 16px}
 #chat-root .kileer{font-size:13.5px;color:#75756E;padding:18px 2px}
 #chat-root .kizeile{display:flex}
@@ -847,7 +866,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mumi93tp">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mumijpbb">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -930,7 +949,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mumi93tp"></script>
-<script type="module" src="dashboard.js?v=mumi93tp"></script>
+<script src="app.js?v=mumijpbb"></script>
+<script src="chat-dokument.js?v=mumijpbb"></script>
+<script type="module" src="dashboard.js?v=mumijpbb"></script>
 </body>
 </html>
