@@ -155,11 +155,24 @@ function chatDokPanel(panel, d) {
     flaeche.dataset.pfad = '';
     flaeche.innerHTML = '';
     const zeilen = String(d.protokoll || '').split('\n').map((z) => z.trim()).filter(Boolean).slice(-10);
+    // Arbeitsweg (Migr. 205): hat der Lauf einen (SDK-Agent), Arbeitsliste + letzte Schritte statt Rohlog;
+    // sonst (claude -p, schreibt erst am Ende) bleibt das Protokoll. Darueber immer das Lebenszeichen.
+    const w = d.lauf_weg || {};
+    const plan = Array.isArray(w.plan) ? w.plan : [];
+    const schritte = Array.isArray(w.schritte) ? w.schritte.slice(-6) : [];
+    const puls = !arbeitet || d.still_s == null ? ''
+      : el('div', { class: 'kidokpuls' + (d.still_s >= 180 ? ' haengt' : '') }, d.still_s >= 180
+        ? `Kein Lebenszeichen seit ${Math.floor(d.still_s / 60)} min – nach 10 min wird der Lauf abgebrochen.`
+        : `lebt · letzte Rückmeldung vor ${d.still_s} Sek.` + (w.jetzt ? ` · ${w.jetzt}` : ''));
     flaeche.append(el('div', { class: 'kidokwarte' },
       el('div', { class: 'kidokwartetitel' }, arbeitet
         ? d.agent === 'tony' ? 'Tony schreibt das Dokument …' : (d.lauf_status === 'queued' ? 'Wartet auf den Büro-PC …' : 'Der Agent schreibt den Bericht. Das dauert einige Minuten.')
         : (d.antwort || 'Kein Dokument entstanden.')),
-      zeilen.length ? el('pre', { class: 'kidokprot' }, zeilen.join('\n')) : ''));
+      puls,
+      plan.length ? el('div', { class: 'kidokplan' }, ...plan.map((p) => el('div', { class: 'awp ' + (p.s || 'pending') },
+        (p.s === 'completed' ? '✓ ' : p.s === 'in_progress' ? '▸ ' : '○ ') + p.t))) : '',
+      schritte.length ? el('pre', { class: 'kidokprot' }, schritte.map((x) => mmss(x.s || 0) + '  ' + x.t).join('\n'))
+        : zeilen.length ? el('pre', { class: 'kidokprot' }, zeilen.join('\n')) : ''));
     return;
   }
   if (flaeche.dataset.pfad !== d.anhang_pfad) {
