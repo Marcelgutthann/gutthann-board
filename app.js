@@ -15,6 +15,8 @@ const CHIPS = {
   fehlgeschlagen: { txt: 'Fehlgeschlagen', bg: '#F4E0DC', fg: '#B4432E', dot: '#B4432E', anim: false },
   // Migration 195: Karte hat ein Agent ohne Auftrag uebernommen und fertig abgelegt.
   selbst: { txt: 'Selbst erledigt', bg: '#EEF1E4', fg: '#4E6117', dot: '#4E6117', anim: false },
+  // Migration 211: ein Agent verfolgt die Karte und schreibt sie mit jedem neuen Dokument fort.
+  beobachtet: { txt: 'Beobachtet', bg: '#EEF1E4', fg: '#4E6117', dot: '#4E6117', anim: false },
 };
 
 // Tags (Migration 155): freie Etiketten an der Karte — auf dem VgV-Board vor allem
@@ -805,6 +807,7 @@ function radarAuswahlDialog() {
 // Strich-Icons (Lucide-Formen, 24er Raster) statt Unicode-Zeichen -- einheitliche
 // Strichstaerke, Farbe kommt ueber currentColor aus der Zeile.
 const ICO = {
+  auge: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
   dev: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
   chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
@@ -3254,7 +3257,7 @@ function projektMenu(x, y, todoId, danach) {
 
 function renderCard(t) {
   const st = statusVon(t);
-  const chip = t.selbst?.entscheid === 'erledigt' ? CHIPS.selbst : st && CHIPS[st];
+  const chip = t.selbst?.entscheid === 'erledigt' ? CHIPS.selbst : (st && CHIPS[st]) || (t.beobachten?.an ? CHIPS.beobachtet : null);
   const due = fmtDatum(t.faellig);
   const vrest = vgvRest(t.vgv_frist);
   const c = el('div', {
@@ -3548,6 +3551,20 @@ function renderDrawer() {
     ]);
   } }, ico('calendar'), d.faellig ? 'fällig ' + new Date(d.faellig).toLocaleDateString('de-DE') : 'Frist setzen');
   meta.append(fristBtn);
+  // Beobachten (Migration 211): An/Aus. An = ein Agent verfolgt die Karte und schreibt sie mit
+  // jedem neuen Dokument im Projektordner fort, bis alles beisammen ist.
+  const bo = d.beobachten || {};
+  const zuletzt = bo.zuletzt ? new Date(bo.zuletzt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  meta.append(el('button', { class: 'metabtn', style: bo.an ? 'color:#4E6117;border-color:#4E6117' : '',
+    title: bo.an ? 'Ein Agent beobachtet den Projektordner und schreibt die Karte mit jedem neuen Dokument fort. Klicken zum Ausschalten.'
+      : 'Einschalten: ein Agent beobachtet den Projektordner und schreibt die Karte mit jedem neuen Dokument fort, bis alles beisammen ist.',
+    onclick: async () => {
+      if (!d.projekt) { uiHinweis('Erst ein Projekt zuweisen — beobachtet wird dessen Ordner.'); return; }
+      const r = await mut('todo_beobachten', { todo_id: d.id, an: !bo.an });
+      if (r?.fehler) return;
+      await openCard(d.id); await ladeBoard();
+    } }, ico('auge'), bo.an ? ('Beobachten an' + (zuletzt ? ' · zuletzt ' + zuletzt : ' · erster Durchgang folgt'))
+      : bo.fertig_at ? 'Beobachten aus · fertig' : 'Beobachten aus'));
   meta.append(el('span', {}, 'Besitzer: ' + personName(d.besitzer)));
   head.append(meta);
   dkopf.append(head);
@@ -3715,7 +3732,7 @@ function renderDrawer() {
   // Ergebnis
   if (d.agent_ergebnis && (st === 'fertig' || st === 'fehlgeschlagen' || !st)) {
     const sec = el('div', { class: 'dsec' });
-    sec.append(el('div', { class: 'slbl' }, 'Ergebnis'));
+    sec.append(el('div', { class: 'slbl' }, d.beobachten ? 'Aufbereitung (beobachtet)' : 'Ergebnis'));
     sec.append(...feldFaltung(el('div', { class: 'feldtext lesen' }, d.agent_ergebnis), d.agent_ergebnis, 'ergebnis-' + d.id));
     const m = d.agent_ergebnis.match(/Datei abgelegt:\s*([^\n—]+)/);
     if (m) sec.append(el('button', { class: 'btn ghost', style: 'margin-top:10px', onclick: () => { navigator.clipboard.writeText(m[1].trim()); } }, 'Datei-Pfad kopieren'));
