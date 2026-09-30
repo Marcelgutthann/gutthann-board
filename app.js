@@ -955,6 +955,8 @@ function renderSidebar() {
         S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
       } }, ico('pin'))));
   }
+  if (!imChat) g4.append(el('div', { class: 'row addrow', onclick: projekteAusSharepoint,
+    title: 'Projektordner aus den SharePoint-Jahrgängen ins Board holen' }, ico('plus'), 'Aus SharePoint'));
 }
 
 function boardMenu(e, b, letztes) {
@@ -971,6 +973,53 @@ async function neuesBoard(typ) {
   if (r.fehler) { uiHinweis(r.fehler); return; }
   S.active = { typ: 'board', id: r.board_id, name: r.name };
   await ladeAlles();
+}
+
+// ---------- Projekte aus SharePoint (Migration 216) ----------
+// Der Katalog listet die Projektordner der acht Jahrgangs-Sites (ingest/sharepoint-katalog.mjs,
+// stuendlich). Ein Klick legt das Projekt an und reiht das Einlesen aus SharePoint ein.
+async function projekteAusSharepoint() {
+  const { o, schliessen } = uiModal(
+    '<div class="uidlg-t">Projekte aus SharePoint</div>' +
+    '<div class="uidlg-x spk-stand">Lade die Ordner der Jahrgangs-Sites …</div>' +
+    '<input class="uidlg-i" placeholder="Suchen: Nummer, Ort, Bauherr …">' +
+    '<div class="spk-liste"></div>' +
+    '<div class="uidlg-akt"><button class="uidlg-b hell" data-ui="ok">Schließen</button></div>', () => {}, true);
+  o.querySelector('[data-ui="ok"]').onclick = () => schliessen(null);
+  const such = o.querySelector('.uidlg-i'), liste = o.querySelector('.spk-liste'), stand = o.querySelector('.spk-stand');
+  const r = await lotse('sharepoint_katalog').catch((e) => ({ fehler: e.message }));
+  if (r.fehler) { stand.textContent = r.fehler; return; }
+  const ordner = r.ordner || [];
+  const zeichne = () => {
+    const q = such.value.trim().toLowerCase();
+    liste.innerHTML = '';
+    const treffer = ordner.filter((x) => !q || x.ordner.toLowerCase().includes(q));
+    let jahr = null;
+    for (const x of treffer.sort((a, b) => b.jahr.localeCompare(a.jahr) || b.ordner.localeCompare(a.ordner, 'de', { numeric: true }))) {
+      if (x.jahr !== jahr) { jahr = x.jahr; liste.append(el('div', { class: 'spk-jahr' }, 'Jahrgang 20' + jahr)); }
+      // Archivierte Projekte holt derselbe Klick zurueck (die Funktion setzt status wieder auf aktiv).
+      const label = x.project_id ? 'Zurückholen' : 'Ins Board';
+      const knopf = x.project_id && x.status === 'aktiv'
+        ? el('span', { class: 'spk-da' }, 'im Board')
+        : el('button', { class: 'spk-knopf', type: 'button', onclick: async () => {
+            knopf.disabled = true; knopf.textContent = 'wird angelegt …';
+            const a = await lotse('projekt_aus_sharepoint', { jahr: x.jahr, ordner: x.ordner }).catch((e) => ({ fehler: e.message }));
+            if (a.fehler) { uiHinweis(a.fehler); knopf.disabled = false; knopf.textContent = label; return; }
+            x.project_id = a.project_id; x.status = 'aktiv';
+            knopf.replaceWith(el('span', { class: 'spk-da neu' }, 'angelegt · liest ein'));
+            S.projects = (await lotse('projects')).projects || S.projects;
+            renderSidebar();
+            uiHinweis(`${a.projekt} ist im Board. ${a.hinweis || ''}`, 'ok');
+          } }, label);
+      liste.append(el('div', { class: 'spk-zeile' + (x.project_id && x.status === 'aktiv' ? ' drin' : '') }, el('span', { class: 'spk-name' }, x.ordner), knopf));
+    }
+    if (!treffer.length) liste.append(el('div', { class: 'spk-leer' }, 'Kein Ordner passt.'));
+  };
+  const neu = ordner.filter((x) => !x.project_id).length;
+  stand.textContent = `${ordner.length} Projektordner in SharePoint, ${ordner.length - neu} davon schon im Board.` +
+    (r.stand ? ` Stand ${new Date(r.stand).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.` : '');
+  such.oninput = zeichne;
+  zeichne(); such.focus();
 }
 
 // ---------- Glocke ----------
