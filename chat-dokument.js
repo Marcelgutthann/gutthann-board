@@ -13,7 +13,8 @@ function chatDokRender() {
   if (!root || !k) return;
   const d = k.dok;
   // Ohne Dokument laesst sich die Zweiteilung ueber den Knopf oben rechts trotzdem oeffnen.
-  const zeigen = d ? !k.dokZu : !!k.zweiOffen;
+  // Tonys Arbeitsliste (30.09.) oeffnet die rechte Seite von selbst, bis man sie wegklickt.
+  const zeigen = (d ? !k.dokZu : !!k.zweiOffen) || !!(k.plan?.length && !k.planZu);
   root.classList.toggle('mitdok', zeigen);
   document.querySelector('.splitbtn')?.classList.toggle('on', zeigen);
 
@@ -35,6 +36,25 @@ function chatDokRender() {
   if (!panel) { panel = el('div', { class: 'kidok' }); root.append(panel); }
   chatTeiler(root, haupt, panel);
   chatDokPanel(panel, d);
+  chatPlanKasten(panel, k);
+}
+
+// Tonys Arbeitsliste oben rechts (Werkzeug plan, live-backend streamt jede Fassung). Wie die
+// Aufgabenliste in Claude Code: erledigt abgehakt, der aktuelle Punkt hervorgehoben.
+function chatPlanKasten(panel, k) {
+  panel.querySelector('.kiplan')?.remove();
+  const plan = k.plan || [];
+  if (!plan.length || k.planZu) return;
+  const fertig = plan.filter((p) => p.s === 'completed').length;
+  const laeuft = k.denkt && fertig < plan.length;
+  const box = el('div', { class: 'kidokliste kiplan' },
+    el('div', { class: 'kidoklistekopf' },
+      el('span', {}, `Tonys Plan · ${fertig} von ${plan.length}` + (laeuft ? '' : fertig === plan.length ? ' · erledigt' : '')),
+      el('button', { class: 'kichip', type: 'button', title: 'Plan ausblenden', onclick: () => { k.planZu = true; renderChat(); } }, '×')),
+    ...plan.map((p) => el('div', { class: 'awp ' + (p.s || 'pending') + (p.s === 'in_progress' && laeuft ? ' jetzt' : '') },
+      (p.s === 'completed' ? '✓ ' : p.s === 'in_progress' ? '▸ ' : '○ ') + p.t)));
+  const kopf = panel.querySelector('.kidokkopf');
+  panel.insertBefore(box, kopf ? kopf.nextSibling : panel.firstChild);
 }
 
 // Knopf oben links im Chat: Board-Navigation und Chatverlaeufe zusammen ein-/ausklappen.
@@ -128,8 +148,8 @@ function chatDokPanel(panel, d) {
     panel.innerHTML = '';
     panel.append(
       el('div', { class: 'kidokkopf' }, el('div', { class: 'kidoktitel' }, 'Dokument'),
-        el('button', { class: 'kichip', type: 'button', title: 'Zweite Ansicht schließen', onclick: () => { S.kichat.zweiOffen = false; renderChat(); } }, '×')),
-      el('div', { class: 'kidokflaeche', 'data-pfad': 'leer' }, el('div', { class: 'kidokwarte' },
+        el('button', { class: 'kichip', type: 'button', title: 'Zweite Ansicht schließen', onclick: () => { S.kichat.zweiOffen = false; S.kichat.planZu = true; renderChat(); } }, '×')),
+      el('div', { class: 'kidokflaeche', 'data-pfad': 'leer' }, S.kichat?.plan?.length && !S.kichat.planZu ? null : el('div', { class: 'kidokwarte' },
         'Noch kein Dokument. Schick unten einen Agenten los oder bitte Tony, eins zu schreiben.')));
     return;
   }
@@ -157,6 +177,12 @@ function chatDokPanel(panel, d) {
         onclick: () => window.open(URL.createObjectURL(new Blob([d.html], { type: 'text/html' }))) }, 'Öffnen')] : []),
     ...(d.anhang_pfad ? [el('button', { class: 'kichip', type: 'button', title: 'In neuem Fenster öffnen',
       onclick: () => oeffneAnhaenge([{ pfad: d.anhang_pfad, name: d.name || 'Dokument.html' }]) }, 'Öffnen')] : []),
+    // Anhalten wie Esc in Claude Code (Migration 214): wartet er noch, ist er sofort weg, sonst in Sekunden.
+    ...(arbeitet && d.id && d.agent !== 'tony' ? [el('button', { class: 'kichip', type: 'button', title: 'Agent anhalten', onclick: async (ev) => {
+      ev.currentTarget.disabled = true;
+      const j = await chatAktion('dok_anhalten', { dok_id: d.id }).catch((e) => ({ fehler: e.message }));
+      uiHinweis(j.fehler || j.error || (j.angehalten ? 'Angehalten.' : 'Wird angehalten …'), j.fehler || j.error ? undefined : 'ok');
+    } }, 'Anhalten')] : []),
     ...kiFassungKnopf(d, panel), // fruehere Fassungen (chat-werkstatt.js, Migration 204)
     el('button', { class: 'kichip', type: 'button', title: 'Dokument ausblenden', onclick: () => { S.kichat.dokZu = true; renderChat(); } }, '×'));
 
