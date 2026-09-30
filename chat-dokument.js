@@ -14,7 +14,8 @@ function chatDokRender() {
   const d = k.dok;
   // Ohne Dokument laesst sich die Zweiteilung ueber den Knopf oben rechts trotzdem oeffnen.
   // Tonys Arbeitsliste (30.09.) oeffnet die rechte Seite von selbst, bis man sie wegklickt.
-  const zeigen = (d ? !k.dokZu : !!k.zweiOffen) || !!(k.plan?.length && !k.planZu);
+  const zeigen = d ? !k.dokZu : !!k.zweiOffen;
+  chatArbeitsweg(); // Plan und Arbeitsweg im schwebenden Fenster (chat-arbeitsweg.js, 30.09.)
   root.classList.toggle('mitdok', zeigen);
   document.querySelector('.splitbtn')?.classList.toggle('on', zeigen);
 
@@ -36,7 +37,6 @@ function chatDokRender() {
   if (!panel) { panel = el('div', { class: 'kidok' }); root.append(panel); }
   chatTeiler(root, haupt, panel);
   chatDokPanel(panel, d);
-  chatPlanKasten(panel, k);
 }
 
 // Tonys Arbeitsliste oben rechts (Werkzeug plan, live-backend streamt jede Fassung). Wie die
