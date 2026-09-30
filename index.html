@@ -637,6 +637,19 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .uidlg-b.hell:hover{background:rgba(28,28,26,.05)}
 .uidlg-b.rot{background:#B4432E;border-color:#B4432E}
 .uidlg-b.rot:hover{background:#98351f}
+.spk-liste{margin-top:10px;max-height:56vh;overflow-y:auto;border-top:1px solid rgba(28,28,26,.1)}
+.spk-jahr{position:sticky;top:0;background:#FCFCFB;font-size:11.5px;font-weight:600;color:#8A8A83;
+  text-transform:uppercase;letter-spacing:.04em;padding:12px 2px 6px}
+.spk-zeile{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid rgba(28,28,26,.06);font-size:13px}
+.spk-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spk-zeile.drin .spk-name{color:#8A8A83}
+.spk-knopf{padding:5px 12px;border-radius:7px;border:1px solid rgba(28,28,26,.2);background:#fff;color:#1C1C1A;
+  font-size:12px;cursor:pointer;white-space:nowrap}
+.spk-knopf:hover{background:#1C1C1A;color:#fff}
+.spk-knopf:disabled{opacity:.6;cursor:default}
+.spk-da{font-size:12px;color:#8A8A83;white-space:nowrap}
+.spk-da.neu{color:#4E6117}
+.spk-leer{padding:16px 2px;color:#8A8A83;font-size:13px}
 .uitoast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:310;max-width:min(560px,92vw);
   background:#1C1C1A;color:#F3F3F1;padding:11px 16px;border-radius:10px;font-size:13px;line-height:1.45;
   box-shadow:0 10px 30px rgba(28,28,26,.28);white-space:pre-line;cursor:pointer;transition:opacity .35s}
@@ -1056,7 +1069,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=muntaub1">
+<link rel="stylesheet" href="dashboard.scoped.css?v=muntokg6">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1139,9 +1152,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=muntaub1"></script>
-<script src="chat-dokument.js?v=muntaub1"></script>
-<script src="chat-werkstatt.js?v=muntaub1"></script>
-<script type="module" src="dashboard.js?v=muntaub1"></script>
+<script src="app.js?v=muntokg6"></script>
+<script src="chat-dokument.js?v=muntokg6"></script>
+<script src="chat-werkstatt.js?v=muntokg6"></script>
+<script type="module" src="dashboard.js?v=muntokg6"></script>
 </body>
 </html>
