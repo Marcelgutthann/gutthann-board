@@ -1611,7 +1611,7 @@ async function chatSenden(ta) {
   // Die Antwort waechst in dieser Zeile, waehrend Tony schreibt (live-backend streamt im Chat).
   const z = { rolle: 'assistent', text: '', laeuft: true, tut: '' };
   k.zeilen.push(z);
-  ta.value = ''; k.denkt = true; k.stopp = new AbortController(); renderChat(); chatKnopf();
+  ta.value = ''; k.awZu = false; k.denkt = true; k.stopp = new AbortController(); renderChat(); chatKnopf();
   try {
     const antwort = await chatStrom({ signal: k.stopp.signal, aufgabe: text, verlauf, projekt: k.projekt?.name || liveProjekt(), projekt_id: k.projekt?.id,
       ...(dateien.length ? { dateien: dateien.map((d) => ({ name: d.name, mime: d.mime, base64: d.base64 })) } : {}), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true, chat_id: k.id },
@@ -1693,6 +1693,7 @@ function chatLetzte() {
   if (!letzte || !z) return;
   const unten = verlauf.scrollHeight - verlauf.scrollTop - verlauf.clientHeight < 60;
   letzte.replaceWith(chatZeile(z));
+  chatArbeitsweg(); // schwebendes Fenster Arbeitsweg (chat-arbeitsweg.js)
   if (unten) verlauf.scrollTop = verlauf.scrollHeight;
 }
 
@@ -1744,6 +1745,13 @@ function chatLogo(q) {
 }
 // Einklappbarer Arbeitsweg ueber Tonys Antwort: offen, solange er arbeitet. Je Schritt Logo der Quelle,
 // bei einem Fehler der Grund (live-backend werkzeugFehler, 30.09.).
+// Fehlergrund lesbar (30.09.): aus dem rohen MCP-JSON die innerste Meldung, Zeitueberschreitungen in Klartext.
+function chatGrund(f) {
+  const s = String(f || '').replace(/\\+"/g, '"');
+  if (/signal has been aborted|57014|statement timeout|upstream request timeout/i.test(s)) return 'Datenbank hat nicht rechtzeitig geantwortet';
+  const m = s.match(/"fehler"\s*:\s*"([^"]{1,160})/);
+  return (m ? m[1] : s).slice(0, 160);
+}
 function chatWeg(z) {
   if (!z.weg?.length) return null;
   const quellen = [...new Set(z.weg.map((w) => chatQuelle(w.n)))];
@@ -1754,7 +1762,7 @@ function chatWeg(z) {
     const q = chatQuelle(w.n);
     d.append(el('div', { class: 'kiwegz' + (w.ok ? '' : ' fehl') }, chatLogo(q),
       el('span', {}, (KI_QUELLE[q]?.name ? KI_QUELLE[q].name + ' · ' : '') + (w.was || chatWerkzeugWort(w.n)) + (w.x ? ': ' + w.x : '') +
-        (w.ok ? '' : ' — ging nicht' + (w.f ? ': ' + w.f : '')))));
+        (w.ok ? '' : ' — ging nicht' + (w.f ? ': ' + chatGrund(w.f) : '')))));
   }
   return d;
 }
