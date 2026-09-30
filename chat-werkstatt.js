@@ -431,6 +431,18 @@ function chatWerkstattEnde(antwort) {
       setTimeout(() => chatDokTakt(k), 0);
     }
   }
+  // LPH-Bericht oder Doku-Check, von Tony losgeschickt (Migration 213): rechts arbeiten lassen, Ergebnis kommt hierher.
+  const ds = antwort?.dok_start;
+  if (ds) {
+    if (ds.fehler || ds.error) k.zeilen.push({ rolle: 'fehler', text: 'Nicht losgeschickt: ' + (ds.fehler || ds.error) });
+    else if (ds.dok_id) {
+      k.zeilen.push({ rolle: 'assistent', text: ds.lief_schon ? ds.titel + ' lief schon — ich zeige rechts denselben Lauf.'
+        : ds.titel + ' ist losgeschickt. Rechts steht, was der Agent gerade tut; das Ergebnis kommt hierher.' });
+      k.dok = { id: ds.dok_id, titel: ds.titel, status: 'arbeitet', version: 0, lauf_status: 'queued', agent: 'agent' };
+      k.dokZu = false; k.dokWahl = null;
+      setTimeout(() => chatDokTakt(k), 0);
+    }
+  }
 }
 // Kachel unter Tonys Antwort, wenn er einen Agenten entworfen hat (chatZeile in app.js).
 function kwAgentKachel(a) {
