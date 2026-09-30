@@ -1233,20 +1233,19 @@ function betListe(L){
     const K=betKont(r),nm=betName(r);
     const mail=K.find(k=>k.art==='email'),tel=K.find(k=>k.art==='telefon'||k.art==='mobil');
     // Firmenzeile = die Zeile, die unter einer Gruppe die Firma haelt. Sie wird
-    // wie im Buero-Ausdruck als Balken gesetzt; die Personen darunter zeigen den
-    // Firmennamen nicht noch einmal (steht ja eine Zeile hoeher).
+    // wie im Buero-Ausdruck als Balken gesetzt. Am Bildschirm steht die Firma
+    // trotzdem bei jeder Person (Marcel 30.09.) -- nur der Ausdruck laesst sie weg.
     const istFirma=betIstFirmenzeile(r);
     const vater=r.parent_id?L.find(x=>x.id===r.parent_id):null;
-    const firmaGleich=vater&&vater.art==='eintrag'&&
-      (vater.firma||'').trim().toLowerCase()===(r.firma||'').trim().toLowerCase();
+    const firma=r.firma||(vater&&vater.art==='eintrag'?vater.firma:'');
     h+='<div class="bet-z t'+Math.min(r.tiefe,3)+(betSel===r.id?' sel':'')+
        (istFirma?' firmenzeile':'')+
        (r.status==='offen'?' offen':'')+(r.status==='ausgeschieden'?' raus':'')+'" data-betrow="'+r.id+'" draggable="true"'+
        ' title="Ziehen zum Verschieben · Klick: ansehen und bearbeiten · Rechtsklick: Zeile einfügen">'+
        '<span class="z-nr">'+esc(r.nummer)+'</span>'+
        '<span class="z-rolle">'+esc(r.titel||'—')+'</span>'+
-       '<span class="z-firma">'+(firmaGleich?'':(r.firma?esc(r.firma)
-         :(r.status==='offen'?'<span class="z-offen">noch nicht vergeben</span>':'')))+'</span>'+
+       '<span class="z-firma">'+(firma?esc(firma)
+         :(r.status==='offen'?'<span class="z-offen">noch nicht vergeben</span>':''))+'</span>'+
        '<span class="z-person">'+esc(nm)+(r.funktion?' <span class="z-funk">'+esc(r.funktion)+'</span>':'')+'</span>'+
        '<span class="z-kon">'+(tel?'<i title="'+esc(tel.wert)+'">'+BET_Z_HOERER+'</i>':'')+
          (mail?'<i title="'+esc(mail.wert)+'">'+BET_Z_BRIEF+'</i>':'')+'</span>'+
