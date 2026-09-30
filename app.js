@@ -1427,7 +1427,9 @@ async function chatOeffnen(id) {
   chatDiktatEnde();
   const j = await chatAktion('laden', { chat_id: id }).catch((e) => ({ fehler: e.message }));
   if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
-  S.kichat = { id: j.id, zeilen: (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten })), denkt: false,
+  // Arbeitsweg, Quellen und Plan kommen seit Migration 215 mit dem Verlauf; der letzte Plan steht wieder rechts.
+  const zeilen = (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten, weg: z.weg, quellen: z.quellen, plan: z.plan }));
+  S.kichat = { id: j.id, zeilen, denkt: false, plan: [...zeilen].reverse().find((z) => z.plan)?.plan || null,
     projekt: kiChatProjekt(j.id) }; // Chat im Projekt (chat-werkstatt.js, Migration 207)
   renderChat();
   chatDokLaden();
@@ -1472,6 +1474,7 @@ function chatEingabe() {
   knopf.addEventListener('click', () => {
     const k = S.kichat;
     if (k.rec) chatDiktatEnde();
+    else if (k.denkt) k.stopp?.abort(); // Tony antwortet gerade: anhalten wie Esc in Claude Code
     else if (ta.value.trim()) chatSenden(ta);
     else if (KI_SR) chatDiktat(ta);
   });
@@ -1480,7 +1483,8 @@ function chatEingabe() {
   ta.addEventListener('blur', () => chatKnopf());
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSenden(ta); }
-    if (e.key === 'Escape' && !ta.value.trim()) ta.blur();
+    if (e.key === 'Escape' && S.kichat?.denkt) { e.preventDefault(); S.kichat.stopp?.abort(); }
+    else if (e.key === 'Escape' && !ta.value.trim()) ta.blur();
   });
   return el('div', { class: 'kieingabe' }, pille);
 }
@@ -1504,10 +1508,10 @@ function chatKnopf() {
   pille.style.height = (offen ? Math.max(96, h + 26 + 40) : 48) + 'px';
   pille.classList.toggle('offen', offen);
   pille.classList.toggle('hoert', !!k.rec);
-  const modus = k.rec ? 'stop' : (voll || !KI_SR) ? 'pfeil' : 'mic';
+  const modus = k.rec || k.denkt ? 'stop' : (voll || !KI_SR) ? 'pfeil' : 'mic';
   knopf.dataset.modus = modus;
-  knopf.disabled = modus === 'pfeil' && (k.denkt || !voll);
-  knopf.setAttribute('aria-label', { pfeil: 'Senden', mic: 'Diktieren', stop: 'Diktat beenden' }[modus]);
+  knopf.disabled = modus === 'pfeil' && !voll;
+  knopf.setAttribute('aria-label', k.denkt ? 'Antwort anhalten (Esc)' : { pfeil: 'Senden', mic: 'Diktieren', stop: 'Diktat beenden' }[modus]);
   knopf.title = knopf.getAttribute('aria-label');
 }
 
@@ -1558,15 +1562,17 @@ async function chatSenden(ta) {
   // Die Antwort waechst in dieser Zeile, waehrend Tony schreibt (live-backend streamt im Chat).
   const z = { rolle: 'assistent', text: '', laeuft: true, tut: '' };
   k.zeilen.push(z);
-  ta.value = ''; k.denkt = true; renderChat();
+  ta.value = ''; k.denkt = true; k.stopp = new AbortController(); renderChat(); chatKnopf();
   try {
-    const antwort = await chatStrom({ aufgabe: text, verlauf, projekt: k.projekt?.name || liveProjekt(), projekt_id: k.projekt?.id,
+    const antwort = await chatStrom({ signal: k.stopp.signal, aufgabe: text, verlauf, projekt: k.projekt?.name || liveProjekt(), projekt_id: k.projekt?.id,
       ...(dateien.length ? { dateien: dateien.map((d) => ({ name: d.name, mime: d.mime, base64: d.base64 })) } : {}), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true, chat_id: k.id },
       (e) => {
         if (e.t === 'd') z.text += e.x;
-        else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : 'sieht nach';
+        else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : e.name === 'plan' ? 'plant' : 'sieht nach';
         // Arbeitsweg (Migr. 205): jeder Werkzeugaufruf bleibt als Zeile stehen, auch wenn Text kommt.
-        else if (e.t === 'wx') (z.weg = z.weg || []).push({ was: chatWerkzeugWort(e.name), x: e.x || '', ok: e.ok !== false });
+        else if (e.t === 'wx' && e.name !== 'plan') (z.weg = z.weg || []).push({ n: e.name, was: chatWerkzeugWort(e.name), x: e.x || '', ok: e.ok !== false, f: e.f || '' });
+        // Tonys Arbeitsliste (30.09.): steht rechts, jede neue Fassung ersetzt die alte.
+        else if (e.t === 'plan') { k.plan = e.punkte; k.planZu = false; renderChat(); }
         chatDokStrom(e, z); // Tony schreibt ein Dokument ins rechte Feld (chat-dokument.js)
         chatLetzte();
       });
@@ -1577,14 +1583,22 @@ async function chatSenden(ta) {
     if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
     // Die Schlussfassung gilt: sie kann nachgefasst sein, wenn der Lauf ohne Satz endete.
     z.karten = antwort.karten || [];
+    z.quellen = antwort.quellen || [];
+    if (!z.weg?.length && antwort.weg?.length) z.weg = antwort.weg; // ohne Strom (alter Dienst) aus dem Schluss
+    if (antwort.plan) k.plan = antwort.plan;
     z.text = t || (z.karten.length ? '' : '(keine Antwort)');
     if (antwort.chat_id) { const neu = !k.id; k.id = antwort.chat_id; if (neu || S.kichats?.[0]?.id !== k.id) ladeChats(); }
   } catch (e) {
-    k.zeilen.splice(k.zeilen.indexOf(z), 1);
-    k.zeilen.push({ rolle: 'fehler', text: 'Das hat nicht geklappt: ' + (e?.message || e) });
+    if (k.stopp?.signal.aborted) {
+      // Angehalten: was schon dastand, bleibt stehen (live-backend speichert denselben Satz).
+      z.text = (z.text ? z.text + '\n\n' : '') + '(Angehalten, bevor die Antwort fertig war.)';
+    } else {
+      k.zeilen.splice(k.zeilen.indexOf(z), 1);
+      k.zeilen.push({ rolle: 'fehler', text: 'Das hat nicht geklappt: ' + (e?.message || e) });
+    }
   } finally {
-    z.laeuft = false; k.denkt = false;
-    if (S.active?.typ === 'chat') renderChat();
+    z.laeuft = false; k.denkt = false; k.stopp = null;
+    if (S.active?.typ === 'chat') { renderChat(); chatKnopf(); }
   }
 }
 
@@ -1592,9 +1606,10 @@ async function chatSenden(ta) {
 // {t:'ende'} die fertige Antwort. Antwortet der Dienst mit einfachem JSON (alter Stand
 // oder Fehler vor dem Start), wird das wie bisher gelesen.
 async function chatStrom(body, beiEreignis, retried = false) {
-  const r = await fetch(LIVE_BACKEND, { method: 'POST',
+  const { signal, ...rumpf } = body; // Stopp-Knopf: bricht Anfrage und Lesen ab
+  const r = await fetch(LIVE_BACKEND, { method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
-    body: JSON.stringify(body) });
+    body: JSON.stringify(rumpf) });
   if (r.status === 401 && !retried && await authRefresh()) return chatStrom(body, beiEreignis, true);
   if (!(r.headers.get('content-type') || '').includes('ndjson')) {
     const j = await r.json().catch(() => ({}));
@@ -1632,17 +1647,78 @@ function chatLetzte() {
   if (unten) verlauf.scrollTop = verlauf.scrollHeight;
 }
 
+const KI_WORT = { wissen: 'durchsucht das Projektwissen', dokument_suche: 'sucht wörtlich in Dokumenten', email_suche: 'sucht in Büro-Mails',
+  projekt_datei_lesen: 'liest Datei', projekt_datei_suchen: 'sucht Dateien', projekt_ordner_listen: 'sieht in den Projektordner', anhang_lesen: 'liest Anhang',
+  web_lesen: 'liest Webseite', mail_suchen: 'sucht Mails', mail_lesen: 'liest Mail', drive_suchen: 'sucht im Drive', drive_lesen: 'liest Drive-Datei',
+  karten_suchen: 'sucht Karten', karte_lesen: 'liest Karte', mein_radar: 'sieht deine Aufgaben an', projekt_detail: 'liest die Projektakte',
+  kosten: 'liest den Kostenstand', fristen: 'sieht Fristen nach', termine: 'sieht Termine nach', doku_beauftragen: 'schickt Agenten los', agent_starten: 'schickt Agenten los' };
 function chatWerkzeugWort(name) {
   if (name === 'websuche') return 'sucht im Internet';
-  return String(name || 'Werkzeug').replace(/^assistant_/, '').replace(/_/g, ' ');
+  return KI_WORT[name] || String(name || 'Werkzeug').replace(/^assistant_/, '').replace(/_/g, ' ');
 }
-// Einklappbarer Arbeitsweg ueber Tonys Antwort: offen, solange er arbeitet.
+// Quellen-Logos im Arbeitsweg (Marcel 30.09.: "so wie Claude Code mit den Microsoft-SharePoint-Logos").
+// Jede Quelle: Logo + Name. Die Projektdokumente kommen aus SharePoint und vom Laufwerk -> SharePoint-Logo.
+const KI_MS = '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="1" width="6.5" height="6.5" fill="#F25022"/><rect x="8.5" y="1" width="6.5" height="6.5" fill="#7FBA00"/><rect x="1" y="8.5" width="6.5" height="6.5" fill="#00A4EF"/><rect x="8.5" y="8.5" width="6.5" height="6.5" fill="#FFB900"/></svg>';
+const KI_QUELLE = {
+  sharepoint: { name: 'SharePoint', svg: KI_MS },
+  outlook: { name: 'Outlook', svg: KI_MS },
+  laufwerk: { name: 'Projektordner', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="#F2C94C" stroke="#C9A227" stroke-width=".8"/></svg>' },
+  gmail: { name: 'Gmail', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="3" width="14" height="10" rx="1.5" fill="#fff" stroke="#DADCE0"/><path d="M1.5 4l6.5 5 6.5-5" fill="none" stroke="#EA4335" stroke-width="1.8"/></svg>' },
+  drive: { name: 'Google Drive', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M5.5 1.5h5l4.5 8h-5z" fill="#FFBA00"/><path d="M5.5 1.5L1 9.5l2.5 4.5 4.5-8z" fill="#0F9D58"/><path d="M3.5 14h9l2.5-4.5H6z" fill="#4285F4"/></svg>' },
+  poool: { name: 'Poool', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="1" width="14" height="14" rx="3.5" fill="#1F2937"/><text x="8" y="11.6" font-size="9.5" font-family="Inter,Arial" font-weight="700" fill="#fff" text-anchor="middle">P</text></svg>' },
+  jira: { name: 'Jira', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 1l7 7-7 7-7-7z" fill="#2684FF"/><path d="M8 5l3 3-3 3-3-3z" fill="#fff"/></svg>' },
+  web: { name: 'Web', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#5F6368" stroke-width="1.2"><circle cx="8" cy="8" r="6.5"/><path d="M1.5 8h13M8 1.5c2 2 2 11 0 13M8 1.5c-2 2-2 11 0 13"/></svg>' },
+  board: { name: 'Board', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#4E6117" stroke-width="1.3"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M6 2v12M10.5 2v12"/></svg>' },
+  agent: { name: 'Agent', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#4E6117" stroke-width="1.3"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 5V2.5M6 9h.01M10 9h.01"/></svg>' },
+  kalender: { name: 'Kalender', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#5F6368" stroke-width="1.2"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3"/></svg>' },
+  datenbank: { name: 'Agentic OS', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#5F6368" stroke-width="1.2"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"/><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>' },
+};
+function chatQuelle(name) {
+  const n = String(name || '');
+  if (n === 'websuche' || n === 'web_lesen' || n === 'kontakt_von_seite') return 'web';
+  if (/^(wissen|dokument_suche|bericht|katalog|kosten)$/.test(n)) return 'sharepoint';
+  if (n === 'email_suche') return 'outlook';
+  if (/^projekt_(ordner|datei)|^anhang_(lesen|felder|ausfuellen)$/.test(n)) return 'laufwerk';
+  if (/^mail_/.test(n)) return 'gmail';
+  if (/^(drive_|doc_)/.test(n)) return 'drive';
+  if (/^poool_/.test(n)) return 'poool';
+  if (/^jira_/.test(n)) return 'jira';
+  if (/^(termin|kalender|fristen|vorausschau)/.test(n)) return 'kalender';
+  if (/^(agent_|doku_|werkstatt_|auftrag_|agenten_)/.test(n)) return 'agent';
+  if (/^(todo_|karte|karten_|board|spalte_|tag_|kommentar_|unterpunkt_|mein_radar|pin$|radar_|umfeld)/.test(n)) return 'board';
+  return 'datenbank';
+}
+function chatLogo(q) {
+  const s = el('span', { class: 'kilogo', title: KI_QUELLE[q]?.name || '' });
+  s.innerHTML = (KI_QUELLE[q] || KI_QUELLE.datenbank).svg;
+  return s;
+}
+// Einklappbarer Arbeitsweg ueber Tonys Antwort: offen, solange er arbeitet. Je Schritt Logo der Quelle,
+// bei einem Fehler der Grund (live-backend werkzeugFehler, 30.09.).
 function chatWeg(z) {
   if (!z.weg?.length) return null;
-  const d = el('details', { class: 'kiweg' }, el('summary', {}, `Arbeitsweg · ${z.weg.length} Schritt${z.weg.length === 1 ? '' : 'e'}`));
+  const quellen = [...new Set(z.weg.map((w) => chatQuelle(w.n)))];
+  const d = el('details', { class: 'kiweg' }, el('summary', {}, el('span', { class: 'kiweglogos' }, ...quellen.slice(0, 5).map(chatLogo)),
+    `Arbeitsweg · ${z.weg.length} Schritt${z.weg.length === 1 ? '' : 'e'}`));
   if (z.laeuft) d.open = true;
-  for (const w of z.weg) d.append(el('div', { class: 'kiwegz' + (w.ok ? '' : ' fehl') }, w.was + (w.x ? ': ' + w.x : '') + (w.ok ? '' : ' (fehlgeschlagen)')));
+  for (const w of z.weg) {
+    const q = chatQuelle(w.n);
+    d.append(el('div', { class: 'kiwegz' + (w.ok ? '' : ' fehl') }, chatLogo(q),
+      el('span', {}, (KI_QUELLE[q]?.name ? KI_QUELLE[q].name + ' · ' : '') + (w.was || chatWerkzeugWort(w.n)) + (w.x ? ': ' + w.x : '') +
+        (w.ok ? '' : ' — ging nicht' + (w.f ? ': ' + w.f : '')))));
+  }
   return d;
+}
+// Zitierte Webseiten unter der Antwort, mit dem Favicon der Seite (geladen von der Seite selbst).
+function chatQuellen(z) {
+  if (!z.quellen?.length) return null;
+  return el('div', { class: 'kiquellen' }, ...z.quellen.map((q) => {
+    let host = '';
+    try { host = new URL(q.u).host; } catch { return null; }
+    const img = el('img', { src: 'https://' + host + '/favicon.ico', alt: '', width: '14', height: '14', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    img.addEventListener('error', () => img.replaceWith(chatLogo('web')));
+    return el('a', { class: 'kiquelle', href: q.u, target: '_blank', rel: 'noopener noreferrer', title: q.t || q.u }, img, el('span', {}, host.replace(/^www\./, '')));
+  }).filter(Boolean));
 }
 function chatZeile(z) {
   if (z.agentLink) return el('div', { class: 'kizeile assistent' }, kwAgentKachel(z.agentLink)); // chat-werkstatt.js
@@ -1660,8 +1736,9 @@ function chatZeile(z) {
     blase.innerHTML = chatMd(text);
   } else blase.textContent = text;
   const weg = z.rolle === 'assistent' ? chatWeg(z) : null;
-  if (!z.karten?.length) return el('div', { class: 'kizeile ' + z.rolle }, weg ? el('div', { class: 'kiantwort' }, weg, blase) : blase);
-  return el('div', { class: 'kizeile ' + z.rolle }, el('div', { class: 'kiantwort' }, weg, text ? blase : null, chatKacheln(z.karten)));
+  const quellen = z.rolle === 'assistent' && !z.laeuft ? chatQuellen(z) : null;
+  if (!z.karten?.length) return el('div', { class: 'kizeile ' + z.rolle }, weg || quellen ? el('div', { class: 'kiantwort' }, weg, blase, quellen) : blase);
+  return el('div', { class: 'kizeile ' + z.rolle }, el('div', { class: 'kiantwort' }, weg, text ? blase : null, quellen, chatKacheln(z.karten)));
 }
 
 // Dieselben Kacheln wie auf dem Board (renderCard). Klick oeffnet die Karte; Ziehen und das
