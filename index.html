@@ -872,6 +872,31 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kipille.hoert .kiwelle span{animation:kiwelle .9s ease-in-out infinite}
 @keyframes kiwelle{0%,100%{height:5px}50%{height:20px}}
 @media (prefers-reduced-motion:reduce){#chat-root .kipille,#chat-root .kiic,#chat-root .kiwelle{transition:none}#chat-root .kipille.hoert .kiwelle span{animation:none;height:12px}}
+/* Schwebendes Fenster Arbeitsweg (chat-arbeitsweg.js, 30.09.): verschiebbar, auf-/zuklappbar. */
+#chat-root .kiaw{position:fixed;top:110px;right:24px;width:360px;max-width:calc(100vw - 32px);z-index:60;background:#FFFFFF;border:1px solid rgba(28,28,26,.14);border-radius:12px;box-shadow:0 12px 32px rgba(28,28,26,.14);display:flex;flex-direction:column;max-height:70vh;font-size:13px}
+#chat-root .kiaw.zieht{opacity:.92;user-select:none}
+#chat-root .kiaw.zu .kiawinhalt{display:none}
+#chat-root .kiawkopf{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 12px;cursor:move;border-bottom:1px solid rgba(28,28,26,.08);touch-action:none}
+#chat-root .kiaw.zu .kiawkopf{border-bottom:0}
+#chat-root .kiawtitel{font-weight:600;color:#1C1C1A}
+#chat-root .kiawstand{color:#75756E;flex:1}
+#chat-root .kiawpunkt{width:8px;height:8px;border-radius:50%;background:#C8C8C2}
+#chat-root .kiawpunkt.laeuft{background:#4E6117;animation:kiawpuls 1.2s ease-in-out infinite}
+@keyframes kiawpuls{50%{opacity:.3}}
+#chat-root .kiawinhalt{overflow:auto;padding:6px 12px 10px;display:grid;gap:4px}
+#chat-root .kiawabschnitt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#75756E;margin-top:6px}
+#chat-root .kiawplan{display:grid;gap:3px;padding:2px 0 4px}
+#chat-root .kiaw .awp{display:flex;gap:6px;color:#75756E}
+#chat-root .kiaw .awp.in_progress{color:#1C1C1A;font-weight:600}
+#chat-root .kiaw .awp.completed{color:#9A9A93}
+#chat-root .kiaw .awp.completed .kiawhaken{color:#4E6117}
+#chat-root .kiaw .kiwegz{display:flex;gap:6px;align-items:flex-start;color:#3A3A36}
+#chat-root .kiaw .kiwegz.fehl{color:#A33A2A}
+#chat-root .kiawjetzt{color:#4E6117;font-style:italic}
+#chat-root .kiawjetzt.haengt{color:#A33A2A}
+#chat-root .kiawschritte{display:grid;gap:2px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#3A3A36}
+#chat-root .kiawschritt{display:flex;gap:8px}
+#chat-root .kiawzeit{color:#9A9A93;flex:none}
 /* Agentenwerkstatt (chat-werkstatt.js, Migr. 204): Routinen, Agenten, GHIW Docs, Projekte in der Chat-Seitenleiste. */
 #chat-root .kiverlauf[hidden],#chat-root .kieingabe[hidden]{display:none}
 #chat-root .kwlauf{margin-left:auto;font-size:11px;font-weight:600;color:#4E6117;display:flex;align-items:center;gap:5px;white-space:nowrap}
@@ -1069,7 +1094,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=muntqm8p">
+<link rel="stylesheet" href="dashboard.scoped.css?v=muo385qx">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1152,9 +1177,10 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=muntqm8p"></script>
-<script src="chat-dokument.js?v=muntqm8p"></script>
-<script src="chat-werkstatt.js?v=muntqm8p"></script>
-<script type="module" src="dashboard.js?v=muntqm8p"></script>
+<script src="app.js?v=muo385qx"></script>
+<script src="chat-dokument.js?v=muo385qx"></script>
+<script src="chat-werkstatt.js?v=muo385qx"></script>
+<script src="chat-arbeitsweg.js?v=muo385qx"></script>
+<script type="module" src="dashboard.js?v=muo385qx"></script>
 </body>
 </html>
