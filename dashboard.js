@@ -1226,6 +1226,7 @@ function betListe(L){
          (n?'<span class="bet-g-n">'+n+'</span>':'')+
          '<span class="z-akt">'+
            '<button class="bet-t wort" data-betadd="'+r.id+'" title="Hier einen Beteiligten einsortieren">+ Beteiligter</button>'+
+           '<button class="bet-t" data-betmenu="'+r.id+'" title="Alle Möglichkeiten für diese Überschrift (wie Rechtsklick)">⋯</button>'+
          '</span></div>';
       return;}
     gezeigt++;
@@ -1255,6 +1256,7 @@ function betListe(L){
          (r.quelle==='crm'?'<span class="bet-tag crm">CRM</span>':'')+
          (r.quelle==='pdf'?'<span class="bet-tag pdf">PDF</span>':'')+
          (r.quelle==='analyse'?'<span class="bet-tag an">Analyse</span>':'')+
+         '<button class="bet-t" data-betmenu="'+r.id+'" title="Alle Möglichkeiten für diese Zeile (wie Rechtsklick)">⋯</button>'+
        '</span></div>';});
   if(f&&!gezeigt)h='<div class="bet-leer">Kein Eintrag passt zu „'+esc(betFilter)+'“.</div>';
   return h;
@@ -1866,6 +1868,21 @@ async function betUmwandeln(id){
   if(error){betHinweis('Nicht umgewandelt: '+betFehler(error));return;}
   await betNeuZeichnen();betHinweis(zuGruppe?'Ist jetzt eine Überschrift.':'Ist jetzt eine Zeile.');
 }
+// Marcel 30.09.: "bei Baustrom die Firma rein machen ging nicht". Eine
+// Ueberschrift traegt keine Firma. Soll sie eine tragen, wird sie zur Zeile
+// (Titel bleibt Rolle, Unterzeilen bleiben darunter) und das Adressbuch
+// besetzt genau diese Zeile.
+async function betFirmaHier(id){
+  const r=betL.find(x=>x.id===id);if(!r)return;
+  if(r.art==='gruppe'){
+    const{error}=await sb.from('beteiligte').update({art:'eintrag',status:'offen'}).eq('id',id);
+    if(error){betHinweis('Nicht umgestellt: '+betFehler(error));return;}
+    await betNeuZeichnen();}
+  const z=betL.find(x=>x.id===id);if(!z)return;
+  betSel=id;betEdit=Object.assign({},z,{kontakte:betKont(z)});betMitRolle=z.titel||'';
+  betCrmOffen=true;betCrmFirma=null;betNurSeite();
+  betHinweis('„'+(z.titel||'Zeile')+'“ nimmt jetzt eine Firma auf — rechts im Adressbuch anklicken.');
+}
 function betTitelBearbeiten(id){
   const r=betL.find(x=>x.id===id);if(!r)return;
   betSel=id;betEdit=Object.assign({},r,{kontakte:betKont(r),_inline:true});
@@ -1882,6 +1899,7 @@ function betZeilenMenue(e,id){
     x.classList.toggle('sel',x.dataset.betrow===id||x.dataset.betfold===id));
   const istG=r.art==='gruppe',P=[];
   P.push({note:'Zeile'});
+  if(istG)P.push({txt:'Firma direkt hier eintragen',do:()=>betFirmaHier(id)});
   if(istG)P.push({txt:'Zeile in dieser Überschrift',do:()=>betZeileDarunter(id,'kind')});
   else{
     P.push({txt:'Zeile darunter einfügen',do:()=>betZeileDarunter(id,'gleich')});
@@ -2851,6 +2869,7 @@ function wireBet(){
     }
     betMitRolle=firmenzeile.titel||r.titel||'';
     betCrmOffen=true;betCrmFirma=null;betNurSeite();});
+  M.querySelectorAll('[data-betmenu]').forEach(b=>b.onclick=e=>betZeilenMenue(e,b.dataset.betmenu));
   M.querySelectorAll('[data-betadd]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     betEdit={art:'eintrag',parent_id:b.dataset.betadd,kontakte:[]};betCrmOffen=true;betCrmFirma=null;betSel=null;
@@ -2862,7 +2881,7 @@ function wireBet(){
   M.querySelectorAll('[data-betup]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betup,'up');});
   M.querySelectorAll('[data-betdown]').forEach(b=>b.onclick=e=>{e.stopPropagation();betVerschieben(b.dataset.betdown,'down');});
   M.querySelectorAll('[data-betfold]').forEach(g=>g.onclick=e=>{
-    if(e.target.closest('[data-betadd]'))return;
+    if(e.target.closest('[data-betadd],[data-betmenu]'))return;
     const id=g.dataset.betfold;betZu.has(id)?betZu.delete(id):betZu.add(id);betNurListe();});
   M.querySelectorAll('[data-betfirma]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();betCrmOffen=true;betCrmFirmaOeffnen(+b.dataset.betfirma);});
