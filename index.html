@@ -771,6 +771,20 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #chat-root .kidokliste .awp{color:#75756E}
 #chat-root .kidokliste .awp.in_progress{color:#1C1C1A;font-weight:600}
 #chat-root .kidokliste .awp.completed{color:#9A9A93}
+/* Tonys Plan (30.09.): der aktuelle Punkt pulsiert leise, solange er arbeitet */
+#chat-root .kiplan .awp.jetzt{animation:kiplanpuls 1.6s ease-in-out infinite}
+@keyframes kiplanpuls{50%{opacity:.55}}
+/* Quellen-Logos im Arbeitsweg und zitierte Seiten unter der Antwort */
+#chat-root .kilogo{display:inline-flex;width:14px;height:14px;flex:none}
+#chat-root .kilogo svg{display:block}
+#chat-root .kiweg summary{display:flex;align-items:center;gap:6px}
+#chat-root .kiweglogos{display:inline-flex;gap:3px}
+#chat-root .kiwegz{display:flex;align-items:flex-start;gap:6px}
+#chat-root .kiwegz .kilogo{margin-top:2px}
+#chat-root .kiquellen{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+#chat-root .kiquelle{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#4A4A45;text-decoration:none;background:#F4F4F2;border:1px solid rgba(28,28,26,.08);border-radius:999px;padding:3px 9px 3px 6px}
+#chat-root .kiquelle:hover{background:#E8E8E6}
+#chat-root .kiquelle img{width:14px;height:14px;border-radius:3px}
 #chat-root .kiagenten{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;position:relative}
 #chat-root .kiplus{width:30px;height:30px;border-radius:50%;border:1px solid rgba(28,28,26,.14);background:#FFFFFF;color:#1C1C1A;font:inherit;font-size:18px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:transform .25s cubic-bezier(.175,.885,.32,1.275),border-color .2s}
 #chat-root .kiplus:hover{border-color:rgba(28,28,26,.35)}
@@ -1042,7 +1056,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=munsaw9q">
+<link rel="stylesheet" href="dashboard.scoped.css?v=muntaub1">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1125,9 +1139,9 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=munsaw9q"></script>
-<script src="chat-dokument.js?v=munsaw9q"></script>
-<script src="chat-werkstatt.js?v=munsaw9q"></script>
-<script type="module" src="dashboard.js?v=munsaw9q"></script>
+<script src="app.js?v=muntaub1"></script>
+<script src="chat-dokument.js?v=muntaub1"></script>
+<script src="chat-werkstatt.js?v=muntaub1"></script>
+<script type="module" src="dashboard.js?v=muntaub1"></script>
 </body>
 </html>
