@@ -1113,6 +1113,17 @@ rightpane.addEventListener('wheel', (ev)=>{
     rightpane.scrollLeft += (ev.deltaY || ev.deltaX);
   }
 }, {passive:false});
+// Ueber dem Datumskopf (overflow:hidden, eigener Scroller fehlt) tat das Mausrad nichts
+// (Marcels Befund 01.10.). Dort schiebt jedes Rad die Zeitachse, Strg+Rad zoomt wie im Diagramm.
+calheader.addEventListener('wheel', (ev)=>{
+  ev.preventDefault();
+  if(ev.ctrlKey || ev.metaKey){
+    const rect = rightpane.getBoundingClientRect();
+    zoomAnwenden(zoomIndex + (ev.deltaY < 0 ? 1 : -1), ev.clientX - rect.left);
+  } else {
+    rightpane.scrollLeft += (Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY);
+  }
+}, {passive:false});
 // Schieben mit der LINKEN Maustaste auf freier Flaeche (Marcels Wunsch 24.08.), mittlere
 // Taste geht weiterhin ueberall. Damit Benjamins Klick-Funktionen unveraendert bleiben:
 //   * auf Balken/Meilenstein/Verknuepfungspunkt wird gar nicht erst gegriffen,
