@@ -1025,14 +1025,25 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #dev-root .dvblase{max-width:72ch;font-size:13.5px;line-height:1.55;white-space:pre-wrap;padding:10px 13px;border-radius:10px;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);color:#1C1C1A}
 #dev-root .dvblase.md{white-space:normal}
 #dev-root .nutzer .dvblase{background:#1C1C1A;border-color:#1C1C1A;color:#FFFFFF}
-#dev-root .dvweg{background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:11px 13px;margin:0 0 14px;max-width:72ch}
-#dev-root .dvwegkopf{font-size:12.5px;font-weight:600;color:#1C1C1A;margin-bottom:6px}
+#dev-root .dvweg{margin:6px 4px 0;max-width:72ch}
+#dev-root .dvwegkopf{font-size:12px;color:#75756E;cursor:pointer;list-style:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#dev-root .dvwegkopf::-webkit-details-marker{display:none}
+#dev-root .dvwegkopf::before{content:'›';display:inline-block;width:12px;transition:transform .15s ease}
+#dev-root .dvweg[open] .dvwegkopf::before{transform:rotate(90deg)}
+#dev-root .dvweg[open]{padding-bottom:4px}
+#dev-root .dvweg .dvplan{margin:6px 0 4px 12px}
+#dev-root .dvweg .dvschritt{margin-left:12px}
+#dev-root .dvblase.tippt{display:inline-flex;gap:4px;padding:13px 14px}
+#dev-root .dvblase.tippt span{width:6px;height:6px;border-radius:50%;background:#A3A39C;animation:dvtipp 1.2s infinite ease-in-out}
+#dev-root .dvblase.tippt span:nth-child(2){animation-delay:.15s}
+#dev-root .dvblase.tippt span:nth-child(3){animation-delay:.3s}
+@keyframes dvtipp{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){#dev-root .dvblase.tippt span{animation:none;opacity:.6}}
 #dev-root .dvplan{list-style:none;margin:0 0 6px;padding:0}
 #dev-root .dvp{font-size:13px;line-height:1.55;color:#55554F;display:flex;gap:8px}
 #dev-root .dvp.completed{color:#8A8A83;text-decoration:line-through}
 #dev-root .dvp.in_progress{color:#1C1C1A;font-weight:600}
 #dev-root .dvpz{width:12px;flex:none;text-align:center}
-#dev-root .dvjetzt{font-size:12.5px;color:#4E6117;margin:4px 0}
 #dev-root .dvschritt{font-size:12px;color:#8A8A83;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #dev-root .dvvkarte{background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:11px 13px;margin:0 0 14px;max-width:72ch}
 #dev-root .dveingabe{padding:10px 0 18px}
@@ -1113,7 +1124,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mupmoqjp">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mupo2kxj">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1196,11 +1207,11 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mupmoqjp"></script>
-<script src="chat-dokument.js?v=mupmoqjp"></script>
-<script src="chat-werkstatt.js?v=mupmoqjp"></script>
-<script src="chat-arbeitsweg.js?v=mupmoqjp"></script>
-<script src="dev-chat.js?v=mupmoqjp"></script>
-<script type="module" src="dashboard.js?v=mupmoqjp"></script>
+<script src="app.js?v=mupo2kxj"></script>
+<script src="chat-dokument.js?v=mupo2kxj"></script>
+<script src="chat-werkstatt.js?v=mupo2kxj"></script>
+<script src="chat-arbeitsweg.js?v=mupo2kxj"></script>
+<script src="dev-chat.js?v=mupo2kxj"></script>
+<script type="module" src="dashboard.js?v=mupo2kxj"></script>
 </body>
 </html>
