@@ -4282,7 +4282,10 @@ function liveFenster() {
 // nahtlos anschliesst; eine Pause ab 2,5 s ist ein neuer Zug.
 function liveZeile(rolle, text, ev) {
   if (!S.live) return; // aus dem Chat gerufen: kein Gespraechsfenster offen
-  const zl = S.live.zeilen, letzte = zl[zl.length - 1];
+  const zl = S.live.zeilen;
+  // Wortstücke hängen an der letzten Gesprächszeile, auch wenn Schnellbahn oder Bildschirm
+  // dazwischen eine Zeile geschrieben haben -- sonst zählt der Rest des Satzes als neuer Satz.
+  const letzte = ev ? [...zl].reverse().find((z) => z.rolle === 'nutzer' || z.rolle === 'assistent') : zl[zl.length - 1];
   if (ev && letzte && letzte.rolle === rolle && letzte.bis != null && ev.start_ms - letzte.bis <= 2500) {
     letzte.text += text; letzte.bis = ev.end_ms;
   } else zl.push({ rolle, text, zeit: new Date().toTimeString().slice(0, 5), bis: ev?.end_ms });
@@ -4785,9 +4788,43 @@ function liveEreignis(ev) {
     if (!text) return;
     const rolle = /input|user/i.test(typ) || ev.role === 'user' ? 'nutzer' : 'assistent';
     liveZeile(rolle, text, /delta/i.test(typ) ? ev : null);
-    // Navigationssätze schaltet der Browser sofort selbst, ohne auf die Delegation zu warten.
-    if (rolle === 'nutzer') liveReflexFeuern(S.live?.zeilen[S.live.zeilen.length - 1]?.text);
+    // Navigationssätze schaltet der Browser selbst, ohne auf die Delegation zu warten -- aber
+    // erst, wenn 600 ms kein Wortstück mehr kam. Vorher feuerte jedes Stück: bei „öffne
+    // Aufgabe…" traf das halbe Wort schon „Meine Aufgaben", bevor das „n" da war (01.10.).
+    if (rolle === 'nutzer') {
+      clearTimeout(S.live?.reflexUhr);
+      // Greift der Reflex (lokal, ohne Netz) nicht, entscheidet Jev am selben Satz.
+      if (S.live) S.live.reflexUhr = setTimeout(() => {
+        const satz = S.live?.zeilen.filter((z) => z.rolle === 'nutzer').pop()?.text;
+        if (liveReflexBefehl(satz)) liveReflexFeuern(satz); else liveSchnellFeuern(satz);
+      }, 600);
+    }
   }
+}
+// Schnellbahn (01.10.2026, live-backend/jev-bedienen.ts). nurBedienen: vom Transkript
+// ausgelöst, der Satz kann noch unfertig sein -- dann wird nur navigiert, nie geschrieben.
+function liveSchnellFragen(aufgabe, nurBedienen) {
+  return liveFetch(LIVE_BACKEND, { schnell: true, nur_bedienen: nurBedienen, aufgabe, karte_id: S.detail?.id, projekt: liveProjekt(),
+    kanal: 'board', sicht: liveBildschirm(), bretter: liveBretter().map((b) => ({ name: b.name, begriffe: b.begriffe })),
+    karten: (S.board?.todos || []).map((t) => t.titel).filter(Boolean) });
+}
+// Marcel, 01.10.: „kann Jev sich nicht direkt an das Transkript hängen?" -- ja: nach 600 ms
+// Ruhe geht der Satz sofort an Jev, nicht erst nach den 2,5 s, die das Modell bis zur
+// Delegation wartet. Ausgeführt wird nur, wenn währenddessen kein neues Wort kam.
+async function liveSchnellFeuern(satz) {
+  if (!S.live || !satz || S.live.schnell?.satz === satz) return;
+  let fertig;
+  const eintrag = { satz, ergebnis: null, fertig: new Promise((r) => { fertig = r; }) };
+  S.live.schnell = eintrag;
+  try {
+    const s = await liveSchnellFragen(satz, true);
+    const nutzer = S.live?.zeilen.filter((z) => z.rolle === 'nutzer');
+    if (!s.schnell || S.live?.schnell !== eintrag || nutzer[nutzer.length - 1]?.text !== satz) return;
+    const misslungen = await liveOberflaeche(s.oberflaeche);
+    eintrag.ergebnis = { ...s, ausgefuehrt: true, misslungen };
+    liveZeile('backend', 'Schnellbahn am Transkript (' + s.ms + ' ms): ' + [s.text, ...misslungen].filter(Boolean).join(' '));
+  } catch (e) { console.warn('[live] schnellbahn am transkript:', e); }
+  finally { fertig(); }
 }
 async function liveDelegation(ev) {
   const d = ev.delegation || ev;
@@ -4813,16 +4850,19 @@ async function liveDelegation(ev) {
   // den alten Weg; sagt sie gar nichts zu, läuft alles wie bisher.
   let schnellText = '';
   try {
+    // Hat Jev denselben Satz schon am Transkript erledigt (liveSchnellFeuern), gilt das --
+    // sonst würde ein Klick zweimal gedrückt. Hat er dort nur abgewunken, fragt die Delegation
+    // noch einmal mit dem ganzen Satz, jetzt auch mit Anlegen und Eintippen.
+    const fr = S.live.schnell;
+    if (fr && fr.satz === aufgabe) await fr.fertig;
     const vorherS = liveKartenstand();
-    const s = await liveFetch(LIVE_BACKEND, { schnell: true, aufgabe, karte_id: S.detail?.id, projekt: liveProjekt(), kanal: 'board',
-      sicht: liveBildschirm(), bretter: liveBretter().map((b) => ({ name: b.name, begriffe: b.begriffe })),
-      karten: (S.board?.todos || []).map((t) => t.titel).filter(Boolean) });
+    const s = fr?.satz === aufgabe && fr.ergebnis ? fr.ergebnis : await liveSchnellFragen(aufgabe, false);
     if (s.schnell) {
-      const misslungen = await liveOberflaeche(s.oberflaeche);
+      const misslungen = s.ausgefuehrt ? s.misslungen : await liveOberflaeche(s.oberflaeche);
       if ((s.werkzeuge || []).includes('todo_anlegen')) await ladeBoard().catch(() => {});
       await liveNachziehen(s.werkzeuge, vorherS).catch((e) => console.warn('[live] nachziehen:', e));
       schnellText = [s.text, ...misslungen].filter(Boolean).join(' ');
-      liveZeile('backend', 'Schnellbahn (' + s.ms + ' ms): ' + schnellText);
+      if (!s.ausgefuehrt) liveZeile('backend', 'Schnellbahn (' + s.ms + ' ms): ' + schnellText);
       if (!s.rest || misslungen.length) {
         liveSenden({ type: 'session.commentary.append', delegation_id: id, content: schnellText || 'Erledigt.' });
         return;
