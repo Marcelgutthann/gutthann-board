@@ -4796,7 +4796,7 @@ async function liveDelegation(ev) {
   // liefert den Rest. Falls OpenAI spaeter doch ein Textfeld mitschickt, gewinnt das.
   console.log('[live] delegation:', JSON.stringify(d));
   const nutzer = S.live.zeilen.filter((z) => z.rolle === 'nutzer');
-  const aufgabe = d.task || d.input || d.instructions || d.prompt || nutzer[nutzer.length - 1]?.text || '';
+  let aufgabe = d.task || d.input || d.instructions || d.prompt || nutzer[nutzer.length - 1]?.text || '';
   const id = d.id || ev.delegation_id || d.delegation_id;
   if (!aufgabe) return liveFehler('Delegation, aber noch kein Nutzertext im Transkript (siehe Konsole)');
   liveZeile('backend', 'Aufgabe: ' + aufgabe);
@@ -4808,6 +4808,28 @@ async function liveDelegation(ev) {
     liveSenden({ type: 'session.commentary.append', delegation_id: id, content: S.live.reflex.satz });
     return;
   }
+  // Schnellbahn (01.10.2026, live-backend/jev-bedienen.ts): Jev entscheidet reine Bedienung in
+  // unter einer Sekunde. Was sie nicht sicher weiß („schau mal", Fragen), bleibt als Rest für
+  // den alten Weg; sagt sie gar nichts zu, läuft alles wie bisher.
+  let schnellText = '';
+  try {
+    const vorherS = liveKartenstand();
+    const s = await liveFetch(LIVE_BACKEND, { schnell: true, aufgabe, karte_id: S.detail?.id, projekt: liveProjekt(), kanal: 'board',
+      sicht: liveBildschirm(), bretter: liveBretter().map((b) => ({ name: b.name, begriffe: b.begriffe })),
+      karten: (S.board?.todos || []).map((t) => t.titel).filter(Boolean) });
+    if (s.schnell) {
+      const misslungen = await liveOberflaeche(s.oberflaeche);
+      if ((s.werkzeuge || []).includes('todo_anlegen')) await ladeBoard().catch(() => {});
+      await liveNachziehen(s.werkzeuge, vorherS).catch((e) => console.warn('[live] nachziehen:', e));
+      schnellText = [s.text, ...misslungen].filter(Boolean).join(' ');
+      liveZeile('backend', 'Schnellbahn (' + s.ms + ' ms): ' + schnellText);
+      if (!s.rest || misslungen.length) {
+        liveSenden({ type: 'session.commentary.append', delegation_id: id, content: schnellText || 'Erledigt.' });
+        return;
+      }
+      aufgabe = s.rest + ' (Schon erledigt, nicht wiederholen: ' + s.text + ')';
+    }
+  } catch (e) { console.warn('[live] schnellbahn:', e); }
   const verlauf = S.live.zeilen.filter((z) => z.rolle === 'nutzer' || z.rolle === 'assistent').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
   let text;
   // Nach 20 s ohne Antwort ein Lebenszeichen ins Gespraech, sonst schweigt der Moderator bis zu
@@ -4842,6 +4864,7 @@ async function liveDelegation(ev) {
   } finally {
     clearTimeout(lebenszeichen);
   }
+  if (schnellText) text = schnellText + ' ' + text;
   liveZeile('backend', text);
   // Stuecke bis 1500 Zeichen (etwa 400 Token), Schnitt moeglichst am Satzende.
   for (let rest = text; rest.length;) {
