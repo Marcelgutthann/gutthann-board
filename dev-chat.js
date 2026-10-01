@@ -11,7 +11,7 @@
 // an einer Kopie des Terminplan-Werkzeugs; das Ergebnis ist eine Vorschau, live geht es nur über
 // bau_uebernehmen. Die Vorschau läuft mit einem Datenbank-Ersatz, der liest, aber nie schreibt.
 
-const DEV = { ich: null, faden: null, stand: null, offen: [], takt: null, sendet: false, fehler: null };
+const DEV = { ich: null, faden: null, stand: null, offen: [], takt: null, sendet: false, fehler: null, wartend: null, wegOffen: false };
 
 async function ladeDev() {
   try {
@@ -29,7 +29,11 @@ async function devStandLaden() {
   if (!DEV.faden) return;
   try {
     const st = await restRpc('bau_stand', { p_todo: DEV.faden });
-    if (st && st.fehler) { DEV.faden = null; DEV.stand = null; } else DEV.stand = st;
+    if (st && st.fehler) { DEV.faden = null; DEV.stand = null; } else {
+      DEV.stand = st;
+      // Die eigene Nachricht steht jetzt in der Datenbank -- die vorlaeufige Blase entfaellt.
+      if (DEV.wartend && (st.nachrichten || []).some((n) => n.von !== 'agent' && n.text === DEV.wartend)) DEV.wartend = null;
+    }
   } catch (e) { /* naechster Takt versucht es wieder */ }
   renderDev();
 }
@@ -39,7 +43,7 @@ function devLaeuft() {
   return !!(l && (l.status === 'queued' || l.status === 'running'));
 }
 
-// Nachsehen: alle 3 s, solange der Coding Agent arbeitet, sonst alle 20 s. Nur in der DEV-Ansicht.
+// Nachsehen: alle 1,5 s, solange der Coding Agent arbeitet, sonst alle 20 s. Nur in der DEV-Ansicht.
 function devTakt() {
   clearTimeout(DEV.takt);
   if (S.active?.typ !== 'dev' || !DEV.faden) return;
@@ -49,7 +53,7 @@ function devTakt() {
     await devStandLaden();
     if (vorher && !devLaeuft()) ladeDev();  // fertig: Fadenliste und Vorschauen auffrischen
     else devTakt();
-  }, devLaeuft() ? 3000 : 20000);
+  }, devLaeuft() || DEV.wartend ? 1500 : 20000);
 }
 
 function devOeffnen(id) {
@@ -62,13 +66,15 @@ async function devSenden(ta) {
   const text = ta.value.trim();
   if (!text || DEV.sendet) return;
   DEV.sendet = true;
+  // Sofort im Verlauf zeigen, wie in jedem Chat -- nicht erst nach der Datenbank-Runde.
+  DEV.wartend = text; ta.value = '';
+  renderDev();
   try {
     const r = await restRpc('bau_senden', { p_text: text, p_todo: DEV.faden });
-    if (r.fehler) { alert(r.fehler); return; }
-    ta.value = '';
+    if (r.fehler) { DEV.wartend = null; renderDev(); const t = document.querySelector('#dev-root .dvta'); if (t) t.value = text; alert(r.fehler); return; }
     DEV.faden = r.todo_id;
     await ladeDev();
-  } catch (e) { alert('Nicht gesendet: ' + e.message); }
+  } catch (e) { DEV.wartend = null; renderDev(); const t = document.querySelector('#dev-root .dvta'); if (t) t.value = text; alert('Nicht gesendet: ' + e.message); }
   finally { DEV.sendet = false; }
 }
 
@@ -78,6 +84,10 @@ function renderDev() {
   const alt = root.querySelector('.dvta');
   const entwurf = alt ? alt.value : '';
   const fokus = alt && document.activeElement === alt;
+  // Wer hochgescrollt hat und liest, bleibt dort; wer unten war, folgt dem neuen Text.
+  const altV = root.querySelector('.dvverlauf');
+  const unten = !altV || altV.scrollHeight - altV.scrollTop - altV.clientHeight < 80;
+  const altPos = altV ? altV.scrollTop : 0;
   root.innerHTML = '';
   if (DEV.fehler) { root.append(el('div', { class: 'dvleer' }, DEV.fehler)); return; }
   if (!DEV.ich) { root.append(el('div', { class: 'dvleer' }, 'Lädt …')); return; }
@@ -89,7 +99,7 @@ function renderDev() {
   const ta = root.querySelector('.dvta');
   if (ta && fokus) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
   const verlauf = root.querySelector('.dvverlauf');
-  if (verlauf) verlauf.scrollTop = verlauf.scrollHeight;
+  if (verlauf) verlauf.scrollTop = unten ? verlauf.scrollHeight : altPos;
 }
 
 function devSeite() {
@@ -131,33 +141,48 @@ function devHaupt(entwurf) {
 
   const verlauf = el('div', { class: 'dvverlauf' });
   const st = DEV.stand;
-  if (!DEV.faden) {
+  if (!DEV.faden && !DEV.wartend) {
     verlauf.append(el('div', { class: 'dvstart' }, tp
       ? 'Sag Tony, was das Terminplan-Werkzeug können soll, so wie du es einem Kollegen erklären würdest. Er liest den Code, baut es und zeigt dir eine Vorschau.'
       : 'Sag Tony, was die Anwendung können soll. Er liest den Code, baut es und meldet sich hier.'));
-  } else if (!st) {
+  } else if (DEV.faden && !st) {
     verlauf.append(el('div', { class: 'dvhinweis' }, 'Lädt …'));
   } else {
-    for (const n of st.nachrichten || []) {
+    const nachr = st.nachrichten || [];
+    nachr.forEach((n, i) => {
       const vonAgent = n.von === 'agent';
-      const blase = el('div', { class: 'dvblase' + (vonAgent ? ' md' : '') });
-      if (vonAgent) blase.innerHTML = chatMd(n.text); else blase.textContent = n.text;
-      verlauf.append(el('div', { class: 'dvmsg ' + (vonAgent ? 'agent' : 'nutzer') },
-        el('div', { class: 'dvwer' }, vonAgent ? 'Tony' : (n.von === DEV.ich.wer ? 'Du' : n.von)), blase));
+      const tippt = vonAgent && /^\s*…\s*$/.test(n.text || '');
+      if (tippt && !devLaeuft()) return;  // leere Platzhalter alter, abgebrochener Laeufe nicht zeigen
+      const blase = el('div', { class: 'dvblase' + (vonAgent ? ' md' : '') + (tippt ? ' tippt' : '') });
+      if (tippt) blase.append(el('span', {}), el('span', {}), el('span', {}));
+      else if (vonAgent) blase.innerHTML = chatMd(n.text); else blase.textContent = n.text;
+      const zeile = el('div', { class: 'dvmsg ' + (vonAgent ? 'agent' : 'nutzer') },
+        el('div', { class: 'dvwer' }, vonAgent ? 'Tony' : (n.von === DEV.ich.wer ? 'Du' : n.von)), blase);
+      // Der Arbeitsweg gehoert unter die Nachricht, an der Tony gerade schreibt.
+      if (vonAgent && devLaeuft() && i === nachr.length - 1) zeile.append(devArbeitsweg(st.lauf));
+      verlauf.append(zeile);
+    });
+    if (devLaeuft() && (!nachr.length || nachr[nachr.length - 1].von !== 'agent')) {
+      verlauf.append(el('div', { class: 'dvmsg agent' }, el('div', { class: 'dvwer' }, 'Tony'),
+        el('div', { class: 'dvblase tippt' }, el('span', {}), el('span', {}), el('span', {})), devArbeitsweg(st.lauf)));
     }
-    if (devLaeuft()) verlauf.append(devArbeitsweg(st.lauf));
     if (st.vorschau) verlauf.append(devVorschauKarte(st.vorschau));
+  }
+  if (DEV.wartend) {
+    verlauf.append(el('div', { class: 'dvmsg nutzer' }, el('div', { class: 'dvwer' }, 'Du'), el('div', { class: 'dvblase' }, DEV.wartend)));
+    verlauf.append(el('div', { class: 'dvmsg agent' }, el('div', { class: 'dvwer' }, 'Tony'),
+      el('div', { class: 'dvblase tippt' }, el('span', {}), el('span', {}), el('span', {}))));
   }
   h.append(verlauf);
 
   const ta = el('textarea', { class: 'dvta', rows: 3,
-    placeholder: DEV.faden ? (devLaeuft() ? 'Nachtrag — Tony arbeitet ihn in die laufende Arbeit ein …' : 'Weiter mit Tony …')
+    placeholder: DEV.faden ? (devLaeuft() ? 'Schreib dazwischen — Tony nimmt es in die laufende Arbeit auf …' : 'Antworten …')
       : 'Was soll gebaut werden?' });
   ta.value = entwurf || '';
-  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); devSenden(ta); } });
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); devSenden(ta); } });
   h.append(el('div', { class: 'dveingabe' }, ta,
     el('div', { class: 'dvsendezeile' },
-      el('span', { class: 'dvhinweis' }, 'Strg+Enter sendet'),
+      el('span', { class: 'dvhinweis' }, 'Enter sendet · Umschalt+Enter neue Zeile'),
       el('button', { class: 'btn', onclick: () => devSenden(ta) }, DEV.sendet ? 'Sendet …' : 'Senden'))));
   return h;
 }
@@ -165,9 +190,13 @@ function devHaupt(entwurf) {
 // Was der Coding Agent gerade tut: Plan (Arbeitsliste), aktueller Schritt, die letzten Schritte.
 function devArbeitsweg(l) {
   const w = (l && l.weg) || {};
-  const box = el('div', { class: 'dvweg' });
-  box.append(el('div', { class: 'dvwegkopf' }, l.status === 'queued' ? 'Wartet auf den Coding Agent …'
-    : 'Tony arbeitet' + (l.still_s > 90 ? ' · seit ' + l.still_s + ' s ohne neuen Schritt' : '')));
+  const box = el('details', { class: 'dvweg' });
+  if (DEV.wegOffen) box.open = true;
+  box.addEventListener('toggle', () => { DEV.wegOffen = box.open; });
+  const plan0 = Array.isArray(w.plan) ? w.plan : [];
+  const fertig = plan0.filter((p) => p.s === 'completed').length;
+  box.append(el('summary', { class: 'dvwegkopf' }, l.status === 'queued' ? 'wartet, bis der Coding Agent frei ist …'
+    : (w.jetzt || 'arbeitet') + (plan0.length ? ' · ' + fertig + '/' + plan0.length : '') + (l.still_s > 90 ? ' · seit ' + l.still_s + ' s still' : '')));
   const plan = Array.isArray(w.plan) ? w.plan : [];
   if (plan.length) {
     const ul = el('ul', { class: 'dvplan' });
@@ -175,7 +204,6 @@ function devArbeitsweg(l) {
       el('span', { class: 'dvpz' }, p.s === 'completed' ? '✓' : p.s === 'in_progress' ? '›' : '·'), p.t || ''));
     box.append(ul);
   }
-  if (w.jetzt) box.append(el('div', { class: 'dvjetzt' }, w.jetzt));
   const sch = Array.isArray(w.schritte) ? w.schritte.slice(-4) : [];
   for (const x of sch) box.append(el('div', { class: 'dvschritt' }, (x.a ? x.a + ': ' : '') + (x.t || '')));
   return box;
