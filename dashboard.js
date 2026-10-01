@@ -1627,8 +1627,12 @@ async function betCrmStandZeichnen(){
   if(s)s.textContent=betCrmStandText();
 }
 // Nur den Fensterinhalt neu zeichnen — ein voller render() wuerde das Formular schliessen.
+// Scrollstand von Liste und rechter Seite halten, sonst springt die Liste nach jeder Aenderung nach oben.
+function betFensterNeu(bd){const sp=['.bet-liste','.bet-seite'].map(q=>{const e=bd.querySelector(q);return e?e.scrollTop:0;});
+  bd.innerHTML=renderBet();wireBet();
+  ['.bet-liste','.bet-seite'].forEach((q,i)=>{const e=bd.querySelector(q);if(e)e.scrollTop=sp[i];});}
 async function betNeuZeichnen(){await betLaden();const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
-  if(!bd){render();return;}bd.innerHTML=renderBet();wireBet();}
+  if(!bd){render();return;}betFensterNeu(bd);}
 
 function betFormLesen(){
   const g=id=>{const e=el('main').querySelector('#'+id);return e?e.value.trim():'';};
@@ -2719,7 +2723,7 @@ function betUebernehmen(d){
 function betNurSeite(){
   const s=el('main').querySelector('.bet-seite');
   if(!s){const bd=el('main').querySelector('.win[data-sec="beteiligte"] .win-bd');
-    if(bd){bd.innerHTML=renderBet();wireBet();}return;}
+    if(bd)betFensterNeu(bd);return;}
   s.innerHTML=betSeite();wireBet();
   if(betCrmOffen&&!betCrmFirma){const r=el('main').querySelector('#bf_crmres');
     if(r&&!r.dataset.geladen){r.dataset.geladen='1';betCrmSuche();}}
@@ -2734,7 +2738,7 @@ function betNurListe(){
 function wireBet(){
   const M=el('main');
   const neuZeichnen=()=>{const bd=M.querySelector('.win[data-sec="beteiligte"] .win-bd');
-    if(bd){bd.innerHTML=renderBet();wireBet();}};
+    if(bd)betFensterNeu(bd);};
   M.querySelectorAll('[data-bet]').forEach(b=>b.onclick=async()=>{
     const a=b.dataset.bet;
     if(a==='neu-gruppe'){betEdit={art:'gruppe',parent_id:null};betCrmOffen=false;betSel=null;}
