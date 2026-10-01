@@ -41,6 +41,7 @@ const S = {
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
+  tonyKarte: null, // {todoId, text, tut, stopp} — Tony schreibt gerade im Kartenchat (Migration 220)
   komAuf: new Set(), // Kommentare, die der Nutzer aufgeklappt hat — ueberlebt das Neuzeichnen
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
   tags: { liste: [], proKarte: {} }, // Etiketten des offenen Boards (assistant_board_tags)
@@ -3585,6 +3586,45 @@ function chatTakt(id) {
     }
   }, 2500);
 }
+// Tony im Kartenchat (Migration 220, 01.10.): er antwortet auf jede Nachricht, ausser sie geht
+// erkennbar an einen Kollegen (@Name ohne @tony) oder an den Karten-Agenten (@agent).
+function tonyAntwortet(txt) {
+  if (/@tony\b/i.test(txt)) return true;
+  if (/@agent\b/i.test(txt)) return false;
+  return !/(?:^|[^A-Za-z0-9_@])@[A-Za-zÄÖÜäöüß]/.test(txt);
+}
+function tonyKarteBlase() {
+  const t = S.tonyKarte;
+  const kopf = el('div', { class: 'von' }, 'Tony · ' + (t.text ? 'schreibt…' : t.tut || 'denkt nach…'),
+    el('button', { class: 'del', title: 'Anhalten', style: 'opacity:1', onclick: () => t.stopp?.abort() }, '■'));
+  return el('div', { class: 'kom kom-agent', id: 'tony-karte-live' }, kopf,
+    t.text ? chatText(t.text) : el('div', { class: 'agenttippt' }, el('span', { class: 'punkte' }, '•••')));
+}
+async function tonyInKarte(todoId, aufgabe, verlauf) {
+  const t = S.tonyKarte = { todoId, text: '', tut: '', stopp: new AbortController() };
+  const neuZeichnen = () => {
+    const alt = document.getElementById('tony-karte-live');
+    if (alt) alt.replaceWith(tonyKarteBlase()); else if (S.detail?.id === todoId) renderDrawer();
+    const v = document.querySelector('.dchat-verlauf'); if (v) v.scrollTop = v.scrollHeight;
+  };
+  neuZeichnen();
+  let antwort = null;
+  try {
+    antwort = await chatStrom({ signal: t.stopp.signal, aufgabe, verlauf, karte_id: todoId, karte_chat: true, stream: true,
+      kanal: 'board', sicht: liveBildschirm(), projekt: liveProjekt() }, (e) => {
+      if (e.t === 'd') t.text += e.x;
+      else if (e.t === 'w') t.tut = chatWerkzeugWort(e.name) + '…';
+      neuZeichnen();
+    });
+  } catch (e) {
+    if (!t.stopp.signal.aborted) uiHinweis('Tony konnte nicht antworten: ' + (e?.message || e), 'fehler');
+  }
+  S.tonyKarte = null;
+  if (antwort) await liveOberflaeche(antwort.oberflaeche);
+  if (S.detail?.id === todoId) await openCard(todoId);
+  await ladeBoard();
+}
+
 function closeDrawer() { clearInterval(S.chatPoll); S.chatPoll = null; S.detail = null; S.komEntwurf = ''; S.zuruf = null; document.getElementById('drawer-root').innerHTML = ''; }
 
 function renderDrawer() {
@@ -3954,10 +3994,10 @@ function renderDrawer() {
   // der Spalte traegt die Ueberschrift, darum entfällt das fruehere Inline-Label.
   const sk = el('div', { class: 'dchat-verlauf' });
   if (!d.kommentare.length) sk.append(el('div', { class: 'dchat-leer' },
-    'Schreib hier mit dem Team, oder ruf @agent — er kennt Titel, Notiz, Unterpunkte, Dateien und den ganzen Verlauf dieser Karte.'));
+    'Schreib hier — Tony antwortet und kann an dieser Karte alles: nachsehen, Unterpunkte, Fristen, Dateien anlegen. Mit @Name schreibst du nur einem Kollegen.'));
   for (const k of d.kommentare) {
     const zeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const kopf = el('div', { class: 'von' }, `${k.von} · ${zeit(k.am)}` + (k.bearbeitet ? ` · bearbeitet ${zeit(k.bearbeitet)}` : ''));
+    const kopf = el('div', { class: 'von' }, `${k.von === 'tony' ? 'Tony' : k.von} · ${zeit(k.am)}` + (k.bearbeitet ? ` · bearbeitet ${zeit(k.bearbeitet)}` : ''));
     // Eigene Kommentare korrigieren und wegnehmen. Stift und Kreuz stehen wie das ✕ an
     // den Unterpunkten am Zeilenende und erscheinen erst beim Hovern (Marcel, 25.08.).
     // Sie tragen ein title, damit die Bedeutung nicht am Symbol allein haengt.
@@ -3976,7 +4016,7 @@ function renderDrawer() {
     }
     // Eigene Nachrichten rechtsbuendig, alle anderen (Kollegen wie Agent) linksbuendig --
     // das gibt dem Chat sein Richtungsgefuehl. k.meiner traegt die App schon lange.
-    const komKlasse = 'kom' + (k.von === 'agent' ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '');
+    const komKlasse = 'kom' + (k.von === 'agent' || k.von === 'tony' ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '');
     const komZeile = el('div', { class: komKlasse }, kopf, ...chatFaltung(k.text, k.id));
     // Vorschlag mit Klick-Bestaetigung (Migration 115/116): eine Frist AENDERT eine
     // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
@@ -4037,16 +4077,21 @@ function renderDrawer() {
       // Schritt fuer Schritt mit Sekunde, dazu der Vergleich mit der ueblichen Dauer.
       arbeitsweg(d)));
   }
+  // Tony schreibt (Migration 220): die Antwort waechst hier Wort fuer Wort und wird danach
+  // ein Kommentar von "tony". Steht im Zustand, damit ein Neuzeichnen sie nicht verliert.
+  if (S.tonyKarte && S.tonyKarte.todoId === d.id) sk.append(tonyKarteBlase());
   const addK = el('div', { class: 'dchat-eingabe' });
   const senden = async () => {
-    const txt = kInp.value.trim(); if (!txt) return;
+    const txt = kInp.value.trim(); if (!txt || (S.tonyKarte && S.tonyKarte.todoId === d.id)) return;
     kInp.value = ''; S.komEntwurf = '';
     kInp.style.height = 'auto';   // mitgewachsenes Feld wieder auf eine Zeile
     // Erst die Bestaetigung zeichnen, dann zum Server: ein Zuruf darf sich nie
     // anfuehlen, als waere er ins Leere gegangen.
     if (/@agent\b/i.test(txt)) { S.zuruf = { todoId: d.id, seit: Date.now() }; renderDrawer(); }
+    const verlauf = (d.kommentare || []).slice(-20).map((k) => ({ rolle: k.von === 'tony' ? 'assistent' : 'nutzer', text: (k.von === 'tony' ? '' : k.von + ': ') + k.text }));
     await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
     await openCard(d.id); await ladeBoard();
+    if (tonyAntwortet(txt)) await tonyInKarte(d.id, txt, verlauf);
   };
   // Mehrzeiliges Eingabefeld, das mitwaechst (Marcel, 26.08.: "passt sich nicht der
   // Masse an Text an, ich muss mit der Pfeiltaste durchzippen"). Aufgebaut wie das
@@ -4054,7 +4099,7 @@ function renderDrawer() {
   // dem Text bis zu einer Deckelung -- danach scrollt das Feld selbst, statt den
   // halben Chat zu verdraengen.
   const kInp = el('textarea', { id: 'kom-inp', rows: '1',
-    placeholder: 'Nachricht…  @ erwähnt jemanden, @agent fragt den Agenten',
+    placeholder: 'Nachricht an Tony…  @Name schreibt nur einem Kollegen',
     oninput: () => { S.komEntwurf = kInp.value; hoeheAnpassen(); },
     onkeydown: (e) => {
       // Waehrend die @-Vorschlagsliste offen ist, gehoert Enter der Auswahl.
@@ -4070,7 +4115,7 @@ function renderDrawer() {
   // Nach dem Einhaengen messen: vorher ist scrollHeight 0.
   setTimeout(hoeheAnpassen);
   dchat.append(el('div', { class: 'dchat-kopf' }, 'Chat',
-    el('span', { class: 'dchat-hinweis' }, '@agent fragt den Agenten')), sk, addK);
+    el('span', { class: 'dchat-hinweis' }, 'Tony liest mit und antwortet')), sk, addK);
 
   // Verlauf
   if ((d.verlauf || []).length) {
