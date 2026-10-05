@@ -208,7 +208,8 @@ function renderVergabe() {
     + `${ohneTermin.length} Einheiten ohne Lesefassungstermin`));
   const tab = el('table', { class: 'vgtab' }, el('tr', {}, el('th', {}, 'Projekt'), el('th', {}, 'Plan'), el('th', {}, 'Stand'),
     el('th', {}, 'GHIW'), el('th', {}, 'ohne Lesefassung')));
-  for (const q of VG.d.quellen || []) tab.append(el('tr', {}, el('td', {}, vgKurzProjekt(q.projekt)), el('td', {}, q.datei),
+  for (const q of VG.d.quellen || []) tab.append(el('tr', {}, el('td', {}, vgKurzProjekt(q.projekt), q.im_board ? '' : el('span', { class: 'vgklein' }, ' (nicht im Board)')),
+    el('td', {}, q.url ? el('a', { href: q.url, target: '_blank', rel: 'noopener' }, q.datei) : q.datei),
     el('td', {}, vgFmt(vgTag(q.stand))), el('td', {}, `${q.ghiw} von ${q.gesamt}`),
     el('td', { class: q.ohne_lesefassung ? 'warn' : '' }, String(q.ohne_lesefassung))));
   lage.append(tab, el('div', { class: 'vgklein' }, 'Ohne Lesefassungstermin kann eine Einheit nicht auf der Zeitachse stehen — '
@@ -266,7 +267,8 @@ function vgDetail(e) {
       zeile('Veröffentlichung', vgFmt(vgTag(e.veroeffentlichung))), zeile('Submission', vgFmt(vgTag(e.submission))),
       zeile('Sitzung', vgFmt(vgTag(e.sitzung))), zeile('Beginn Gewerk', vgFmt(vgTag(e.baubeginn))),
       el('div', { class: 'vgquelle' }, `Einordnung der KI: ${e.ghiw ? 'GHIW schreibt aus' : 'nicht GHIW'} — ${e.ghiw_grund || ''}`),
-      el('div', { class: 'vgquelle' }, `Quelle: ${e.quelle_datei} (Stand ${vgFmt(vgTag(e.plan_stand))})`)));
+      el('div', { class: 'vgquelle' }, 'Quelle: ', e.quelle_url ? el('a', { href: e.quelle_url, target: '_blank', rel: 'noopener' }, e.quelle_datei) : e.quelle_datei,
+        ` (Stand ${vgFmt(vgTag(e.plan_stand))})`)));
 }
 
 let vgStilDa = false;
@@ -349,6 +351,7 @@ function vgStil() {
 #vergabe-root .vgfeldreihe{display:flex;gap:10px}
 #vergabe-root .vgin{font:inherit;font-size:13px;padding:7px 9px;border-radius:8px;border:1px solid rgba(28,28,26,.16);background:#FFFFFF;color:#1C1C1A;width:100%;box-sizing:border-box}
 #vergabe-root .vgdknoepfe{display:flex;gap:8px;margin-top:4px}
+#vergabe-root .vglage a,#vergabe-root .vgquelle a{color:#4E6117;text-decoration:underline;text-underline-offset:2px}
 #vergabe-root .vgquelle{font-size:11.5px;color:#8A8A83;margin-top:6px;line-height:1.45}
 `));
 }
