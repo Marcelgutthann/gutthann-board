@@ -140,8 +140,13 @@ function renderVergabe() {
   const gruppeVon = (e) => VG.sicht === 'projekt' ? e.projekt : VG.sicht === 'gewerk' ? e.gewerk : (e.person || 'Nicht zugeordnet');
   const gruppen = new Map();
   for (const e of imFenster) { const g = gruppeVon(e); if (!gruppen.has(g)) gruppen.set(g, []); gruppen.get(g).push(e); }
+  // Mitarbeiter-Ansicht: jede Person der Liste (Migration 226) hat eine Zeile, auch ohne Zuordnung —
+  // so sieht man freie Kapazitaet. Reihenfolge wie in der Liste, Nicht zugeordnet zuletzt.
+  const team = VG.d.personen || [];
+  if (VG.sicht === 'person') for (const p of team) if (!gruppen.has(p)) gruppen.set(p, []);
+  const rang = (n) => n === 'Nicht zugeordnet' ? 1e9 : team.includes(n) ? team.indexOf(n) : 1e6;
   const reihe = [...gruppen.entries()].sort((a, b) => {
-    if (VG.sicht === 'person') { if (a[0] === 'Nicht zugeordnet') return 1; if (b[0] === 'Nicht zugeordnet') return -1; }
+    if (VG.sicht === 'person') return rang(a[0]) - rang(b[0]) || a[0].localeCompare(b[0], 'de');
     return Math.min(...a[1].map((e) => vgFenster(e).vorlauf)) - Math.min(...b[1].map((e) => vgFenster(e).vorlauf));
   });
 
@@ -179,7 +184,7 @@ function renderVergabe() {
       VG.sicht === 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + projDot(name) }) : null,
       el('span', { class: 'vgname', title: name }, VG.sicht === 'projekt' ? vgKurzProjekt(name) : name),
       el('span', { class: 'vgzahl', title: frei ? `${frei} noch ohne Mitarbeiter` : 'alle zugeordnet' },
-        `${liste.length}${frei ? ' · ' + frei + ' offen' : ''}`)),
+        liste.length ? `${liste.length}${frei ? ' · ' + frei + ' offen' : ''}` : 'frei')),
     el('div', { class: 'vgspur' }, heuteLinie(), ...liste.map((e) => balken(e, false)), ...meilensteine(liste)));
     plan.append(kopf);
     if (!offen) continue;
@@ -233,7 +238,7 @@ function renderVergabe() {
 function vgDetail(e) {
   const f = vgFenster(e);
   const zeile = (k, v, klasse) => v ? el('div', { class: 'vgdz' + (klasse ? ' ' + klasse : '') }, el('span', {}, k), el('b', {}, v)) : null;
-  const personen = VG.d.personen || [];
+  const personen = [...(VG.d.personen || []), ...(VG.d.weitere || [])];
   const liste = el('datalist', { id: 'vg-personen' }, ...personen.map((p) => el('option', { value: p })));
   const pIn = el('input', { class: 'vgin', list: 'vg-personen', placeholder: 'Mitarbeiter wählen oder eintippen', value: e.person || '' });
   const tIn = el('input', { class: 'vgin kurz', type: 'number', min: '1', max: '120', value: String(e.bearbeitung_tage || VG_TAGE) });
