@@ -10,8 +10,10 @@
 // Farben: Projekte zufällig (projDot wie in der Seitenleiste), Gewerkfarben sind zurückgestellt.
 
 const VG = { d: null, fehler: null, sicht: 'projekt', monate: 6, offen: new Set(), projekte: null,
-  gewerk: '', fremde: false, erledigte: false, nurOffen: false, detail: null };
-const VG_TAGE = 14, VG_VORLAUF = 4; // Beispiel aus der Besprechung (Baumeister-LV), je Einheit änderbar
+  gewerk: '', fremde: false, erledigte: false, nurOffen: false, detail: null,
+  von: null, tage: null }; // sichtbarer Ausschnitt der Zeitachse (Strg/Alt+Mausrad zoomt, Umschalt+Mausrad schiebt)
+const VG_TAGE = 14; // Beispiel aus der Besprechung (Baumeister-LV), je Einheit änderbar
+const VG_TAG_MS = 86400000;
 
 async function ladeVergabe() {
   vgStil();
@@ -37,21 +39,100 @@ const vgKurzProjekt = (p) => String(p).replace(/^\d+\s*-\s*/, '').replace(/^\d{4
 // ist die Zelle offensichtlich veraltet (Wenzenbach 29.09.2026: Lesefassung 2025, Veroeffentlichung 2026).
 // Dann gilt die Regel des Plans selbst — „Lesefassung 10 KT vor Versendung" — und der Termin ist als
 // abgeleitet markiert (hohle Raute, Hinweis im Detail).
+// Fehlt die Lesefassung ganz, gibt es einen Ersatztermin (Marcel 05.10.: „dass wir alles mal drin haben"),
+// zurueckgerechnet aus dem naechsten Termin, der in der Zeile steht:
+//   Veroeffentlichung − 10 KT · Submission − Angebotszeit (EU 35 / national 10 KT) − 10 KT ·
+//   Baubeginn − Versand-Orientierung aus dem Wenzenbach-Plan (EU 90 / national 42 KT) − 10 KT.
+// Immer als Schaetzung markiert; e.lf_grund sagt, woraus.
 function vgLesefassung(e) {
-  e.lf = e.lesefassung; e.lf_abgeleitet = false;
+  e.lf = e.lesefassung; e.lf_abgeleitet = false; e.lf_grund = null;
+  const eu = /eu/i.test(e.vergabeart || '');
+  const ab = (d, tage, grund) => { e.lf = vgPlus(vgTag(d), -tage).toLocaleDateString('sv-SE'); e.lf_abgeleitet = true; e.lf_grund = grund; };
   if (e.lesefassung && e.veroeffentlichung && (vgTag(e.veroeffentlichung) - vgTag(e.lesefassung)) / 86400000 > 90) {
-    e.lf = vgPlus(vgTag(e.veroeffentlichung), -10).toLocaleDateString('sv-SE');
-    e.lf_abgeleitet = true;
+    ab(e.veroeffentlichung, 10, 'veraltet');
+  } else if (!e.lesefassung && !e.erledigt) {
+    if (e.veroeffentlichung) ab(e.veroeffentlichung, 10, 'veroeffentlichung');
+    else if (e.submission) ab(e.submission, (eu ? 35 : 10) + 10, 'submission');
+    else if (e.baubeginn) ab(e.baubeginn, (eu ? 90 : 42) + 10, 'baubeginn');
   }
 }
+const VG_LF_GRUND = {
+  veraltet: (e) => `Im Plan steht ${vgFmt(vgTag(e.lesefassung))} — über 90 Tage vor der Veröffentlichung, also veraltet. Angesetzt: 10 Kalendertage vor der Veröffentlichung.`,
+  veroeffentlichung: () => 'Im Plan fehlt die Lesefassung. Geschätzt: 10 Kalendertage vor der Veröffentlichung.',
+  submission: (e) => `Im Plan fehlt die Lesefassung. Geschätzt aus der Submission: ${/eu/i.test(e.vergabeart || '') ? '35' : '10'} Tage Angebotszeit + 10 Tage.`,
+  baubeginn: (e) => `Im Plan fehlt die Lesefassung. Geschätzt aus dem Baubeginn: Versand ${/eu/i.test(e.vergabeart || '') ? '90 (EU)' : '42 (national)'} Tage vorher (Faustregel aus dem Wenzenbach-Plan), Lesefassung 10 Tage davor.`,
+};
 
-// Bearbeitungsfenster einer Einheit: [Lesefassung − Bearbeitung − Vorlauf, Lesefassung]
+// Bearbeitungsfenster einer Einheit: [Lesefassung − Bearbeitung, Lesefassung]. Den Vorlauf gibt es nicht
+// mehr (Marcel 05.10.: ergibt keinen Sinn) — eine alte vorlauf_tage-Angabe in der Datenbank wird ignoriert.
 function vgFenster(e) {
   const ende = vgTag(e.lf);
   if (!ende) return null;
-  const tage = e.bearbeitung_tage || VG_TAGE, vor = e.vorlauf_tage ?? VG_VORLAUF;
-  return { vorlauf: vgPlus(ende, -(tage + vor)), start: vgPlus(ende, -tage), ende };
+  return { start: vgPlus(ende, -(e.bearbeitung_tage || VG_TAGE)), ende };
 }
+
+// Ausschnitt auf eine Voreinstellung (3/6/12 Monate ab zwei Wochen vor heute) setzen
+function vgAusschnitt(monate) {
+  const heute = vgTag(VG.d.heute);
+  VG.monate = monate;
+  VG.von = vgPlus(heute, -14);
+  VG.tage = Math.round((new Date(heute.getFullYear(), heute.getMonth() + monate, heute.getDate()) - VG.von) / VG_TAG_MS);
+}
+
+// Alles auf der Zeitachse traegt data-a (und data-b fuer Breiten) als Millisekunden. Zoomen und Schieben
+// setzen nur left/width neu — kein Neuaufbau, deshalb laeuft es fluessig wie im Terminplan.
+function vgLage(wurzel) {
+  const von = VG.von.getTime(), span = VG.tage * VG_TAG_MS;
+  for (const n of wurzel.querySelectorAll('[data-a]')) {
+    const a = +n.dataset.a;
+    n.style.left = ((a - von) / span * 100) + '%';
+    if (n.dataset.b) n.style.width = Math.max(0.15, (+n.dataset.b - a) / span * 100) + '%';
+  }
+}
+
+// Strg/Alt+Mausrad zoomt am Zeiger, Umschalt+Mausrad (oder seitliches Wischen) schiebt, Ziehen mit der
+// linken Maustaste auf freier Flaeche schiebt ebenfalls. Vorbild: terminplan/plan.html.
+function vgBewegung(plan) {
+  let rahmen = 0;
+  const zeichne = () => { if (!rahmen) rahmen = requestAnimationFrame(() => { rahmen = 0; vgLage(plan); }); };
+  const spur = () => plan.querySelector('.vgspur').getBoundingClientRect();
+  const schiebe = (px) => { VG.von = new Date(VG.von.getTime() + px / spur().width * VG.tage * VG_TAG_MS); VG.monate = null; zeichne(); };
+  plan.addEventListener('wheel', (ev) => {
+    const r = spur();
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) {
+      ev.preventDefault();
+      const anteil = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      const anker = VG.von.getTime() + anteil * VG.tage * VG_TAG_MS;
+      const d = ev.deltaMode === 1 ? ev.deltaY * 33 : ev.deltaY;
+      VG.tage = Math.max(14, Math.min(1100, VG.tage * Math.exp(d * 0.0015)));
+      VG.von = new Date(anker - anteil * VG.tage * VG_TAG_MS);
+      VG.monate = null; zeichne();
+      vgSegmentAus(plan);
+    } else if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+      ev.preventDefault();
+      schiebe(ev.deltaX || ev.deltaY);
+      vgSegmentAus(plan);
+    }
+  }, { passive: false });
+  plan.addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0 || ev.target.closest('.vgbalken, .vgraute, .vglabel, button, a, input')) return;
+    vgZug = { plan, x: ev.clientX, los: false, schiebe };
+  });
+}
+const vgSegmentAus = (plan) => plan.closest('.vghaupt')?.querySelectorAll('.vgseg.zeit button.an').forEach((b) => b.classList.remove('an'));
+// Ziehen: EIN Satz Fenster-Lauscher fuer alle Neuaufbauten (sonst saemmelte jeder renderVergabe neue an)
+let vgZug = null;
+window.addEventListener('mousemove', (ev) => {
+  if (!vgZug || !vgZug.plan.isConnected) return;
+  const dx = ev.clientX - vgZug.x;
+  if (!vgZug.los && Math.abs(dx) < 4) return;
+  vgZug.los = true; vgZug.x = ev.clientX; vgZug.plan.classList.add('zieht');
+  vgZug.schiebe(-dx); vgSegmentAus(vgZug.plan);
+});
+window.addEventListener('mouseup', () => {
+  if (vgZug?.los) vgZug.plan.addEventListener('click', (ev) => ev.stopPropagation(), { capture: true, once: true });
+  vgZug?.plan.classList.remove('zieht'); vgZug = null;
+});
 
 function vgEinheiten() {
   const alle = VG.d?.einheiten || [];
@@ -68,25 +149,25 @@ function renderVergabe() {
   if (VG.fehler) { root.replaceChildren(el('div', { class: 'vgleer' }, VG.fehler)); return; }
   if (!VG.d) return;
   const heute = vgTag(VG.d.heute);
-  const von = vgPlus(heute, -14);
-  const bis = new Date(heute.getFullYear(), heute.getMonth() + VG.monate, heute.getDate());
-  const tageGesamt = Math.round((bis - von) / 86400000);
-  const pct = (d) => Math.max(0, Math.min(100, (d - von) / 86400000 / tageGesamt * 100));
+  if (!VG.von) vgAusschnitt(VG.monate || 6);
+  // Zeilen haengen nicht am Zoom: alles ab zwei Wochen vor heute steht drin, der Ausschnitt waehlt nur den Blick
+  const ab = vgPlus(heute, -14);
+  const pos = (a, b) => b ? { 'data-a': String(+a), 'data-b': String(+b) } : { 'data-a': String(+a) };
 
   const basis = vgEinheiten();
-  const imFenster = basis.filter((e) => { const f = vgFenster(e); return f && f.ende >= von && f.vorlauf <= bis; });
+  const imFenster = basis.filter((e) => { const f = vgFenster(e); return f && f.ende >= ab; });
   const ohneTermin = basis.filter((e) => !e.lf && !e.erledigt);
 
   // ---- Werkzeugleiste ----
   const leiste = el('div', { class: 'vgleiste' });
-  const seg = (werte, aktiv, setze) => {
-    const s = el('div', { class: 'vgseg' });
+  const seg = (werte, aktiv, setze, klasse) => {
+    const s = el('div', { class: 'vgseg' + (klasse ? ' ' + klasse : '') });
     for (const [k, t] of werte) s.append(el('button', { class: aktiv === k ? 'an' : '', onclick: () => { setze(k); renderVergabe(); } }, t));
     return s;
   };
   leiste.append(seg([['projekt', 'Projekte'], ['gewerk', 'Gewerke'], ['person', 'Mitarbeiter']], VG.sicht,
     (k) => { VG.sicht = k; VG.offen.clear(); }));
-  leiste.append(seg([[3, '3 Monate'], [6, '6 Monate'], [12, '12 Monate']], VG.monate, (k) => { VG.monate = k; }));
+  leiste.append(seg([[3, '3 Monate'], [6, '6 Monate'], [12, '12 Monate']], VG.monate, (k) => vgAusschnitt(k), 'zeit'));
   const gewerke = [...new Set((VG.d.einheiten || []).filter((e) => VG.fremde || e.ghiw).map((e) => e.gewerk))].sort((a, b) => a.localeCompare(b, 'de'));
   const gsel = el('select', { class: 'vgsel', onchange: (ev) => { VG.gewerk = ev.target.value; renderVergabe(); } },
     el('option', { value: '' }, 'Alle Gewerke'), ...gewerke.map((g) => el('option', { value: g }, g)));
@@ -112,29 +193,32 @@ function renderVergabe() {
     } }, el('span', { class: 'vgpunkt', style: 'background:' + projDot(p) }), vgKurzProjekt(p)));
   }
 
-  // ---- Zeitachse ----
+  // ---- Zeitachse: ueber den ganzen Datenbereich plus Reserve gebaut, damit Zoomen/Schieben nichts nachbauen muss ----
+  const fenster = imFenster.map(vgFenster);
+  const bereichVon = new Date(Math.min(+vgPlus(heute, -400), ...fenster.map((f) => +f.start)));
+  const bereichBis = new Date(Math.max(+vgPlus(heute, 1100), ...fenster.map((f) => +f.ende)));
   const achse = el('div', { class: 'vgachse' });
-  for (let m = new Date(von.getFullYear(), von.getMonth() + 1, 1); m < bis; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
-    achse.append(el('div', { class: 'vgmonat', style: `left:${pct(m)}%` },
+  for (let m = new Date(bereichVon.getFullYear(), bereichVon.getMonth() + 1, 1); m < bereichBis; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
+    achse.append(el('div', { class: 'vgmonat', ...pos(m) },
       m.toLocaleDateString('de-DE', { month: 'short', year: m.getMonth() === 0 ? '2-digit' : undefined })));
   }
-  const heuteLinie = () => el('div', { class: 'vgheute', style: `left:${pct(heute)}%` });
+  const heuteLinie = () => el('div', { class: 'vgheute', ...pos(heute) });
 
-  // Dichte je Woche: wie viele Einheiten sind gleichzeitig in Bearbeitung („wo zwickt es")
-  const wochen = Math.ceil(tageGesamt / 7);
+  // Dichte je Kalenderwoche (ab Montag): wie viele Einheiten sind gleichzeitig in Bearbeitung („wo zwickt es")
+  const montag0 = vgPlus(bereichVon, -((bereichVon.getDay() + 6) % 7));
+  const wochen = Math.ceil((bereichBis - montag0) / VG_TAG_MS / 7);
   const dichte = Array(wochen).fill(0);
-  for (const e of imFenster) {
-    const f = vgFenster(e);
+  for (const f of fenster) {
     for (let w = 0; w < wochen; w++) {
-      const a = vgPlus(von, w * 7), b = vgPlus(a, 7);
-      if (f.vorlauf < b && f.ende >= a) dichte[w]++;
+      const a = vgPlus(montag0, w * 7), b = vgPlus(a, 7);
+      if (f.start < b && f.ende >= a) dichte[w]++;
     }
   }
   const maxD = Math.max(1, ...dichte);
   const dichteBand = el('div', { class: 'vgdichte' });
-  dichte.forEach((n, w) => dichteBand.append(el('div', {
-    class: 'vgdzelle', title: `KW ab ${vgFmt(vgPlus(von, w * 7))}: ${n} Einheit${n === 1 ? '' : 'en'} in Bearbeitung`,
-    style: `left:${pct(vgPlus(von, w * 7))}%;width:${100 / wochen}%;opacity:${n ? 0.12 + 0.88 * n / maxD : 0}` }, n ? String(n) : '')));
+  dichte.forEach((n, w) => { if (n) dichteBand.append(el('div', {
+    class: 'vgdzelle', title: `KW ab ${vgFmt(vgPlus(montag0, w * 7))}: ${n} Einheit${n === 1 ? '' : 'en'} in Bearbeitung`,
+    ...pos(vgPlus(montag0, w * 7), vgPlus(montag0, w * 7 + 7)), style: `opacity:${0.12 + 0.88 * n / maxD}` }, String(n))); });
 
   // ---- Gruppen ----
   const gruppeVon = (e) => VG.sicht === 'projekt' ? e.projekt : VG.sicht === 'gewerk' ? e.gewerk : (e.person || 'Nicht zugeordnet');
@@ -147,7 +231,7 @@ function renderVergabe() {
   const rang = (n) => n === 'Nicht zugeordnet' ? 1e9 : team.includes(n) ? team.indexOf(n) : 1e6;
   const reihe = [...gruppen.entries()].sort((a, b) => {
     if (VG.sicht === 'person') return rang(a[0]) - rang(b[0]) || a[0].localeCompare(b[0], 'de');
-    return Math.min(...a[1].map((e) => vgFenster(e).vorlauf)) - Math.min(...b[1].map((e) => vgFenster(e).vorlauf));
+    return Math.min(...a[1].map((e) => vgFenster(e).start)) - Math.min(...b[1].map((e) => vgFenster(e).start));
   });
 
   const farbe = (e) => projDot(e.projekt);
@@ -155,9 +239,8 @@ function renderVergabe() {
     const f = vgFenster(e);
     const b = el('div', {
       class: 'vgbalken' + (e.person ? ' zu' : ' frei') + (klein ? ' klein' : ''),
-      style: `left:${pct(f.vorlauf)}%;width:${Math.max(0.4, pct(f.ende) - pct(f.vorlauf))}%;--f:${farbe(e)};`
-        + `--v:${(pct(f.start) - pct(f.vorlauf)) / Math.max(0.01, pct(f.ende) - pct(f.vorlauf)) * 100}%`,
-      title: `${e.gewerk} · ${vgKurzProjekt(e.projekt)}\nLesefassung ${vgFmt(f.ende)}${e.person ? '\nbei ' + e.person : '\nnoch nicht zugeordnet'}`,
+      ...pos(f.start, f.ende), style: `--f:${farbe(e)}`,
+      title: `${e.leistungsbereich} · ${vgKurzProjekt(e.projekt)}\nLesefassung ${vgFmt(f.ende)}${e.person ? '\nbei ' + e.person : '\nnoch nicht zugeordnet'}`,
       onclick: (ev) => { ev.stopPropagation(); VG.detail = e.schluessel; renderVergabe(); },
     });
     return b;
@@ -166,8 +249,8 @@ function renderVergabe() {
   const meilensteine = (liste) => {
     const m = new Map();
     for (const e of liste) { const k = e.projekt + '|' + e.lf; m.set(k, [...(m.get(k) || []), e]); }
-    return [...m.values()].map((l) => el('div', { class: 'vgraute' + (l.every((e) => e.lf_abgeleitet) ? ' abgeleitet' : ''), style: `left:${pct(vgTag(l[0].lf))}%;--f:${farbe(l[0])}`,
-      title: `Lesefassung beim Bauherrn ${vgFmt(vgTag(l[0].lf))}${l[0].lf_abgeleitet ? ' (abgeleitet: 10 KT vor Veröffentlichung)' : ''} · ${vgKurzProjekt(l[0].projekt)}\n` + l.map((e) => '· ' + e.leistungsbereich).join('\n') },
+    return [...m.values()].map((l) => el('div', { class: 'vgraute' + (l.every((e) => e.lf_abgeleitet) ? ' abgeleitet' : ''), ...pos(vgTag(l[0].lf)), style: `--f:${farbe(l[0])}`,
+      title: `Lesefassung beim Bauherrn ${vgFmt(vgTag(l[0].lf))}${l[0].lf_abgeleitet ? ' (geschätzt, nicht im Plan)' : ''} · ${vgKurzProjekt(l[0].projekt)}\n` + l.map((e) => '· ' + e.leistungsbereich).join('\n') },
     l.length > 1 ? el('span', { class: 'vgrzahl' }, String(l.length)) : null));
   };
 
@@ -189,7 +272,8 @@ function renderVergabe() {
     plan.append(kopf);
     if (!offen) continue;
     for (const e of [...liste].sort((a, b) => vgFenster(a).ende - vgFenster(b).ende)) {
-      const unter = VG.sicht === 'projekt' ? e.gewerk : vgKurzProjekt(e.projekt) + (VG.sicht === 'person' ? ' · ' + e.gewerk : '');
+      // Beschriftung = Leistungsbereich wie im Vergabeterminplan (gleich dem Detail rechts), nie die KI-Kategorie
+      const unter = VG.sicht === 'projekt' ? e.leistungsbereich : vgKurzProjekt(e.projekt) + ' · ' + e.leistungsbereich;
       plan.append(el('div', { class: 'vgzeile vgeinheit' + (VG.detail === e.schluessel ? ' gewaehlt' : ''), onclick: () => { VG.detail = e.schluessel; renderVergabe(); } },
         el('div', { class: 'vglabel' },
           VG.sicht !== 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + projDot(e.projekt) }) : null,
@@ -199,34 +283,52 @@ function renderVergabe() {
     }
   }
   if (!reihe.length) plan.append(el('div', { class: 'vgleer' }, 'Keine Vergabeeinheit mit Lesefassungstermin in diesem Zeitraum und Filter.'));
+  vgLage(plan);
+  vgBewegung(plan);
 
   // ---- Legende + Datenlage ----
   const legende = el('div', { class: 'vglegende' },
     el('span', {}, el('i', { class: 'vglg voll' }), 'zugeordnet'),
     el('span', {}, el('i', { class: 'vglg leer' }), 'noch offen'),
     el('span', {}, el('i', { class: 'vglg raute' }), 'Lesefassung beim Bauherrn'),
-    el('span', {}, el('i', { class: 'vglg raute hohl' }), 'abgeleitet (Planwert veraltet)'),
-    el('span', { class: 'vgklein' }, `Balken = geschätzte Bearbeitung ${VG_TAGE} Tage + ${VG_VORLAUF} Tage Vorlauf (Beispiel Baumeister-LV, je Einheit änderbar)`));
+    el('span', {}, el('i', { class: 'vglg raute hohl' }), 'geschätzt (Lesefassung fehlt oder ist veraltet)'),
+    el('span', { class: 'vgklein' }, `Balken = geschätzte Bearbeitung, Standard ${VG_TAGE} Tage, je Einheit änderbar · Strg/Alt + Mausrad zoomt, Umschalt + Mausrad oder Ziehen schiebt`));
 
   const lage = el('details', { class: 'vglage' });
   lage.append(el('summary', {}, `Datenlage: ${(VG.d.quellen || []).length} Vergabeterminpläne · `
-    + `${ohneTermin.length} Einheiten ohne Lesefassungstermin`));
+    + `${ohneTermin.length} Einheiten ganz ohne Termin`));
   const tab = el('table', { class: 'vgtab' }, el('tr', {}, el('th', {}, 'Projekt'), el('th', {}, 'Plan'), el('th', {}, 'Stand'),
-    el('th', {}, 'GHIW'), el('th', {}, 'ohne Lesefassung')));
+    el('th', {}, 'GHIW'), el('th', {}, 'Lesefassung fehlt im Plan')));
   for (const q of VG.d.quellen || []) tab.append(el('tr', {}, el('td', {}, vgKurzProjekt(q.projekt), q.im_board ? '' : el('span', { class: 'vgklein' }, ' (nicht im Board)')),
     el('td', {}, q.url ? el('a', { href: q.url, target: '_blank', rel: 'noopener' }, q.datei) : q.datei),
     el('td', {}, vgFmt(vgTag(q.stand))), el('td', {}, `${q.ghiw} von ${q.gesamt}`),
     el('td', { class: q.ohne_lesefassung ? 'warn' : '' }, String(q.ohne_lesefassung))));
-  lage.append(tab, el('div', { class: 'vgklein' }, 'Ohne Lesefassungstermin kann eine Einheit nicht auf der Zeitachse stehen — '
-    + 'die Spalte „Versendung LV als Lesefassung an Bauherr" im Vergabeterminplan ausfüllen (Projektleitung).'));
-  if (ohneTermin.length) {
-    const liste = el('div', { class: 'vgohne' });
-    for (const e of ohneTermin.slice(0, 80)) liste.append(el('button', { class: 'vgohnez', onclick: () => { VG.detail = e.schluessel; renderVergabe(); } },
-      el('span', { class: 'vgpunkt', style: 'background:' + projDot(e.projekt) }), `${vgKurzProjekt(e.projekt)} · ${e.leistungsbereich}`));
-    lage.append(liste);
-  }
+  lage.append(tab, el('div', { class: 'vgklein' }, 'Fehlt die Lesefassung, steht die Einheit mit einem geschätzten Termin auf der Zeitachse (hohle Raute); '
+    + `${ohneTermin.length} Einheiten haben gar keinen Termin im Plan. Bitte die Spalte „Versendung LV als Lesefassung an Bauherr" im Vergabeterminplan ausfüllen (Projektleitung).`));
 
-  const haupt = el('div', { class: 'vghaupt' }, leiste, chips, plan, legende, lage);
+  // ---- Abdeckung (Migration 227): jedes laufende Poool-Projekt muss hier auftauchen ----
+  // Marcel 05.10.: „Wenn ein Projekt, was wir bearbeiten, nicht dort drinnen steht, ist das Katastrophe."
+  const abd = VG.d.abdeckung || [];
+  const GRUND = { plan: 'Vergabeterminplan gelesen', ordner_leer: 'Vergabe-Ordner ist leer', kein_vergabeordner: 'kein Ordner „Vergabeterminplan" unter Termine',
+    kein_termine: 'kein Ordner „Termine"', kein_ordner: 'kein SharePoint-Ordner zur Projektnummer' };
+  const bau = abd.filter((a) => a.art === 'bau');
+  const fehlt = bau.filter((a) => a.plan_status !== 'plan');
+  const abdeckung = el('details', { class: 'vgabd' + (fehlt.length ? ' luecke' : '') });
+  abdeckung.append(el('summary', {}, el('b', {}, `${bau.length - fehlt.length} von ${bau.length} laufenden Bauprojekten`),
+    ' (laut Poool) haben einen Vergabeterminplan', fehlt.length ? el('span', { class: 'warn' }, ` · ${fehlt.length} ohne — nicht planbar`) : ''));
+  for (const st of ['kein_ordner', 'kein_termine', 'kein_vergabeordner', 'ordner_leer']) {
+    const l = fehlt.filter((a) => a.plan_status === st);
+    if (!l.length) continue;
+    abdeckung.append(el('div', { class: 'vgdlbl' }, `${GRUND[st]} (${l.length})`),
+      el('div', { class: 'vgohne' }, ...l.map((a) => el('span', { class: 'vgohnez', title: `${a.titel} · Poool: ${a.poool_status}${a.ordner ? ' · Ordner: ' + a.ordner : ''}` },
+        `${a.nummer} ${a.titel}${a.poool_status !== 'Aktuell' ? ' (' + a.poool_status + ')' : ''}`))));
+  }
+  const rest = abd.filter((a) => a.art !== 'bau');
+  if (rest.length) abdeckung.append(el('div', { class: 'vgklein' }, `Nicht mitgezählt: ${rest.length} Bauleitpläne und interne Positionen ohne Vergaben (`
+    + rest.map((a) => a.nummer).join(', ') + ').'));
+  if (abd.length) abdeckung.append(el('div', { class: 'vgklein' }, `Abgleich Poool ↔ SharePoint vom ${new Date(abd[0].geprueft_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}, läuft alle 15 Minuten.`));
+
+  const haupt = el('div', { class: 'vghaupt' }, leiste, abd.length ? abdeckung : null, chips, plan, legende, lage);
   const teile = [haupt];
   const det = VG.detail && (VG.d.einheiten || []).find((e) => e.schluessel === VG.detail);
   if (det) teile.push(vgDetail(det));
@@ -242,10 +344,9 @@ function vgDetail(e) {
   const liste = el('datalist', { id: 'vg-personen' }, ...personen.map((p) => el('option', { value: p })));
   const pIn = el('input', { class: 'vgin', list: 'vg-personen', placeholder: 'Mitarbeiter wählen oder eintippen', value: e.person || '' });
   const tIn = el('input', { class: 'vgin kurz', type: 'number', min: '1', max: '120', value: String(e.bearbeitung_tage || VG_TAGE) });
-  const vIn = el('input', { class: 'vgin kurz', type: 'number', min: '0', max: '60', value: String(e.vorlauf_tage ?? VG_VORLAUF) });
   const speichern = async (entfernen) => {
     const r = await restRpc('assistant_vergabe_zuordnen', { p_schluessel: e.schluessel, p_person: entfernen ? null : pIn.value.trim() || null,
-      p_bearbeitung_tage: Number(tIn.value) || null, p_vorlauf_tage: vIn.value === '' ? null : Number(vIn.value), p_entfernen: !!entfernen })
+      p_bearbeitung_tage: Number(tIn.value) || null, p_entfernen: !!entfernen })
       .catch((err) => ({ fehler: err.message }));
     if (r?.fehler) { uiHinweis(r.fehler); return; }
     await ladeVergabe();
@@ -256,16 +357,15 @@ function vgDetail(e) {
       el('button', { class: 'vgknopf', title: 'Schließen', onclick: () => { VG.detail = null; renderVergabe(); } }, ico('weg'))),
     el('div', { class: 'vgdblock' },
       zeile('Lesefassung beim Bauherrn', e.lf ? vgFmt(vgTag(e.lf)) + (e.lf_abgeleitet ? ' (abgeleitet)' : '') : 'fehlt im Plan', e.lf && !e.lf_abgeleitet ? 'stark' : 'warn'),
-      f ? zeile('Bearbeitung (geschätzt)', `${vgFmt(f.start)} – ${vgFmt(f.ende)}, Vorlauf ab ${vgFmt(f.vorlauf)}`) : null,
-      e.lf_abgeleitet ? el('div', { class: 'vghinweis' }, `Im Plan steht ${vgFmt(vgTag(e.lesefassung))} — über 90 Tage vor der Veröffentlichung, also veraltet. `
-        + 'Angesetzt ist die Regel des Plans: 10 Kalendertage vor der Veröffentlichung. Bitte im Vergabeterminplan nachtragen.') : null,
+      f ? zeile('Bearbeitung (geschätzt)', `${vgFmt(f.start)} – ${vgFmt(f.ende)}`) : null,
+      e.lf_abgeleitet ? el('div', { class: 'vghinweis' }, VG_LF_GRUND[e.lf_grund](e) + ' Bitte im Vergabeterminplan nachtragen.') : null,
       zeile('Budget (KB brutto)', e.budget_brutto ? Number(e.budget_brutto).toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €' : null),
       zeile('Gewerk', e.gewerk), zeile('Vergabeart', e.vergabeart), zeile('Verantwortlich laut Plan', e.verantwortlich),
       zeile('Bearbeiter laut Plan', e.bearbeiter_plan), zeile('Status laut Plan', e.status)),
     el('div', { class: 'vgdblock' },
       el('div', { class: 'vgdlbl' }, 'Zuordnung'), liste,
       el('label', { class: 'vgfeld' }, 'Mitarbeiter', pIn),
-      el('div', { class: 'vgfeldreihe' }, el('label', { class: 'vgfeld' }, 'Bearbeitung (Tage)', tIn), el('label', { class: 'vgfeld' }, 'Vorlauf (Tage)', vIn)),
+      el('label', { class: 'vgfeld' }, 'Bearbeitung (Tage)', tIn),
       el('div', { class: 'vgdknoepfe' }, el('button', { class: 'btn primary', onclick: () => speichern(false) }, 'Speichern'),
         e.person ? el('button', { class: 'btn', onclick: () => speichern(true) }, 'Zuordnung lösen') : null)),
     el('div', { class: 'vgdblock vgklein' },
@@ -284,7 +384,7 @@ function vgStil() {
 #vergabe-root[hidden]{display:none}
 #vergabe-root .vghaupt{flex:1;min-width:0;overflow:auto;padding:4px 28px 28px}
 #vergabe-root .vgleer{padding:28px;font-size:13.5px;color:#6E6E67}
-#vergabe-root .vgleiste{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:6px 0 10px}
+#vergabe-root .vgleiste{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:4px 0 6px}
 #vergabe-root .vgseg{display:inline-flex;background:#E8E8E6;border-radius:8px;padding:2px}
 #vergabe-root .vgseg button{padding:5px 11px;border-radius:6px;font-size:12.5px;color:#55554F}
 #vergabe-root .vgseg button.an{background:#FFFFFF;color:#1C1C1A;box-shadow:0 1px 2px rgba(28,28,26,.12)}
@@ -292,40 +392,40 @@ function vgStil() {
 #vergabe-root .vgcheck{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#55554F;cursor:pointer}
 #vergabe-root .vgknopf{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:#55554F}
 #vergabe-root .vgknopf:hover{background:rgba(28,28,26,.06)}
-#vergabe-root .vgchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 14px}
-#vergabe-root .vgchip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(28,28,26,.12);color:#8A8A83;background:transparent}
+#vergabe-root .vgchips{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 8px}
+#vergabe-root .vgchip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid rgba(28,28,26,.12);color:#8A8A83;background:transparent}
 #vergabe-root .vgchip.an{color:#1C1C1A;background:#FFFFFF}
 #vergabe-root .vgpunkt{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
 #vergabe-root .vgplan{background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:12px;overflow:hidden}
-#vergabe-root .vgzeile{display:flex;min-height:34px;border-top:1px solid rgba(28,28,26,.06)}
-#vergabe-root .vgkopfzeile{border-top:0;min-height:52px;background:#FAFAF9}
-#vergabe-root .vglabel{width:250px;flex:none;display:flex;align-items:center;gap:7px;padding:0 12px;font-size:12.5px;color:#1C1C1A;border-right:1px solid rgba(28,28,26,.06);min-width:0}
-#vergabe-root .vgkopfzeile .vglabel{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8A8A83;align-items:flex-end;padding-bottom:6px}
+#vergabe-root .vgplan.zieht{cursor:grabbing;user-select:none}
+#vergabe-root .vgzeile{display:flex;min-height:22px;border-top:1px solid rgba(28,28,26,.06)}
+#vergabe-root .vgkopfzeile{border-top:0;min-height:40px;background:#FAFAF9}
+#vergabe-root .vglabel{width:250px;flex:none;display:flex;align-items:center;gap:7px;padding:0 12px;font-size:12px;color:#1C1C1A;border-right:1px solid rgba(28,28,26,.06);min-width:0}
+#vergabe-root .vgkopfzeile .vglabel{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8A8A83;align-items:flex-end;padding-bottom:4px}
 #vergabe-root .vgname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
 #vergabe-root .vgzahl,#vergabe-root .vgmeta{font-size:11.5px;color:#8A8A83;white-space:nowrap}
 #vergabe-root .vgpfeil{display:inline-block;width:10px;color:#8A8A83;transition:transform .15s ease}
-#vergabe-root .vggruppe{cursor:pointer;min-height:40px}
+#vergabe-root .vggruppe{cursor:pointer;min-height:26px}
 #vergabe-root .vggruppe:hover{background:#FAFAF9}
 #vergabe-root .vggruppe .vglabel{font-weight:600}
 #vergabe-root .vggruppe.offen .vgpfeil{transform:rotate(90deg)}
 #vergabe-root .vgeinheit{cursor:pointer;background:#FCFCFB}
 #vergabe-root .vgeinheit .vglabel{padding-left:29px;font-weight:400}
 #vergabe-root .vgeinheit:hover,#vergabe-root .vgeinheit.gewaehlt{background:#F3F3F1}
-#vergabe-root .vgspur{flex:1;position:relative;min-width:420px}
-#vergabe-root .vgachse{position:absolute;inset:0 0 auto 0;height:24px}
-#vergabe-root .vgmonat{position:absolute;top:6px;font-size:11px;color:#75756E;padding-left:4px;border-left:1px solid rgba(28,28,26,.15);height:14px;line-height:14px;white-space:nowrap}
-#vergabe-root .vgdichte{position:absolute;left:0;right:0;bottom:6px;height:18px}
-#vergabe-root .vgdzelle{position:absolute;top:0;bottom:0;background:#4E6117;color:#FFFFFF;font-size:10px;line-height:18px;text-align:center;border-right:1px solid #FAFAF9;box-sizing:border-box}
+#vergabe-root .vgspur{flex:1;position:relative;min-width:420px;overflow-x:clip}
+#vergabe-root .vgachse{position:absolute;inset:0 0 auto 0;height:18px}
+#vergabe-root .vgmonat{position:absolute;top:3px;font-size:11px;color:#75756E;padding-left:4px;border-left:1px solid rgba(28,28,26,.15);height:14px;line-height:14px;white-space:nowrap}
+#vergabe-root .vgdichte{position:absolute;left:0;right:0;bottom:4px;height:16px}
+#vergabe-root .vgdzelle{position:absolute;top:0;bottom:0;background:#4E6117;color:#FFFFFF;font-size:10px;line-height:16px;text-align:center;border-right:1px solid #FAFAF9;box-sizing:border-box;overflow:hidden}
 #vergabe-root .vgheute{position:absolute;top:0;bottom:0;width:0;border-left:1.5px solid #C2410C;opacity:.55;pointer-events:none}
-#vergabe-root .vgbalken{position:absolute;top:9px;height:16px;border-radius:4px;cursor:pointer;background:linear-gradient(90deg,transparent 0 var(--v),var(--f) var(--v));opacity:.42;border:1px solid var(--f);box-sizing:border-box;mix-blend-mode:multiply}
-#vergabe-root .vggruppe .vgbalken{top:11px}
-#vergabe-root .vgbalken.klein{top:10px;height:14px;opacity:.75}
-#vergabe-root .vgbalken.frei{background:repeating-linear-gradient(135deg,transparent 0 3px,rgba(255,255,255,.6) 3px 6px),linear-gradient(90deg,transparent 0 var(--v),var(--f) var(--v));border-style:dashed}
+#vergabe-root .vgbalken{position:absolute;top:50%;height:14px;transform:translateY(-50%);border-radius:4px;cursor:pointer;background:var(--f);opacity:.42;border:1px solid var(--f);box-sizing:border-box;mix-blend-mode:multiply}
+#vergabe-root .vgbalken.klein{height:12px;opacity:.75}
+#vergabe-root .vgbalken.frei{background:repeating-linear-gradient(135deg,transparent 0 3px,rgba(255,255,255,.6) 3px 6px),var(--f);border-style:dashed}
 #vergabe-root .vgbalken:hover{opacity:1}
-#vergabe-root .vgraute{position:absolute;top:50%;width:11px;height:11px;margin:-6px 0 0 -6px;background:#1C1C1A;transform:rotate(45deg);border:2px solid #FFFFFF;box-shadow:0 0 0 1px var(--f);pointer-events:auto}
+#vergabe-root .vgraute{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;background:#1C1C1A;transform:rotate(45deg);border:2px solid #FFFFFF;box-shadow:0 0 0 1px var(--f);pointer-events:auto}
 #vergabe-root .vgraute.abgeleitet{background:#FFFFFF;border:2px solid #B45309;box-shadow:none}
 #vergabe-root .vgrzahl{position:absolute;left:10px;top:-12px;transform:rotate(-45deg);font-size:10px;font-weight:600;color:#1C1C1A;background:#FFFFFF;border-radius:6px;padding:0 3px}
-#vergabe-root .vglegende{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:12px;color:#55554F;padding:12px 2px}
+#vergabe-root .vglegende{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:12px;color:#55554F;padding:8px 2px}
 #vergabe-root .vglegende span{display:inline-flex;align-items:center;gap:6px}
 #vergabe-root .vglg{display:inline-block;width:22px;height:10px;border-radius:3px;background:#8A8A83;opacity:.6}
 #vergabe-root .vglg.leer{background:transparent;border:1px dashed #55554F}
@@ -333,6 +433,10 @@ function vgStil() {
 #vergabe-root .vglg.raute.hohl{background:#FFFFFF;border:2px solid #B45309;box-sizing:border-box}
 #vergabe-root .vgklein{font-size:11.5px;color:#8A8A83;line-height:1.45}
 #vergabe-root .vglage{margin-top:8px;font-size:12.5px;color:#55554F}
+#vergabe-root .vgabd{font-size:12.5px;color:#55554F;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:8px 12px;margin:0 0 12px}
+#vergabe-root .vgabd.luecke{border-color:rgba(180,83,9,.35);background:#FFFBF5}
+#vergabe-root .vgabd summary{cursor:pointer}
+#vergabe-root .vgabd .vgdlbl{margin-top:10px}
 #vergabe-root .vglage summary{cursor:pointer;padding:6px 2px}
 #vergabe-root .vgtab{border-collapse:collapse;margin:6px 0 8px;font-size:12px}
 #vergabe-root .vgtab th,#vergabe-root .vgtab td{text-align:left;padding:4px 14px 4px 0;border-bottom:1px solid rgba(28,28,26,.07)}
