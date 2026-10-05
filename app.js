@@ -319,7 +319,7 @@ async function ladeBoard() {
   if (!S.active) return;
   const token = ++ladeToken;
   ladeMeldungen(); // blockiert nichts; zeichnet die Topbar selbst nach
-  if (S.active.typ === 'chat') return;
+  if (S.active.typ === 'chat' || S.active.typ === 'vergabe') return;
   if (S.active.typ === 'radar') {
     const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (token !== ladeToken) return;
@@ -467,7 +467,7 @@ async function wechsle(typ, id, name) {
   S.newCardCol = null; S.newCardText = '';
   zeigeAnsicht('board'); // beim Wechsel immer zuerst die Aufgaben zeigen
   renderSidebar(); renderTopbar();
-  if (typ === 'dev' || typ === 'chat') return; // DEV und Chat haben kein Board zu laden
+  if (typ === 'dev' || typ === 'chat' || typ === 'vergabe') return; // DEV, Chat, Vergabeuebersicht haben kein Board zu laden
   renderBoard(); await ladeBoard();
 }
 
@@ -487,10 +487,14 @@ function zeigeAnsicht(welche) {
   const istDev = S.active?.typ === 'dev';
   const istChat = S.active?.typ === 'chat';
   const chatRoot = document.getElementById('chat-root');
+  const istVergabe = S.active?.typ === 'vergabe';
+  const vergabeRoot = document.getElementById('vergabe-root');
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
   const termAn = welche === 'termin' && istProjekt;
-  board.style.display = (dashAn || kalAn || termAn || istRadar || istDev || istChat) ? 'none' : '';
+  board.style.display = (dashAn || kalAn || termAn || istRadar || istDev || istChat || istVergabe) ? 'none' : '';
+  if (vergabeRoot) vergabeRoot.hidden = !istVergabe;
+  if (istVergabe) ladeVergabe();
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
   if (term) term.hidden = !termAn;
@@ -904,7 +908,10 @@ function renderSidebar() {
       onclick: () => wechsle('board', b.id, b.name),
       oncontextmenu: (e) => { e.preventDefault(); boardMenu(e, b, false); },
     }, ico('team'), b.name));
+    if (b.name === 'VgV-Radar') g2.append(vergabeZeile());
   }
+  const vgvGepinnt = (li.pins || []).some((p) => p.art === 'board' && p.name === 'VgV-Radar');
+  if (!vgvGepinnt && !(li.team_boards || []).some((b) => b.name === 'VgV-Radar')) g2.append(vergabeZeile());
   g2.append(el('div', { class: 'row addrow', onclick: () => neuesBoard('team') }, ico('plus'), 'Neues Board'));
 
   // Was im Dashboard steht, steht auch hier oben -- in derselben Reihenfolge
@@ -928,6 +935,7 @@ function renderSidebar() {
           await lotse('radar_auswahl', { ziele: rest });
           S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
         } }, ico('weg'))));
+      if (!istProjekt && p.name === 'VgV-Radar') g3.append(vergabeZeile());
     }
   }
 
@@ -958,6 +966,14 @@ function renderSidebar() {
   }
   if (!imChat) g4.append(el('div', { class: 'row addrow', onclick: projekteAusSharepoint,
     title: 'Projektordner aus den SharePoint-Jahrgängen ins Board holen' }, ico('plus'), 'Aus SharePoint'));
+}
+
+// Sonderboard Vergabeuebersicht (Besprechung 05.10.2026, vergabe-uebersicht.js) -- steht direkt
+// unter dem VgV-Board, ist aber kein Kanban, sondern eine Zeitachse ueber alle Vergabeterminplaene.
+function vergabeZeile() {
+  return el('div', { class: 'row' + (S.active?.typ === 'vergabe' ? ' active' : ''),
+    onclick: () => wechsle('vergabe', null, 'Vergabeübersicht'),
+    title: 'Alle anstehenden Vergaben aus den Vergabeterminplänen auf einer Zeitachse' }, ico('calendar'), 'Vergabeübersicht');
 }
 
 function boardMenu(e, b, letztes) {
@@ -1703,6 +1719,7 @@ function renderTopbar() {
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'dev' ? 'Mit Tony bauen wie in Claude Code · eine Sitzung je Faden'
     : S.active.typ === 'chat' ? 'Mit Tony schreiben · er kennt Board, Projekte und Dokumente'
+    : S.active.typ === 'vergabe' ? 'Büro intern · alle Vergabeterminpläne · maßgeblich ist die Lesefassung beim Bauherrn'
     : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
   tb.append(el('div', { class: 'scope' }, scope));
