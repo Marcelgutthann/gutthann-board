@@ -147,12 +147,12 @@ function renderVergabe() {
   if (!VG.d) return;
   const heute = vgTag(VG.d.heute);
   if (!VG.von) vgAusschnitt(VG.monate || 6);
-  // Zeilen haengen nicht am Zoom: alles ab zwei Wochen vor heute steht drin, der Ausschnitt waehlt nur den Blick
-  const ab = vgPlus(heute, -14);
+  // Jeder Termin aus dem Plan steht im Diagramm, auch vergangene (Marcel 06.10.: „ich sehe es nicht im
+  // Gantt"). Der Ausschnitt startet bei heute − 2 Wochen; zurueck geht es mit Umschalt+Mausrad oder Ziehen.
   const pos = (a, b) => b ? { 'data-a': String(+a), 'data-b': String(+b) } : { 'data-a': String(+a) };
 
   const basis = vgEinheiten();
-  const imFenster = basis.filter((e) => { const f = vgFenster(e); return f && f.ende >= ab; });
+  const imFenster = basis.filter((e) => vgFenster(e));
   const ohneTermin = basis.filter((e) => !e.lf && !e.erledigt);
   const ohneNach = new Map();
   for (const e of ohneTermin) ohneNach.set(e.projekt, [...(ohneNach.get(e.projekt) || []), e]);
