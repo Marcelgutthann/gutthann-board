@@ -282,26 +282,6 @@ function renderVergabe() {
         el('div', { class: 'vgspur' }, heuteLinie(), balken(e, true), ...meilensteine([e]))));
     }
   }
-  // Projekt mit Vergabeterminplan, aber ohne Vergabe ab heute: trotzdem eine Zeile, mit Grund (Marcel 05.10.:
-  // „warum sind 8 Projekte mit Vergabeplan und du zeigst mir nur 4") — nichts darf stillschweigend fehlen.
-  if (VG.sicht === 'projekt' && !VG.gewerk && !VG.nurOffen) {
-    for (const q of VG.d.quellen || []) {
-      if (gruppen.has(q.projekt) || (VG.projekte && !VG.projekte.has(q.projekt))) continue;
-      const eig = (VG.d.einheiten || []).filter((e) => e.projekt === q.projekt && (VG.fremde || e.ghiw) && (VG.erledigte || !e.erledigt));
-      const ohne = eig.filter((e) => !e.lf).length;
-      const letzte = eig.map((e) => e.lf).filter(Boolean).sort().pop();
-      const grund = !eig.length ? 'keine offenen GHIW-Vergaben im Plan'
-        : [letzte ? `keine Vergabe ab heute im Plan · letzte Lesefassung ${vgFmt(vgTag(letzte))}` : 'kein einziger Termin im Plan',
-          ohne ? `${ohne} Vergabe${ohne === 1 ? '' : 'n'} ohne Termin` : ''].filter(Boolean).join(' · ');
-      plan.append(el('div', { class: 'vgzeile vggruppe vgohnezeile' },
-        el('div', { class: 'vglabel' }, el('span', { class: 'vgpfeil' }, ''),
-          el('span', { class: 'vgpunkt', style: 'background:' + projDot(q.projekt) }),
-          el('span', { class: 'vgname', title: q.projekt }, vgKurzProjekt(q.projekt)),
-          el('span', { class: 'vgzahl' }, String(eig.length))),
-        el('div', { class: 'vgspur' }, el('span', { class: 'vgohnegrund' }, grund + ' — ',
-          q.url ? el('a', { href: q.url, target: '_blank', rel: 'noopener' }, 'Plan öffnen') : q.datei))));
-    }
-  }
   if (!plan.querySelector('.vggruppe')) plan.append(el('div', { class: 'vgleer' }, 'Keine Vergabeeinheit mit Lesefassungstermin in diesem Zeitraum und Filter.'));
   vgLage(plan);
   vgBewegung(plan);
@@ -423,10 +403,6 @@ function vgStil() {
 #vergabe-root .vglabel{width:300px;flex:none;display:flex;align-items:center;gap:7px;padding:0 12px;font-size:12px;color:#1C1C1A;border-right:1px solid rgba(28,28,26,.06);min-width:0}
 #vergabe-root .vgkopfzeile .vglabel{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8A8A83;align-items:flex-end;padding-bottom:4px}
 #vergabe-root .vgname{overflow:hidden;min-width:0;flex:1;line-height:1.3;padding:5px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-#vergabe-root .vgohnezeile{cursor:default}
-#vergabe-root .vgohnezeile .vgname{color:#75756E}
-#vergabe-root .vgohnegrund{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#8A8A83;white-space:nowrap}
-#vergabe-root .vgohnegrund a{color:#4E6117;text-decoration:underline;text-underline-offset:2px}
 #vergabe-root .vgzahl,#vergabe-root .vgmeta{font-size:11.5px;color:#8A8A83;white-space:nowrap}
 #vergabe-root .vgpfeil{display:inline-block;width:10px;color:#8A8A83;transition:transform .15s ease}
 #vergabe-root .vggruppe{cursor:pointer;min-height:26px}
