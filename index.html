@@ -1123,8 +1123,20 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ab:hover{background:rgba(28,28,26,.07)}
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
+/* Gründlicher Weg (chat-gruendlich.js, Migr. 235, 06.10.): Schalter, Dokumentkarten, Fuß mit Dauer/Kosten. */
+#chat-root .kiwahl.kigr{border:0;cursor:pointer;padding:0 10px;font:inherit;font-size:12.5px}
+#chat-root .kiwahl.kigr.aus{background:none;color:#75756E}
+#chat-root div.kigr{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+#chat-root .kigrdatei{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(28,28,26,.12);border-radius:10px;background:#FFFFFF;max-width:520px}
+#chat-root .kigrdatei .ico svg{width:18px;height:18px;color:#75756E}
+#chat-root .kigrdname{display:flex;flex-direction:column;flex:1;min-width:0;font-size:13px}
+#chat-root .kigrdname b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chat-root .kigrdname span{color:#75756E;font-size:12px}
+#chat-root .kigrdatei a.kichip{display:inline-flex;align-items:center;text-decoration:none}
+#chat-root .kigrfuss{font-size:12px;color:#75756E}
+.kiawschritt.leser{color:#75756E}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=muwj8g7g">
+<link rel="stylesheet" href="dashboard.scoped.css?v=muwxa2e9">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -1208,12 +1220,13 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=muwj8g7g"></script>
-<script src="chat-dokument.js?v=muwj8g7g"></script>
-<script src="chat-werkstatt.js?v=muwj8g7g"></script>
-<script src="chat-arbeitsweg.js?v=muwj8g7g"></script>
-<script src="dev-chat.js?v=muwj8g7g"></script>
-<script src="vergabe-uebersicht.js?v=muwj8g7g"></script>
-<script type="module" src="dashboard.js?v=muwj8g7g"></script>
+<script src="app.js?v=muwxa2e9"></script>
+<script src="chat-dokument.js?v=muwxa2e9"></script>
+<script src="chat-werkstatt.js?v=muwxa2e9"></script>
+<script src="chat-arbeitsweg.js?v=muwxa2e9"></script>
+<script src="chat-gruendlich.js?v=muwxa2e9"></script>
+<script src="dev-chat.js?v=muwxa2e9"></script>
+<script src="vergabe-uebersicht.js?v=muwxa2e9"></script>
+<script type="module" src="dashboard.js?v=muwxa2e9"></script>
 </body>
 </html>
