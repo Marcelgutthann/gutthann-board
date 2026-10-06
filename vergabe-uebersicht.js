@@ -35,33 +35,19 @@ const vgEuro = (n) => n == null ? '' : n >= 1e6 ? (n / 1e6).toLocaleString('de-D
   : Math.round(n / 1000).toLocaleString('de-DE') + ' T€';
 const vgKurzProjekt = (p) => String(p).replace(/^\d+\s*-\s*/, '').replace(/^\d{4}\s+/, '');
 
-// Massgeblicher Termin: die Lesefassung laut Plan. Liegt sie mehr als 90 Tage vor der Veroeffentlichung,
-// ist die Zelle offensichtlich veraltet (Wenzenbach 29.09.2026: Lesefassung 2025, Veroeffentlichung 2026).
-// Dann gilt die Regel des Plans selbst — „Lesefassung 10 KT vor Versendung" — und der Termin ist als
-// abgeleitet markiert (hohle Raute, Hinweis im Detail).
-// Fehlt die Lesefassung ganz, gibt es einen Ersatztermin (Marcel 05.10.: „dass wir alles mal drin haben"),
-// zurueckgerechnet aus dem naechsten Termin, der in der Zeile steht:
-//   Veroeffentlichung − 10 KT · Submission − Angebotszeit (EU 35 / national 10 KT) − 10 KT ·
-//   Baubeginn − Versand-Orientierung aus dem Wenzenbach-Plan (EU 90 / national 42 KT) − 10 KT.
-// Immer als Schaetzung markiert; e.lf_grund sagt, woraus.
-function vgLesefassung(e) {
-  e.lf = e.lesefassung; e.lf_abgeleitet = false; e.lf_grund = null;
-  const eu = /eu/i.test(e.vergabeart || '');
-  const ab = (d, tage, grund) => { e.lf = vgPlus(vgTag(d), -tage).toLocaleDateString('sv-SE'); e.lf_abgeleitet = true; e.lf_grund = grund; };
-  if (e.lesefassung && e.veroeffentlichung && (vgTag(e.veroeffentlichung) - vgTag(e.lesefassung)) / 86400000 > 90) {
-    ab(e.veroeffentlichung, 10, 'veraltet');
-  } else if (!e.lesefassung && !e.erledigt) {
-    if (e.veroeffentlichung) ab(e.veroeffentlichung, 10, 'veroeffentlichung');
-    else if (e.submission) ab(e.submission, (eu ? 35 : 10) + 10, 'submission');
-    else if (e.baubeginn) ab(e.baubeginn, (eu ? 90 : 42) + 10, 'baubeginn');
-  }
+// Massgeblich ist allein die Lesefassung, die im Vergabeterminplan steht (Marcel 06.10.: „wenn kein Termin
+// drinnen steht, dann darf nichts da stehen — keine Ableitung, keine Rueckrechnung"). Ohne Termin: Hinweis
+// „Termin fehlt – kann nicht zugeordnet werden", kein Balken.
+function vgLesefassung(e) { e.lf = e.lesefassung || null; }
+
+// Projektfarben deutlich unterscheidbar (Besprechung 06.10.: „ein wenig unterschiedlichere Farben"),
+// fest nach Reihenfolge der aufgenommenen Projekte vergeben. Gewerkfarben bleiben bewusst weg.
+const VG_PALETTE = ['#4E79A7', '#E8762B', '#59A14F', '#D64550', '#8E6BB8', '#C9A227', '#2A9D8F', '#E377C2', '#8C6D46', '#5B6770', '#1F5F9E', '#A0522D'];
+function vgFarbe(projekt) {
+  const liste = (VG.d?.projekte || []).filter((p) => p.aufgenommen).map((p) => p.ordner).sort();
+  const i = liste.indexOf(projekt);
+  return i >= 0 ? VG_PALETTE[i % VG_PALETTE.length] : projDot(projekt);
 }
-const VG_LF_GRUND = {
-  veraltet: (e) => `Im Plan steht ${vgFmt(vgTag(e.lesefassung))} — über 90 Tage vor der Veröffentlichung, also veraltet. Angesetzt: 10 Kalendertage vor der Veröffentlichung.`,
-  veroeffentlichung: () => 'Im Plan fehlt die Lesefassung. Geschätzt: 10 Kalendertage vor der Veröffentlichung.',
-  submission: (e) => `Im Plan fehlt die Lesefassung. Geschätzt aus der Submission: ${/eu/i.test(e.vergabeart || '') ? '35' : '10'} Tage Angebotszeit + 10 Tage.`,
-  baubeginn: (e) => `Im Plan fehlt die Lesefassung. Geschätzt aus dem Baubeginn: Versand ${/eu/i.test(e.vergabeart || '') ? '90 (EU)' : '42 (national)'} Tage vorher (Faustregel aus dem Wenzenbach-Plan), Lesefassung 10 Tage davor.`,
-};
 
 // Bearbeitungsfenster einer Einheit: [Lesefassung − Bearbeitung, Lesefassung]. Den Vorlauf gibt es nicht
 // mehr (Marcel 05.10.: ergibt keinen Sinn) — eine alte vorlauf_tage-Angabe in der Datenbank wird ignoriert.
@@ -157,6 +143,8 @@ function renderVergabe() {
   const basis = vgEinheiten();
   const imFenster = basis.filter((e) => { const f = vgFenster(e); return f && f.ende >= ab; });
   const ohneTermin = basis.filter((e) => !e.lf && !e.erledigt);
+  const ohneNach = new Map();
+  for (const e of ohneTermin) ohneNach.set(e.projekt, [...(ohneNach.get(e.projekt) || []), e]);
 
   // ---- Werkzeugleiste ----
   const leiste = el('div', { class: 'vgleiste' });
@@ -179,9 +167,21 @@ function renderVergabe() {
   leiste.append(schalter(VG.fremde, 'ELT/HLS & Fachplaner', 'Auch Einheiten, die GHIW nicht selbst ausschreibt (die KI hat sie aussortiert)', (v) => { VG.fremde = v; }));
   leiste.append(schalter(VG.erledigte, 'erledigte', 'Auch bereits vergebene/entfallene Einheiten', (v) => { VG.erledigte = v; }));
   leiste.append(el('button', { class: 'vgknopf', title: 'Neu laden', onclick: () => ladeVergabe() }, ico('refresh')));
+  leiste.append(el('button', { class: 'vgtext', title: 'Alle Gruppen auf- oder zuklappen', onclick: () => {
+    const alle = [...document.querySelectorAll('#vergabe-root .vggruppe')].map((g) => g.dataset.name);
+    if (alle.every((n) => VG.offen.has(n))) VG.offen.clear(); else alle.forEach((n) => VG.offen.add(n));
+    renderVergabe();
+  } }, 'Alle auf-/zuklappen'));
+  // Wann wurde zuletzt in SharePoint nachgesehen (Marcel 06.10.: „ENORM WICHTIG")
+  const durchgang = VG.d.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
+  const vorMin = durchgang ? Math.max(0, Math.round((new Date(VG.d.jetzt) - durchgang) / 60000)) : null;
+  leiste.append(el('div', { class: 'vgrechts' },
+    el('span', { class: 'vgtakt' + (vorMin != null && vorMin > 12 ? ' warn' : ''), title: 'Der Server sieht alle 5 Minuten in SharePoint nach. Ist eine Datei neu gespeichert, liest er sie im selben Durchgang ein.' },
+      durchgang ? `SharePoint geprüft ${durchgang.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (vor ${vorMin} Min.) · alle 5 Min.` : 'SharePoint noch nicht geprüft'),
+    el('button', { class: 'btn primary vgprojbtn', onclick: () => { VG.panel = true; renderVergabe(); } }, 'Projekte +')));
 
   // Projektfilter als Chips
-  const projekte = [...new Set((VG.d.einheiten || []).map((e) => e.projekt))].sort();
+  const projekte = (VG.d.projekte || []).filter((p) => p.aufgenommen).map((p) => p.ordner).sort();
   const chips = el('div', { class: 'vgchips' });
   for (const p of projekte) {
     const an = !VG.projekte || VG.projekte.has(p);
@@ -190,7 +190,7 @@ function renderVergabe() {
       s.has(p) ? s.delete(p) : s.add(p);
       VG.projekte = s.size === projekte.length ? null : s;
       renderVergabe();
-    } }, el('span', { class: 'vgpunkt', style: 'background:' + projDot(p) }), vgKurzProjekt(p)));
+    } }, el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(p) }), vgKurzProjekt(p)));
   }
 
   // ---- Zeitachse: ueber den ganzen Datenbereich plus Reserve gebaut, damit Zoomen/Schieben nichts nachbauen muss ----
@@ -228,13 +228,15 @@ function renderVergabe() {
   // so sieht man freie Kapazitaet. Reihenfolge wie in der Liste, Nicht zugeordnet zuletzt.
   const team = VG.d.personen || [];
   if (VG.sicht === 'person') for (const p of team) if (!gruppen.has(p)) gruppen.set(p, []);
+  if (VG.sicht === 'projekt') for (const p of ohneNach.keys()) if (!gruppen.has(p)) gruppen.set(p, []);
   const rang = (n) => n === 'Nicht zugeordnet' ? 1e9 : team.includes(n) ? team.indexOf(n) : 1e6;
   const reihe = [...gruppen.entries()].sort((a, b) => {
     if (VG.sicht === 'person') return rang(a[0]) - rang(b[0]) || a[0].localeCompare(b[0], 'de');
-    return Math.min(...a[1].map((e) => vgFenster(e).start)) - Math.min(...b[1].map((e) => vgFenster(e).start));
+    const st = (l) => l.length ? Math.min(...l.map((e) => +vgFenster(e).start)) : Infinity;
+    return (st(a[1]) - st(b[1])) || a[0].localeCompare(b[0], 'de');
   });
 
-  const farbe = (e) => projDot(e.projekt);
+  const farbe = (e) => vgFarbe(e.projekt);
   const balken = (e, klein) => {
     const f = vgFenster(e);
     const b = el('div', {
@@ -249,8 +251,8 @@ function renderVergabe() {
   const meilensteine = (liste) => {
     const m = new Map();
     for (const e of liste) { const k = e.projekt + '|' + e.lf; m.set(k, [...(m.get(k) || []), e]); }
-    return [...m.values()].map((l) => el('div', { class: 'vgraute' + (l.every((e) => e.lf_abgeleitet) ? ' abgeleitet' : ''), ...pos(vgTag(l[0].lf)), style: `--f:${farbe(l[0])}`,
-      title: `Lesefassung beim Bauherrn ${vgFmt(vgTag(l[0].lf))}${l[0].lf_abgeleitet ? ' (geschätzt, nicht im Plan)' : ''} · ${vgKurzProjekt(l[0].projekt)}\n` + l.map((e) => '· ' + e.leistungsbereich).join('\n') },
+    return [...m.values()].map((l) => el('div', { class: 'vgraute', ...pos(vgTag(l[0].lf)), style: `--f:${farbe(l[0])}`,
+      title: `Lesefassung beim Bauherrn ${vgFmt(vgTag(l[0].lf))} · ${vgKurzProjekt(l[0].projekt)}\n` + l.map((e) => '· ' + e.leistungsbereich).join('\n') },
     l.length > 1 ? el('span', { class: 'vgrzahl' }, String(l.length)) : null));
   };
 
@@ -260,14 +262,16 @@ function renderVergabe() {
   for (const [name, liste] of reihe) {
     const offen = VG.offen.has(name);
     const frei = liste.filter((e) => !e.person).length;
-    const kopf = el('div', { class: 'vgzeile vggruppe' + (offen ? ' offen' : ''), onclick: () => {
+    const fehlen = VG.sicht === 'projekt' ? (ohneNach.get(name) || []) : [];
+    const kopf = el('div', { class: 'vgzeile vggruppe' + (offen ? ' offen' : ''), 'data-name': name, onclick: () => {
       offen ? VG.offen.delete(name) : VG.offen.add(name); renderVergabe(); } },
     el('div', { class: 'vglabel' },
       el('span', { class: 'vgpfeil' }, '›'),
-      VG.sicht === 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + projDot(name) }) : null,
+      VG.sicht === 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(name) }) : null,
       el('span', { class: 'vgname', title: name }, VG.sicht === 'projekt' ? vgKurzProjekt(name) : name),
       el('span', { class: 'vgzahl', title: frei ? `${frei} noch ohne Mitarbeiter` : 'alle zugeordnet' },
-        liste.length ? `${liste.length}${frei ? ' · ' + frei + ' offen' : ''}` : 'frei')),
+        liste.length ? `${liste.length}${frei ? ' · ' + frei + ' offen' : ''}` : (fehlen.length ? '' : 'frei')),
+      fehlen.length ? el('span', { class: 'vgfehlt', title: `${fehlen.length} Vergabe(n) ohne Lesefassungstermin im Plan — kann nicht zugeordnet werden` }, `! ${fehlen.length}`) : null),
     el('div', { class: 'vgspur' }, heuteLinie(), ...liste.map((e) => balken(e, false)), ...meilensteine(liste)));
     plan.append(kopf);
     if (!offen) continue;
@@ -276,40 +280,39 @@ function renderVergabe() {
       const unter = VG.sicht === 'projekt' ? e.leistungsbereich : vgKurzProjekt(e.projekt) + ' · ' + e.leistungsbereich;
       plan.append(el('div', { class: 'vgzeile vgeinheit' + (VG.detail === e.schluessel ? ' gewaehlt' : ''), onclick: () => { VG.detail = e.schluessel; renderVergabe(); } },
         el('div', { class: 'vglabel' },
-          VG.sicht !== 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + projDot(e.projekt) }) : null,
+          VG.sicht !== 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(e.projekt) }) : null,
           el('span', { class: 'vgname', title: e.leistungsbereich }, unter),
           el('span', { class: 'vgmeta' }, [e.budget_brutto ? vgEuro(e.budget_brutto) : '', e.person ? initialen(e.person) : ''].filter(Boolean).join(' · '))),
         el('div', { class: 'vgspur' }, heuteLinie(), balken(e, true), ...meilensteine([e]))));
     }
+    for (const e of fehlen) {
+      plan.append(el('div', { class: 'vgzeile vgeinheit' + (VG.detail === e.schluessel ? ' gewaehlt' : ''), onclick: () => { VG.detail = e.schluessel; renderVergabe(); } },
+        el('div', { class: 'vglabel' }, el('span', { class: 'vgname', title: e.leistungsbereich }, e.leistungsbereich),
+          el('span', { class: 'vgmeta' }, e.budget_brutto ? vgEuro(e.budget_brutto) : '')),
+        el('div', { class: 'vgspur' }, el('span', { class: 'vgtfehlt' }, '! Termin fehlt – kann nicht zugeordnet werden'))));
+    }
   }
-  if (!plan.querySelector('.vggruppe')) plan.append(el('div', { class: 'vgleer' }, 'Keine Vergabeeinheit mit Lesefassungstermin in diesem Zeitraum und Filter.'));
+  if (!projekte.length) plan.append(el('div', { class: 'vgleer' }, 'Noch kein Projekt aufgenommen — oben rechts über „Projekte +" hinzufügen.'));
+  else if (!plan.querySelector('.vggruppe')) plan.append(el('div', { class: 'vgleer' }, 'Keine Vergabeeinheit mit Lesefassungstermin in diesem Zeitraum und Filter.'));
   vgLage(plan);
   vgBewegung(plan);
 
-  // ---- Legende + Datenlage ----
+  // ---- Legende ----
   const legende = el('div', { class: 'vglegende' },
     el('span', {}, el('i', { class: 'vglg voll' }), 'zugeordnet'),
     el('span', {}, el('i', { class: 'vglg leer' }), 'noch offen'),
-    el('span', {}, el('i', { class: 'vglg raute' }), 'Lesefassung beim Bauherrn'),
-    el('span', {}, el('i', { class: 'vglg raute hohl' }), 'geschätzt (Lesefassung fehlt oder ist veraltet)'),
-    el('span', { class: 'vgklein' }, `Balken = geschätzte Bearbeitung, Standard ${VG_TAGE} Tage, je Einheit änderbar · Strg/Alt + Mausrad zoomt, Umschalt + Mausrad oder Ziehen schiebt`));
+    el('span', {}, el('i', { class: 'vglg raute' }), 'Lesefassung beim Bauherrn (aus dem Plan)'),
+    el('span', { class: 'vgklein' }, `Balken = Bearbeitungszeit in Kalendertagen vor der Lesefassung (Standard ${VG_TAGE} Kalendertage, je Einheit einstellbar) · Strg/Alt + Mausrad zoomt, Umschalt + Mausrad oder Ziehen schiebt`));
+  // Grosses Ausrufezeichen, wenn Termine fehlen (Besprechung 06.10.: „Achtung, kümmer dich")
+  const warnband = ohneTermin.length ? el('div', { class: 'vgwarnband' }, el('b', {}, '!'),
+    ` ${ohneTermin.length} Vergabe${ohneTermin.length === 1 ? '' : 'n'} ohne Lesefassungstermin im Vergabeterminplan — kann nicht zugeordnet werden. `
+    + 'Bitte die Spalte „Versendung LV als Lesefassung an Bauherr" ausfüllen.') : null;
 
-  const lage = el('details', { class: 'vglage' });
-  lage.append(el('summary', {}, `Datenlage: ${(VG.d.quellen || []).length} Vergabeterminpläne · `
-    + `${ohneTermin.length} Einheiten ganz ohne Termin`));
-  const tab = el('table', { class: 'vgtab' }, el('tr', {}, el('th', {}, 'Projekt'), el('th', {}, 'Plan'), el('th', {}, 'Stand'),
-    el('th', {}, 'GHIW'), el('th', {}, 'Lesefassung fehlt im Plan')));
-  for (const q of VG.d.quellen || []) tab.append(el('tr', {}, el('td', {}, vgKurzProjekt(q.projekt), q.im_board ? '' : el('span', { class: 'vgklein' }, ' (nicht im Board)')),
-    el('td', {}, q.url ? el('a', { href: q.url, target: '_blank', rel: 'noopener' }, q.datei) : q.datei),
-    el('td', {}, vgFmt(vgTag(q.stand))), el('td', {}, `${q.ghiw} von ${q.gesamt}`),
-    el('td', { class: q.ohne_lesefassung ? 'warn' : '' }, String(q.ohne_lesefassung))));
-  lage.append(tab, el('div', { class: 'vgklein' }, 'Fehlt die Lesefassung, steht die Einheit mit einem geschätzten Termin auf der Zeitachse (hohle Raute); '
-    + `${ohneTermin.length} Einheiten haben gar keinen Termin im Plan. Bitte die Spalte „Versendung LV als Lesefassung an Bauherr" im Vergabeterminplan ausfüllen (Projektleitung).`));
-
-  const haupt = el('div', { class: 'vghaupt' }, leiste, chips, plan, legende, lage);
+  const haupt = el('div', { class: 'vghaupt' }, leiste, warnband, chips, plan, legende);
   const teile = [haupt];
   const det = VG.detail && (VG.d.einheiten || []).find((e) => e.schluessel === VG.detail);
   if (det) teile.push(vgDetail(det));
+  if (VG.panel) teile.push(vgProjektePanel());
   const scroll = root.querySelector('.vghaupt')?.scrollTop || 0;
   root.replaceChildren(...teile);
   haupt.scrollTop = scroll;
@@ -330,28 +333,91 @@ function vgDetail(e) {
     await ladeVergabe();
   };
   return el('aside', { class: 'vgdetail' },
-    el('div', { class: 'vgdkopf' }, el('span', { class: 'vgpunkt', style: 'background:' + projDot(e.projekt) }),
+    el('div', { class: 'vgdkopf' }, el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(e.projekt) }),
       el('div', {}, el('div', { class: 'vgdtitel' }, e.leistungsbereich), el('div', { class: 'vgklein' }, vgKurzProjekt(e.projekt) + (e.paket ? ' · Paket ' + e.paket : ''))),
       el('button', { class: 'vgknopf', title: 'Schließen', onclick: () => { VG.detail = null; renderVergabe(); } }, ico('weg'))),
     el('div', { class: 'vgdblock' },
-      zeile('Lesefassung beim Bauherrn', e.lf ? vgFmt(vgTag(e.lf)) + (e.lf_abgeleitet ? ' (abgeleitet)' : '') : 'fehlt im Plan', e.lf && !e.lf_abgeleitet ? 'stark' : 'warn'),
-      f ? zeile('Bearbeitung (geschätzt)', `${vgFmt(f.start)} – ${vgFmt(f.ende)}`) : null,
-      e.lf_abgeleitet ? el('div', { class: 'vghinweis' }, VG_LF_GRUND[e.lf_grund](e) + ' Bitte im Vergabeterminplan nachtragen.') : null,
+      zeile('Lesefassung beim Bauherrn', e.lf ? vgFmt(vgTag(e.lf)) : '! Termin fehlt – kann nicht zugeordnet werden', e.lf ? 'stark' : 'warn'),
+      f ? zeile('Bearbeitung', `${vgFmt(f.start)} – ${vgFmt(f.ende)} (${e.bearbeitung_tage || VG_TAGE} Kalendertage)`) : null,
       zeile('Budget (KB brutto)', e.budget_brutto ? Number(e.budget_brutto).toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €' : null),
       zeile('Gewerk', e.gewerk), zeile('Vergabeart', e.vergabeart), zeile('Verantwortlich laut Plan', e.verantwortlich),
       zeile('Bearbeiter laut Plan', e.bearbeiter_plan), zeile('Status laut Plan', e.status)),
     el('div', { class: 'vgdblock' },
       el('div', { class: 'vgdlbl' }, 'Zuordnung'), liste,
       el('label', { class: 'vgfeld' }, 'Mitarbeiter', pIn),
-      el('label', { class: 'vgfeld' }, 'Bearbeitung (Tage)', tIn),
+      el('label', { class: 'vgfeld' }, 'Bearbeitungszeit in Kalendertagen', tIn),
       el('div', { class: 'vgdknoepfe' }, el('button', { class: 'btn primary', onclick: () => speichern(false) }, 'Speichern'),
         e.person ? el('button', { class: 'btn', onclick: () => speichern(true) }, 'Zuordnung lösen') : null)),
     el('div', { class: 'vgdblock vgklein' },
       zeile('Veröffentlichung', vgFmt(vgTag(e.veroeffentlichung))), zeile('Submission', vgFmt(vgTag(e.submission))),
       zeile('Sitzung', vgFmt(vgTag(e.sitzung))), zeile('Beginn Gewerk', vgFmt(vgTag(e.baubeginn))),
-      el('div', { class: 'vgquelle' }, `Einordnung der KI: ${e.ghiw ? 'GHIW schreibt aus' : 'nicht GHIW'} — ${e.ghiw_grund || ''}`),
+      e.ghiw_quelle === 'ki'
+        ? el('div', { class: 'vghinweis' }, `! Spalte „Verantwortlich" ist leer — ${e.ghiw ? 'als GHIW' : 'als nicht GHIW'} eingeordnet durch die KI. Bitte im Plan eintragen.`)
+        : el('div', { class: 'vgquelle' }, e.ghiw_grund || ''),
       el('div', { class: 'vgquelle' }, 'Quelle: ', e.quelle_url ? el('a', { href: e.quelle_url, target: '_blank', rel: 'noopener' }, e.quelle_datei) : e.quelle_datei,
         ` (Stand ${vgFmt(vgTag(e.plan_stand))})`)));
+}
+
+// „Projekte +" (Marcel 06.10.): alle SharePoint-Projektordner, was je Projekt da ist, aktiv aufnehmen.
+// Zeigt je Projekt: Datei und deren Aenderungszeit, wann zuletzt geprueft, wann eingelesen und wie lange die KI brauchte.
+const VG_GRUND = { plan: 'Vergabeterminplan da', mehrere_excel: 'mehrere Excel im Ordner — es gilt die neueste',
+  ordner_leer: 'Ordner „Vergabeterminplan" ist leer', kein_vergabeordner: 'kein Ordner „Vergabeterminplan" unter Termine', kein_termine: 'kein Ordner „Termine"' };
+function vgProjektePanel() {
+  const zeit = (t) => t ? new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '–';
+  const such = (VG.panelSuche || '').toLowerCase();
+  const liste = (VG.d.projekte || []).filter((p) => !such || p.ordner.toLowerCase().includes(such));
+  const durchgang = VG.d.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
+  const naechster = durchgang ? new Date(durchgang.getTime() + 5 * 60000) : null;
+  const umschalten = async (p, entfernen) => {
+    if (entfernen && !await uiFrage(`„${vgKurzProjekt(p.ordner)}" aus der Vergabeübersicht nehmen? Zuordnungen bleiben gespeichert.`)) return;
+    const r = await restRpc('assistant_vergabe_projekt', { p_ordner: p.ordner, p_entfernen: !!entfernen }).catch((e) => ({ fehler: e.message }));
+    if (r?.fehler) { uiHinweis(r.fehler); return; }
+    await ladeVergabe();
+  };
+  const tab = el('table', { class: 'vgtab vgprojtab' }, el('tr', {},
+    el('th', {}, 'Projekt'), el('th', {}, 'Vergabeterminplan'), el('th', {}, 'Datei gespeichert'), el('th', {}, 'Zuletzt geprüft'),
+    el('th', {}, 'Eingelesen'), el('th', {}, '')));
+  for (const p of liste) {
+    const hatPlan = p.status === 'plan' || p.status === 'mehrere_excel';
+    let lesen = '–';
+    if (p.aufgenommen) {
+      if (p.lese_status === 'ok') lesen = `${zeit(p.gelesen_at)} · KI ${Math.round((p.ki_dauer_ms || 0) / 1000)} s`
+        + (p.gelesen_geaendert && (new Date(p.gelesen_at) - new Date(p.gelesen_geaendert)) < 864e5
+          ? ` · ${Math.max(1, Math.round((new Date(p.gelesen_at) - new Date(p.gelesen_geaendert)) / 60000))} Min. nach dem Speichern in der Übersicht` : '');
+      else if (p.lese_status === 'wartet') lesen = naechster ? `wartet — spätestens ${naechster.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : 'wartet auf den nächsten Durchgang';
+      else if (p.lese_status === 'keine_datei') lesen = '! keine Datei';
+      else if (p.lese_status === 'fehler') lesen = '! ' + (p.lese_fehler || 'Fehler');
+      if (p.lese_status === 'ok' && p.datei_geaendert && p.gelesen_geaendert && +new Date(p.datei_geaendert) > +new Date(p.gelesen_geaendert))
+        lesen = `neue Fassung — wird gelesen (spätestens ${naechster ? naechster.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'gleich'})`;
+    }
+    tab.append(el('tr', { class: p.aufgenommen ? 'drin' : '' },
+      el('td', {}, el('span', { class: 'vgpunkt', style: 'background:' + (p.aufgenommen ? vgFarbe(p.ordner) : 'transparent') }), ' ', p.ordner,
+        p.aufgenommen && p.ohne_termin ? el('span', { class: 'vgfehlt', title: 'Vergaben ohne Lesefassungstermin' }, `! ${p.ohne_termin} ohne Termin`) : null),
+      el('td', { class: hatPlan ? (p.status === 'mehrere_excel' ? 'warn' : '') : 'grau' },
+        hatPlan ? el('a', { href: p.datei_url, target: '_blank', rel: 'noopener' }, p.datei) : VG_GRUND[p.status] || p.status,
+        p.status === 'mehrere_excel' ? el('div', { class: 'vgklein warn' }, `${p.excel_anzahl} Excel im Ordner — bitte nur eine (alte in Unterordner „Verlauf")`) : null),
+      el('td', {}, hatPlan ? zeit(p.datei_geaendert) : '–'),
+      el('td', {}, zeit(p.geprueft_at)),
+      el('td', { class: /^!/.test(lesen) ? 'warn' : '' }, lesen),
+      el('td', {}, p.aufgenommen
+        ? el('button', { class: 'btn', onclick: () => umschalten(p, true) }, 'Entfernen')
+        : hatPlan ? el('button', { class: 'btn primary', onclick: () => umschalten(p, false) }, 'Hinzufügen') : '')));
+  }
+  const suche = el('input', { class: 'vgin', placeholder: 'Projekt suchen …', value: VG.panelSuche || '',
+    oninput: (ev) => { VG.panelSuche = ev.target.value; const pos2 = ev.target.selectionStart; renderVergabe();
+      const n = document.querySelector('#vergabe-root .vgpanel input'); if (n) { n.focus(); n.setSelectionRange(pos2, pos2); } } });
+  const drin = (VG.d.projekte || []).filter((p) => p.aufgenommen).length;
+  const mitPlan = (VG.d.projekte || []).filter((p) => p.status === 'plan' || p.status === 'mehrere_excel').length;
+  return el('div', { class: 'vgpanelgrund', onclick: (ev) => { if (ev.target === ev.currentTarget) { VG.panel = false; renderVergabe(); } } },
+    el('div', { class: 'vgpanel' },
+      el('div', { class: 'vgdkopf' }, el('div', {}, el('div', { class: 'vgdtitel' }, 'Projekte in der Vergabeübersicht'),
+        el('div', { class: 'vgklein' }, `${drin} aufgenommen · ${mitPlan} von ${(VG.d.projekte || []).length} Projektordnern haben einen Vergabeterminplan`)),
+        el('button', { class: 'vgknopf', title: 'Schließen', onclick: () => { VG.panel = false; renderVergabe(); } }, ico('weg'))),
+      suche,
+      el('div', { class: 'vgklein vgablauf' }, 'Ablauf: Der Server sieht alle 5 Minuten in jedem Projektordner nach (ein Durchgang ≈ 25 s). '
+        + 'Ist der Vergabeterminplan eines aufgenommenen Projekts neu gespeichert, liest er ihn im selben Durchgang ein (KI ≈ 1 Minute). '
+        + 'Eine Änderung steht damit spätestens etwa 6–7 Minuten nach dem Speichern in der Übersicht. Übernommen wird nur, was in den Zellen steht.'),
+      el('div', { class: 'vgprojscroll' }, tab)));
 }
 
 let vgStilDa = false;
@@ -370,6 +436,24 @@ function vgStil() {
 #vergabe-root .vgcheck{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#55554F;cursor:pointer}
 #vergabe-root .vgknopf{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:#55554F}
 #vergabe-root .vgknopf:hover{background:rgba(28,28,26,.06)}
+#vergabe-root .vgtext{font-size:12.5px;color:#55554F;padding:5px 9px;border-radius:8px}
+#vergabe-root .vgtext:hover{background:rgba(28,28,26,.06)}
+#vergabe-root .vgrechts{margin-left:auto;display:flex;align-items:center;gap:12px}
+#vergabe-root .vgtakt{font-size:12px;color:#75756E}
+#vergabe-root .vgfehlt{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#FFFFFF;background:#C2410C;border-radius:999px;padding:0 6px;line-height:16px;white-space:nowrap}
+#vergabe-root .vgtfehlt{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:11.5px;font-weight:600;color:#C2410C;white-space:nowrap}
+#vergabe-root .vgwarnband{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#7C2D12;background:#FFF4EC;border:1px solid rgba(194,65,12,.35);border-radius:10px;padding:7px 12px;margin:0 0 8px}
+#vergabe-root .vgwarnband b{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#C2410C;color:#FFFFFF;font-size:13px;flex:none}
+#vergabe-root .vgpanelgrund{position:fixed;inset:0;background:rgba(28,28,26,.28);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:48px 24px}
+#vergabe-root .vgpanel{background:#FAFAF9;border-radius:14px;box-shadow:0 18px 50px rgba(28,28,26,.25);width:min(1180px,100%);max-height:calc(100vh - 96px);display:flex;flex-direction:column;padding:10px 20px 16px;gap:8px}
+#vergabe-root .vgprojscroll{overflow:auto;min-height:0;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px}
+#vergabe-root .vgprojtab{width:100%;margin:0}
+#vergabe-root .vgprojtab th{position:sticky;top:0;background:#FFFFFF;padding:8px 10px}
+#vergabe-root .vgprojtab td{padding:6px 10px;vertical-align:top}
+#vergabe-root .vgprojtab tr.drin td{background:#F6F8F1}
+#vergabe-root .vgprojtab td.grau{color:#9A9A93}
+#vergabe-root .vgprojtab .btn{padding:4px 10px;font-size:12px}
+#vergabe-root .vgablauf{line-height:1.5}
 #vergabe-root .vgchips{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 8px}
 #vergabe-root .vgchip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid rgba(28,28,26,.12);color:#8A8A83;background:transparent}
 #vergabe-root .vgchip.an{color:#1C1C1A;background:#FFFFFF}
