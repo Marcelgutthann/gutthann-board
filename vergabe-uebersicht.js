@@ -116,7 +116,7 @@ function vgBewegung(plan) {
     vgZug = { plan, x: ev.clientX, los: false, schiebe };
   });
 }
-const vgSegmentAus = (plan) => plan.closest('.vghaupt')?.querySelectorAll('.vgseg.zeit button.an').forEach((b) => b.classList.remove('an'));
+const vgSegmentAus = (plan) => { const f = plan.closest('.vghaupt')?.querySelector('select.zeit'); if (f) f.value = ''; };
 // Ziehen: EIN Satz Fenster-Lauscher fuer alle Neuaufbauten (sonst saemmelte jeder renderVergabe neue an)
 let vgZug = null;
 window.addEventListener('mousemove', (ev) => {
@@ -152,8 +152,9 @@ function renderVergabe() {
   const pos = (a, b) => b ? { 'data-a': String(+a), 'data-b': String(+b) } : { 'data-a': String(+a) };
 
   const basis = vgEinheiten();
-  const imFenster = basis.filter((e) => vgFenster(e));
-  const ohneTermin = basis.filter((e) => !e.lf && !e.erledigt);
+  // Widerspricht die Lesefassung den spaeteren Terminen (Migration 231), steht statt des Balkens eine Warnung.
+  const imFenster = basis.filter((e) => vgFenster(e) && e.plausibel !== false);
+  const ohneTermin = basis.filter((e) => (!e.lf || e.plausibel === false) && !e.erledigt);
   const ohneNach = new Map();
   for (const e of ohneTermin) ohneNach.set(e.projekt, [...(ohneNach.get(e.projekt) || []), e]);
 
@@ -164,9 +165,18 @@ function renderVergabe() {
     for (const [k, t] of werte) s.append(el('button', { class: aktiv === k ? 'an' : '', onclick: () => { setze(k); renderVergabe(); } }, t));
     return s;
   };
-  leiste.append(seg([['projekt', 'Projekte'], ['gewerk', 'Gewerke'], ['person', 'Mitarbeiter']], VG.sicht,
+  void seg;
+  // Ansicht und Zeitraum als Auswahlfelder wie „Alle Gewerke" (Marcel 06.10.: aufgeraeumte Leiste)
+  const auswahlFeld = (werte, wert, setze, klasse) => {
+    const f = el('select', { class: 'vgsel' + (klasse ? ' ' + klasse : ''), onchange: (ev) => { setze(ev.target.value); renderVergabe(); } },
+      ...werte.map(([k, t]) => el('option', { value: String(k) }, t)));
+    f.value = String(wert ?? '');
+    return f;
+  };
+  leiste.append(auswahlFeld([['projekt', 'Nach Projekten'], ['gewerk', 'Nach Gewerken'], ['person', 'Nach Mitarbeitern']], VG.sicht,
     (k) => { VG.sicht = k; VG.offen.clear(); }));
-  leiste.append(seg([[3, '3 Monate'], [6, '6 Monate'], [12, '12 Monate']], VG.monate, (k) => vgAusschnitt(k), 'zeit'));
+  leiste.append(auswahlFeld([[3, 'Nächste 3 Monate'], [6, 'Nächste 6 Monate'], [12, 'Nächste 12 Monate'], ['', 'Eigener Ausschnitt']], VG.monate ?? '',
+    (k) => { if (k) vgAusschnitt(Number(k)); }, 'zeit'));
   const gewerke = [...new Set((VG.d.einheiten || []).filter((e) => VG.fremde || e.ghiw).map((e) => e.gewerk))].sort((a, b) => a.localeCompare(b, 'de'));
   const gsel = el('select', { class: 'vgsel', onchange: (ev) => { VG.gewerk = ev.target.value; renderVergabe(); } },
     el('option', { value: '' }, 'Alle Gewerke'), ...gewerke.map((g) => el('option', { value: g }, g)));
@@ -174,15 +184,11 @@ function renderVergabe() {
   leiste.append(gsel);
   const schalter = (an, text, titel, setze) => el('label', { class: 'vgcheck', title: titel },
     el('input', { type: 'checkbox', ...(an ? { checked: '' } : {}), onchange: (ev) => { setze(ev.target.checked); renderVergabe(); } }), text);
+  leiste.append(el('span', { class: 'vgtrenner' }));
   leiste.append(schalter(VG.nurOffen, 'nur nicht zugeordnete', 'Nur Vergabeeinheiten ohne Mitarbeiter', (v) => { VG.nurOffen = v; }));
   leiste.append(schalter(VG.fremde, 'ELT/HLS & Fachplaner', 'Auch Einheiten, die GHIW nicht selbst ausschreibt (die KI hat sie aussortiert)', (v) => { VG.fremde = v; }));
   leiste.append(schalter(VG.erledigte, 'erledigte', 'Auch bereits vergebene/entfallene Einheiten', (v) => { VG.erledigte = v; }));
   leiste.append(el('button', { class: 'vgknopf', title: 'Neu laden', onclick: () => ladeVergabe() }, ico('refresh')));
-  leiste.append(el('button', { class: 'vgtext', title: 'Alle Gruppen auf- oder zuklappen', onclick: () => {
-    const alle = [...document.querySelectorAll('#vergabe-root .vggruppe')].map((g) => g.dataset.name);
-    if (alle.every((n) => VG.offen.has(n))) VG.offen.clear(); else alle.forEach((n) => VG.offen.add(n));
-    renderVergabe();
-  } }, 'Alle auf-/zuklappen'));
   // Wann wurde zuletzt in SharePoint nachgesehen (Marcel 06.10.: „ENORM WICHTIG")
   const durchgang = VG.d.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
   const vorMin = durchgang ? Math.max(0, Math.floor((Date.now() + (VG.uhrVersatz || 0) - durchgang) / 60000)) : null;
@@ -191,18 +197,36 @@ function renderVergabe() {
       durchgang ? `SharePoint geprüft ${durchgang.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (${vorMin ? 'vor ' + vorMin + ' Min.' : 'gerade eben'}) · alle 5 Min.` : 'SharePoint noch nicht geprüft'),
     el('button', { class: 'btn vgprojbtn', onclick: () => { VG.panel = true; renderVergabe(); } }, ico('plus'), 'Projekte')));
 
-  // Projektfilter als Chips
+  // Projektauswahl als Dropdown mit Mehrfachauswahl (Marcel 06.10.: Chips „zu chaotisch"), daneben auf-/zuklappen
   const projekte = (VG.d.projekte || []).filter((p) => p.aufgenommen).map((p) => p.ordner).sort();
-  const chips = el('div', { class: 'vgchips' });
-  for (const p of projekte) {
-    const an = !VG.projekte || VG.projekte.has(p);
-    chips.append(el('button', { class: 'vgchip' + (an ? ' an' : ''), title: an ? 'Ausblenden' : 'Einblenden', onclick: () => {
-      const s = VG.projekte ? new Set(VG.projekte) : new Set(projekte);
-      s.has(p) ? s.delete(p) : s.add(p);
-      VG.projekte = s.size === projekte.length ? null : s;
-      renderVergabe();
-    } }, el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(p) }), vgKurzProjekt(p)));
+  const sichtbar = projekte.filter((p) => !VG.projekte || VG.projekte.has(p));
+  const setze = (menge) => { VG.projekte = menge.size === projekte.length ? null : menge; renderVergabe(); };
+  const auswahl = el('div', { class: 'vgdrop' + (VG.dropOffen ? ' offen' : '') });
+  auswahl.append(el('button', { class: 'vgdropknopf', onclick: (ev) => { ev.stopPropagation(); VG.dropOffen = !VG.dropOffen; renderVergabe(); } },
+    el('span', { class: 'vgdroppunkte' }, ...sichtbar.slice(0, 6).map((p) => el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(p) }))),
+    sichtbar.length === projekte.length ? `Alle Projekte (${projekte.length})` : `${sichtbar.length} von ${projekte.length} Projekten`,
+    el('span', { class: 'vgdroppfeil' }, '▾')));
+  if (VG.dropOffen) {
+    const menue = el('div', { class: 'vgdropmenue', onclick: (ev) => ev.stopPropagation() },
+      el('div', { class: 'vgdropkopf' },
+        el('button', { class: 'vgleise', onclick: () => setze(new Set(projekte)) }, 'Alle'),
+        el('button', { class: 'vgleise', onclick: () => setze(new Set()) }, 'Keine')));
+    for (const p of projekte) {
+      const an = !VG.projekte || VG.projekte.has(p);
+      menue.append(el('label', { class: 'vgdropzeile' },
+        el('input', { type: 'checkbox', ...(an ? { checked: '' } : {}), onchange: () => {
+          const m = new Set(VG.projekte || projekte); m.has(p) ? m.delete(p) : m.add(p); setze(m);
+        } }),
+        el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(p) }), vgKurzProjekt(p)));
+    }
+    auswahl.append(menue);
   }
+  const chips = el('div', { class: 'vgchips' }, auswahl,
+    el('button', { class: 'vgtext', title: 'Alle Gruppen auf- oder zuklappen', onclick: () => {
+      const alle = [...document.querySelectorAll('#vergabe-root .vggruppe')].map((g) => g.dataset.name);
+      if (alle.every((n) => VG.offen.has(n))) VG.offen.clear(); else alle.forEach((n) => VG.offen.add(n));
+      renderVergabe();
+    } }, 'Alle auf-/zuklappen'));
 
   // ---- Zeitachse: ueber den ganzen Datenbereich plus Reserve gebaut, damit Zoomen/Schieben nichts nachbauen muss ----
   const fenster = imFenster.map(vgFenster);
@@ -302,7 +326,8 @@ function renderVergabe() {
       plan.append(el('div', { class: 'vgzeile vgeinheit' + (VG.detail === e.schluessel ? ' gewaehlt' : ''), onclick: () => { VG.detail = e.schluessel; renderVergabe(); } },
         el('div', { class: 'vglabel' }, el('span', { class: 'vgname', title: e.leistungsbereich }, e.leistungsbereich),
           el('span', { class: 'vgmeta' }, e.budget_brutto ? vgEuro(e.budget_brutto) : '')),
-        el('div', { class: 'vgspur' }, el('span', { class: 'vgtfehlt' }, '! Termin fehlt – kann nicht zugeordnet werden'))));
+        el('div', { class: 'vgspur' }, el('span', { class: 'vgtfehlt' }, e.lf
+          ? `! Termine unplausibel – ${e.plausi_grund}` : '! Termin fehlt – kann nicht zugeordnet werden'))));
     }
   }
   if (!projekte.length) plan.append(el('div', { class: 'vgleer' }, 'Noch kein Projekt aufgenommen — oben rechts über „Projekte +" hinzufügen.'));
@@ -353,7 +378,9 @@ function vgDetail(e) {
       el('button', { class: 'vgknopf', title: 'Schließen', onclick: () => { VG.detail = null; renderVergabe(); } }, ico('weg'))),
     el('div', { class: 'vgdblock' },
       zeile('Lesefassung beim Bauherrn', e.lf ? vgFmt(vgTag(e.lf)) : '! Termin fehlt – kann nicht zugeordnet werden', e.lf ? 'stark' : 'warn'),
-      f ? zeile('Bearbeitung', `${vgFmt(f.start)} – ${vgFmt(f.ende)} (${e.bearbeitung_tage || VG_TAGE} Kalendertage)`) : null,
+      f && e.plausibel !== false ? zeile('Bearbeitung', `${vgFmt(f.start)} – ${vgFmt(f.ende)} (${e.bearbeitung_tage || VG_TAGE} Kalendertage)`) : null,
+      e.plausi_grund ? el('div', { class: 'vghinweis' }, `! ${e.plausi_grund} — bitte im Vergabeterminplan prüfen.`
+        + (e.plausibel === false ? ' Solange steht kein Balken im Diagramm.' : '')) : null,
       zeile('Budget (KB brutto)', e.budget_brutto ? Number(e.budget_brutto).toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €' : null),
       zeile('Gewerk', e.gewerk), zeile('Vergabeart', e.vergabeart), zeile('Verantwortlich laut Plan', e.verantwortlich),
       zeile('Bearbeiter laut Plan', e.bearbeiter_plan), zeile('Status laut Plan', e.status)),
@@ -404,6 +431,9 @@ function vgProjektePanel() {
     if (p.lese_status === 'ok') return el('span', { class: 'vgmarke ok', title: `Eingelesen ${datum(p.gelesen_at)}, KI ${Math.round((p.ki_dauer_ms || 0) / 1000)} s` },
       `eingelesen ${datum(p.gelesen_at)} · ${Math.round((p.ki_dauer_ms || 0) / 1000)} s`);
     if (p.lese_status === 'keine_datei') return el('span', { class: 'vgmarke warn' }, 'keine Datei');
+    if (p.lese_status === 'abweichung') return el('span', { class: 'vgmarke warn', title: p.lese_fehler || '' }, 'Gegenprobe weicht ab');
+    if (p.lese_status === 'spalten_geaendert') return el('span', { class: 'vgmarke warn', title: p.lese_fehler || '' }, 'Spaltenköpfe geändert');
+    if (p.lese_status === 'spalten_pruefen') return el('span', { class: 'vgmarke warn', title: p.lese_fehler || '' }, 'Spalten prüfen');
     return el('span', { class: 'vgmarke warn', title: p.lese_fehler || '' }, 'Fehler beim Lesen');
   };
   const zeilen = liste.map((p) => {
@@ -422,7 +452,8 @@ function vgProjektePanel() {
       el('div', { class: 'vgpkopf' },
         el('div', { class: 'vgpname' }, el('span', { class: 'vgpnr' }, nr), name,
           p.aufgenommen && p.ohne_termin ? el('span', { class: 'vgfehlt', title: 'Vergaben ohne Lesefassungstermin im Plan' }, `! ${p.ohne_termin}`) : null),
-        el('div', { class: 'vgpmeta' }, ...meta)),
+        el('div', { class: 'vgpmeta' }, ...meta),
+        p.aufgenommen ? vgSpaltenZeile(p) : null),
       el('div', { class: 'vgpstand' }, stand(p)),
       el('div', { class: 'vgpaktion' }, knopf));
   });
@@ -453,6 +484,41 @@ function vgTaktText() {
   const vor = Math.max(0, Math.floor((Date.now() + (VG.uhrVersatz || 0) - t) / 60000));
   n.textContent = `SharePoint geprüft ${t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (${vor ? 'vor ' + vor + ' Min.' : 'gerade eben'}) · alle 5 Min.`;
   n.classList.toggle('warn', vor > 12);
+}
+
+document.addEventListener('click', () => { if (VG.dropOffen) { VG.dropOffen = false; renderVergabe(); } });
+
+// Garantie 1 (Migration 231): Spalten einmal bestaetigen, danach liest der Import ohne KI.
+const VG_FELD = [['lesefassung', 'Lesefassung'], ['veroeffentlichung', 'Veröffentlichung'], ['submission', 'Submission'], ['sitzung', 'Sitzung'],
+  ['baubeginn', 'Beginn Gewerk'], ['leistungsbereich', 'Leistungsbereich'], ['verantwortlich', 'Verantwortlich'], ['budget_brutto', 'Budget brutto'],
+  ['paket', 'Paket'], ['status', 'Status'], ['vergabeart', 'Vergabeart']];
+const vgBuchstabe = (j) => { let t = ''; for (let n = j + 1; n > 0; n = Math.floor((n - 1) / 26)) t = String.fromCharCode(65 + ((n - 1) % 26)) + t; return t; };
+function vgSpaltenZeile(p) {
+  const offen = VG.spaltenOffen === p.ordner;
+  const fest = p.spalten && p.spalten_bestaetigt_at && p.lese_status !== 'spalten_geaendert';
+  const kopf = el('div', { class: 'vgspalten' },
+    fest ? el('span', { class: 'vgspok' }, `Spalten bestätigt ${new Date(p.spalten_bestaetigt_at).toLocaleDateString('de-DE')} · liest ohne KI`)
+      : el('span', { class: 'vgwarntext' }, p.lese_status === 'spalten_geaendert' ? 'Spaltenköpfe haben sich geändert — neu bestätigen' : 'Spalten noch nicht bestätigt'),
+    el('button', { class: 'vgleise', onclick: () => { VG.spaltenOffen = offen ? null : p.ordner; renderVergabe(); } }, offen ? 'zu' : 'ansehen'));
+  if (!offen) return kopf;
+  const quelle = fest ? p.spalten : p.vorschlag, koepfe = fest ? p.spalten_koepfe : p.vorschlag_koepfe;
+  const liste = el('div', { class: 'vgspaltenliste' });
+  for (const [f, t] of VG_FELD) {
+    const j = quelle?.[f];
+    liste.append(el('div', { class: 'vgspz' + (f === 'lesefassung' ? ' haupt' : '') }, el('span', {}, t),
+      Number.isInteger(j) ? el('b', {}, `Spalte ${vgBuchstabe(j)}`, el('span', { class: 'vgklein' }, ` · „${(koepfe?.[f] || '').slice(0, 70)}"`))
+        : el('b', { class: 'vgwarntext' }, 'nicht erkannt')));
+  }
+  const bestaetigen = !fest && quelle && Number.isInteger(quelle.lesefassung)
+    ? el('button', { class: 'btn vgauf', onclick: async (ev) => {
+        ev.currentTarget.disabled = true;
+        const r = await restRpc('assistant_vergabe_spalten_bestaetigen', { p_ordner: p.ordner }).catch((e) => ({ fehler: e.message }));
+        if (r?.fehler) { uiHinweis(r.fehler); ev.currentTarget.disabled = false; return; }
+        VG.spaltenOffen = null; await ladeVergabe();
+      } }, 'Zuordnung bestätigen') : null;
+  return el('div', {}, kopf, liste, el('div', { class: 'vgklein vgspaltenfuss' },
+    fest ? 'Der Import liest genau diese Spalten. Ändert sich ein Spaltenkopf, wird nichts eingelesen und es kommt eine Meldung.'
+      : 'Stimmt die Zuordnung mit eurer Excel überein? Nach dem Bestätigen liest der Import nur noch diese Spalten, ganz ohne KI.', bestaetigen));
 }
 
 let vgStilDa = false;
@@ -486,6 +552,25 @@ function vgStil() {
 #vergabe-root .vgpaneltitel{font-size:17px;font-weight:600;color:#1C1C1A;letter-spacing:-.01em}
 #vergabe-root .vgpanelleiste{display:flex;align-items:center;gap:10px;padding:8px 22px 12px}
 #vergabe-root .vgseg button{white-space:nowrap}
+#vergabe-root .vgchips{align-items:center}
+#vergabe-root .vgleiste .vgsel{flex:none;width:auto;max-width:220px}
+#vergabe-root .vgtrenner{width:1px;height:22px;background:rgba(28,28,26,.16);margin:0 4px}
+#vergabe-root .vgdrop{position:relative}
+#vergabe-root .vgdropknopf{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:#1C1C1A;background:#FFFFFF;border:1px solid rgba(28,28,26,.14);border-radius:8px;padding:5px 10px}
+#vergabe-root .vgdropknopf:hover{border-color:rgba(28,28,26,.3)}
+#vergabe-root .vgdroppunkte{display:inline-flex;gap:3px}
+#vergabe-root .vgdroppfeil{color:#8A8A83;font-size:10px}
+#vergabe-root .vgdropmenue{position:absolute;top:calc(100% + 4px);left:0;z-index:30;min-width:280px;background:#FFFFFF;border:1px solid rgba(28,28,26,.12);border-radius:10px;box-shadow:0 10px 30px rgba(28,28,26,.14);padding:6px}
+#vergabe-root .vgdropkopf{display:flex;gap:4px;padding:2px 2px 6px;border-bottom:1px solid rgba(28,28,26,.07);margin-bottom:4px}
+#vergabe-root .vgdropzeile{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:12.5px;color:#1C1C1A;cursor:pointer}
+#vergabe-root .vgdropzeile:hover{background:#F6F6F4}
+#vergabe-root .vgspalten{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:11.5px}
+#vergabe-root .vgspok{color:#3E4E12}
+#vergabe-root .vgspaltenliste{margin:6px 0 4px;border:1px solid rgba(28,28,26,.08);border-radius:8px;padding:4px 10px;background:#FAFAF9}
+#vergabe-root .vgspz{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:3px 0;color:#55554F}
+#vergabe-root .vgspz b{font-weight:500;color:#1C1C1A;text-align:right}
+#vergabe-root .vgspz.haupt b{font-weight:600}
+#vergabe-root .vgspaltenfuss{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 2px}
 #vergabe-root .vgsegzahl{margin-left:6px;font-size:11px;color:#8A8A83;font-variant-numeric:tabular-nums}
 #vergabe-root .vgsuche{margin-left:auto;width:220px;padding:6px 10px;font-size:12.5px}
 #vergabe-root .vgplist{overflow:auto;min-height:0;margin:0 14px;background:#FFFFFF;border:1px solid rgba(28,28,26,.08);border-radius:12px}
