@@ -31,8 +31,10 @@ function chatArbeitsweg() {
   const agentPlan = Array.isArray(lw.plan) ? lw.plan : [];
   const agentSchritte = Array.isArray(lw.schritte) ? lw.schritte : [];
   const agentLaeuft = d?.status === 'arbeitet' && d.agent !== 'tony';
-  const tonyLaeuft = !!(letzte?.laeuft);
-  if (k.awZu || !(plan.length || weg.length || tonyLaeuft || agentLaeuft || agentPlan.length)) { fen?.remove(); return; }
+  // Gründlicher Weg (chat-gruendlich.js, 06.10.): eigener Abschnitt statt „Tony“.
+  const gruendlich = !!letzte?.gruendlich;
+  const tonyLaeuft = !gruendlich && !!(letzte?.laeuft);
+  if (k.awZu || !(plan.length || weg.length || tonyLaeuft || agentLaeuft || agentPlan.length || (gruendlich && (letzte.laeuft || letzte.gruendlich.lauf)))) { fen?.remove(); return; }
 
   if (!fen) {
     fen = el('div', { id: 'kiaw', class: 'kiaw' });
@@ -41,7 +43,7 @@ function chatArbeitsweg() {
     if (pos) chatAwSetzen(fen, pos.x, pos.y);
   }
   fen.classList.toggle('zu', !!chatAwGespeichert('zu', false));
-  const laeuft = tonyLaeuft || agentLaeuft;
+  const laeuft = tonyLaeuft || agentLaeuft || (gruendlich && !!letzte.laeuft);
   const unten = fen.querySelector('.kiawinhalt');
   const warUnten = !unten || unten.scrollHeight - unten.scrollTop - unten.clientHeight < 40;
 
@@ -56,7 +58,8 @@ function chatArbeitsweg() {
 
   const inhalt = el('div', { class: 'kiawinhalt' });
   // Tony: Plan, dann jeder Schritt mit Logo der Quelle, zuletzt, was er gerade tut.
-  if (plan.length || weg.length || tonyLaeuft) {
+  if (gruendlich) chatAwGruendlich(inhalt, letzte);
+  else if (plan.length || weg.length || tonyLaeuft) {
     const fertig = plan.filter((p) => p.s === 'completed').length;
     inhalt.append(el('div', { class: 'kiawabschnitt' }, 'Tony' + (plan.length ? ` · Plan ${fertig} von ${plan.length}` : '')));
     if (plan.length) inhalt.append(el('div', { class: 'kiawplan' }, ...plan.map(chatAwPunkt)));
