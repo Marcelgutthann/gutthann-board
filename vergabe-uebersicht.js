@@ -294,7 +294,9 @@ function renderVergabe() {
           VG.sicht !== 'projekt' ? el('span', { class: 'vgpunkt', style: 'background:' + vgFarbe(e.projekt) }) : null,
           el('span', { class: 'vgname', title: e.leistungsbereich }, unter),
           el('span', { class: 'vgmeta' }, [e.budget_brutto ? vgEuro(e.budget_brutto) : '', e.person ? initialen(e.person) : ''].filter(Boolean).join(' · '))),
-        el('div', { class: 'vgspur' }, heuteLinie(), balken(e, true), ...meilensteine([e]))));
+        el('div', { class: 'vgspur' }, heuteLinie(), balken(e, true), ...meilensteine([e]),
+          // Datum der Lesefassung hinter dem Balken, grau und leise (Marcel 06.10.)
+          el('span', { class: 'vgrdatum', ...pos(vgTag(e.lf)) }, vgFmt(vgTag(e.lf))))));
     }
     for (const e of fehlen) {
       plan.append(el('div', { class: 'vgzeile vgeinheit' + (VG.detail === e.schluessel ? ' gewaehlt' : ''), onclick: () => { VG.detail = e.schluessel; renderVergabe(); } },
@@ -543,6 +545,7 @@ function vgStil() {
 #vergabe-root .vgbalken:hover{opacity:1}
 #vergabe-root .vgraute{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;background:#1C1C1A;transform:rotate(45deg);border:2px solid #FFFFFF;box-shadow:0 0 0 1px var(--f);pointer-events:auto}
 #vergabe-root .vgraute.abgeleitet{background:#FFFFFF;border:2px solid #B45309;box-shadow:none}
+#vergabe-root .vgrdatum{position:absolute;top:50%;transform:translate(12px,-50%);font-size:11px;color:#A3A39C;white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums}
 #vergabe-root .vgrzahl{position:absolute;left:10px;top:-12px;transform:rotate(-45deg);font-size:10px;font-weight:600;color:#1C1C1A;background:#FFFFFF;border-radius:6px;padding:0 3px}
 #vergabe-root .vglegende{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:12px;color:#55554F;padding:8px 2px}
 #vergabe-root .vglegende span{display:inline-flex;align-items:center;gap:6px}
