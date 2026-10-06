@@ -178,7 +178,7 @@ function renderVergabe() {
   leiste.append(el('div', { class: 'vgrechts' },
     el('span', { class: 'vgtakt' + (vorMin != null && vorMin > 12 ? ' warn' : ''), title: 'Der Server sieht alle 5 Minuten in SharePoint nach. Ist eine Datei neu gespeichert, liest er sie im selben Durchgang ein.' },
       durchgang ? `SharePoint geprüft ${durchgang.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (vor ${vorMin} Min.) · alle 5 Min.` : 'SharePoint noch nicht geprüft'),
-    el('button', { class: 'btn primary vgprojbtn', onclick: () => { VG.panel = true; renderVergabe(); } }, 'Projekte +')));
+    el('button', { class: 'btn vgprojbtn', onclick: () => { VG.panel = true; renderVergabe(); } }, ico('plus'), 'Projekte')));
 
   // Projektfilter als Chips
   const projekte = (VG.d.projekte || []).filter((p) => p.aufgenommen).map((p) => p.ordner).sort();
@@ -363,61 +363,72 @@ function vgDetail(e) {
 const VG_GRUND = { plan: 'Vergabeterminplan da', mehrere_excel: 'mehrere Excel im Ordner — es gilt die neueste',
   ordner_leer: 'Ordner „Vergabeterminplan" ist leer', kein_vergabeordner: 'kein Ordner „Vergabeterminplan" unter Termine', kein_termine: 'kein Ordner „Termine"' };
 function vgProjektePanel() {
-  const zeit = (t) => t ? new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '–';
+  const datum = (t) => t ? new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
+  const uhr = (t) => t ? new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+  const alle = VG.d.projekte || [];
+  const hatPlan = (p) => p.status === 'plan' || p.status === 'mehrere_excel';
+  const filter = VG.panelFilter || 'plan';
   const such = (VG.panelSuche || '').toLowerCase();
-  const liste = (VG.d.projekte || []).filter((p) => !such || p.ordner.toLowerCase().includes(such));
+  const zahl = { drin: alle.filter((p) => p.aufgenommen).length, plan: alle.filter(hatPlan).length, alle: alle.length };
+  const liste = alle.filter((p) => (filter === 'drin' ? p.aufgenommen : filter === 'plan' ? hatPlan(p) || p.aufgenommen : true)
+    && (!such || p.ordner.toLowerCase().includes(such)));
   const durchgang = VG.d.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
   const naechster = durchgang ? new Date(durchgang.getTime() + 5 * 60000) : null;
-  const umschalten = async (p, entfernen) => {
+  const umschalten = async (p, entfernen, knopf) => {
     if (entfernen && !await uiFrage(`„${vgKurzProjekt(p.ordner)}" aus der Vergabeübersicht nehmen? Zuordnungen bleiben gespeichert.`)) return;
+    knopf.disabled = true;
     const r = await restRpc('assistant_vergabe_projekt', { p_ordner: p.ordner, p_entfernen: !!entfernen }).catch((e) => ({ fehler: e.message }));
-    if (r?.fehler) { uiHinweis(r.fehler); return; }
+    if (r?.fehler) { knopf.disabled = false; uiHinweis(r.fehler); return; }
     await ladeVergabe();
   };
-  const tab = el('table', { class: 'vgtab vgprojtab' }, el('tr', {},
-    el('th', {}, 'Projekt'), el('th', {}, 'Vergabeterminplan'), el('th', {}, 'Datei gespeichert'), el('th', {}, 'Zuletzt geprüft'),
-    el('th', {}, 'Eingelesen'), el('th', {}, '')));
-  for (const p of liste) {
-    const hatPlan = p.status === 'plan' || p.status === 'mehrere_excel';
-    let lesen = '–';
-    if (p.aufgenommen) {
-      if (p.lese_status === 'ok') lesen = `${zeit(p.gelesen_at)} · KI ${Math.round((p.ki_dauer_ms || 0) / 1000)} s`
-        + (p.gelesen_geaendert && (new Date(p.gelesen_at) - new Date(p.gelesen_geaendert)) < 864e5
-          ? ` · ${Math.max(1, Math.round((new Date(p.gelesen_at) - new Date(p.gelesen_geaendert)) / 60000))} Min. nach dem Speichern in der Übersicht` : '');
-      else if (p.lese_status === 'wartet') lesen = naechster ? `wartet — spätestens ${naechster.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : 'wartet auf den nächsten Durchgang';
-      else if (p.lese_status === 'keine_datei') lesen = '! keine Datei';
-      else if (p.lese_status === 'fehler') lesen = '! ' + (p.lese_fehler || 'Fehler');
-      if (p.lese_status === 'ok' && p.datei_geaendert && p.gelesen_geaendert && +new Date(p.datei_geaendert) > +new Date(p.gelesen_geaendert))
-        lesen = `neue Fassung — wird gelesen (spätestens ${naechster ? naechster.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'gleich'})`;
-    }
-    tab.append(el('tr', { class: p.aufgenommen ? 'drin' : '' },
-      el('td', {}, el('span', { class: 'vgpunkt', style: 'background:' + (p.aufgenommen ? vgFarbe(p.ordner) : 'transparent') }), ' ', p.ordner,
-        p.aufgenommen && p.ohne_termin ? el('span', { class: 'vgfehlt', title: 'Vergaben ohne Lesefassungstermin' }, `! ${p.ohne_termin} ohne Termin`) : null),
-      el('td', { class: hatPlan ? (p.status === 'mehrere_excel' ? 'warn' : '') : 'grau' },
-        hatPlan ? el('a', { href: p.datei_url, target: '_blank', rel: 'noopener' }, p.datei) : VG_GRUND[p.status] || p.status,
-        p.status === 'mehrere_excel' ? el('div', { class: 'vgklein warn' }, `${p.excel_anzahl} Excel im Ordner — bitte nur eine (alte in Unterordner „Verlauf")`) : null),
-      el('td', {}, hatPlan ? zeit(p.datei_geaendert) : '–'),
-      el('td', {}, zeit(p.geprueft_at)),
-      el('td', { class: /^!/.test(lesen) ? 'warn' : '' }, lesen),
-      el('td', {}, p.aufgenommen
-        ? el('button', { class: 'btn', onclick: () => umschalten(p, true) }, 'Entfernen')
-        : hatPlan ? el('button', { class: 'btn primary', onclick: () => umschalten(p, false) }, 'Hinzufügen') : '')));
-  }
-  const suche = el('input', { class: 'vgin', placeholder: 'Projekt suchen …', value: VG.panelSuche || '',
+  // Lesestand eines aufgenommenen Projekts als eine ruhige Marke
+  const stand = (p) => {
+    if (!p.aufgenommen) return null;
+    const neu = p.lese_status === 'ok' && p.datei_geaendert && p.gelesen_geaendert && +new Date(p.datei_geaendert) > +new Date(p.gelesen_geaendert);
+    if (neu || p.lese_status === 'wartet') return el('span', { class: 'vgmarke warte' }, `wird gelesen · bis ${uhr(naechster)}`);
+    if (p.lese_status === 'ok') return el('span', { class: 'vgmarke ok', title: `Eingelesen ${datum(p.gelesen_at)}, KI ${Math.round((p.ki_dauer_ms || 0) / 1000)} s` },
+      `eingelesen ${datum(p.gelesen_at)} · ${Math.round((p.ki_dauer_ms || 0) / 1000)} s`);
+    if (p.lese_status === 'keine_datei') return el('span', { class: 'vgmarke warn' }, 'keine Datei');
+    return el('span', { class: 'vgmarke warn', title: p.lese_fehler || '' }, 'Fehler beim Lesen');
+  };
+  const zeilen = liste.map((p) => {
+    const nr = (p.ordner.match(/^[\d-]+/) || [''])[0];
+    const name = p.ordner.slice(nr.length).trim() || p.ordner;
+    const meta = hatPlan(p)
+      ? [el('a', { href: p.datei_url, target: '_blank', rel: 'noopener', class: 'vgdatei', title: 'Im SharePoint öffnen' }, ico('file'), p.datei),
+          el('span', {}, `gespeichert ${datum(p.datei_geaendert)}`),
+          p.status === 'mehrere_excel' ? el('span', { class: 'vgwarntext', title: 'Es gilt die zuletzt gespeicherte. Alte Stände bitte in einen Unterordner „Verlauf" legen.' }, `${p.excel_anzahl} Excel im Ordner`) : null]
+      : [el('span', {}, VG_GRUND[p.status] || p.status)];
+    const knopf = p.aufgenommen
+      ? el('button', { class: 'vgleise', onclick: (ev) => umschalten(p, true, ev.currentTarget) }, 'Entfernen')
+      : hatPlan(p) ? el('button', { class: 'btn ghost vgauf', onclick: (ev) => umschalten(p, false, ev.currentTarget) }, ico('plus'), 'Aufnehmen') : null;
+    return el('div', { class: 'vgprow' + (p.aufgenommen ? ' drin' : '') + (hatPlan(p) ? '' : ' ohne') },
+      el('span', { class: 'vgpunkt', style: p.aufgenommen ? 'background:' + vgFarbe(p.ordner) : '' }),
+      el('div', { class: 'vgpkopf' },
+        el('div', { class: 'vgpname' }, el('span', { class: 'vgpnr' }, nr), name,
+          p.aufgenommen && p.ohne_termin ? el('span', { class: 'vgfehlt', title: 'Vergaben ohne Lesefassungstermin im Plan' }, `! ${p.ohne_termin}`) : null),
+        el('div', { class: 'vgpmeta' }, ...meta)),
+      el('div', { class: 'vgpstand' }, stand(p)),
+      el('div', { class: 'vgpaktion' }, knopf));
+  });
+  const reiter = el('div', { class: 'vgseg' }, ...[['drin', 'Aufgenommen'], ['plan', 'Mit Vergabeterminplan'], ['alle', 'Alle Ordner']].map(([k, t]) =>
+    el('button', { class: filter === k ? 'an' : '', onclick: () => { VG.panelFilter = k; renderVergabe(); } }, t, el('span', { class: 'vgsegzahl' }, String(zahl[k])))));
+  const suche = el('input', { class: 'vgin vgsuche', placeholder: 'Projekt suchen', value: VG.panelSuche || '',
     oninput: (ev) => { VG.panelSuche = ev.target.value; const pos2 = ev.target.selectionStart; renderVergabe();
-      const n = document.querySelector('#vergabe-root .vgpanel input'); if (n) { n.focus(); n.setSelectionRange(pos2, pos2); } } });
-  const drin = (VG.d.projekte || []).filter((p) => p.aufgenommen).length;
-  const mitPlan = (VG.d.projekte || []).filter((p) => p.status === 'plan' || p.status === 'mehrere_excel').length;
-  return el('div', { class: 'vgpanelgrund', onclick: (ev) => { if (ev.target === ev.currentTarget) { VG.panel = false; renderVergabe(); } } },
+      const n = document.querySelector('#vergabe-root .vgsuche'); if (n) { n.focus(); n.setSelectionRange(pos2, pos2); } } });
+  const zu = () => { VG.panel = false; renderVergabe(); };
+  return el('div', { class: 'vgpanelgrund', onclick: (ev) => { if (ev.target === ev.currentTarget) zu(); } },
     el('div', { class: 'vgpanel' },
-      el('div', { class: 'vgdkopf' }, el('div', {}, el('div', { class: 'vgdtitel' }, 'Projekte in der Vergabeübersicht'),
-        el('div', { class: 'vgklein' }, `${drin} aufgenommen · ${mitPlan} von ${(VG.d.projekte || []).length} Projektordnern haben einen Vergabeterminplan`)),
-        el('button', { class: 'vgknopf', title: 'Schließen', onclick: () => { VG.panel = false; renderVergabe(); } }, ico('weg'))),
-      suche,
-      el('div', { class: 'vgklein vgablauf' }, 'Ablauf: Der Server sieht alle 5 Minuten in jedem Projektordner nach (ein Durchgang ≈ 25 s). '
-        + 'Ist der Vergabeterminplan eines aufgenommenen Projekts neu gespeichert, liest er ihn im selben Durchgang ein (KI ≈ 1 Minute). '
-        + 'Eine Änderung steht damit spätestens etwa 6–7 Minuten nach dem Speichern in der Übersicht. Übernommen wird nur, was in den Zellen steht.'),
-      el('div', { class: 'vgprojscroll' }, tab)));
+      el('div', { class: 'vgpanelkopf' },
+        el('div', {}, el('div', { class: 'vgpaneltitel' }, 'Projekte'),
+          el('div', { class: 'vgklein' }, 'Nur aufgenommene Projekte erscheinen in der Vergabeübersicht.')),
+        el('button', { class: 'vgknopf', title: 'Schließen', onclick: zu }, ico('weg'))),
+      el('div', { class: 'vgpanelleiste' }, reiter, suche),
+      el('div', { class: 'vgplist' }, ...(zeilen.length ? zeilen : [el('div', { class: 'vgleer' }, filter === 'drin' ? 'Noch kein Projekt aufgenommen.' : 'Kein Projekt gefunden.')])),
+      el('div', { class: 'vgpanelfuss', title: 'Ein Durchgang durch alle Projektordner dauert etwa 25 Sekunden, das Einlesen eines geänderten Plans durch die KI etwa eine Minute.' },
+        ico('refresh'), durchgang
+          ? `SharePoint zuletzt geprüft ${uhr(durchgang)} · nächste Prüfung ${uhr(naechster)} · eine gespeicherte Änderung erscheint nach höchstens etwa 7 Minuten`
+          : 'SharePoint wird alle 5 Minuten geprüft')));
 }
 
 let vgStilDa = false;
@@ -442,18 +453,42 @@ function vgStil() {
 #vergabe-root .vgtakt{font-size:12px;color:#75756E}
 #vergabe-root .vgfehlt{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#FFFFFF;background:#C2410C;border-radius:999px;padding:0 6px;line-height:16px;white-space:nowrap}
 #vergabe-root .vgtfehlt{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:11.5px;font-weight:600;color:#C2410C;white-space:nowrap}
-#vergabe-root .vgwarnband{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#7C2D12;background:#FFF4EC;border:1px solid rgba(194,65,12,.35);border-radius:10px;padding:7px 12px;margin:0 0 8px}
-#vergabe-root .vgwarnband b{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#C2410C;color:#FFFFFF;font-size:13px;flex:none}
-#vergabe-root .vgpanelgrund{position:fixed;inset:0;background:rgba(28,28,26,.28);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:48px 24px}
-#vergabe-root .vgpanel{background:#FAFAF9;border-radius:14px;box-shadow:0 18px 50px rgba(28,28,26,.25);width:min(1180px,100%);max-height:calc(100vh - 96px);display:flex;flex-direction:column;padding:10px 20px 16px;gap:8px}
-#vergabe-root .vgprojscroll{overflow:auto;min-height:0;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px}
-#vergabe-root .vgprojtab{width:100%;margin:0}
-#vergabe-root .vgprojtab th{position:sticky;top:0;background:#FFFFFF;padding:8px 10px}
-#vergabe-root .vgprojtab td{padding:6px 10px;vertical-align:top}
-#vergabe-root .vgprojtab tr.drin td{background:#F6F8F1}
-#vergabe-root .vgprojtab td.grau{color:#9A9A93}
-#vergabe-root .vgprojtab .btn{padding:4px 10px;font-size:12px}
-#vergabe-root .vgablauf{line-height:1.5}
+#vergabe-root .vgwarnband{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#55554F;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:7px 12px;margin:0 0 8px}
+#vergabe-root .vgprojbtn{padding:6px 12px;font-size:12.5px}
+#vergabe-root .vgprojbtn .ico svg,#vergabe-root .vgauf .ico svg{width:14px;height:14px}
+#vergabe-root .vgpanelgrund{position:fixed;inset:0;background:rgba(28,28,26,.32);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:56px 24px}
+#vergabe-root .vgpanel{background:#F3F3F1;border-radius:16px;box-shadow:0 24px 60px rgba(28,28,26,.28);width:min(920px,100%);max-height:calc(100vh - 112px);display:flex;flex-direction:column;overflow:hidden}
+#vergabe-root .vgpanelkopf{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 22px 6px}
+#vergabe-root .vgpaneltitel{font-size:17px;font-weight:600;color:#1C1C1A;letter-spacing:-.01em}
+#vergabe-root .vgpanelleiste{display:flex;align-items:center;gap:10px;padding:8px 22px 12px}
+#vergabe-root .vgseg button{white-space:nowrap}
+#vergabe-root .vgsegzahl{margin-left:6px;font-size:11px;color:#8A8A83;font-variant-numeric:tabular-nums}
+#vergabe-root .vgsuche{margin-left:auto;width:220px;padding:6px 10px;font-size:12.5px}
+#vergabe-root .vgplist{overflow:auto;min-height:0;margin:0 14px;background:#FFFFFF;border:1px solid rgba(28,28,26,.08);border-radius:12px}
+#vergabe-root .vgprow{display:grid;grid-template-columns:10px minmax(0,1fr) auto 112px;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid rgba(28,28,26,.06)}
+#vergabe-root .vgprow:first-child{border-top:0}
+#vergabe-root .vgprow:hover{background:#FAFAF9}
+#vergabe-root .vgprow .vgpunkt{width:9px;height:9px;box-shadow:inset 0 0 0 1px rgba(28,28,26,.18)}
+#vergabe-root .vgprow.drin .vgpunkt{box-shadow:none}
+#vergabe-root .vgpname{font-size:13px;font-weight:500;color:#1C1C1A;display:flex;align-items:center;gap:7px;min-width:0}
+#vergabe-root .vgpnr{font-size:12px;font-weight:400;color:#8A8A83;font-variant-numeric:tabular-nums;flex:none}
+#vergabe-root .vgprow.ohne .vgpname{color:#75756E;font-weight:400}
+#vergabe-root .vgpmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:3px;font-size:11.5px;color:#8A8A83}
+#vergabe-root .vgdatei{display:inline-flex;align-items:center;gap:4px;color:#55554F;text-decoration:none;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#vergabe-root .vgdatei:hover{color:#1C1C1A;text-decoration:underline;text-underline-offset:2px}
+#vergabe-root .vgdatei .ico svg{width:12px;height:12px}
+#vergabe-root .vgwarntext{color:#9A5B13}
+#vergabe-root .vgmarke{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#vergabe-root .vgmarke.ok{background:#EEF3E2;color:#3E4E12}
+#vergabe-root .vgmarke.warte{background:#F1F1EE;color:#55554F}
+#vergabe-root .vgmarke.warn{background:#FBEEE4;color:#9A3A0C}
+#vergabe-root .vgpaktion{display:flex;justify-content:flex-end}
+#vergabe-root .vgauf{padding:5px 11px;font-size:12px;font-weight:500}
+#vergabe-root .vgleise{font-size:12px;color:#8A8A83;padding:5px 8px;border-radius:8px}
+#vergabe-root .vgleise:hover{color:#9A3A0C;background:#FBEEE4}
+#vergabe-root .vgpanelfuss{display:flex;align-items:center;gap:7px;padding:12px 22px 16px;font-size:11.5px;color:#8A8A83}
+#vergabe-root .vgpanelfuss .ico svg{width:13px;height:13px}
+#vergabe-root .vgwarnband b{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#C2410C;color:#FFFFFF;font-size:12px;flex:none}
 #vergabe-root .vgchips{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 8px}
 #vergabe-root .vgchip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid rgba(28,28,26,.12);color:#8A8A83;background:transparent}
 #vergabe-root .vgchip.an{color:#1C1C1A;background:#FFFFFF}
