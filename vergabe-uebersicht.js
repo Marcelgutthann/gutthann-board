@@ -306,29 +306,7 @@ function renderVergabe() {
   lage.append(tab, el('div', { class: 'vgklein' }, 'Fehlt die Lesefassung, steht die Einheit mit einem geschätzten Termin auf der Zeitachse (hohle Raute); '
     + `${ohneTermin.length} Einheiten haben gar keinen Termin im Plan. Bitte die Spalte „Versendung LV als Lesefassung an Bauherr" im Vergabeterminplan ausfüllen (Projektleitung).`));
 
-  // ---- Abdeckung (Migration 227): jedes laufende Poool-Projekt muss hier auftauchen ----
-  // Marcel 05.10.: „Wenn ein Projekt, was wir bearbeiten, nicht dort drinnen steht, ist das Katastrophe."
-  const abd = VG.d.abdeckung || [];
-  const GRUND = { plan: 'Vergabeterminplan gelesen', ordner_leer: 'Vergabe-Ordner ist leer', kein_vergabeordner: 'kein Ordner „Vergabeterminplan" unter Termine',
-    kein_termine: 'kein Ordner „Termine"', kein_ordner: 'kein SharePoint-Ordner zur Projektnummer' };
-  const bau = abd.filter((a) => a.art === 'bau');
-  const fehlt = bau.filter((a) => a.plan_status !== 'plan');
-  const abdeckung = el('details', { class: 'vgabd' + (fehlt.length ? ' luecke' : '') });
-  abdeckung.append(el('summary', {}, el('b', {}, `${bau.length - fehlt.length} von ${bau.length} laufenden Bauprojekten`),
-    ' (laut Poool) haben einen Vergabeterminplan', fehlt.length ? el('span', { class: 'warn' }, ` · ${fehlt.length} ohne — nicht planbar`) : ''));
-  for (const st of ['kein_ordner', 'kein_termine', 'kein_vergabeordner', 'ordner_leer']) {
-    const l = fehlt.filter((a) => a.plan_status === st);
-    if (!l.length) continue;
-    abdeckung.append(el('div', { class: 'vgdlbl' }, `${GRUND[st]} (${l.length})`),
-      el('div', { class: 'vgohne' }, ...l.map((a) => el('span', { class: 'vgohnez', title: `${a.titel} · Poool: ${a.poool_status}${a.ordner ? ' · Ordner: ' + a.ordner : ''}` },
-        `${a.nummer} ${a.titel}${a.poool_status !== 'Aktuell' ? ' (' + a.poool_status + ')' : ''}`))));
-  }
-  const rest = abd.filter((a) => a.art !== 'bau');
-  if (rest.length) abdeckung.append(el('div', { class: 'vgklein' }, `Nicht mitgezählt: ${rest.length} Bauleitpläne und interne Positionen ohne Vergaben (`
-    + rest.map((a) => a.nummer).join(', ') + ').'));
-  if (abd.length) abdeckung.append(el('div', { class: 'vgklein' }, `Abgleich Poool ↔ SharePoint vom ${new Date(abd[0].geprueft_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}, läuft alle 15 Minuten.`));
-
-  const haupt = el('div', { class: 'vghaupt' }, leiste, abd.length ? abdeckung : null, chips, plan, legende, lage);
+  const haupt = el('div', { class: 'vghaupt' }, leiste, chips, plan, legende, lage);
   const teile = [haupt];
   const det = VG.detail && (VG.d.einheiten || []).find((e) => e.schluessel === VG.detail);
   if (det) teile.push(vgDetail(det));
@@ -433,10 +411,6 @@ function vgStil() {
 #vergabe-root .vglg.raute.hohl{background:#FFFFFF;border:2px solid #B45309;box-sizing:border-box}
 #vergabe-root .vgklein{font-size:11.5px;color:#8A8A83;line-height:1.45}
 #vergabe-root .vglage{margin-top:8px;font-size:12.5px;color:#55554F}
-#vergabe-root .vgabd{font-size:12.5px;color:#55554F;background:#FFFFFF;border:1px solid rgba(28,28,26,.10);border-radius:10px;padding:8px 12px;margin:0 0 12px}
-#vergabe-root .vgabd.luecke{border-color:rgba(180,83,9,.35);background:#FFFBF5}
-#vergabe-root .vgabd summary{cursor:pointer}
-#vergabe-root .vgabd .vgdlbl{margin-top:10px}
 #vergabe-root .vglage summary{cursor:pointer;padding:6px 2px}
 #vergabe-root .vgtab{border-collapse:collapse;margin:6px 0 8px;font-size:12px}
 #vergabe-root .vgtab th,#vergabe-root .vgtab td{text-align:left;padding:4px 14px 4px 0;border-bottom:1px solid rgba(28,28,26,.07)}
