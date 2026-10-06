@@ -25,7 +25,7 @@ function chatDokRender() {
     if (!leiste) { leiste = el('div', { class: 'kiagenten' }); eing.prepend(leiste); }
     leiste.innerHTML = '';
     leiste.append(el('button', { class: 'kiplus', type: 'button', title: 'Datei, Projekt oder Agent hinzufügen', 'aria-label': 'Hinzufügen',
-      onclick: (e) => { e.stopPropagation(); chatPlusMenue(leiste); } }, '+'), ...chatPlusChips());
+      onclick: (e) => { e.stopPropagation(); chatPlusMenue(leiste); } }, '+'), ...chatPlusChips(), chatGrChip()); // Schalter Gründlich (chat-gruendlich.js)
     // Jede Nachricht geht an Tony (29.09.). Aendern soll sich das Dokument nur, wenn man es
     // ausdruecklich sagt -- das erkennt Tony und gibt es an den Agenten weiter (dokument_aendern_lassen).
     chatDateiZiel(root.querySelector('.kihaupt'));
