@@ -26,6 +26,14 @@ async function ladeVergabe() {
     else { for (const e of d.einheiten || []) vgLesefassung(e); VG.d = d; VG.fehler = null; }
   } catch (e) { VG.fehler = 'Die Vergabeübersicht ist gerade nicht erreichbar (' + e.message + ').'; }
   renderVergabe();
+  // Jede Minute still neu laden (Marcel 06.10.), damit niemand auf den Pfeil klicken muss. Nicht, solange
+  // jemand tippt, zieht oder der Tab im Hintergrund liegt — sonst raeumt der Neuaufbau die Eingabe weg.
+  if (!VG.takt) VG.takt = setInterval(() => {
+    if (S.active?.typ !== 'vergabe' || document.hidden || vgZug) return;
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest('#vergabe-root')) return;
+    ladeVergabe();
+  }, 60000);
 }
 
 const vgTag = (s) => s ? new Date(s + 'T00:00:00') : null;
@@ -176,7 +184,7 @@ function renderVergabe() {
   const durchgang = VG.d.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
   const vorMin = durchgang ? Math.max(0, Math.round((new Date(VG.d.jetzt) - durchgang) / 60000)) : null;
   leiste.append(el('div', { class: 'vgrechts' },
-    el('span', { class: 'vgtakt' + (vorMin != null && vorMin > 12 ? ' warn' : ''), title: 'Der Server sieht alle 5 Minuten in SharePoint nach. Ist eine Datei neu gespeichert, liest er sie im selben Durchgang ein.' },
+    el('span', { class: 'vgtakt' + (vorMin != null && vorMin > 12 ? ' warn' : ''), title: 'Der Server sieht alle 5 Minuten in SharePoint nach. Ist eine Datei neu gespeichert, liest er sie im selben Durchgang ein. Diese Ansicht lädt sich jede Minute selbst neu.' },
       durchgang ? `SharePoint geprüft ${durchgang.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (vor ${vorMin} Min.) · alle 5 Min.` : 'SharePoint noch nicht geprüft'),
     el('button', { class: 'btn vgprojbtn', onclick: () => { VG.panel = true; renderVergabe(); } }, ico('plus'), 'Projekte')));
 
@@ -314,8 +322,10 @@ function renderVergabe() {
   if (det) teile.push(vgDetail(det));
   if (VG.panel) teile.push(vgProjektePanel());
   const scroll = root.querySelector('.vghaupt')?.scrollTop || 0;
+  const listScroll = root.querySelector('.vgplist')?.scrollTop || 0;
   root.replaceChildren(...teile);
   haupt.scrollTop = scroll;
+  const pl = root.querySelector('.vgplist'); if (pl) pl.scrollTop = listScroll;
 }
 
 function vgDetail(e) {
