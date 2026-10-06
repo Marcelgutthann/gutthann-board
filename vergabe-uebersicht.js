@@ -23,9 +23,12 @@ async function ladeVergabe() {
   try {
     const d = await restRpc('assistant_vergabe_uebersicht', {});
     if (d?.fehler) { VG.fehler = d.fehler; VG.d = null; }
-    else { for (const e of d.einheiten || []) vgLesefassung(e); VG.d = d; VG.fehler = null; }
+    else { for (const e of d.einheiten || []) vgLesefassung(e); VG.d = d; VG.fehler = null; VG.uhrVersatz = new Date(d.jetzt) - Date.now(); }
   } catch (e) { VG.fehler = 'Die Vergabeübersicht ist gerade nicht erreichbar (' + e.message + ').'; }
   renderVergabe();
+  // Die Zeitangabe „vor X Min." zaehlt im Browser selbst weiter (Marcel 06.10.: „ich will die Zeit nicht
+  // ständig neu laden müssen") — alle 15 s, unabhaengig vom Datenabruf.
+  if (!VG.uhr) VG.uhr = setInterval(vgTaktText, 15000);
   // Jede Minute still neu laden (Marcel 06.10.), damit niemand auf den Pfeil klicken muss. Nicht, solange
   // jemand tippt, zieht oder der Tab im Hintergrund liegt — sonst raeumt der Neuaufbau die Eingabe weg.
   if (!VG.takt) VG.takt = setInterval(() => {
@@ -182,10 +185,10 @@ function renderVergabe() {
   } }, 'Alle auf-/zuklappen'));
   // Wann wurde zuletzt in SharePoint nachgesehen (Marcel 06.10.: „ENORM WICHTIG")
   const durchgang = VG.d.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
-  const vorMin = durchgang ? Math.max(0, Math.round((new Date(VG.d.jetzt) - durchgang) / 60000)) : null;
+  const vorMin = durchgang ? Math.max(0, Math.floor((Date.now() + (VG.uhrVersatz || 0) - durchgang) / 60000)) : null;
   leiste.append(el('div', { class: 'vgrechts' },
     el('span', { class: 'vgtakt' + (vorMin != null && vorMin > 12 ? ' warn' : ''), title: 'Der Server sieht alle 5 Minuten in SharePoint nach. Ist eine Datei neu gespeichert, liest er sie im selben Durchgang ein. Diese Ansicht lädt sich jede Minute selbst neu.' },
-      durchgang ? `SharePoint geprüft ${durchgang.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (vor ${vorMin} Min.) · alle 5 Min.` : 'SharePoint noch nicht geprüft'),
+      durchgang ? `SharePoint geprüft ${durchgang.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (${vorMin ? 'vor ' + vorMin + ' Min.' : 'gerade eben'}) · alle 5 Min.` : 'SharePoint noch nicht geprüft'),
     el('button', { class: 'btn vgprojbtn', onclick: () => { VG.panel = true; renderVergabe(); } }, ico('plus'), 'Projekte')));
 
   // Projektfilter als Chips
@@ -439,6 +442,15 @@ function vgProjektePanel() {
         ico('refresh'), durchgang
           ? `SharePoint zuletzt geprüft ${uhr(durchgang)} · nächste Prüfung ${uhr(naechster)} · eine gespeicherte Änderung erscheint nach höchstens etwa 7 Minuten`
           : 'SharePoint wird alle 5 Minuten geprüft')));
+}
+
+function vgTaktText() {
+  const n = document.querySelector('#vergabe-root .vgtakt');
+  const t = VG.d?.letzter_durchgang ? new Date(VG.d.letzter_durchgang) : null;
+  if (!n || !t) return;
+  const vor = Math.max(0, Math.floor((Date.now() + (VG.uhrVersatz || 0) - t) / 60000));
+  n.textContent = `SharePoint geprüft ${t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} (${vor ? 'vor ' + vor + ' Min.' : 'gerade eben'}) · alle 5 Min.`;
+  n.classList.toggle('warn', vor > 12);
 }
 
 let vgStilDa = false;
