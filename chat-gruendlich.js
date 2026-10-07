@@ -30,8 +30,8 @@ async function chatGrSenden(ta, text) {
   if (m === 'aus' || (k.dateien || []).length) return false;
   if (m === 'auto') {
     k.denkt = true; chatKnopf();
-    const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-4).map((z) => ({ rolle: z.rolle, text: String(z.text || '').slice(0, 400) }));
-    const w = await chatAktion('weiche', { aufgabe: text, verlauf }).catch(() => ({ gruendlich: false }));
+    const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-4).map((z) => ({ rolle: z.rolle, text: String(z.text || '').slice(0, 400), ...(z.gruendlich ? { gruendlich: true } : {}) }));
+    const w = await chatAktion('weiche', { aufgabe: text, verlauf, chat_id: k.id }).catch(() => ({ gruendlich: false }));
     k.denkt = false;
     if (!w.gruendlich) return false;
   }
