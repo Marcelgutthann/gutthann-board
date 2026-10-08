@@ -4211,12 +4211,15 @@ async function agentPruefung(){
   try {
     if(!runId){
       let offenPunkte = [];
-      try {
+      let gemerkt = null;
+      try { gemerkt = JSON.parse(localStorage.getItem('rahmenOffen:' + planId) || 'null'); } catch(e){}
+      if(gemerkt) offenPunkte = gemerkt;
+      else try {
         const q = await db('rpc/termin_rahmen_quellen', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) });
         offenPunkte = rahmenEingabenAusQuellen(q, fmtISO(new Date())).offen;
       } catch(e){ offenPunkte = ['Projektdaten nicht lesbar: ' + e.message]; }
       const auftrag = rahmenAgentAuftrag(PROJEKT_NAME || 'Projekt', TASKS, offenPunkte, fmtISO(new Date()),
-        PLAN_LISTE.find(p=>p.id===planId)?.art);
+        PLAN_LISTE.find(p=>p.id===planId)?.art, !!gemerkt && TASKS.some(t=>/, Pos /.test(t.quelleText || '')));
       const s = await liveAktion('gruendlich_starten', { aufgabe: auftrag, projekt_id: PROJEKT_ID });
       runId = s.run_id;
       try { localStorage.setItem(SCHL, runId); } catch(e){}
@@ -4365,6 +4368,7 @@ function anlageZeigen(){
     document.getElementById('anLosRahmen').textContent = wort + ' erzeugen';
     document.getElementById('anZeileGen').style.display = bzp ? 'none' : '';
     document.getElementById('anZeilePlab').style.display = bzp ? 'none' : '';
+    const dh = document.getElementById('anDruckHinweis'); if(dh) dh.style.display = bzp ? '' : 'none';
   };
   document.getElementById('anArt').onchange = artWechsel;
 
@@ -4373,6 +4377,7 @@ function anlageZeigen(){
   // entscheiden koennen, landet in RAHMEN_EINGABEN.offen — das prueft spaeter der Agent.
   // Der Mensch sieht jede Herkunft und bestaetigt (Vorschlag-Freigabe-Prinzip).
   let eingaben = null;
+  let druck = { plan: null, hinweis: null };   // massgeblicher vorhandener Bauzeitenplan-Druck (Migr. 238)
   const FELDER = { genehmigung:'anGenehmigung', planungStart:'anPlanungAb', baubeginn:'anBaubeginn', uebergabe:'anUebergabe' };
   (async ()=>{
     const hint = document.getElementById('anRahmenHint');
@@ -4381,6 +4386,7 @@ function anlageZeigen(){
       const q = await db('rpc/termin_rahmen_quellen', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) });
       if(q?.fehler) throw new Error(q.fehler);
       eingaben = rahmenEingabenAusQuellen(q, fmtISO(new Date()));
+      druck = bzpMassgeblich(q.bauzeitenplaene);
       for(const [k, id] of Object.entries(FELDER)){
         const inp = document.getElementById(id);
         if(eingaben[k]){ inp.value = eingaben[k].datum; inp.title = eingaben[k].quelle; inp.dataset.vorbelegt = eingaben[k].datum; }
@@ -4394,6 +4400,14 @@ function anlageZeigen(){
       hint.title = quellen.join('\n');
       const fixiert = (eingaben.vergabeeinheiten || []).filter(v=>Object.keys(v.bekannt).length).length;
       hint.after(zeile(eingaben.hinweise.join(' · ') + (eingaben.vergabeeinheiten ? ', davon ' + fixiert + ' mit belastbaren Terminen' : '')));
+      // Bauzeitenplan: ein vorhandener Druck ist die Grundlage, Regeln fuellen nur Luecken
+      const dz = zeile(druck.plan
+        ? 'Bauzeitenplan-Grundlage: „' + druck.plan.datei + '“ (Stand ' + fmtDE(druck.plan.stand) + ', ' + druck.plan.anzahl + ' Vorgänge, deterministisch gelesen)'
+        : 'Kein lesbarer Bauzeitenplan-Druck im Projekt — Bauzeitenplan entsteht aus Vergabeeinheiten + Regeln');
+      dz.id = 'anDruckHinweis';
+      if(druck.hinweis) dz.title = druck.hinweis;
+      dz.style.display = document.getElementById('anArt').value === 'bauzeitenplan' ? '' : 'none';
+      hint.after(dz);
       if(eingaben.offen.length){
         const o = zeile(eingaben.offen.length + ' Punkte können Regeln nicht entscheiden — die klärt nach dem Erzeugen automatisch ein Agent in der Ablage.', '#b45309');
         o.title = eingaben.offen.join('\n');
@@ -4413,7 +4427,7 @@ function anlageZeigen(){
       let name = document.getElementById('anName').value.trim() || 'Terminplan';
       let art = document.getElementById('anArt').value;
       const startTag = document.getElementById('anStart').value || fmtISO(new Date());
-      let tasks = [], edges = [], quelleText = quelle, quelleXml = null;
+      let tasks = [], edges = [], quelleText = quelle, quelleXml = null, planOffen = null;
       if(quelle === 'rahmen'){
         if(typeof erzeugeRahmenplan !== 'function') return fehler('Rahmenplan-Baustein fehlt in dieser Fassung.');
         const bzp = art === 'bauzeitenplan';
@@ -4435,15 +4449,24 @@ function anlageZeigen(){
           if(inp.value) herkunft[k] = (eingaben?.[k] && inp.dataset.vorbelegt === inp.value)
             ? eingaben[k].quelle : 'von Hand im Anlegedialog eingetragen';
         }
+        if(bzp && druck.plan){
+          // Vorhandener Druck 1:1, nur Vergabeeinheiten ohne Vorgang nach Regel; offen = nur diese Luecken
+          const r = bauzeitenplanAusDruck(druck.plan, eingaben?.vergabeeinheiten, bau, ueb);
+          tasks = r.tasks; edges = r.edges;
+          planOffen = r.offen.concat(druck.hinweis ? [druck.hinweis] : []);
+          quelleText = 'Bauzeitenplan aus „' + druck.plan.datei + '“ (Stand ' + fmtDE(druck.plan.stand) + '), Lücken nach Regel';
+        } else {
         const erg = erzeugeRahmenplan({ genehmigung: gen, baubeginn: bau, uebergabe: ueb,
           planungStart: plab || undefined, vergabeeinheiten: eingaben?.vergabeeinheiten || undefined,
           genehmigungErteilt: !!eingaben?.genehmigungErteilt, herkunft, nurAusfuehrung: bzp });
         tasks = erg.tasks;
         edges = erg.edges;
+        planOffen = eingaben?.offen || [];
         quelleText = (bzp ? 'Bauzeitenplan' : 'Rahmenplan') + '-Generator (Projektdaten + Regeln, bestätigt)';
+        if(erg.warnungen.length) console.warn('Rahmenplan:', erg.warnungen.join(' | '));
+        }
         if(!bzp) art = 'rahmenterminplan';
         if(name === 'Terminplan') name = bzp ? 'Bauzeitenplan' : 'Rahmenterminplan';
-        if(erg.warnungen.length) console.warn('Rahmenplan:', erg.warnungen.join(' | '));
       } else if(quelle === 'leer'){
         tasks = [{ uid:1, name:'Neuer Vorgang', wbs:'1', level:1, start:startTag,
           finish: fmtISO(addDays(parseISO(startTag), 5)), milestone:false, summary:false }];
@@ -4489,7 +4512,9 @@ function anlageZeigen(){
       await planListeLaden();
       document.getElementById('planWahl').value = planId;
       // Ein Klick: nach dem Regelplan sucht der Agent die echten Termine in der Ablage zusammen
-      if(quelle === 'rahmen') agentPruefung();
+      // Die offenen Punkte dieses Plans merken: der Agent klaert nur sie (nicht den belegten Rest)
+      if(planOffen){ try { localStorage.setItem('rahmenOffen:' + planId, JSON.stringify(planOffen)); } catch(e){} }
+      if(quelle === 'rahmen' && (!planOffen || planOffen.length)) agentPruefung();
     } catch(e){ fehler('Anlegen fehlgeschlagen: ' + e.message); }
   }
 }
@@ -5812,7 +5837,8 @@ function reNorm(s) {
   return String(s || '').toLowerCase().replace(/\s*(›|>|»|\/)\s*/g, ' › ').replace(/\s+/g, ' ').trim();
 }
 
-function rahmenAgentAuftrag(projektName, tasks, offen, heuteIso, planart) {
+// nurOffen: der Plan stammt aus einem deterministisch gelesenen Druck — der Agent klärt NUR die offenen Punkte.
+function rahmenAgentAuftrag(projektName, tasks, offen, heuteIso, planart, nurOffen) {
   var bzp = planart === 'bauzeitenplan';
   var zeilen = [];
   for (var i = 0; i < tasks.length; i++) {
@@ -5832,6 +5858,7 @@ function rahmenAgentAuftrag(projektName, tasks, offen, heuteIso, planart) {
     'Der Plan wurde nach Regeln aus den Projektdaten erzeugt. [Regel] heißt: der Termin ist nur geschätzt.',
     'Suche in der Ablage nach den echten Terminen: aktueller Bauzeitenplan, aktueller Vergabeterminplan, Protokolle (Jour fixe, Planer-Besprechung, Gremium), Baugenehmigung, Förderbescheid, Mails mit Terminzusagen. Neuere Stände schlagen ältere.',
     (bzp ? 'Ziel ist ein belastbarer Bauzeitenplan: für JEDES Gewerk Beginn und Ende der Ausführung („start“ und „ende“) aus dem neuesten Bauzeitenplan, Ablaufplan, Vertragsterminen der Firmen oder Protokollen. Gewerke, die im Plan fehlen, als Hinweis nennen.\n' : '') +
+    (nurOffen ? 'WICHTIG: Die Vorgänge mit Herkunft „…, Pos …“ stammen 1:1 aus dem Bauzeitenplan-Druck und gelten als belegt — prüfe sie NICHT erneut. Kläre ausschließlich die offenen Punkte unten (Gewerke ohne Vorgang im Druck: suche ihre Ausführungszeit in Vergabeterminplänen, Verträgen, Protokollen, Firmenterminplänen).\n' : '') +
     'Achte besonders auf: Datum der erteilten Baugenehmigung, tatsächlich laufende Vergabeverfahren (Veröffentlichung, Submission), Sitzungstermine des Stadt-/Gemeinderats, Fristen aus Förderbescheiden (z. B. „erste Vergabe bis …“), Schulferien/Umzugstermine, Bauabschnitte.',
     '',
     'Punkte, die die Regeln nicht entscheiden konnten:',
@@ -5902,6 +5929,93 @@ function rahmenAgentAntwortLesen(text, tasks) {
   });
   (Array.isArray(j.hinweise) ? j.hinweise : []).forEach(function (h) { if (typeof h === 'string' && h.trim()) { erg.hinweise.push(h.trim()); } });
   return erg;
+}
+
+// --- Bauzeitenplan aus einem vorhandenen Druck ---------------------------------
+// Rangfolge: der vorhandene Bauzeitenplan des Projekts (deterministisch gelesen, Migr. 238)
+// geht vor Regeln. Erzeugt wird nichts, was nicht im Druck steht; Vergabeeinheiten ohne
+// Vorgang im Druck werden nach Regel ergänzt und als offen gemeldet.
+
+// Maßgeblicher Druck: der neueste — außer er ist deutlich gröber (< 50 % der Vorgänge)
+// als ein höchstens 30 Tage älterer; dann gilt der Detailplan und der neuere wird gemeldet.
+function bzpMassgeblich(plaene) {
+  var liste = (plaene || []).filter(function (p) { return p && p.anzahl > 0 && p.stand; })
+    .sort(function (a, b) { return a.stand < b.stand ? 1 : (a.stand > b.stand ? -1 : b.anzahl - a.anzahl); });
+  if (!liste.length) { return { plan: null, hinweis: null }; }
+  var neu = liste[0];
+  var grenze = new Date(Date.parse(neu.stand) - 30 * 86400000).toISOString().slice(0, 10);
+  var detail = liste.filter(function (p) { return p.stand >= grenze; })
+    .reduce(function (m, p) { return p.anzahl > m.anzahl ? p : m; }, neu);
+  if (detail !== neu && neu.anzahl < 0.5 * detail.anzahl) {
+    return { plan: detail, hinweis: 'Neuerer Bauzeitenplan „' + neu.datei + '“ (Stand ' + reDE(neu.stand) + ', ' + neu.anzahl +
+      ' Vorgänge) ist gröber als „' + detail.datei + '“ (Stand ' + reDE(detail.stand) + ', ' + detail.anzahl + ' Vorgänge) — Detailplan verwendet, Abweichungen prüfen' };
+  }
+  return { plan: neu, hinweis: null };
+}
+
+// Schlüsselwörter einer Leistung: Wortstämme ohne Arbeits-Endungen, plus feste Kürzel.
+var RE_GLEICH = [
+  [/elektro|\belt\b|starkstrom/, 'elt'], [/sanitär|sanitaer|heizung|lüftung|lueftung|raumluft|wärmeversorg|waermeversorg|\bhls\b|klima/, 'hls'],
+  [/wärmedämm|waermedaemm|wdvs/, 'wdvs'], [/pfosten|riegel/, 'pfostenriegel'], [/vorgeh|hinterl|\bvhf\b/, 'vhf'],
+  [/zimmer|holzbau/, 'holzbau'], [/flachdach|dachabdicht|abdichtung/, 'dachabdichtung'], [/baumeister|rohbau/, 'rohbau'],
+  [/gerüst|geruest/, 'geruest'], [/trockenbau/, 'trockenbau'], [/estrich/, 'estrich'], [/fliesen|platten/, 'fliesen'],
+  [/linoleum|bodenbelag/, 'bodenbelag'], [/parkett/, 'parkett'], [/maler/, 'maler'], [/schlosser/, 'schlosser'],
+  [/schreiner|tischler|einbaut/, 'schreiner'], [/innentür|innentuer/, 'innentueren'], [/mobile.{0,3}trennw/, 'mobiletrennwand'], [/wc.{0,3}trennw/, 'wctrennwand'],
+  [/möbl|moebl|ausstattung/, 'ausstattung'], [/aufzug/, 'aufzug'], [/fenster/, 'fenster'], [/sonnenschutz/, 'sonnenschutz'],
+  [/reinigung/, 'reinigung'], [/außenanlage|aussenanlage|freianlage/, 'aussenanlagen'], [/küche|kueche/, 'kueche'],
+  [/automation|\bmsr\b|\bglt\b/, 'gebaeudeautomation'], [/abbruch|rückbau|rueckbau/, 'abbruch'], [/blitzschutz/, 'blitzschutz']
+];
+// Schlüssel in der Reihenfolge ihres Vorkommens im Text: der erste ist der Hauptschlüssel
+// („Baumeisterarbeiten inkl. Abbruch, ELT …“ -> rohbau zuerst).
+function reSchluessel(text) {
+  var t = String(text || '').toLowerCase();
+  var s = [];
+  for (var i = 0; i < RE_GLEICH.length; i++) {
+    var m = RE_GLEICH[i][0].exec(t);
+    if (m && !s.some(function (x) { return x.k === RE_GLEICH[i][1]; })) { s.push({ k: RE_GLEICH[i][1], at: m.index }); }
+  }
+  return s.sort(function (a, b) { return a.at - b.at; }).map(function (x) { return x.k; });
+}
+
+// plan: {datei, stand, vorgaenge[]} aus bzpMassgeblich; einheiten: Vergabeeinheiten aus rahmenEingabenAusQuellen
+// (oder null); baubeginn/uebergabe: Ecktermine für die Regel-Ergänzung.
+// Ergebnis: { tasks, edges, zuordnung: {einheitName: [uid, …]}, offen: [] }
+function bauzeitenplanAusDruck(plan, einheiten, baubeginn, uebergabe) {
+  var tasks = [];
+  var offen = [];
+  var zuordnung = {};
+  var quelle = plan.datei + (plan.stand ? ' (Stand ' + reDE(plan.stand) + ')' : '');
+  for (var i = 0; i < plan.vorgaenge.length; i++) {
+    var v = plan.vorgaenge[i];
+    var ms = v.start === v.ende && !v.summary && (v.dauerAT === 0 || v.dauerAT === null || /meilenstein|beginn|fertigstellung|übergabe|abnahme|einzug/i.test(v.name));
+    tasks.push({ uid: i + 1, name: v.name, wbs: /^[SZ]/.test(v.pos) ? String(i + 1) : v.pos, level: v.level || 1,
+      start: v.start, finish: v.ende, milestone: ms, summary: !!v.summary, category: 'ausfuehrung',
+      isGewerk: !v.summary && !ms, lockStart: false, lockFinish: false, grAnchor: false,
+      quelleText: quelle + (/^[SZ]/.test(v.pos) ? '' : ', Pos ' + v.pos) });
+  }
+  // Vergabeeinheit -> alle Vorgänge mit ihrem Hauptschlüssel (für die Verbindung zählt der früheste Beginn)
+  var luecken = [];
+  (einheiten || []).forEach(function (e) {
+    var haupt = reSchluessel(e.name)[0];
+    var treffer = !haupt ? [] : tasks.filter(function (t) { return reSchluessel(t.name).indexOf(haupt) >= 0; })
+      .map(function (t) { return t.uid; });
+    if (treffer.length) { zuordnung[e.name] = treffer; } else { luecken.push(e); }
+  });
+  if (luecken.length && baubeginn && uebergabe) {
+    // Nur die Lücken nach Regel: eigener Abschnitt, damit nichts mit dem Druck verwechselt wird
+    var erg = erzeugeRahmenplan({ baubeginn: baubeginn, uebergabe: uebergabe, nurAusfuehrung: true, vergabeeinheiten: luecken });
+    var basis = tasks.length;
+    tasks.push({ uid: basis + 1, name: 'NICHT IM BAUZEITENPLAN (nach Regel ergänzt)', wbs: 'R', level: 1,
+      start: erg.tasks[2].start, finish: erg.tasks[2].finish, milestone: false, summary: true, category: 'ausfuehrung',
+      isGewerk: false, lockStart: false, lockFinish: false, grAnchor: false, quelleText: 'Regel: Vergabeeinheiten ohne Vorgang im Bauzeitenplan' });
+    erg.tasks.slice(3).forEach(function (t, n) {
+      t.uid = basis + 2 + n; t.wbs = 'R.' + (n + 1); t.level = 2;
+      tasks.push(t);
+      zuordnung[luecken[n].name] = [t.uid];
+      offen.push('Vergabeeinheit „' + luecken[n].name + '“ steht nicht im Bauzeitenplan ' + plan.datei + ' — Termin nach Regel geschätzt');
+    });
+  }
+  return { tasks: tasks, edges: [], zuordnung: zuordnung, offen: offen };
 }
 
 // ---------- Baustein: mspdi_export.js (geprueft, Tests unter _bausteine/) ----------
