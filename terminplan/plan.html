@@ -4387,6 +4387,12 @@ function anlageZeigen(){
       if(q?.fehler) throw new Error(q.fehler);
       eingaben = rahmenEingabenAusQuellen(q, fmtISO(new Date()));
       druck = bzpMassgeblich(q.bauzeitenplaene);
+      if(druck.plaene.length){
+        // Vorgaenge der gewaehlten Drucke (Migr. 239) — Kopfdaten kamen mit termin_rahmen_quellen
+        const vg = await db('rpc/termin_bauzeitenplan_vorgaenge', { method:'POST',
+          body: JSON.stringify({ p_project: PROJEKT_ID, p_ids: druck.plaene.map(x=>x.id) }) });
+        for(const tp of druck.plaene) tp.vorgaenge = (vg.find(x=>x.id === tp.id) || {}).vorgaenge || [];
+      }
       for(const [k, id] of Object.entries(FELDER)){
         const inp = document.getElementById(id);
         if(eingaben[k]){ inp.value = eingaben[k].datum; inp.title = eingaben[k].quelle; inp.dataset.vorbelegt = eingaben[k].datum; }
@@ -4401,8 +4407,8 @@ function anlageZeigen(){
       const fixiert = (eingaben.vergabeeinheiten || []).filter(v=>Object.keys(v.bekannt).length).length;
       hint.after(zeile(eingaben.hinweise.join(' · ') + (eingaben.vergabeeinheiten ? ', davon ' + fixiert + ' mit belastbaren Terminen' : '')));
       // Bauzeitenplan: ein vorhandener Druck ist die Grundlage, Regeln fuellen nur Luecken
-      const dz = zeile(druck.plan
-        ? 'Bauzeitenplan-Grundlage: „' + druck.plan.datei + '“ (Stand ' + fmtDE(druck.plan.stand) + ', ' + druck.plan.anzahl + ' Vorgänge, deterministisch gelesen)'
+      const dz = zeile(druck.plaene.length
+        ? 'Bauzeitenplan-Grundlage (deterministisch gelesen): ' + druck.plaene.map(tp=>'„' + tp.datei + '“ (Stand ' + fmtDE(tp.stand) + ', ' + tp.anzahl + ' Vorgänge)').join(' + ')
         : 'Kein lesbarer Bauzeitenplan-Druck im Projekt — Bauzeitenplan entsteht aus Vergabeeinheiten + Regeln');
       dz.id = 'anDruckHinweis';
       if(druck.hinweis) dz.title = druck.hinweis;
@@ -4449,12 +4455,12 @@ function anlageZeigen(){
           if(inp.value) herkunft[k] = (eingaben?.[k] && inp.dataset.vorbelegt === inp.value)
             ? eingaben[k].quelle : 'von Hand im Anlegedialog eingetragen';
         }
-        if(bzp && druck.plan){
-          // Vorhandener Druck 1:1, nur Vergabeeinheiten ohne Vorgang nach Regel; offen = nur diese Luecken
-          const r = bauzeitenplanAusDruck(druck.plan, eingaben?.vergabeeinheiten, bau, ueb);
+        if(bzp && druck.plaene.length){
+          // Vorhandene Drucke 1:1 (je Planfamilie einer), nur Vergabeeinheiten ohne Vorgang nach Regel; offen = nur diese Luecken
+          const r = bauzeitenplanAusDruck(druck.plaene, eingaben?.vergabeeinheiten, bau, ueb);
           tasks = r.tasks; edges = r.edges;
-          planOffen = r.offen.concat(druck.hinweis ? [druck.hinweis] : []);
-          quelleText = 'Bauzeitenplan aus „' + druck.plan.datei + '“ (Stand ' + fmtDE(druck.plan.stand) + '), Lücken nach Regel';
+          planOffen = r.offen.concat(druck.hinweise);
+          quelleText = 'Bauzeitenplan aus ' + druck.plaene.map(tp=>'„' + tp.datei + '“ (Stand ' + fmtDE(tp.stand) + ')').join(' + ') + ', Lücken nach Regel';
         } else {
         const erg = erzeugeRahmenplan({ genehmigung: gen, baubeginn: bau, uebergabe: ueb,
           planungStart: plab || undefined, vergabeeinheiten: eingaben?.vergabeeinheiten || undefined,
@@ -5936,21 +5942,51 @@ function rahmenAgentAntwortLesen(text, tasks) {
 // geht vor Regeln. Erzeugt wird nichts, was nicht im Druck steht; Vergabeeinheiten ohne
 // Vorgang im Druck werden nach Regel ergänzt und als offen gemeldet.
 
-// Maßgeblicher Druck: der neueste — außer er ist deutlich gröber (< 50 % der Vorgänge)
-// als ein höchstens 30 Tage älterer; dann gilt der Detailplan und der neuere wird gemeldet.
+// Planfamilie aus dem Dateinamen: Gewerkteil (Hülle/Ausbau/Rohbau/TGA) + Bauteil-Kürzel (BT/BA/ZB/BA-Nr.).
+// „20260811_Bauzeiten_Ausbau_BT1+ZB1+Speiseraum“ und „20260729_Bauzeiten_Ausbau_BT1+ZB1“ = dieselbe Familie.
+function bzpFamilie(datei) {
+  var d = String(datei || '').toLowerCase().replace(/\.pdf$/, '');
+  var teil = (/(hülle|huelle|ausbau|rohbau|tga|außenanlage|aussenanlage)/.exec(d) || [''])[0].replace('huelle', 'hülle').replace('aussen', 'außen');
+  // „_BT1“: der Unterstrich zählt als Wortzeichen, deshalb kein \b
+  var bauteile = (d.match(/(?:^|[^a-zäöü])(bt|ba|zb|bauteil|bauabschnitt)\s*-?\s*\d+/g) || [])
+    .map(function (x) { return x.replace(/^[^a-zäöü]/, '').replace(/bauteil/, 'bt').replace(/bauabschnitt/, 'ba').replace(/[\s-]/g, ''); });
+  // „BA1 - BA3“ (Gesamtübersicht über mehrere Abschnitte) ist keine Teilplan-Familie
+  if (bauteile.length > 1 && bauteile.every(function (b) { return /^ba/.test(b); })) { bauteile = []; }
+  return (teil || 'gesamt') + (bauteile.length ? ' ' + bauteile.sort().join('+') : '');
+}
+
+// Maßgebliche Drucke: je Planfamilie der neueste — außer er ist deutlich gröber (< 50 % der Vorgänge)
+// als ein höchstens 30 Tage älterer derselben Familie; dann gilt der Detailplan und der neuere wird gemeldet.
+// Familien, deren neuester Druck mehr als 60 Tage hinter dem neuesten Druck des Projekts liegt, gelten als überholt.
+// Ergebnis: { plaene: [...], plan: plaene[0] (Kompatibilität), hinweis, hinweise: [] }
 function bzpMassgeblich(plaene) {
   var liste = (plaene || []).filter(function (p) { return p && p.anzahl > 0 && p.stand; })
     .sort(function (a, b) { return a.stand < b.stand ? 1 : (a.stand > b.stand ? -1 : b.anzahl - a.anzahl); });
-  if (!liste.length) { return { plan: null, hinweis: null }; }
-  var neu = liste[0];
-  var grenze = new Date(Date.parse(neu.stand) - 30 * 86400000).toISOString().slice(0, 10);
-  var detail = liste.filter(function (p) { return p.stand >= grenze; })
-    .reduce(function (m, p) { return p.anzahl > m.anzahl ? p : m; }, neu);
-  if (detail !== neu && neu.anzahl < 0.5 * detail.anzahl) {
-    return { plan: detail, hinweis: 'Neuerer Bauzeitenplan „' + neu.datei + '“ (Stand ' + reDE(neu.stand) + ', ' + neu.anzahl +
-      ' Vorgänge) ist gröber als „' + detail.datei + '“ (Stand ' + reDE(detail.stand) + ', ' + detail.anzahl + ' Vorgänge) — Detailplan verwendet, Abweichungen prüfen' };
+  if (!liste.length) { return { plaene: [], plan: null, hinweis: null, hinweise: [] }; }
+  var projektNeu = liste[0].stand;
+  var aktiv = new Date(Date.parse(projektNeu) - 60 * 86400000).toISOString().slice(0, 10);
+  var familien = {};
+  liste.forEach(function (p) { var f = bzpFamilie(p.datei); (familien[f] = familien[f] || []).push(p); });
+  var gewaehlt = [];
+  var hinweise = [];
+  Object.keys(familien).forEach(function (f) {
+    var fl = familien[f];
+    var neu = fl[0];
+    if (neu.stand < aktiv) { return; }
+    var grenze = new Date(Date.parse(neu.stand) - 30 * 86400000).toISOString().slice(0, 10);
+    var detail = fl.filter(function (p) { return p.stand >= grenze; })
+      .reduce(function (m, p) { return p.anzahl > m.anzahl ? p : m; }, neu);
+    if (detail !== neu && neu.anzahl < 0.5 * detail.anzahl) {
+      hinweise.push('Neuerer Bauzeitenplan „' + neu.datei + '“ (Stand ' + reDE(neu.stand) + ', ' + neu.anzahl +
+        ' Vorgänge) ist gröber als „' + detail.datei + '“ (Stand ' + reDE(detail.stand) + ', ' + detail.anzahl + ' Vorgänge) — Detailplan verwendet, Abweichungen prüfen');
+      gewaehlt.push(detail);
+    } else { gewaehlt.push(neu); }
+  });
+  gewaehlt.sort(function (a, b) { return bzpFamilie(a.datei) < bzpFamilie(b.datei) ? -1 : 1; });
+  if (gewaehlt.length > 1) {
+    hinweise.push(gewaehlt.length + ' Teilpläne nebeneinander: ' + gewaehlt.map(function (p) { return p.datei; }).join(', '));
   }
-  return { plan: neu, hinweis: null };
+  return { plaene: gewaehlt, plan: gewaehlt[0], hinweis: hinweise.join(' · ') || null, hinweise: hinweise };
 }
 
 // Schlüsselwörter einer Leistung: Wortstämme ohne Arbeits-Endungen, plus feste Kürzel.
@@ -5981,18 +6017,32 @@ function reSchluessel(text) {
 // (oder null); baubeginn/uebergabe: Ecktermine für die Regel-Ergänzung.
 // Ergebnis: { tasks, edges, zuordnung: {einheitName: [uid, …]}, offen: [] }
 function bauzeitenplanAusDruck(plan, einheiten, baubeginn, uebergabe) {
+  // plan: ein Druck oder eine Liste von Teilplänen (bzpMassgeblich().plaene). Mehrere Teilpläne stehen
+  // als eigene Abschnitte nebeneinander, jeder Vorgang behält die Herkunft seiner Datei.
+  var teilplaene = Array.isArray(plan) ? plan : [plan];
+  var mehrere = teilplaene.length > 1;
   var tasks = [];
   var offen = [];
   var zuordnung = {};
-  var quelle = plan.datei + (plan.stand ? ' (Stand ' + reDE(plan.stand) + ')' : '');
-  for (var i = 0; i < plan.vorgaenge.length; i++) {
-    var v = plan.vorgaenge[i];
-    var ms = v.start === v.ende && !v.summary && (v.dauerAT === 0 || v.dauerAT === null || /meilenstein|beginn|fertigstellung|übergabe|abnahme|einzug/i.test(v.name));
-    tasks.push({ uid: i + 1, name: v.name, wbs: /^[SZ]/.test(v.pos) ? String(i + 1) : v.pos, level: v.level || 1,
-      start: v.start, finish: v.ende, milestone: ms, summary: !!v.summary, category: 'ausfuehrung',
-      isGewerk: !v.summary && !ms, lockStart: false, lockFinish: false, grAnchor: false,
-      quelleText: quelle + (/^[SZ]/.test(v.pos) ? '' : ', Pos ' + v.pos) });
-  }
+  teilplaene.forEach(function (tp, n) {
+    var quelle = tp.datei + (tp.stand ? ' (Stand ' + reDE(tp.stand) + ')' : '');
+    var praefix = mehrere ? 'T' + (n + 1) + '.' : '';
+    if (mehrere) {
+      var von = tp.vorgaenge.reduce(function (m, v) { return v.start < m ? v.start : m; }, '9999-12-31');
+      var bis = tp.vorgaenge.reduce(function (m, v) { return v.ende > m ? v.ende : m; }, '0000-01-01');
+      tasks.push({ uid: tasks.length + 1, name: 'Teilplan ' + bzpFamilie(tp.datei).toUpperCase() + ' — ' + tp.datei, wbs: 'T' + (n + 1), level: 1,
+        start: von, finish: bis, milestone: false, summary: true, category: 'ausfuehrung', isGewerk: false,
+        lockStart: false, lockFinish: false, grAnchor: false, quelleText: quelle });
+    }
+    for (var i = 0; i < tp.vorgaenge.length; i++) {
+      var v = tp.vorgaenge[i];
+      var ms = v.start === v.ende && !v.summary && (v.dauerAT === 0 || v.dauerAT === null || /meilenstein|beginn|fertigstellung|übergabe|abnahme|einzug/i.test(v.name));
+      tasks.push({ uid: tasks.length + 1, name: v.name, wbs: praefix + (/^[SZ]/.test(v.pos) ? String(i + 1) : v.pos), level: (v.level || 1) + (mehrere ? 1 : 0),
+        start: v.start, finish: v.ende, milestone: ms, summary: !!v.summary, category: 'ausfuehrung',
+        isGewerk: !v.summary && !ms, lockStart: false, lockFinish: false, grAnchor: false,
+        quelleText: quelle + (/^[SZ]/.test(v.pos) ? '' : ', Pos ' + v.pos) });
+    }
+  });
   // Vergabeeinheit -> alle Vorgänge mit ihrem Hauptschlüssel (für die Verbindung zählt der früheste Beginn)
   var luecken = [];
   (einheiten || []).forEach(function (e) {
@@ -6012,7 +6062,7 @@ function bauzeitenplanAusDruck(plan, einheiten, baubeginn, uebergabe) {
       t.uid = basis + 2 + n; t.wbs = 'R.' + (n + 1); t.level = 2;
       tasks.push(t);
       zuordnung[luecken[n].name] = [t.uid];
-      offen.push('Vergabeeinheit „' + luecken[n].name + '“ steht nicht im Bauzeitenplan ' + plan.datei + ' — Termin nach Regel geschätzt');
+      offen.push('Vergabeeinheit „' + luecken[n].name + '“ steht nicht im Bauzeitenplan (' + teilplaene.map(function (tp) { return tp.datei; }).join(', ') + ') — Termin nach Regel geschätzt');
     });
   }
   return { tasks: tasks, edges: [], zuordnung: zuordnung, offen: offen };
