@@ -1996,6 +1996,21 @@ function openTaskContextMenu(uid, clientX, clientY){
   }
   menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
 
+  // Marcel 08.10.2026: „Rechtsklick auf ein Gewerk — kann ich die Multifunktionsauswahl nutzen,
+  // oder muss ich sie jedes Mal suchen?" Bisher lagen Fixieren, Verknuepfen, Gewerk und Vorlauf
+  // Vergabe verstreut (Schloss-Icon, Detail-Dialog, Kalender-Icon). Jetzt auch hier.
+  addItem('✎ Bearbeiten …', ()=> openTaskDetail(uid));
+  addItem('🔗 Verknüpfen mit …', ()=> startLinkPickMode(uid));
+  addItem((t.lockStart ? '🔓 Beginn lösen' : '🔒 Beginn fixieren'), ()=> toggleLock(uid, 'start'));
+  if(!t.milestone) addItem((t.lockFinish ? '🔓 Ende lösen' : '🔒 Ende fixieren'), ()=> toggleLock(uid, 'finish'));
+  if(hasChildren) addItem(t.collapsed ? '▸ Untervorgänge aufklappen' : '▾ Untervorgänge zuklappen', ()=>{ t.collapsed = !t.collapsed; renderAll(); });
+  // Gewerke sind in den echten Plaenen meist Sammelzeilen („Baumeister Fa. Wittl"), daher auch dort.
+  if(!t.milestone){
+    addItem(t.isGewerk ? '⚑ Gewerk-Kennzeichnung entfernen' : '⚑ Als Ausführungsgewerk kennzeichnen', ()=>{ pushUndo(); t.isGewerk = !t.isGewerk; renderAll(); });
+    if(t.isGewerk) addItem('📅 Vorlauf Vergabe …', ()=> openVorlaufVergabeWizard(uid));
+  }
+  menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
+
   addItem('🗑 Vorgang löschen', ()=>{
     const msg = `Vorgang „${t.name}“${hasChildren?' (einschließlich aller Untervorgänge)':''} einschließlich aller Verknüpfungen löschen?`;
     openConfirmDialog(msg, ()=>{
@@ -4000,12 +4015,15 @@ async function ankerLaden(){
 }
 
 // Meilenstein in einen anderen Plan dieses Projekts spiegeln.
-async function meilensteinSpiegeln(uid){
+async function meilensteinSpiegeln(uid, zielName){
   const t = byUid[uid];
   if(!t || !t.milestone) return;
   const ziele = PLAN_LISTE.filter(p => p.id !== planId && !p.eingefroren_am);
   if(!ziele.length){ uiInfo('Kein anderer (nicht eingefrorener) Plan in diesem Projekt vorhanden.'); return; }
-  const auswahl = ziele.length === 1 ? ziele[0]
+  // Tony nennt den Zielplan beim Namen; ohne Namen fragt die Seite wie bisher.
+  const z = String(zielName || '').trim().toLowerCase();
+  const auswahl = z ? ziele.find(p => String(p.name || '').toLowerCase().includes(z))
+    : ziele.length === 1 ? ziele[0]
     : ziele[Number(prompt('In welchen Plan spiegeln?\n' + ziele.map((p,i)=>(i+1) + ') ' + p.name).join('\n'), '1')) - 1];
   if(!auswahl) return;
   try {
@@ -4699,6 +4717,33 @@ function vorgangUmterminieren(t, neuStart, neuEnde){
   renderAll();
 }
 
+// Ein ganzes Gewerk (Sammelvorgang) verschieben: der Balken selbst ist nur die Huelle seiner
+// Untervorgaenge -- er wandert, indem alle Untervorgaenge um denselben Versatz wandern. Danach
+// zieht die Kette ausserhalb des Gewerks einmal nach (cascadeChange), innerhalb nicht doppelt.
+// Fixierte Untervorgaenge bleiben stehen und melden sich ueber planKonflikte.
+function planGewerkVerschieben(sammel, d){
+  pushUndo();
+  const block = subtreeUidSet(sammel.uid);
+  const bewegt = [];
+  block.forEach(u => {
+    const t = byUid[u];
+    if(!t || t.summary || t.lockStart || t.lockFinish) return;
+    t.start = fmtISO(addDays(parseISO(t.start), d));
+    t.finish = fmtISO(addDays(parseISO(t.finish), d));
+    bewegt.push(u);
+  });
+  const besucht = new Set(block);
+  EDGES.filter(e => bewegt.includes(e.from) && !block.has(e.to)).forEach(e => {
+    const n = byUid[e.to];
+    if(!n || besucht.has(n.uid) || n.lockStart || n.lockFinish || e.hardCeiling) return;
+    n.start = fmtISO(addDays(parseISO(n.start), d));
+    n.finish = fmtISO(addDays(parseISO(n.finish), d));
+    cascadeChange(n.uid, d, d, besucht);
+  });
+  resolveLockedConstraints();
+  renderAll();
+}
+
 // Vorgang am gesprochenen Namen finden. Mehrdeutigkeit ist ein Fehler mit Vorschlaegen --
 // lieber nachfragen als den falschen Balken verschieben.
 function planVorgangFinden(name){
@@ -4758,18 +4803,37 @@ function planGebremst(b, vorher, haupt){
     + (fix.length ? ' — gehalten von fixiert ' + fix.slice(0, 3).join(', ') : '')
     + '. Fixierung lösen oder rückgängig machen?';
 }
+// Marcel 08.10.2026: „Wenn die Abhaengigkeiten offensichtlich in demselben Gewerk sind, muss er
+// das nicht sagen. Es geht darum, dass wenn ich weit oben etwas verschiebe und unten etwas
+// mitverschoben wird, was ich nicht mitbekomme." Gewerk = der Sammelvorgang, unter dem der
+// bewegte Vorgang haengt (bzw. er selbst, wenn er einer ist) -- ausser es ist die Wurzel, die
+// den ganzen Plan umfasst; dann zaehlt alles als fremd.
+function planGewerkVon(uid){
+  const t = byUid[uid]; if(!t) return null;
+  const g = t.summary ? uid : findParentUid(uid);
+  if(g == null) return null;
+  const r = getSubtreeRange(g);
+  return (r.start <= 0 && r.end >= TASKS.length - 1) ? null : g;
+}
+function planImGewerk(uid, g){
+  for(let u = uid; u != null; u = findParentUid(u)) if(u === g) return true;
+  return false;
+}
 function planFolgen(vorher, haupt){
+  const gewerke = [...haupt].map(planGewerkVon).filter(g => g != null);
   return TASKS
     .filter(t => !t.summary && !t.hidden && !haupt.has(t.uid) && vorher.has(t.uid))
     .filter(t => vorher.get(t.uid).start !== t.start || vorher.get(t.uid).finish !== t.finish)
     .map(t => ({ name: t.name, meilenstein: !!t.milestone,
+      gleichesGewerk: gewerke.some(g => planImGewerk(t.uid, g)),
       tage: daysBetween(parseISO(vorher.get(t.uid).start), parseISO(t.start)),
       alt: vorher.get(t.uid).start, start: t.start, ende: t.finish }))
     .sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
 }
 // Viele Folgen vorzulesen hilft niemandem: Meilensteine zuerst, hoechstens fuenf mit Namen,
 // der Rest als Zahl -- auf Nachfrage liest Tony ihn aus der Rueckgabe vor.
-function planFolgenSatz(folgen){
+function planFolgenSatz(alle){
+  const folgen = alle.filter(f => !f.gleichesGewerk);
   if(!folgen.length) return '';
   const um = f => f.name + ' (' + (f.tage > 0 ? '+' : '') + f.tage + (Math.abs(f.tage) === 1 ? ' Tag' : ' Tage') + ', jetzt ab ' + fmtDE(f.start) + ')';
   const reihe = folgen.filter(f => f.meilenstein).concat(folgen.filter(f => !f.meilenstein));
@@ -4829,13 +4893,13 @@ window.terminplanApi = {
   // sie verglichen und mitgemeldet, samt fixierter Vorgaenge, die die Kette jetzt nicht mehr haelt.
   tu(b){
     const tu = String(b && b.tu || '').trim();
-    const vergleichen = !['lesen', 'rueckgaengig', 'speichern', 'einfrieren'].includes(tu) && typeof TASKS !== 'undefined' && Array.isArray(TASKS);
+    const vergleichen = !['lesen', 'rueckgaengig', 'speichern', 'einfrieren', 'anzeige', 'schicht', 'plan_wechseln', 'export', 'agent_pruefen', 'spiegeln'].includes(tu) && typeof TASKS !== 'undefined' && Array.isArray(TASKS);
     const vorher = vergleichen ? planStandMerken() : null;
     const konfliktVorher = vergleichen ? new Set(planKonflikte().map(k => k.schluessel)) : null;
     // Der Vorgang, den Tony selbst bewegt, steht schon im Satz -- Folgen sind nur die anderen.
     const haupt = new Set();
     if(vergleichen){
-      const name = tu === 'verknuepfen' ? b.nach : (['verschieben', 'termin', 'dauer'].includes(tu) ? b.vorgang : null);
+      const name = ['verknuepfen', 'verknuepfung_aendern'].includes(tu) ? b.nach : (['verschieben', 'termin', 'dauer', 'vorlauf_vergabe'].includes(tu) ? b.vorgang : null);
       const f = name ? planVorgangFinden(name) : null;
       if(f && f.t) haupt.add(f.t.uid);
     }
@@ -4871,6 +4935,7 @@ window.terminplanApi = {
         const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
         const tage = planVersatzInTage(b.tage, einheit, f.t.start);
         if(!tage) return { fehler: 'Um wie viel soll ' + f.t.name + ' verschoben werden?' };
+        if(f.t.summary){ planGewerkVerschieben(f.t, tage); return { ok: true, satz: 'Das ganze Gewerk ' + planSatz(f.t) }; }
         vorgangUmterminieren(f.t, fmtISO(addDays(parseISO(f.t.start), tage)), fmtISO(addDays(parseISO(f.t.finish), tage)));
         return { ok: true, satz: planSatz(f.t) };
       }
@@ -4906,7 +4971,14 @@ window.terminplanApi = {
         let start = String(b.datum || '').slice(0, 10);
         let index = TASKS.length, level = 0;
         let anker = null;
-        if(b.nach){
+        // art untervorgang: nach ist der Sammelvorgang, unter den der neue als letztes Kind kommt
+        // (wie „＋ Untervorgang" im Kontextmenue) -- ohne Verknuepfung.
+        if(String(b.art || '').toLowerCase() === 'untervorgang'){
+          const f = planVorgangFinden(b.nach); if(f.fehler) return f;
+          const ins = findInsertionForParent(f.t.uid);
+          index = ins.index; level = ins.level;
+          if(!start) start = f.t.start;
+        } else if(b.nach){
           const f = planVorgangFinden(b.nach); if(f.fehler) return f;
           anker = f.t;
           index = findInsertionAdjacent(anker.uid, false);
@@ -4988,6 +5060,196 @@ window.terminplanApi = {
         if(typeof standEinfrieren !== 'function') return { fehler: 'Das Einfrieren gibt es in dieser Fassung des Plans nicht.' };
         standEinfrieren();
         return { ok: true, satz: 'Der heutige Stand ist als Soll-Fassung eingefroren.' };
+      }
+
+      // ---- Alles, was die Maus am Vorgang kann (Marcel 08.10.2026: „dass alles Mögliche Tony
+      //      auch machen kann") -- Kontextmenue, Detail-Dialog, Werkzeugleiste. Jeder Befehl ruft
+      //      dieselbe Funktion wie der Klick; nichts ist nachgebaut.
+      if(tu === 'umbenennen'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const neu = String(b.wert || '').trim();
+        if(!neu) return { fehler: 'Wie soll ' + f.t.name + ' künftig heißen?' };
+        pushUndo(); const alt = f.t.name; f.t.name = neu; renderAll();
+        return { ok: true, satz: alt + ' heißt jetzt ' + neu + '.' };
+      }
+      if(tu === 'duplizieren'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        pushUndo(); const kopie = duplicateTaskTree(f.t.uid); resolveLockedConstraints(); renderAll();
+        return { ok: true, satz: f.t.name + ' ist dupliziert: ' + (kopie ? kopie.name : 'Kopie') + ', ohne Verknüpfungen nach außen.' };
+      }
+      if(tu === 'ausblenden' || tu === 'einblenden'){
+        const z = String(b.vorgang || '').trim().toLowerCase();
+        // Ausgeblendete findet planVorgangFinden nicht -- beim Einblenden alle durchsuchen.
+        const kand = TASKS.filter(t => (tu === 'einblenden' ? t.hidden : !t.hidden) && String(t.name || '').toLowerCase().includes(z));
+        if(!z || !kand.length) return { fehler: tu === 'einblenden'
+          ? 'Ausgeblendet ist: ' + (TASKS.filter(t => t.hidden).map(t => t.name).join(', ') || 'nichts')
+          : 'Im Plan gibt es keinen Vorgang „' + (b.vorgang || '') + '".' };
+        const t = kand.find(x => String(x.name).toLowerCase() === z) || (kand.length === 1 ? kand[0] : null);
+        if(!t) return { fehler: 'Auf „' + b.vorgang + '" passen mehrere: ' + kand.slice(0, 8).map(x => x.name).join(', ') + '. Welcher davon?' };
+        pushUndo(); t.hidden = tu === 'ausblenden'; renderAll();
+        return { ok: true, satz: t.name + (t.hidden ? ' ist ausgeblendet.' : ' ist wieder eingeblendet.') };
+      }
+      if(tu === 'zuklappen' || tu === 'aufklappen'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const r = getSubtreeRange(f.t.uid);
+        if(!(r.end > r.start)) return { fehler: f.t.name + ' hat keine Untervorgänge zum ' + (tu === 'zuklappen' ? 'Zuklappen.' : 'Aufklappen.') };
+        f.t.collapsed = tu === 'zuklappen'; renderAll();
+        return { ok: true, satz: 'Die Untervorgänge von ' + f.t.name + ' sind ' + (f.t.collapsed ? 'zugeklappt.' : 'aufgeklappt.') };
+      }
+      if(tu === 'gewerk'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        if(f.t.milestone) return { fehler: f.t.name + ' ist ein Meilenstein und kann kein Ausführungsgewerk sein.' };
+        const an = !/^(nein|aus|false|entfernen)$/i.test(String(b.wert || 'ja'));
+        pushUndo(); f.t.isGewerk = an; renderAll();
+        return { ok: true, satz: f.t.name + (an ? ' ist jetzt als Ausführungsgewerk gekennzeichnet.' : ' ist kein Ausführungsgewerk mehr.') };
+      }
+      if(tu === 'meilenstein'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const an = !/^(nein|aus|false|balken|vorgang)$/i.test(String(b.wert || 'ja'));
+        if(an === !!f.t.milestone) return { ok: true, satz: f.t.name + (an ? ' ist schon ein Meilenstein.' : ' ist schon ein Vorgang mit Dauer.') };
+        pushUndo();
+        // wie die Checkbox im Detail-Dialog
+        if(an){ f.t.milestone = true; f.t.finish = f.t.start; f.t.finishSuffix = '00:00:00'; }
+        else { f.t.milestone = false; f.t.finish = fmtISO(addDays(parseISO(f.t.start), 3)); f.t.finishSuffix = '23:59:59'; }
+        resolveLockedConstraints(); renderAll();
+        return { ok: true, satz: f.t.name + (an ? ' ist jetzt ein Meilenstein am ' + fmtDE(f.t.start) + '.' : ' ist jetzt ein Vorgang, ' + planSatz(f.t).replace(f.t.name + ' ', '') + '.') };
+      }
+      if(tu === 'kategorie'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const k = String(b.wert || '').toLowerCase().replace('ausführung', 'ausfuehrung');
+        if(!['planung', 'vergabe', 'ausfuehrung'].includes(k)) return { fehler: 'Kategorie muss Planung, Vergabe oder Ausführung sein.' };
+        pushUndo(); f.t.category = k; renderAll();
+        return { ok: true, satz: f.t.name + ' gehört jetzt zur Schicht ' + (k === 'ausfuehrung' ? 'Ausführung' : k[0].toUpperCase() + k.slice(1)) + '.' };
+      }
+      if(tu === 'ist'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const datum = String(b.datum || '').slice(0, 10);
+        const leeren = /^(leer|löschen|loeschen|keins?)$/i.test(String(b.wert || ''));
+        if(!leeren && !/^\d{4}-\d{2}-\d{2}$/.test(datum)) return { fehler: 'Für den Ist-Termin von ' + f.t.name + ' fehlt ein Datum als JJJJ-MM-TT.' };
+        const ende = String(b.art || 'start').toLowerCase() === 'ende';
+        pushUndo(); f.t[ende ? 'istEnde' : 'istStart'] = leeren ? undefined : datum; renderAll();
+        return { ok: true, satz: (ende ? 'Ist-Ende' : 'Ist-Beginn') + ' von ' + f.t.name + (leeren ? ' ist gelöscht.' : ': ' + fmtDE(datum) + '.') };
+      }
+      if(tu === 'fortschritt'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        const roh = b.wert != null && b.wert !== '' ? b.wert : b.tage;
+        const w = Math.max(0, Math.min(100, Math.round(Number(String(roh).replace('%', '')))));
+        if(!Number.isFinite(w)) return { fehler: 'Wie viel Prozent von ' + f.t.name + ' sind erledigt?' };
+        pushUndo(); f.t.fortschritt = w; renderAll();
+        return { ok: true, satz: f.t.name + ' ist zu ' + w + ' Prozent erledigt.' };
+      }
+      if(tu === 'verknuepfung_aendern'){
+        const a = planVorgangFinden(b.vorgang); if(a.fehler) return a;
+        const c = planVorgangFinden(b.nach); if(c.fehler) return c;
+        const e = EDGES.find(x => x.from === a.t.uid && x.to === c.t.uid);
+        if(!e) return { fehler: a.t.name + ' und ' + c.t.name + ' sind nicht in dieser Richtung verknüpft.' };
+        const art = String(b.art || e.type || 'EA').toUpperCase();
+        if(!['EA', 'AA', 'EE', 'AE'].includes(art)) return { fehler: 'Verknüpfungsart muss EA, AA, EE oder AE sein.' };
+        const wd = einheit === 'arbeitstage' || einheit === 'wd';
+        const anker = edgeAnchors(art);
+        pushUndo();
+        e.type = art;
+        if(b.tage != null){
+          const wert = Math.round(Number(b.tage) || 0);
+          const kt = wd ? wert : planVersatzInTage(wert, einheit, a.t[anker.predEnd] || a.t.finish);
+          e.lagUnit = wd ? 'wd' : 'cd'; e.lagValue = kt;
+          e.lag = lagToCalendarDays(a.t[anker.predEnd] || a.t.finish, kt, e.lagUnit);
+        }
+        // Wie beim Aendern der Verknuepfungsart im Detail-Dialog: der Nachfolger richtet sich neu aus.
+        applyEdgeAnchor(e); renderAll();
+        return { ok: true, satz: 'Die Verknüpfung ' + a.t.name + ' → ' + c.t.name + ' ist jetzt ' + art + (e.lagValue ? (e.lagValue > 0 ? ' plus ' : ' minus ') + Math.abs(e.lagValue) + (e.lagUnit === 'wd' ? ' Arbeitstage' : ' Tage') : '') + ', ' + planSatz(c.t).replace(c.t.name + ' ', '') + '.' };
+      }
+      if(tu === 'vorlauf_vergabe'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        if(!f.t.isGewerk) return { fehler: f.t.name + ' ist nicht als Ausführungsgewerk gekennzeichnet — erst mit gewerk kennzeichnen, dann den Vorlauf anlegen.' };
+        const v = b.vergabe || {};
+        const beginn = String(b.datum || f.t.start).slice(0, 10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(beginn)) return { fehler: 'Der Ausführungsbeginn fehlt als JJJJ-MM-TT.' };
+        const gr = String(v.gr_datum || '').slice(0, 10);
+        // Ein Gewerk als Sammelzeile wandert nur mit seinen Untervorgaengen -- erst das ganze Gewerk
+        // auf den neuen Beginn schieben, dann den Vorlauf davor haengen.
+        if(f.t.summary && beginn !== f.t.start) planGewerkVerschieben(f.t, daysBetween(parseISO(f.t.start), parseISO(beginn)));
+        // Dieselben Vorgaben wie im Assistenten (openVorlaufVergabeWizard)
+        commitVorlaufVergabe(f.t.uid, {
+          ausfuehrungsbeginn: f.t.summary ? f.t.start : beginn,
+          einspruchsfrist: Math.max(0, Math.round(Number(v.einspruchsfrist ?? 14))),
+          grBekannt: /^\d{4}-\d{2}-\d{2}$/.test(gr), grDate: /^\d{4}-\d{2}-\d{2}$/.test(gr) ? gr : null,
+          kalkulationszeit: Math.max(0, Math.round(Number(v.kalkulationszeit ?? 30))),
+          planungAT: Math.max(0, Math.round(Number(v.planung_at ?? 20))),
+        });
+        return { ok: true, satz: 'Vorlauf Vergabe für ' + f.t.name + ' angelegt: Ausführungsbeginn ' + fmtDE(f.t.start) + ', Beauftragung, ' + (gr ? 'GR-Sitzung ' + fmtDE(gr) : 'GR-Platzhalter (fixiert, 4 Wochen)') + ', Vergabevorschlag, Submission, Veröffentlichung LV und Ausführungsplanung davor.' };
+      }
+      if(tu === 'spiegeln'){
+        const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
+        if(!f.t.milestone) return { fehler: 'Spiegeln geht nur mit Meilensteinen; ' + f.t.name + ' ist ein Vorgang.' };
+        const ziele = (typeof PLAN_LISTE !== 'undefined' ? PLAN_LISTE : []).filter(p => p.id !== planId && !p.eingefroren_am);
+        if(!ziele.length) return { fehler: 'In diesem Projekt gibt es keinen anderen Plan zum Spiegeln.' };
+        if(!b.wert && ziele.length > 1) return { fehler: 'In welchen Plan? Zur Wahl: ' + ziele.map(p => p.name).join(', ') + '.' };
+        const ziel = b.wert ? ziele.find(p => String(p.name || '').toLowerCase().includes(String(b.wert).toLowerCase())) : ziele[0];
+        if(!ziel) return { fehler: 'Einen Plan „' + b.wert + '" gibt es hier nicht. Zur Wahl: ' + ziele.map(p => p.name).join(', ') + '.' };
+        meilensteinSpiegeln(f.t.uid, ziel.name);
+        return { ok: true, satz: f.t.name + ' wird in den Plan ' + ziel.name + ' gespiegelt.' };
+      }
+      if(tu === 'sondertermin'){
+        const name = String(b.vorgang || b.wert || '').trim();
+        const von = String(b.datum || '').slice(0, 10);
+        if(!name || !/^\d{4}-\d{2}-\d{2}$/.test(von)) return { fehler: 'Für einen Sondertermin brauche ich eine Bezeichnung und ein Datum als JJJJ-MM-TT.' };
+        const tage = Math.max(1, Math.round(Number(b.tage) || 1));
+        const art = String(b.art || '').toLowerCase();
+        const kind = /gr|gemeinderat|sitzung/.test(art + ' ' + name.toLowerCase()) ? 'grsitzung'
+          : /ferien|urlaub/.test(art + ' ' + name.toLowerCase()) ? 'schulferien' : 'feiertag';
+        pushUndo();
+        SPECIAL_PERIODS.push({ id: newSpecialId(), kind, label: name, start: von, finish: fmtISO(addDays(parseISO(von), tage - 1)) });
+        renderAll();
+        return { ok: true, satz: 'Sondertermin ' + name + ' am ' + fmtDE(von) + (tage > 1 ? ' für ' + tage + ' Tage' : '') + ' eingetragen.' };
+      }
+
+      // ---- Werkzeugleiste: reine Anzeige, Plan- und Agentenknoepfe ----
+      if(tu === 'anzeige'){
+        const w = String(b.wert || '').toLowerCase();
+        const klick = id => { const el = document.getElementById(id); if(el) el.click(); return !!el; };
+        if(/rein|hinein|groesser|größer|\+/.test(w)) klick('btnZoomIn');
+        else if(/raus|heraus|kleiner|-/.test(w)) klick('btnZoomOut');
+        else if(/einpass|ganz|alles/.test(w)) klick('btnZoomFit');
+        else if(/heute/.test(w)) klick('btnHeute');
+        else if(/arbeitstag|kalendertag/.test(w)){
+          const sel = document.getElementById('durationUnitSel');
+          const ziel = /arbeit/.test(w) ? 'wd' : 'cd';
+          if(sel && [...sel.options].some(o => o.value === ziel)){ sel.value = ziel; sel.dispatchEvent(new Event('change')); }
+        } else if(/gr/.test(w)){
+          const cb = document.getElementById('toggleGrSitzungen');
+          if(cb){ cb.checked = !/aus|weg|ausblend/.test(w); cb.dispatchEvent(new Event('change')); }
+        } else return { fehler: 'Anzeige kennt: hineinzoomen, herauszoomen, einpassen, heute, Arbeitstage, Kalendertage, GR ein, GR aus.' };
+        return { ok: true, satz: 'Anzeige umgestellt (' + w + ').' };
+      }
+      if(tu === 'schicht'){
+        const sel = document.getElementById('blickWahl');
+        const w = String(b.wert || 'alle').toLowerCase().replace('ausführung', 'ausfuehrung');
+        const opt = sel && [...sel.options].find(o => o.value.toLowerCase() === w || o.textContent.toLowerCase().replace('ausführung', 'ausfuehrung').includes(w));
+        if(!opt) return { fehler: 'Schichten zur Wahl: ' + (sel ? [...sel.options].map(o => o.textContent).join(', ') : 'keine') + '.' };
+        sel.value = opt.value; sel.dispatchEvent(new Event('change'));
+        return { ok: true, satz: 'Der Plan zeigt jetzt: ' + opt.textContent + '.' };
+      }
+      if(tu === 'plan_wechseln'){
+        const liste = typeof PLAN_LISTE !== 'undefined' ? PLAN_LISTE : [];
+        const w = String(b.wert || '').toLowerCase();
+        const ziel = liste.find(p => String(p.name || '').toLowerCase() === w) || liste.find(p => String(p.name || '').toLowerCase().includes(w));
+        if(!w || !ziel) return { fehler: 'Pläne in diesem Projekt: ' + (liste.map(p => p.name + (p.eingefroren_am ? ' (eingefroren)' : '')).join(', ') || 'keine') + '.' };
+        planWechseln(ziel.id);
+        return { ok: true, satz: 'Der Plan ' + ziel.name + ' wird geöffnet.' };
+      }
+      if(tu === 'export'){
+        const w = String(b.wert || 'pdf').toLowerCase();
+        if(w.includes('xml') || w.includes('project')) exportXml();
+        else if(w.includes('json')) exportJson();
+        else exportPdf();
+        return { ok: true, satz: 'Der Export als ' + (w.includes('xml') || w.includes('project') ? 'MS-Project-XML' : w.includes('json') ? 'JSON' : 'PDF') + ' ist angestoßen.' };
+      }
+      if(tu === 'agent_pruefen'){
+        const k = document.getElementById('btnAgentPruefen');
+        if(!k || k.disabled) return { fehler: 'Die Agentenprüfung läuft schon oder ist hier nicht verfügbar.' };
+        k.click();
+        return { ok: true, satz: 'Der Agent prüft den Plan gegen die Projektunterlagen; das dauert rund zehn Minuten, die Vorschläge erscheinen im Plan zum Abhaken.' };
       }
 
       if(tu === 'rueckgaengig'){
