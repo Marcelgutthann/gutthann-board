@@ -232,6 +232,8 @@
      Partner-Termin ab, wird der Ring orange — das ist der Meilensteintrend-Blick. */
   .milestone.anker{outline:2px dashed #2563eb;outline-offset:2px;}
   .milestone.anker.anker-drift{outline:2px dashed #d97706;}
+  .bar.anker{outline:2px dashed #2563eb;outline-offset:1px;}
+  .bar.anker.anker-drift{outline:2px dashed #d97706;}
   .bar .fortschritt{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.32);
     border-radius:inherit;pointer-events:none;}
   #planWahl{max-width:220px;font-size:12px;padding:5px 8px;border-radius:4px;border:1px solid var(--line);background:#fff;}
@@ -304,6 +306,7 @@
     </div>
   </div>
   <button id="btnSpecialPeriods" class="secondary">📅 Sondertermine</button>
+  <button id="btnVerbindung" class="secondary" hidden title="Vergabe-Konflikte mit dem verbundenen Plan">⚠ Konflikte</button>
   <button id="btnAgentPruefen" class="secondary" title="Ein Agent prüft den Plan gegen die Projektunterlagen (Bauzeitenplan, Protokolle, Bescheide, Mails) und schlägt Korrekturen mit Beleg vor">🔎 Agent prüft</button>
   <button id="btnReset" class="secondary">↺ Zurücksetzen</button>
   <span class="tb-trenner"></span>
@@ -3269,6 +3272,15 @@ function renderBars(){
       const pB = PUFFER && !t.summary ? PUFFER[t.uid] : null;
       if(pB){ if(pB.kritisch) el.classList.add('kritisch');
         el.title = t.name + ' · Puffer: ' + (pB.puffer==null?'—':pB.puffer + ' KT'); }
+      // Verbundener Gewerk-Balken (Rahmenplan <-> Bauzeitenplan): Abweichung zum Partner zeigen, nichts schieben
+      const ankB = !t.summary ? ANKER[t.uid] : null;
+      if(ankB){
+        el.classList.add('anker');
+        const driftB = daysBetween(parseISO(ankB.partnerDatum), parseISO(t.start));
+        if(driftB !== 0) el.classList.add('anker-drift');
+        el.title = (el.title || t.name) + '\n◇ Verbunden mit „' + ankB.partnerPlanName + '“ › ' + ankB.partnerName + ': Beginn '
+          + fmtDE(ankB.partnerDatum) + (driftB !== 0 ? ' (Abweichung ' + (driftB>0?'+':'') + driftB + ' KT)' : ' (deckungsgleich)');
+      }
       // Fortschritt (Ist-Stand): dunkler Fuellbalken ueber die ersten n Prozent.
       if(!t.summary && t.fortschritt > 0){
         const fb = document.createElement('div');
@@ -3728,7 +3740,9 @@ async function db(pfad, opt = {}){
     },
   });
   if(!r.ok) throw new Error('Datenbank ' + r.status + ': ' + (await r.text()).slice(0, 160));
-  return r.status === 204 ? null : r.json();
+  // Einfügen mit Prefer return=minimal antwortet 201 OHNE Inhalt — leere Antwort ist kein JSON
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // ---- Planverwaltung: Liste, Auswahl, Anlegen, Einfrieren ----
@@ -3830,6 +3844,7 @@ async function planLaden(gewuenschtePlanId){
   await kalenderLaden(eintrag.kalender_id);
   await ankerLaden();
   standMerken();
+  planeVerbinden();
   schreibschutzAnzeigen();
   return true;
 }
@@ -4014,6 +4029,54 @@ async function meilensteinSpiegeln(uid){
   } catch(e){ saveStatus('Spiegeln fehlgeschlagen: ' + e.message, 'err'); }
 }
 function uiInfo(text){ alert(text); }
+
+// ================== Pläne im Hintergrund verbinden (Rahmen-/Vergabeplan <-> Bauzeitenplan) ==================
+// Marcels Entscheid 24.08.: Anker statt planuebergreifender Kaskade. Beim Laden und nach dem Erzeugen
+// sucht die Seite den Partnerplan (neuester, nicht eingefroren) und setzt je Gewerk einen Anker
+// (planVerbindungen in rahmenplan_eingaben.js: deterministischer Gewerke-Schluessel). Vergabekonflikte
+// (Beauftragung + Einspruchsfrist nach Ausfuehrungsbeginn) erscheinen als Knopf „⚠ Konflikte“.
+let VERBINDUNG = null;   // { partnerName, konflikte: [], anzahl }
+const PARTNER_ART = { bauzeitenplan: ['rahmenterminplan', 'vergabeterminplan'], rahmenterminplan: ['bauzeitenplan'], vergabeterminplan: ['bauzeitenplan'] };
+async function planeVerbinden(){
+  VERBINDUNG = null;
+  const knopf = document.getElementById('btnVerbindung');
+  if(knopf) knopf.hidden = true;
+  const hier = PLAN_LISTE.find(p=>p.id===planId);
+  if(!hier || typeof planVerbindungen !== 'function') return;
+  const arten = PARTNER_ART[hier.art];
+  if(!arten) return;
+  const partner = PLAN_LISTE.find(p=>p.id !== planId && arten.includes(p.art) && !p.eingefroren_am);
+  if(!partner) return;
+  try {
+    const zeilen = await db('termin_vorgaenge?plan_id=eq.' + partner.id
+      + '&select=uid,name,ebene,start_datum,end_datum,ist_sammelvorgang,ist_gewerk&order=pos.asc');
+    const dort = zeilen.map(z=>({ uid:z.uid, name:z.name, level:z.ebene, start:z.start_datum, finish:z.end_datum,
+      summary:!!z.ist_sammelvorgang, isGewerk:!!z.ist_gewerk }));
+    const hierIstBzp = hier.art === 'bauzeitenplan';
+    const rahmen = hierIstBzp ? dort : TASKS, bzp = hierIstBzp ? TASKS : dort;
+    const rahmenId = hierIstBzp ? partner.id : planId, bzpId = hierIstBzp ? planId : partner.id;
+    const r = planVerbindungen(rahmen, bzp, 14);
+    if(r.verbindungen.length && !SCHREIBSCHUTZ){
+      await db('termin_meilenstein_anker?on_conflict=quelle_plan_id,quelle_uid,ziel_plan_id,ziel_uid', { method:'POST',
+        headers:{ Prefer:'resolution=ignore-duplicates,return=minimal' },
+        body: JSON.stringify(r.verbindungen.map(v=>({ quelle_plan_id: rahmenId, quelle_uid: v.rahmenUid,
+          ziel_plan_id: bzpId, ziel_uid: v.bzpUid, angelegt_von: 'automatisch (Gewerk ' + v.schluessel + ')' }))) });
+      await ankerLaden();
+      renderAll();
+    }
+    VERBINDUNG = { partnerName: partner.name, konflikte: r.konflikte, anzahl: r.verbindungen.length };
+    if(knopf && r.konflikte.length){
+      knopf.hidden = false;
+      knopf.textContent = '⚠ ' + r.konflikte.length + ' Vergabe-Konflikte';
+      knopf.title = 'Verbunden mit „' + partner.name + '“ (' + r.verbindungen.length + ' Gewerke)';
+    }
+  } catch(e){ console.warn('Planverbindung:', e.message); }
+}
+document.getElementById('btnVerbindung').onclick = ()=>{
+  if(!VERBINDUNG) return;
+  alert('Verbunden mit „' + VERBINDUNG.partnerName + '“ — ' + VERBINDUNG.anzahl + ' Gewerke.\n\n'
+    + VERBINDUNG.konflikte.map(k=>'• ' + k.text).join('\n'));
+};
 
 // ---- Schreiben ----
 async function planSpeichern(){
@@ -4520,6 +4583,8 @@ function anlageZeigen(){
       // Ein Klick: nach dem Regelplan sucht der Agent die echten Termine in der Ablage zusammen
       // Die offenen Punkte dieses Plans merken: der Agent klaert nur sie (nicht den belegten Rest)
       if(planOffen){ try { localStorage.setItem('rahmenOffen:' + planId, JSON.stringify(planOffen)); } catch(e){} }
+      await ankerLaden();
+      planeVerbinden();
       if(quelle === 'rahmen' && (!planOffen || planOffen.length)) agentPruefung();
     } catch(e){ fehler('Anlegen fehlgeschlagen: ' + e.message); }
   }
@@ -5632,7 +5697,7 @@ function reProfile() {
     { profil: 'Dach/Holzbau', muster: /zimmer|holzbau|dach|spengler|klempner/i, startAnteil: 0.28, dauerAnteil: 0.18 },
     { profil: 'Aufzug', muster: /aufzug/i, startAnteil: 0.60, dauerAnteil: 0.20 },
     { profil: 'Fassade/Fenster', muster: /fenster|fassade|pfosten|riegel|wärmedämmverbund|waermedaemmverbund|wdvs|sonnenschutz|außentür|aussentuer|verglasung außen/i, startAnteil: 0.38, dauerAnteil: 0.22 },
-    { profil: 'Technische Gebäudeausrüstung', muster: /elektro|sanitär|sanitaer|heizung|wärmeversorg|waermeversorg|lüftung|lueftung|raumluft|gebäudeautom|gebaeudeautom|automation|msr|hls|elt|blitzschutz|fernmelde|nachrichten|sprinkler|kälte|kaelte|photovoltaik|pv-anlage/i, startAnteil: 0.30, dauerAnteil: 0.60 },
+    { profil: 'Technische Gebäudeausrüstung', muster: /elektro|sanitär|sanitaer|heizung|wärmeversorg|waermeversorg|lüftung|lueftung|raumluft|gebäudeautom|gebaeudeautom|automation|msr|\bhls\b|\belt\b|blitzschutz|fernmelde|nachrichten|sprinkler|kälte|kaelte|photovoltaik|pv-anlage/i, startAnteil: 0.30, dauerAnteil: 0.60 },
     { profil: 'Küchentechnik', muster: /küche|kueche/i, startAnteil: 0.80, dauerAnteil: 0.10 },
     { profil: 'Trockenbau', muster: /trockenbau|akustik|abgehängte decke|unterdecke/i, startAnteil: 0.55, dauerAnteil: 0.25 },
     { profil: 'Estrich', muster: /estrich/i, startAnteil: 0.65, dauerAnteil: 0.12 },
@@ -5998,7 +6063,9 @@ var RE_GLEICH = [
   [/linoleum|bodenbelag/, 'bodenbelag'], [/parkett/, 'parkett'], [/maler/, 'maler'], [/schlosser/, 'schlosser'],
   [/schreiner|tischler|einbaut/, 'schreiner'], [/innentür|innentuer/, 'innentueren'], [/mobile.{0,3}trennw/, 'mobiletrennwand'], [/wc.{0,3}trennw/, 'wctrennwand'],
   [/möbl|moebl|ausstattung/, 'ausstattung'], [/aufzug/, 'aufzug'], [/fenster/, 'fenster'], [/sonnenschutz/, 'sonnenschutz'],
-  [/reinigung/, 'reinigung'], [/außenanlage|aussenanlage|freianlage/, 'aussenanlagen'], [/küche|kueche/, 'kueche'],
+  [/reinigung/, 'reinigung'], [/bautafel/, 'bautafel'], [/brand.{0,12}rauchschutz|rauchschutz|\brs.?elemente|\blm.?türen/, 'rstueren'],
+  [/innenverglasung/, 'innenverglasung'], [/schließanlage|schliessanlage/, 'schliessanlage'], [/blendschutz/, 'blendschutz'],
+  [/beschriftung|beschilderung|folierung/, 'beschilderung'], [/erschließung|erschliessung/, 'erschliessung'], [/außenanlage|aussenanlage|freianlage/, 'aussenanlagen'], [/küche|kueche/, 'kueche'],
   [/automation|\bmsr\b|\bglt\b/, 'gebaeudeautomation'], [/abbruch|rückbau|rueckbau/, 'abbruch'], [/blitzschutz/, 'blitzschutz']
 ];
 // Schlüssel in der Reihenfolge ihres Vorkommens im Text: der erste ist der Hauptschlüssel
@@ -6066,6 +6133,49 @@ function bauzeitenplanAusDruck(plan, einheiten, baubeginn, uebergabe) {
     });
   }
   return { tasks: tasks, edges: [], zuordnung: zuordnung, offen: offen };
+}
+
+// --- Verbindung der Pläne (Rahmen-/Vergabeplan ↔ Bauzeitenplan) ---------------
+// Marcels Entscheid 24.08.: Pläne verbinden sich über Anker, ohne Kaskade in den anderen Plan —
+// angezeigt wird die Abweichung. Zuordnung deterministisch über den Gewerke-Hauptschlüssel.
+//   gewerk:  Gewerk-Balken im Rahmenplan  ↔  frühester Vorgang dieses Gewerks im Bauzeitenplan
+//   vergabe: Beauftragung + Einspruchsfrist muss vor dem Ausführungsbeginn im Bauzeitenplan liegen
+// rahmenTasks/bzpTasks: Vorgänge der beiden Pläne ({uid,name,start,finish,summary,isGewerk,level}).
+function planVerbindungen(rahmenTasks, bzpTasks, einspruchKT) {
+  var einspruch = einspruchKT === undefined ? 14 : einspruchKT;
+  var verbindungen = [];
+  var konflikte = [];
+  var ohneSchluessel = [];
+  var bzp = (bzpTasks || []).filter(function (t) { return !/^Teilplan /.test(t.name); });
+  var tage = function (a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 86400000); };
+  (rahmenTasks || []).forEach(function (g, i) {
+    if (!g.isGewerk || g.summary) { return; }
+    var haupt = reSchluessel(g.name)[0];
+    if (!haupt) { ohneSchluessel.push(g.name); return; }
+    var mit = bzp.filter(function (t) { return reSchluessel(t.name).indexOf(haupt) >= 0; });
+    var blatt = mit.filter(function (t) { return !t.summary; });
+    var wahl = (blatt.length ? blatt : mit).reduce(function (m, t) { return !m || t.start < m.start ? t : m; }, null);
+    if (!wahl) { return; }
+    verbindungen.push({ art: 'gewerk', schluessel: haupt, rahmenUid: g.uid, rahmenName: g.name, rahmenStart: g.start,
+      bzpUid: wahl.uid, bzpName: wahl.name, bzpStart: wahl.start, abweichungKT: tage(g.start, wahl.start) });
+    // Beauftragung aus der Vergabekette „Vergabe <Gewerk>“ im Rahmenplan
+    var vIdx = -1;
+    for (var k = 0; k < rahmenTasks.length; k++) { if (rahmenTasks[k].summary && rahmenTasks[k].name === 'Vergabe ' + g.name) { vIdx = k; break; } }
+    if (vIdx < 0) { return; }
+    for (var j = vIdx + 1; j < rahmenTasks.length && (rahmenTasks[j].level || 1) > (rahmenTasks[vIdx].level || 1); j++) {
+      if (rahmenTasks[j].name === 'Beauftragung') {
+        var spaetestens = new Date(Date.parse(wahl.start) - einspruch * 86400000).toISOString().slice(0, 10);
+        if (rahmenTasks[j].start > spaetestens) {
+          konflikte.push({ art: 'vergabe', rahmenUid: rahmenTasks[j].uid, gewerk: g.name, beauftragung: rahmenTasks[j].start,
+            bzpUid: wahl.uid, bzpStart: wahl.start, spaetestens: spaetestens,
+            text: 'Beauftragung ' + g.name + ' am ' + reDE(rahmenTasks[j].start) + ' — für Ausführungsbeginn ' + reDE(wahl.start) +
+              ' (Bauzeitenplan „' + wahl.name + '“) spätestens ' + reDE(spaetestens) + ' nötig (Einspruchsfrist ' + einspruch + ' KT)' });
+        }
+        break;
+      }
+    }
+  });
+  return { verbindungen: verbindungen, konflikte: konflikte, ohneSchluessel: ohneSchluessel };
 }
 
 // ---------- Baustein: mspdi_export.js (geprueft, Tests unter _bausteine/) ----------
