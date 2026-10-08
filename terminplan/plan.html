@@ -304,6 +304,7 @@
     </div>
   </div>
   <button id="btnSpecialPeriods" class="secondary">📅 Sondertermine</button>
+  <button id="btnAgentPruefen" class="secondary" title="Ein Agent prüft den Plan gegen die Projektunterlagen (Bauzeitenplan, Protokolle, Bescheide, Mails) und schlägt Korrekturen mit Beleg vor">🔎 Agent prüft</button>
   <button id="btnReset" class="secondary">↺ Zurücksetzen</button>
   <span class="tb-trenner"></span>
   <select id="durationUnitSel" title="Dauer anzeigen und eingeben als Kalendertage oder Arbeitstage">
@@ -2487,6 +2488,15 @@ function openTaskDetail(uid){
   nameInp.addEventListener('change', ()=>{ pushUndo(); t.name = nameInp.value; renderAll(); });
   grid.appendChild(nameInp);
 
+  // Woher der Termin stammt (Regel, Vergabeterminplan, Agent mit Beleg) — nur lesen
+  if(t.quelleText){
+    grid.appendChild(modalLabel('Herkunft'));
+    const herk = document.createElement('div');
+    herk.style.cssText = 'font-size:11px;color:#555;line-height:1.35;align-self:center;';
+    herk.textContent = t.quelleText;
+    grid.appendChild(herk);
+  }
+
   grid.appendChild(modalLabel('Gewerk'));
   const gewerkDetailRow = document.createElement('div');
   gewerkDetailRow.className = 'modal-checkbox-row';
@@ -4141,6 +4151,150 @@ document.addEventListener('keydown', (ev)=>{
   else if(ev.key === 'End') { ev.preventDefault(); rightpane.scrollLeft = chartWidth; calheader.scrollLeft = chartWidth; }
 });
 
+// ================== Agent prüft den Plan gegen die Projektunterlagen ==================
+// Regeln rechnen den Plan sofort; was sie nicht entscheiden koennen (Freitext, veraltete
+// Vergabetermine, Fristen aus Bescheiden), klaert ein gruendlicher Lauf (runner/chat-agent.mjs,
+// Migr. 235) mit Zugriff auf die Ablage. Er liefert Korrekturen MIT Beleg; der Mensch hakt an,
+// was uebernommen wird (Vorschlag-Freigabe). Der Lauf steht zusaetzlich als Chat im Board.
+const LIVE_BACKEND = SUPA_URL + '/functions/v1/live-backend';
+async function liveAktion(aktion, extra){
+  const s = sitzung();
+  if(!s?.access_token) throw new Error('nicht angemeldet');
+  const r = await fetch(LIVE_BACKEND, { method:'POST',
+    headers:{ 'Content-Type':'application/json', apikey: SUPA_ANON, Authorization:'Bearer ' + s.access_token },
+    body: JSON.stringify({ chat_aktion: aktion, ...extra }) });
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok || j.fehler || j.error) throw new Error(j.fehler || j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+// Termin setzen wie im Bearbeiten-Dialog: Kaskade ueber Verknuepfungen, GR-Anker rueckwaerts
+function terminSetzen(t, start, ende){
+  const oldStart = t.start, oldFinish = t.finish;
+  if(t.milestone){ t.start = start; t.finish = start; }
+  else {
+    const dauer = daysBetween(parseISO(t.start), parseISO(t.finish));
+    t.start = start;
+    t.finish = ende || fmtISO(addDays(parseISO(start), dauer));
+  }
+  const sD = daysBetween(parseISO(oldStart), parseISO(t.start));
+  const fD = daysBetween(parseISO(oldFinish), parseISO(t.finish));
+  cascadeChange(t.uid, sD, fD);
+  if(t.grAnchor) cascadeChangeBackward(t.uid, sD, fD);
+  enforceBackward(t.uid);
+}
+
+async function agentPruefung(){
+  if(!planId) return alert('Erst einen Plan anlegen oder wählen.');
+  if(SCHREIBSCHUTZ) return alert('Eingefrorene Fassung — der Agent prüft nur den Arbeitsstand.');
+  const alt = document.getElementById('agentOverlay'); if(alt) alt.remove();
+  const o = document.createElement('div');
+  o.id = 'agentOverlay'; o.className = 'anlage-overlay';
+  o.innerHTML = `<div class="anlage-box" style="max-width:760px;">
+      <h2>🔎 Agent sucht die echten Termine in den Projektunterlagen</h2>
+      <div class="anlage-hint">Der Plan steht schon (nach Regeln aus den Projektdaten). Der Agent liest jetzt Bauzeitenplan, Protokolle, Bescheide und Mails und schlägt belegte Korrekturen vor.</div>
+      <div class="anlage-hint" id="agStatus">startet …</div>
+      <div id="agInhalt" style="margin-top:10px;font-size:12px;max-height:60vh;overflow:auto;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="agUebernehmen" style="display:none;">Ausgewählte übernehmen</button>
+        <button id="agSchliessen" class="secondary">Schließen</button>
+      </div></div>`;
+  document.body.appendChild(o);
+  const status = (t)=>{ document.getElementById('agStatus').textContent = t; };
+  let offen = true;
+  document.getElementById('agSchliessen').onclick = ()=>{ offen = false; o.remove(); };
+
+  // Laufenden Lauf zu diesem Plan wieder aufnehmen (Seite neu geladen, Dialog geschlossen)
+  const SCHL = 'rahmenAgent:' + planId;
+  let runId = null;
+  try { runId = localStorage.getItem(SCHL); } catch(e){}
+  try {
+    if(!runId){
+      let offenPunkte = [];
+      try {
+        const q = await db('rpc/termin_rahmen_quellen', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) });
+        offenPunkte = rahmenEingabenAusQuellen(q, fmtISO(new Date())).offen;
+      } catch(e){ offenPunkte = ['Projektdaten nicht lesbar: ' + e.message]; }
+      const auftrag = rahmenAgentAuftrag(PROJEKT_NAME || 'Projekt', TASKS, offenPunkte, fmtISO(new Date()),
+        PLAN_LISTE.find(p=>p.id===planId)?.art);
+      const s = await liveAktion('gruendlich_starten', { aufgabe: auftrag, projekt_id: PROJEKT_ID });
+      runId = s.run_id;
+      try { localStorage.setItem(SCHL, runId); } catch(e){}
+    }
+    status('Der Agent liest die Unterlagen — das dauert einige Minuten. Du kannst den Dialog schließen, der Lauf arbeitet weiter.');
+    let antwort = null;
+    const bis = Date.now() + 40 * 60000;
+    while(offen){
+      await new Promise(r=>setTimeout(r, 3000));
+      const j = await liveAktion('gruendlich_stand', { run_id: runId }).catch(()=>null);
+      if(!j) { if(Date.now() > bis) throw new Error('keine Rückmeldung vom Server'); continue; }
+      if(j.status === 'wartet') status('wartet auf den Server (' + (j.wartet_s || 0) + ' s) …');
+      else if(j.status === 'running') status('arbeitet: ' + ((j.lauf && j.lauf.jetzt) || '…'));
+      else { antwort = j.antwort || j.antwort_teil || j.result || ''; break; }
+      if(Date.now() > bis) throw new Error('Zeitlimit erreicht — der Lauf steht im Board-Chat');
+    }
+    if(!offen) return;
+    try { localStorage.removeItem(SCHL); } catch(e){}
+    agentErgebnisZeigen(antwort);
+  } catch(e){
+    try { localStorage.removeItem(SCHL); } catch(x){}
+    status('Prüfung nicht möglich: ' + e.message);
+  }
+}
+
+function agentErgebnisZeigen(antwort){
+  const inhalt = document.getElementById('agInhalt');
+  const erg = rahmenAgentAntwortLesen(antwort, TASKS);
+  const zusammenfassung = (antwort || '').replace(/```rahmenplan-json[\s\S]*?```/, '').trim();
+  const esc = (s)=> String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let html = '<div style="white-space:pre-wrap;color:#333;margin-bottom:10px;">' + esc(zusammenfassung.slice(0, 4000)) + '</div>';
+  if(erg.fehler) html += '<div style="color:#b45309;font-weight:600;">' + esc(erg.fehler) + ' Keine Übernahme möglich — die Antwort steht im Board-Chat.</div>';
+  const zeile = (id, text, beleg)=> '<label style="display:flex;gap:8px;padding:6px 0;border-top:1px solid #eee;">'
+    + '<input type="checkbox" checked data-id="' + id + '"><span><b>' + esc(text) + '</b><br><span style="color:#666;">' + esc(beleg) + '</span></span></label>';
+  erg.korrekturen.forEach((k, i)=>{
+    const t = byUid[k.uid];
+    const neu = t.milestone || !k.ende ? fmtDE(k.start) : fmtDE(k.start) + ' – ' + fmtDE(k.ende);
+    const alt = t.milestone ? fmtDE(t.start) : fmtDE(t.start) + ' – ' + fmtDE(t.finish);
+    html += zeile('k' + i, t.name + ': ' + alt + ' → ' + neu, k.beleg);
+  });
+  erg.meilensteine.forEach((m, i)=>{ html += zeile('m' + i, 'Neuer Meilenstein „' + m.name + '“ am ' + fmtDE(m.datum), m.beleg); });
+  if(!erg.korrekturen.length && !erg.meilensteine.length && !erg.fehler) html += '<div class="anlage-hint">Keine belegten Korrekturen — der Plan bleibt, wie er ist.</div>';
+  if(erg.hinweise.length) html += '<div style="margin-top:8px;"><b>Hinweise</b><ul>' + erg.hinweise.map(h=>'<li>' + esc(h) + '</li>').join('') + '</ul></div>';
+  if(erg.verworfen.length) html += '<div class="anlage-hint" style="margin-top:6px;">Verworfen (ohne Beleg oder ungültig): ' + esc(erg.verworfen.join(' · ')) + '</div>';
+  inhalt.innerHTML = html;
+  document.getElementById('agStatus').textContent = 'Fertig. Angehakte Vorschläge werden fixiert und mit Beleg als Herkunft gespeichert.';
+  const knopf = document.getElementById('agUebernehmen');
+  if(!erg.korrekturen.length && !erg.meilensteine.length) return;
+  knopf.style.display = '';
+  knopf.onclick = async ()=>{
+    const an = (id)=> inhalt.querySelector('input[data-id="' + id + '"]')?.checked;
+    pushUndo();
+    erg.korrekturen.forEach((k, i)=>{
+      if(!an('k' + i)) return;
+      const t = byUid[k.uid];
+      terminSetzen(t, k.start, k.ende);
+      t.lockStart = true; if(k.ende || t.milestone) t.lockFinish = true;
+      t.quelleText = 'Agent-Prüfung ' + fmtDE(fmtISO(new Date())) + ': ' + k.beleg;
+    });
+    let naechste = Math.max(0, ...TASKS.map(t=>t.uid)) + 1;
+    erg.meilensteine.forEach((m, i)=>{
+      if(!an('m' + i)) return;
+      // neue Ebene-1-Meilensteine hinter die Ecktermine (vor die erste Sammelzeile)
+      const pos = TASKS.findIndex(t=>t.summary);
+      const t = { uid: naechste++, name: m.name, wbs: '0.' + (i + 1), level: 1, start: m.datum, finish: m.datum,
+        milestone: true, summary: false, category: 'planung', lockStart: true, lockFinish: true, grAnchor: false, hidden: false,
+        isGewerk: false, quelleText: 'Agent-Prüfung ' + fmtDE(fmtISO(new Date())) + ': ' + m.beleg };
+      TASKS.splice(pos < 0 ? TASKS.length : pos, 0, t);
+      byUid[t.uid] = t;
+    });
+    resolveLockedConstraints();
+    renderAll();
+    await planSpeichern();
+    document.getElementById('agentOverlay')?.remove();
+  };
+}
+document.getElementById('btnAgentPruefen').onclick = agentPruefung;
+
 // ================== Neuen Plan anlegen (Vorlage / MS-Project-XML / leer) ==================
 function anlageZeigen(){
   const alt = document.getElementById('anlageOverlay'); if(alt) alt.remove();
@@ -4161,10 +4315,10 @@ function anlageZeigen(){
       <div class="anlage-zeile"><label>Startdatum</label><input id="anStart" type="date"></div>
       <div class="anlage-quellen">
         <div class="anlage-quelle anlage-ki" id="anQuelleRahmen">
-          <b>🪄 Rahmenterminplan aus Projektdaten</b>
+          <b id="anRahmenTitel">🪄 Rahmenterminplan aus Projektdaten</b>
           <div class="anlage-hint" id="anRahmenHint">liest die Terminprüfung des Projekts …</div>
-          <div class="anlage-zeile"><label>Genehmigung</label><input id="anGenehmigung" type="date"></div>
-          <div class="anlage-zeile"><label>Planung ab</label><input id="anPlanungAb" type="date"></div>
+          <div class="anlage-zeile" id="anZeileGen"><label>Genehmigung</label><input id="anGenehmigung" type="date"></div>
+          <div class="anlage-zeile" id="anZeilePlab"><label>Planung ab</label><input id="anPlanungAb" type="date"></div>
           <div class="anlage-zeile"><label>Baubeginn</label><input id="anBaubeginn" type="date"></div>
           <div class="anlage-zeile"><label>Übergabe</label><input id="anUebergabe" type="date"></div>
           <button id="anLosRahmen">Rahmenterminplan erzeugen</button>
@@ -4203,40 +4357,55 @@ function anlageZeigen(){
   document.getElementById('anLosVorlage').onclick = ()=> anlegen('vorlage');
   document.getElementById('anLosXml').onclick = ()=> anlegen('xml');
   document.getElementById('anLosRahmen').onclick = ()=> anlegen('rahmen');
+  // Planart steuert, was der Projektdaten-Knopf baut: Bauzeitenplan = nur Ausfuehrung
+  const artWechsel = ()=>{
+    const bzp = document.getElementById('anArt').value === 'bauzeitenplan';
+    const wort = bzp ? 'Bauzeitenplan' : 'Rahmenterminplan';
+    document.getElementById('anRahmenTitel').textContent = '🪄 ' + wort + ' aus Projektdaten';
+    document.getElementById('anLosRahmen').textContent = wort + ' erzeugen';
+    document.getElementById('anZeileGen').style.display = bzp ? 'none' : '';
+    document.getElementById('anZeilePlab').style.display = bzp ? 'none' : '';
+  };
+  document.getElementById('anArt').onchange = artWechsel;
 
-  // Das KI-Feature: Eckdaten aus der Terminpruefung des Projekts (projects.termin_check,
-  // vom Termin-Agenten gepflegt) VORBELEGEN — der Mensch prueft und bestaetigt
-  // (Vorschlag-Freigabe-Prinzip, keine stillen Uebernahmen).
+  // Eckdaten und Vergabeeinheiten aus ALLEN Projektdaten (RPC termin_rahmen_quellen, Migr. 237)
+  // nach Regeln vorbelegen (Baustein rahmenplan_eingaben.js). Was die Regeln nicht sicher
+  // entscheiden koennen, landet in RAHMEN_EINGABEN.offen — das prueft spaeter der Agent.
+  // Der Mensch sieht jede Herkunft und bestaetigt (Vorschlag-Freigabe-Prinzip).
+  let eingaben = null;
+  const FELDER = { genehmigung:'anGenehmigung', planungStart:'anPlanungAb', baubeginn:'anBaubeginn', uebergabe:'anUebergabe' };
   (async ()=>{
     const hint = document.getElementById('anRahmenHint');
+    hint.textContent = 'liest die Projektdaten (Terminprüfung, Kennzahlen, Terminebene, Vergabeterminplan) …';
     try {
-      const zeilen = await db('projects?id=eq.' + PROJEKT_ID + '&select=termin_check,lph');
-      const ph = zeilen[0]?.termin_check?.phasen || [];
-      const je = (n)=> ph.find(x=>x.lph===n) || {};
-      const gen = je(4).soll_ende, bau = je(8).soll_start, ueb = je(8).soll_ende, plab = je(5).soll_start;
-      if(gen) document.getElementById('anGenehmigung').value = gen;
-      if(plab) document.getElementById('anPlanungAb').value = plab;
-      if(bau) document.getElementById('anBaubeginn').value = bau;
-      if(ueb) document.getElementById('anUebergabe').value = ueb;
-      const quellen = [];
-      if(gen) quellen.push('Genehmigung = Soll-Ende LPH 4');
-      if(plab) quellen.push('Planung ab = Soll-Start LPH 5');
-      if(bau) quellen.push('Baubeginn = Soll-Start LPH 8');
-      if(ueb) quellen.push('Übergabe = Soll-Ende LPH 8');
-      hint.textContent = quellen.length
-        ? 'Vorbelegt aus der Terminprüfung: ' + quellen.join(' · ') + ' — bitte prüfen.'
-        : 'Keine Soll-Termine in der Terminprüfung gefunden — bitte von Hand eintragen.';
-      // Ueberholte Solls NIE stillschweigend uebernehmen: liegt das vorbelegte
-      // Genehmigungsdatum in der Vergangenheit, ist es Papierstand, kein Plan —
-      // deutlich warnen, der Mensch setzt ein realistisches Datum.
-      const heuteIso = fmtISO(new Date());
-      if(gen && gen < heuteIso){
-        const warn = document.createElement('div');
-        warn.style.cssText = 'color:#b45309;font-size:11px;font-weight:600;';
-        warn.textContent = '⚠ Das Soll-Genehmigungsdatum (' + fmtDE(gen) + ') liegt in der Vergangenheit — bitte realistisches Datum eintragen, sonst zeigt der Plan eine bereits verpasste Genehmigung.';
-        hint.after(warn);
+      const q = await db('rpc/termin_rahmen_quellen', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) });
+      if(q?.fehler) throw new Error(q.fehler);
+      eingaben = rahmenEingabenAusQuellen(q, fmtISO(new Date()));
+      for(const [k, id] of Object.entries(FELDER)){
+        const inp = document.getElementById(id);
+        if(eingaben[k]){ inp.value = eingaben[k].datum; inp.title = eingaben[k].quelle; inp.dataset.vorbelegt = eingaben[k].datum; }
       }
-    } catch(e){ hint.textContent = 'Terminprüfung nicht lesbar (' + e.message + ') — bitte von Hand eintragen.'; }
+      const zeile = (text, farbe)=>{ const d = document.createElement('div'); d.className = 'anlage-hint';
+        if(farbe) d.style.cssText = 'color:' + farbe + ';font-weight:600;'; d.textContent = text; return d; };
+      const quellen = Object.entries(FELDER).filter(([k])=>eingaben[k])
+        .map(([k])=>({ genehmigung:'Genehmigung', planungStart:'Planung ab', baubeginn:'Baubeginn', uebergabe:'Übergabe' })[k] + ': ' + eingaben[k].quelle);
+      hint.textContent = quellen.length ? 'Vorbelegt aus den Projektdaten (Herkunft je Feld beim Darüberfahren) — bitte prüfen.'
+        : 'Keine Ecktermine in den Projektdaten gefunden — bitte von Hand eintragen.';
+      hint.title = quellen.join('\n');
+      const fixiert = (eingaben.vergabeeinheiten || []).filter(v=>Object.keys(v.bekannt).length).length;
+      hint.after(zeile(eingaben.hinweise.join(' · ') + (eingaben.vergabeeinheiten ? ', davon ' + fixiert + ' mit belastbaren Terminen' : '')));
+      if(eingaben.offen.length){
+        const o = zeile(eingaben.offen.length + ' Punkte können Regeln nicht entscheiden — die klärt nach dem Erzeugen automatisch ein Agent in der Ablage.', '#b45309');
+        o.title = eingaben.offen.join('\n');
+        hint.nextSibling.after(o);
+      }
+      // Ueberholte Solls NIE stillschweigend uebernehmen: eine noch nicht erteilte Genehmigung
+      // in der Vergangenheit ist Papierstand — deutlich warnen.
+      const gen = eingaben.genehmigung?.datum;
+      if(gen && gen < fmtISO(new Date()) && !eingaben.genehmigungErteilt){
+        hint.after(zeile('⚠ Das Genehmigungsdatum (' + fmtDE(gen) + ') liegt in der Vergangenheit, die Genehmigung ist aber nicht erteilt — bitte realistisches Datum eintragen.', '#b45309'));
+      }
+    } catch(e){ hint.textContent = 'Projektdaten nicht lesbar (' + e.message + ') — bitte von Hand eintragen.'; }
   })();
 
   async function anlegen(quelle){
@@ -4247,19 +4416,33 @@ function anlageZeigen(){
       let tasks = [], edges = [], quelleText = quelle, quelleXml = null;
       if(quelle === 'rahmen'){
         if(typeof erzeugeRahmenplan !== 'function') return fehler('Rahmenplan-Baustein fehlt in dieser Fassung.');
-        const gen = document.getElementById('anGenehmigung').value;
+        const bzp = art === 'bauzeitenplan';
+        const gen = bzp ? null : document.getElementById('anGenehmigung').value;
         const bau = document.getElementById('anBaubeginn').value;
         const ueb = document.getElementById('anUebergabe').value;
-        if(!gen || !bau || !ueb) return fehler('Bitte Genehmigung, Baubeginn und Übergabe angeben.');
-        if(!(gen <= bau && bau < ueb)) return fehler('Reihenfolge prüfen: Genehmigung ≤ Baubeginn < Übergabe.');
-        const plab = document.getElementById('anPlanungAb').value || null;
+        if(bzp){
+          if(!bau || !ueb) return fehler('Bitte Baubeginn und Übergabe angeben.');
+          if(!(bau < ueb)) return fehler('Reihenfolge prüfen: Baubeginn < Übergabe.');
+        } else {
+          if(!gen || !bau || !ueb) return fehler('Bitte Genehmigung, Baubeginn und Übergabe angeben.');
+          if(!(gen <= bau && bau < ueb)) return fehler('Reihenfolge prüfen: Genehmigung ≤ Baubeginn < Übergabe.');
+        }
+        const plab = bzp ? null : (document.getElementById('anPlanungAb').value || null);
+        // Herkunft je Eckdatum: vorbelegt und unveraendert = Projektdaten, sonst von Hand
+        const herkunft = {};
+        for(const [k, id] of Object.entries(FELDER)){
+          const inp = document.getElementById(id);
+          if(inp.value) herkunft[k] = (eingaben?.[k] && inp.dataset.vorbelegt === inp.value)
+            ? eingaben[k].quelle : 'von Hand im Anlegedialog eingetragen';
+        }
         const erg = erzeugeRahmenplan({ genehmigung: gen, baubeginn: bau, uebergabe: ueb,
-          planungStart: plab || undefined });
+          planungStart: plab || undefined, vergabeeinheiten: eingaben?.vergabeeinheiten || undefined,
+          genehmigungErteilt: !!eingaben?.genehmigungErteilt, herkunft, nurAusfuehrung: bzp });
         tasks = erg.tasks;
         edges = erg.edges;
-        quelleText = 'Rahmenplan-Generator (Eckdaten aus Terminprüfung, bestätigt)';
-        art = 'rahmenterminplan';
-        if(name === 'Terminplan') name = 'Rahmenterminplan';
+        quelleText = (bzp ? 'Bauzeitenplan' : 'Rahmenplan') + '-Generator (Projektdaten + Regeln, bestätigt)';
+        if(!bzp) art = 'rahmenterminplan';
+        if(name === 'Terminplan') name = bzp ? 'Bauzeitenplan' : 'Rahmenterminplan';
         if(erg.warnungen.length) console.warn('Rahmenplan:', erg.warnungen.join(' | '));
       } else if(quelle === 'leer'){
         tasks = [{ uid:1, name:'Neuer Vorgang', wbs:'1', level:1, start:startTag,
@@ -4305,6 +4488,8 @@ function anlageZeigen(){
       await planSpeichern();
       await planListeLaden();
       document.getElementById('planWahl').value = planId;
+      // Ein Klick: nach dem Regelplan sucht der Agent die echten Termine in der Ablage zusammen
+      if(quelle === 'rahmen') agentPruefung();
     } catch(e){ fehler('Anlegen fehlgeschlagen: ' + e.message); }
   }
 }
@@ -5043,6 +5228,11 @@ function rpStartFuerArbeitstage(endeMs, arbeitstage) {
   return cursor;
 }
 
+// Herkunftstext eines Kettentermins: bekannt = Quelle der Einheit, sonst die Regel
+function rpHerkunft(bekannt, quelle, regelText, feld) {
+  return bekannt[feld] ? quelle : regelText;
+}
+
 // --- Defaults ----------------------------------------------------------------
 
 // Default-Vergabeeinheiten kommunaler Hochbau: Lage des Ausführungsbeginns
@@ -5079,14 +5269,25 @@ function rpDefaultKette() {
 //   baubeginn    'YYYY-MM-DD'  Beginn Ausführung
 //   uebergabe    'YYYY-MM-DD'  Soll-Ende, Meilenstein wird fixiert
 //   planungStart 'YYYY-MM-DD'  optional, Default = genehmigung
-//   vergabeeinheiten            optional [{name, startAnteil, dauerAnteil}]
+//   vergabeeinheiten            optional [{name, startAnteil, dauerAnteil,
+//                                 bekannt?: {veroeffentlichung, submission, sitzung, baubeginn},
+//                                 quelle?: Text zu den bekannten Terminen,
+//                                 regel?: Text, woher startAnteil/dauerAnteil stammen}]
+//                               Bekannte Termine werden fixiert übernommen, die fehlenden
+//                               Kettenglieder rechnet die Regel um sie herum.
 //   kette                       optional, Einzelwerte überschreiben Defaults
+//   genehmigungErteilt          optional true: Meilenstein heißt "Baugenehmigung (erteilt)",
+//                               keine Warnung "Vergabe vor Genehmigung"
+//   herkunft                    optional {genehmigung, baubeginn, uebergabe, planungStart}:
+//                               Text je Eckdatum, landet in quelleText der Vorgänge
 // Ergebnis: { tasks, edges, warnungen }
 function erzeugeRahmenplan(param) {
-  var genehmigungMs = rpParseDatum(param.genehmigung);
+  // Bauzeitenplan: nur Ecktermine Baubeginn/Übergabe + Schicht AUSFÜHRUNG, Genehmigung optional
+  var nur = param.nurAusfuehrung === true;
+  var genehmigungMs = param.genehmigung ? rpParseDatum(param.genehmigung) : rpParseDatum(param.baubeginn);
   var baubeginnMs = rpParseDatum(param.baubeginn);
   var uebergabeMs = rpParseDatum(param.uebergabe);
-  var planungStartIso = param.planungStart ? param.planungStart : param.genehmigung;
+  var planungStartIso = param.planungStart ? param.planungStart : (param.genehmigung || param.baubeginn);
   var planungStartMs = rpParseDatum(planungStartIso);
 
   var einheiten = param.vergabeeinheiten || rpDefaultVergabeeinheiten();
@@ -5133,8 +5334,17 @@ function erzeugeRahmenplan(param) {
       lockFinish: felder.lock === true,
       grAnchor: felder.grAnchor === true
     };
+    if (felder.quelle) { t.quelleText = felder.quelle; }
+    if (felder.collapsed) { t.collapsed = true; }
     tasks.push(t);
     return t;
+  }
+
+  // Kante zwischen zwei angelegten Vorgängen; lag = tatsächlicher Abstand, damit
+  // fixierte bekannte Termine und Regelkette konsistent bleiben (im Regelfall
+  // ergibt das genau die Kettenwerte).
+  function kanteZwischen(von, nach, hardCeiling) {
+    neueKante(von.uid, nach.uid, Math.round((rpParseDatum(nach.start) - rpParseDatum(von.finish)) / 86400000), hardCeiling);
   }
 
   // Kante anlegen — type ist IMMER der Kürzel-String 'EA'
@@ -5155,17 +5365,49 @@ function erzeugeRahmenplan(param) {
   for (var i = 0; i < einheiten.length; i++) {
     var einheit = einheiten[i];
 
-    // AUSFÜHRUNG: Lage + Dauer anteilig an der Bauzeit; Start ggf. auf Montag
-    var gewerkStartMs = rpSnapAufMontag(rpPlusTage(baubeginnMs, Math.round(einheit.startAnteil * bauzeitKT)));
+    var bekannt = einheit.bekannt || {};
+    var bekanntMs = function (feld) { return bekannt[feld] ? rpParseDatum(bekannt[feld]) : null; };
+
+    // AUSFÜHRUNG: Lage + Dauer anteilig an der Bauzeit; Start ggf. auf Montag.
+    // Ein bekannter Ausführungsbeginn ersetzt die Lage, die Dauer bleibt Regel.
+    var gewerkStartMs = bekanntMs('baubeginn') !== null ? bekanntMs('baubeginn')
+      : rpSnapAufMontag(rpPlusTage(baubeginnMs, Math.round(einheit.startAnteil * bauzeitKT)));
     var gewerkFinishMs = rpPlusTage(gewerkStartMs, Math.round(einheit.dauerAnteil * bauzeitKT));
 
-    // VERGABE: Rückwärtskette vom (ggf. gesnappten) Ausführungsbeginn A
-    var beauftragungMs = rpPlusTage(gewerkStartMs, -kette.einspruchKT);
-    var grEndeMs = rpPlusTage(beauftragungMs, -1); // endet 1 KT vor Beauftragung
-    var grStartMs = rpPlusTage(grEndeMs, -kette.grPlatzhalterKT);
+    // VERGABE: Rückwärtskette vom (ggf. gesnappten) Ausführungsbeginn A. Ein bekanntes
+    // Glied ersetzt den Regelwert, die früheren Glieder rechnen dann von ihm aus weiter.
+    var sitzungBek = bekanntMs('sitzung');
+    var submissionBek = bekanntMs('submission');
+    var veroeffBek = bekanntMs('veroeffentlichung');
+    // GR: bekannte Sitzung ist ein Sitzungstag, sonst der Platzhalter-Vorgang wie bisher
+    var grEndeMs = sitzungBek !== null ? sitzungBek : rpPlusTage(gewerkStartMs, -kette.einspruchKT - 1);
+    var grStartMs = sitzungBek !== null ? sitzungBek : rpPlusTage(grEndeMs, -kette.grPlatzhalterKT);
+    var beauftragungMs = rpPlusTage(grEndeMs, 1);
     var vorschlagMs = rpPlusTage(grStartMs, -kette.vorschlagVorlaufKT);
-    var submissionMs = rpPlusTage(vorschlagMs, -kette.submissionVorlaufKT);
-    var veroeffentlichungMs = rpPlusTage(submissionMs, -kette.kalkulationKT);
+    var submissionMs = submissionBek !== null ? submissionBek : rpPlusTage(vorschlagMs, -kette.submissionVorlaufKT);
+    var veroeffentlichungMs = veroeffBek !== null ? veroeffBek : rpPlusTage(submissionMs, -kette.kalkulationKT);
+    // Glieder NACH dem spätesten bekannten Glied laufen vorwärts von ihm: eine bekannte
+    // Veröffentlichung zieht Submission, Vorschlag, GR und Beauftragung mit (statt sie
+    // irgendwo vor dem Regel-Ausführungsbeginn stehen zu lassen).
+    if (sitzungBek === null && (submissionBek !== null || veroeffBek !== null)) {
+      if (submissionBek === null) { submissionMs = rpPlusTage(veroeffentlichungMs, kette.kalkulationKT); }
+      vorschlagMs = rpPlusTage(submissionMs, kette.submissionVorlaufKT);
+      grStartMs = rpPlusTage(vorschlagMs, kette.vorschlagVorlaufKT);
+      grEndeMs = rpPlusTage(grStartMs, kette.grPlatzhalterKT);
+      beauftragungMs = rpPlusTage(grEndeMs, 1);
+    } else if (submissionBek === null && veroeffBek !== null && submissionMs < veroeffentlichungMs) {
+      submissionMs = rpPlusTage(veroeffentlichungMs, kette.kalkulationKT);
+    }
+    // Regel-Ausführungsbeginn nie vor Beauftragung + Einspruchsfrist
+    if (bekanntMs('baubeginn') === null && gewerkStartMs < rpPlusTage(beauftragungMs, kette.einspruchKT)) {
+      var dauerMs = gewerkFinishMs - gewerkStartMs;
+      gewerkStartMs = rpSnapAufMontag(rpPlusTage(beauftragungMs, kette.einspruchKT));
+      gewerkFinishMs = gewerkStartMs + dauerMs;
+    }
+    if (vorschlagMs < submissionMs) { vorschlagMs = submissionMs; }
+    if (submissionMs < veroeffentlichungMs || grStartMs < vorschlagMs || gewerkStartMs < beauftragungMs) {
+      warnungen.push('Vergabekette ' + einheit.name + ' widerspricht sich: bekannte Termine passen nicht zur Regelkette');
+    }
 
     // PLANUNG: endet 1 KT vor Veröffentlichung LV, Dauer in Arbeitstagen
     var planungEndeMs = rpPlusTage(veroeffentlichungMs, -1);
@@ -5173,18 +5415,27 @@ function erzeugeRahmenplan(param) {
 
     // Die Wahrheit zeigen, nicht verbiegen: Termine bleiben stehen,
     // Konflikte werden nur als Warnung gemeldet.
-    if (veroeffentlichungMs < genehmigungMs) {
+    if (!nur && veroeffentlichungMs < genehmigungMs && param.genehmigungErteilt !== true) {
       warnungen.push('Vergabekette ' + einheit.name + ' beginnt vor der Genehmigung');
     }
-    if (planungBeginnMs < planungStartMs) {
+    if (!nur && planungBeginnMs < planungStartMs) {
       warnungen.push('Planung ' + einheit.name + ' muesste vor ' + planungStartIso + ' beginnen');
     }
     if (gewerkFinishMs < gewerkStartMs) {
       warnungen.push('Gewerk ' + einheit.name + ' hat negative Dauer (Finish vor Start)');
     }
 
+    // Herkunft je Termin: bekannt = Quelle der Einheit (fixiert), sonst die Regel
+    var regelText = 'Regel: ' + (einheit.regel || 'Standardablauf kommunaler Hochbau');
+    var quelleBek = einheit.quelle || 'Projektdaten';
+    // (keine Closure über die Schleifen-vars — die würden von der letzten Einheit überschrieben)
+    var herkunftVon = rpHerkunft.bind(null, bekannt, quelleBek, regelText);
+
     daten.push({
       name: einheit.name,
+      bekannt: bekannt,
+      herkunftVon: herkunftVon,
+      regelText: regelText,
       gewerkStartMs: gewerkStartMs,
       gewerkFinishMs: gewerkFinishMs,
       beauftragungMs: beauftragungMs,
@@ -5201,9 +5452,12 @@ function erzeugeRahmenplan(param) {
   // --- Schritt 2: Vorgänge in fester Reihenfolge anlegen ---------------------
 
   // Ebene-1-Meilensteine
-  neueTask({ name: 'Baugenehmigung (erwartet)', wbs: '1', level: 1, startMs: genehmigungMs, finishMs: genehmigungMs, milestone: true, category: 'planung' });
-  neueTask({ name: 'Baubeginn', wbs: '2', level: 1, startMs: baubeginnMs, finishMs: baubeginnMs, milestone: true, category: 'ausfuehrung' });
-  neueTask({ name: 'Übergabe (Soll)', wbs: '3', level: 1, startMs: uebergabeMs, finishMs: uebergabeMs, milestone: true, category: 'ausfuehrung', lock: true });
+  var herkunft = param.herkunft || {};
+  var erteilt = param.genehmigungErteilt === true;
+  var wbsNr = nur ? 0 : 1;
+  if (!nur) neueTask({ name: erteilt ? 'Baugenehmigung (erteilt)' : 'Baugenehmigung (erwartet)', wbs: '1', level: 1, startMs: genehmigungMs, finishMs: genehmigungMs, milestone: true, category: 'planung', quelle: herkunft.genehmigung });
+  neueTask({ name: 'Baubeginn', wbs: String(wbsNr + 1), level: 1, startMs: baubeginnMs, finishMs: baubeginnMs, milestone: true, category: 'ausfuehrung', quelle: herkunft.baubeginn });
+  neueTask({ name: 'Übergabe (Soll)', wbs: String(wbsNr + 2), level: 1, startMs: uebergabeMs, finishMs: uebergabeMs, milestone: true, category: 'ausfuehrung', lock: true, quelle: herkunft.uebergabe });
 
   // Leere Vergabeeinheiten-Liste (leeres Array ist truthy, umgeht also den
   // Default oben): keine Schichten möglich — nur Ecktermine plus Warnung,
@@ -5229,6 +5483,7 @@ function erzeugeRahmenplan(param) {
     if (daten[s].gewerkFinishMs > ausfuehrungBis) { ausfuehrungBis = daten[s].gewerkFinishMs; }
   }
 
+  if (!nur) {
   // Schicht PLANUNG. Zusaetzlich zu den LV-bezogenen Vorgaengen je Einheit gibt es
   // EINEN durchgehenden Werkplanungs-Balken ab planungStart: Die Ausfuehrungsplanung
   // (LPH 5) laeuft real ab Planungsfreigabe baubegleitend weiter — ohne diesen Balken
@@ -5242,7 +5497,7 @@ function erzeugeRahmenplan(param) {
   neueTask({ name: 'PLANUNG', wbs: '4', level: 1, startMs: planungVon, finishMs: planungBis, summary: true, category: 'planung' });
   if (werkplanung) {
     neueTask({ name: 'Werk- und Detailplanung (durchgehend)', wbs: '4.1', level: 2,
-      startMs: planungStartMs, finishMs: planungBis, category: 'planung' });
+      startMs: planungStartMs, finishMs: planungBis, category: 'planung', quelle: herkunft.planungStart });
   }
   var planungWbsBasis = werkplanung ? 1 : 0;
   for (var p = 0; p < daten.length; p++) {
@@ -5252,56 +5507,401 @@ function erzeugeRahmenplan(param) {
       level: 2,
       startMs: daten[p].planungBeginnMs,
       finishMs: daten[p].planungEndeMs,
-      category: 'planung'
+      category: 'planung',
+      quelle: daten[p].regelText + ' · LV-Erstellung ' + kette.lvErstellungAT + ' AT vor Veröffentlichung'
     });
   }
 
   // Schicht VERGABE mit Rückwärtskette je Einheit
   neueTask({ name: 'VERGABE', wbs: '5', level: 1, startMs: vergabeVon, finishMs: vergabeBis, summary: true, category: 'vergabe' });
+  // Viele Einheiten (echter Vergabeterminplan): die Ketten zugeklappt anlegen
+  var zuklappen = daten.length > 8;
   for (var v = 0; v < daten.length; v++) {
     var d = daten[v];
     var basisWbs = '5.' + (v + 1);
-    neueTask({ name: 'Vergabe ' + d.name, wbs: basisWbs, level: 2, startMs: d.veroeffentlichungMs, finishMs: d.beauftragungMs, summary: true, category: 'vergabe' });
+    neueTask({ name: 'Vergabe ' + d.name, wbs: basisWbs, level: 2, startMs: d.veroeffentlichungMs, finishMs: d.beauftragungMs, summary: true, category: 'vergabe', collapsed: zuklappen });
 
-    var tLv = neueTask({ name: 'Veröffentlichung LV', wbs: basisWbs + '.1', level: 3, startMs: d.veroeffentlichungMs, finishMs: d.veroeffentlichungMs, milestone: true, category: 'vergabe' });
-    var tSub = neueTask({ name: 'Submission', wbs: basisWbs + '.2', level: 3, startMs: d.submissionMs, finishMs: d.submissionMs, milestone: true, category: 'vergabe' });
-    var tVor = neueTask({ name: 'Vergabevorschlag', wbs: basisWbs + '.3', level: 3, startMs: d.vorschlagMs, finishMs: d.vorschlagMs, milestone: true, category: 'vergabe' });
+    var tLv = neueTask({ name: 'Veröffentlichung LV', wbs: basisWbs + '.1', level: 3, startMs: d.veroeffentlichungMs, finishMs: d.veroeffentlichungMs, milestone: true, category: 'vergabe',
+      lock: !!d.bekannt.veroeffentlichung, quelle: d.herkunftVon('veroeffentlichung') });
+    var tSub = neueTask({ name: 'Submission', wbs: basisWbs + '.2', level: 3, startMs: d.submissionMs, finishMs: d.submissionMs, milestone: true, category: 'vergabe',
+      lock: !!d.bekannt.submission, quelle: d.herkunftVon('submission') });
+    var tVor = neueTask({ name: 'Vergabevorschlag', wbs: basisWbs + '.3', level: 3, startMs: d.vorschlagMs, finishMs: d.vorschlagMs, milestone: true, category: 'vergabe', quelle: d.regelText });
     // GR-Sitzung ist ein Vorgang (KEIN Meilenstein): fixierter Platzhalter, Anker
-    var tGr = neueTask({ name: 'GR-Sitzung', wbs: basisWbs + '.4', level: 3, startMs: d.grStartMs, finishMs: d.grEndeMs, category: 'vergabe', lock: true, grAnchor: true });
-    var tBea = neueTask({ name: 'Beauftragung', wbs: basisWbs + '.5', level: 3, startMs: d.beauftragungMs, finishMs: d.beauftragungMs, milestone: true, category: 'vergabe' });
+    var tGr = neueTask({ name: 'GR-Sitzung', wbs: basisWbs + '.4', level: 3, startMs: d.grStartMs, finishMs: d.grEndeMs, category: 'vergabe', lock: true, grAnchor: true,
+      quelle: d.herkunftVon('sitzung') });
+    var tBea = neueTask({ name: 'Beauftragung', wbs: basisWbs + '.5', level: 3, startMs: d.beauftragungMs, finishMs: d.beauftragungMs, milestone: true, category: 'vergabe', quelle: d.regelText });
 
-    neueKante(tLv.uid, tSub.uid, kette.kalkulationKT, false);
-    neueKante(tSub.uid, tVor.uid, kette.submissionVorlaufKT, false);
-    neueKante(tVor.uid, tGr.uid, kette.vorschlagVorlaufKT, false);
-    neueKante(tGr.uid, tBea.uid, 1, false);
+    kanteZwischen(tLv, tSub, false);
+    kanteZwischen(tSub, tVor, false);
+    kanteZwischen(tVor, tGr, false);
+    kanteZwischen(tGr, tBea, false);
 
     d.beauftragungTask = tBea;
     d.veroeffentlichungTask = tLv;
   }
 
+  }
+
   // Schicht AUSFÜHRUNG
-  neueTask({ name: 'AUSFÜHRUNG', wbs: '6', level: 1, startMs: ausfuehrungVon, finishMs: ausfuehrungBis, summary: true, category: 'ausfuehrung' });
+  var ausWbs = nur ? '3' : '6';
+  neueTask({ name: 'AUSFÜHRUNG', wbs: ausWbs, level: 1, startMs: ausfuehrungVon, finishMs: ausfuehrungBis, summary: true, category: 'ausfuehrung' });
   for (var g = 0; g < daten.length; g++) {
     daten[g].gewerkTask = neueTask({
       name: daten[g].name,
-      wbs: '6.' + (g + 1),
+      wbs: ausWbs + '.' + (g + 1),
       level: 2,
       startMs: daten[g].gewerkStartMs,
       finishMs: daten[g].gewerkFinishMs,
       category: 'ausfuehrung',
-      isGewerk: true
+      isGewerk: true,
+      quelle: daten[g].bekannt.baubeginn
+        ? 'Beginn: ' + daten[g].herkunftVon('baubeginn') + ' · Dauer: ' + daten[g].regelText
+        : daten[g].regelText
     });
+    if (daten[g].bekannt.baubeginn) { daten[g].gewerkTask.lockStart = true; }
   }
 
   // --- Schritt 3: schichtübergreifende Kanten --------------------------------
-  for (var q = 0; q < daten.length; q++) {
+  for (var q = 0; q < daten.length && !nur; q++) {
     // Beauftragung -> Gewerk: Einspruchsfrist als harte Obergrenze
-    neueKante(daten[q].beauftragungTask.uid, daten[q].gewerkTask.uid, kette.einspruchKT, true);
+    kanteZwischen(daten[q].beauftragungTask, daten[q].gewerkTask, true);
     // Planung -> Veröffentlichung LV (Planung endet 1 KT davor)
-    neueKante(daten[q].planungTask.uid, daten[q].veroeffentlichungTask.uid, 1, false);
+    kanteZwischen(daten[q].planungTask, daten[q].veroeffentlichungTask, false);
   }
 
   return { tasks: tasks, edges: edges, warnungen: warnungen };
+}
+
+// ---------- Baustein: rahmenplan_eingaben.js (geprueft, Tests unter _bausteine/) ----------
+// =============================================================================
+// rahmenplan_eingaben.js — Baustein: Projektdaten -> Eingaben des Rahmenplan-Generators
+// -----------------------------------------------------------------------------
+// Nimmt die gebündelten Projektdaten (RPC termin_rahmen_quellen, Migr. 237) und
+// entscheidet NACH REGELN, was der Generator bekommt:
+//   - Ecktermine: je Termin der Kandidat mit dem neuesten Stand (Terminebene,
+//     Kennzahlen, Terminprüfung), Herkunft wird mitgeschrieben
+//   - Vergabeeinheiten: die echten aus dem Vergabeterminplan statt der acht
+//     Standard-Gewerke, Lage/Dauer aus einem Gewerke-Profil
+//   - bekannte Vergabetermine: nur, wenn sie in der Zukunft liegen und in sich
+//     stimmig sind — alles andere wird NICHT fixiert, sondern als offener Punkt
+//     gemeldet (für die Prüfung durch den Agenten)
+// Was Regeln nicht können (Freitext, widersprüchliche Stände, Fristen aus
+// Bescheiden), steht danach in `offen` — das ist der Auftrag an den Agenten.
+//
+// Browser-Baustein wie rahmenplan_generator.js: keine imports/exports, keine DOM-APIs.
+// =============================================================================
+
+// Gewerke-Profile: Lage (startAnteil) und Dauer (dauerAnteil) als Anteil der Bauzeit.
+// Erste passende Zeile gewinnt — Reihenfolge ist Absicht (z. B. "Sonnenschutz" vor "Schutz").
+function reProfile() {
+  return [
+    { profil: 'Bautafel/Baustelleneinrichtung', muster: /^\s*(bautafel|bauzaun)/i, startAnteil: 0.00, dauerAnteil: 0.02 },
+    { profil: 'Rohbau', muster: /baumeister|rohbau|abbruch|erdarb|beton|maurer|spezial.?tiefbau|verbau/i, startAnteil: 0.00, dauerAnteil: 0.40 },
+    { profil: 'Gerüst', muster: /gerüst|geruest/i, startAnteil: 0.20, dauerAnteil: 0.55 },
+    { profil: 'Dach/Holzbau', muster: /zimmer|holzbau|dach|spengler|klempner/i, startAnteil: 0.28, dauerAnteil: 0.18 },
+    { profil: 'Aufzug', muster: /aufzug/i, startAnteil: 0.60, dauerAnteil: 0.20 },
+    { profil: 'Fassade/Fenster', muster: /fenster|fassade|pfosten|riegel|wärmedämmverbund|waermedaemmverbund|wdvs|sonnenschutz|außentür|aussentuer|verglasung außen/i, startAnteil: 0.38, dauerAnteil: 0.22 },
+    { profil: 'Technische Gebäudeausrüstung', muster: /elektro|sanitär|sanitaer|heizung|wärmeversorg|waermeversorg|lüftung|lueftung|raumluft|gebäudeautom|gebaeudeautom|automation|msr|hls|elt|blitzschutz|fernmelde|nachrichten|sprinkler|kälte|kaelte|photovoltaik|pv-anlage/i, startAnteil: 0.30, dauerAnteil: 0.60 },
+    { profil: 'Küchentechnik', muster: /küche|kueche/i, startAnteil: 0.80, dauerAnteil: 0.10 },
+    { profil: 'Trockenbau', muster: /trockenbau|akustik|abgehängte decke|unterdecke/i, startAnteil: 0.55, dauerAnteil: 0.25 },
+    { profil: 'Estrich', muster: /estrich/i, startAnteil: 0.65, dauerAnteil: 0.12 },
+    { profil: 'Bodenbeläge/Fliesen', muster: /fliesen|platten|bodenbelag|linoleum|parkett|teppich/i, startAnteil: 0.75, dauerAnteil: 0.15 },
+    { profil: 'Ausstattung', muster: /möblierung|moeblierung|ausstattung|lose möbel/i, startAnteil: 0.88, dauerAnteil: 0.10 },
+    { profil: 'Reinigung', muster: /reinigung/i, startAnteil: 0.95, dauerAnteil: 0.04 },
+    { profil: 'Außenanlagen', muster: /außenanlage|aussenanlage|freianlage|erschließung|erschliessung|pflaster|landschaft/i, startAnteil: 0.80, dauerAnteil: 0.20 },
+    { profil: 'Innenausbau', muster: /maler|tür|tuer|schreiner|schlosser|trennw|einbau|beschriftung|folierung|blendschutz|schließ|schliess|innenverglasung|tischler/i, startAnteil: 0.80, dauerAnteil: 0.15 }
+  ];
+}
+
+function reProfilFuer(name) {
+  var profile = reProfile();
+  for (var i = 0; i < profile.length; i++) {
+    if (profile[i].muster.test(name)) { return profile[i]; }
+  }
+  return null;
+}
+
+// 'YYYY-MM' -> 'YYYY-MM-01'; 'YYYY-MM-DD' bleibt; alles andere -> null
+function reDatum(wert) {
+  if (typeof wert !== 'string') { return null; }
+  if (/^\d{4}-\d{2}-\d{2}/.test(wert)) { return wert.slice(0, 10); }
+  if (/^\d{4}-\d{2}$/.test(wert)) { return wert + '-01'; }
+  return null;
+}
+
+function reDE(iso) { return iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : ''; }
+
+// Kandidat mit dem neuesten Stand; bei gleichem Stand gewinnt die vorher genannte Quelle
+function reNeuester(kandidaten) {
+  var beste = null;
+  for (var i = 0; i < kandidaten.length; i++) {
+    var k = kandidaten[i];
+    if (!k || !k.datum) { continue; }
+    if (beste === null || (k.stand || '') > (beste.stand || '')) { beste = k; }
+  }
+  return beste;
+}
+
+// q: Ergebnis von termin_rahmen_quellen; heuteIso: 'YYYY-MM-DD'
+function rahmenEingabenAusQuellen(q, heuteIso) {
+  q = q || {};
+  var heute = heuteIso || q.heute;
+  var phasen = q.phasen || [];
+  var termine = q.termine || [];
+  var kz = (q.projekt && q.projekt.termine) || {};
+  var pruefStand = q.pruefung_stand || '';
+  var hinweise = [];
+  var offen = [];
+
+  var phase = function (n) {
+    for (var i = 0; i < phasen.length; i++) { if (phasen[i].lph === n) { return phasen[i]; } }
+    return {};
+  };
+  var ausTerminebene = function (muster, feld) {
+    var treffer = [];
+    for (var i = 0; i < termine.length; i++) {
+      var t = termine[i];
+      var d = reDatum(feld === 'ende' ? (t.ende || t.start) : t.start);
+      if (d && muster.test(t.vorgang || '') && !/zusammenstell|unterlagen|antrag|einreich|vorbereit/i.test(t.vorgang || '')) {
+        treffer.push({ datum: d, stand: reDatum(t.stand) || '', quelle: 'Terminebene: „' + t.vorgang + '“ aus ' + t.quelle + (t.stand ? ' (Stand ' + reDE(reDatum(t.stand)) + ')' : '') });
+      }
+    }
+    return reNeuester(treffer);
+  };
+  var ausKennzahl = function (schluessel, text) {
+    var k = kz[schluessel];
+    if (!k || k.status !== 'belegt') { return null; }
+    var d = reDatum(k.wert);
+    if (!d) { return null; }
+    return { datum: d, stand: reDatum(k.stand) || '', quelle: 'Projektkennzahl ' + text + (k.quelle ? ': ' + k.quelle : '') };
+  };
+  var ausPhase = function (n, feld, text) {
+    var d = reDatum(phase(n)[feld]);
+    return d ? { datum: d, stand: pruefStand, quelle: 'Terminprüfung: ' + text + (phase(n).soll_quelle ? ' (' + phase(n).soll_quelle + ')' : '') } : null;
+  };
+  var waehle = function (name, kandidaten) {
+    var gueltig = kandidaten.filter(function (k) { return k && k.datum; });
+    var gewaehlt = reNeuester(gueltig);
+    if (gewaehlt) {
+      for (var i = 0; i < gueltig.length; i++) {
+        if (gueltig[i].datum !== gewaehlt.datum) {
+          offen.push(name + ': gewählt ' + reDE(gewaehlt.datum) + ' (' + gewaehlt.quelle + '), abweichend ' + reDE(gueltig[i].datum) + ' (' + gueltig[i].quelle + ')');
+        }
+      }
+    }
+    return gewaehlt;
+  };
+
+  // --- Ecktermine ------------------------------------------------------------
+  var genehmigung = waehle('Baugenehmigung', [
+    ausTerminebene(/baugenehmigung/i, 'start'),
+    ausPhase(4, 'soll_ende', 'Soll-Ende LPH 4')
+  ]);
+  var genehmigungErteilt = phase(4).status === 'abgeschlossen';
+  if (genehmigungErteilt && genehmigung && genehmigung.quelle.indexOf('Terminprüfung') === 0 && !/erteilt/i.test(genehmigung.quelle)) {
+    offen.push('Baugenehmigung gilt laut Terminprüfung als erteilt; im Plan steht das Soll-Datum ' + reDE(genehmigung.datum) + ', das echte Erteilungsdatum steht nur im Freitext');
+  }
+  var baubeginn = waehle('Baubeginn', [
+    ausTerminebene(/baubeginn/i, 'start'),
+    ausKennzahl('baubeginn', 'Baubeginn'),
+    ausPhase(8, 'soll_start', 'Soll-Start LPH 8')
+  ]);
+  var uebergabe = waehle('Übergabe', [
+    ausTerminebene(/übergabe|uebergabe|fertigstellung|inbetriebnahme|bezug/i, 'ende'),
+    ausKennzahl('fertigstellung', 'Fertigstellung'),
+    ausPhase(8, 'soll_ende', 'Soll-Ende LPH 8')
+  ]);
+  var planungStart = ausPhase(5, 'soll_start', 'Soll-Start LPH 5');
+  if (!genehmigung) { offen.push('Baugenehmigung: kein Datum in den Projektdaten'); }
+  if (!baubeginn) { offen.push('Baubeginn: kein Datum in den Projektdaten'); }
+  if (!uebergabe) { offen.push('Übergabe: kein Datum in den Projektdaten'); }
+
+  // Freitext der laufenden und kommenden Phasen kann keine Regel lesen
+  for (var p = 4; p <= 8; p++) {
+    var ph = phase(p);
+    if (ph.ist_hinweis && ph.status !== 'abgeschlossen') {
+      offen.push('LPH ' + p + ' (' + (ph.status || '?') + '): ' + ph.ist_hinweis);
+    }
+  }
+  if (genehmigungErteilt && phase(4).ist_hinweis) {
+    offen.push('LPH 4 (abgeschlossen): ' + phase(4).ist_hinweis);
+  }
+
+  // --- Vergabeeinheiten ------------------------------------------------------
+  var vergabe = q.vergabe || [];
+  var einheiten = [];
+  var projektBaubeginn = baubeginn ? baubeginn.datum : null;
+  for (var v = 0; v < vergabe.length; v++) {
+    var ve = vergabe[v];
+    var roh = (ve.leistungsbereich || ve.gewerk || 'Vergabeeinheit').replace(/\s+/g, ' ').trim();
+    var name = roh.length > 60 ? roh.slice(0, 57).trim() + '…' : roh;
+    if (ve.ghiw === false) { name += ' (Fachplaner)'; }
+    var prof = reProfilFuer(roh);
+    if (!prof) {
+      prof = { profil: 'ohne Profil', startAnteil: 0.50, dauerAnteil: 0.30 };
+      offen.push('Vergabeeinheit „' + roh + '“: kein Gewerke-Profil, Lage/Dauer nur geschätzt (Mitte der Bauzeit)');
+    }
+    // Bekannte Termine nur übernehmen, wenn sie in der Zukunft liegen, in der
+    // Reihenfolge stimmen und die Ausführung nicht vor dem Projekt-Baubeginn liegt.
+    var bekannt = {};
+    var verworfen = [];
+    var letztes = heute;
+    var felder = ['veroeffentlichung', 'submission', 'sitzung', 'baubeginn'];
+    for (var f = 0; f < felder.length; f++) {
+      var feld = felder[f];
+      var d = reDatum(ve[feld]);
+      if (!d) { continue; }
+      if (d < heute) { verworfen.push(feld + ' ' + reDE(d) + ' liegt zurück'); continue; }
+      if (d < letztes) { verworfen.push(feld + ' ' + reDE(d) + ' passt nicht zur Reihenfolge'); continue; }
+      if (feld === 'baubeginn' && projektBaubeginn && d < projektBaubeginn) { verworfen.push('Ausführungsbeginn ' + reDE(d) + ' vor Projekt-Baubeginn'); continue; }
+      bekannt[feld] = d;
+      letztes = d;
+    }
+    if (verworfen.length) {
+      offen.push('Vergabeeinheit „' + roh + '“ (' + (ve.quelle || 'Vergabeterminplan') + '): nicht übernommen — ' + verworfen.join('; '));
+    }
+    if (ve.plausibel === false) {
+      offen.push('Vergabeeinheit „' + roh + '“ ist beim Import als unplausibel markiert');
+    }
+    einheiten.push({
+      name: name,
+      startAnteil: prof.startAnteil,
+      dauerAnteil: prof.dauerAnteil,
+      bekannt: bekannt,
+      quelle: (ve.quelle || 'Vergabeterminplan') + (ve.stand ? ' (Stand ' + reDE(reDatum(ve.stand)) + ')' : ''),
+      regel: 'Gewerke-Profil ' + prof.profil + ' (Beginn ' + Math.round(prof.startAnteil * 100) + ' %, Dauer ' + Math.round(prof.dauerAnteil * 100) + ' % der Bauzeit)',
+      budget: ve.budget || null
+    });
+  }
+  if (!einheiten.length) {
+    hinweise.push('Kein Vergabeterminplan im Projekt — Standard-Gewerke kommunaler Hochbau verwendet');
+  } else {
+    hinweise.push(einheiten.length + ' Vergabeeinheiten aus dem Vergabeterminplan');
+  }
+
+  return {
+    genehmigung: genehmigung,
+    planungStart: planungStart,
+    baubeginn: baubeginn,
+    uebergabe: uebergabe,
+    genehmigungErteilt: genehmigungErteilt,
+    vergabeeinheiten: einheiten.length ? einheiten : null,
+    hinweise: hinweise,
+    offen: offen
+  };
+}
+
+// --- Agentenprüfung ------------------------------------------------------------
+// Was Regeln nicht entscheiden, klärt ein Agent mit Zugriff auf die Projektablage.
+// rahmenAgentAuftrag baut den Auftrag (Plan kompakt + offene Punkte + Antwortformat),
+// rahmenAgentAntwortLesen holt aus der Antwort NUR belegte, formal gültige Vorschläge.
+
+var RE_AGENT_BLOCK = 'rahmenplan-json';
+
+// Eindeutiger Name eines Vorgangs: "Übergeordneter › Name" (z. B. "Vergabe Estricharbeiten › Submission").
+// Über ihn kann der Agent zuordnen, auch wenn er die #uid nach einer Kontextkürzung nicht mehr kennt.
+function rahmenVorgangPfad(tasks, i) {
+  var t = tasks[i];
+  for (var j = i - 1; j >= 0; j--) {
+    if ((tasks[j].level || 1) < (t.level || 1)) { return tasks[j].name + ' › ' + t.name; }
+  }
+  return t.name;
+}
+
+function reNorm(s) {
+  return String(s || '').toLowerCase().replace(/\s*(›|>|»|\/)\s*/g, ' › ').replace(/\s+/g, ' ').trim();
+}
+
+function rahmenAgentAuftrag(projektName, tasks, offen, heuteIso, planart) {
+  var bzp = planart === 'bauzeitenplan';
+  var zeilen = [];
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (t.summary && (t.level || 1) === 1) {
+      zeilen.push('— ' + t.name);
+      continue;
+    }
+    if (t.summary) { continue; }
+    var herk = !t.quelleText ? '' : (/^Regel:/.test(t.quelleText) ? ' [Regel]' : ' [' + t.quelleText.slice(0, 80) + ']');
+    zeilen.push('#' + t.uid + ' ' + rahmenVorgangPfad(tasks, i) + ' ' + (t.milestone ? t.start : t.start + ' bis ' + t.finish) +
+      (t.lockStart ? ' (fixiert)' : '') + herk);
+  }
+  return [
+    'Prüfe den ' + (bzp ? 'Bauzeitenplan (Ausführung)' : 'Rahmenterminplan') + ' des Projekts „' + projektName + '“ gegen die Projektunterlagen (heute ist ' + heuteIso + ').',
+    '',
+    'Der Plan wurde nach Regeln aus den Projektdaten erzeugt. [Regel] heißt: der Termin ist nur geschätzt.',
+    'Suche in der Ablage nach den echten Terminen: aktueller Bauzeitenplan, aktueller Vergabeterminplan, Protokolle (Jour fixe, Planer-Besprechung, Gremium), Baugenehmigung, Förderbescheid, Mails mit Terminzusagen. Neuere Stände schlagen ältere.',
+    (bzp ? 'Ziel ist ein belastbarer Bauzeitenplan: für JEDES Gewerk Beginn und Ende der Ausführung („start“ und „ende“) aus dem neuesten Bauzeitenplan, Ablaufplan, Vertragsterminen der Firmen oder Protokollen. Gewerke, die im Plan fehlen, als Hinweis nennen.\n' : '') +
+    'Achte besonders auf: Datum der erteilten Baugenehmigung, tatsächlich laufende Vergabeverfahren (Veröffentlichung, Submission), Sitzungstermine des Stadt-/Gemeinderats, Fristen aus Förderbescheiden (z. B. „erste Vergabe bis …“), Schulferien/Umzugstermine, Bauabschnitte.',
+    '',
+    'Punkte, die die Regeln nicht entscheiden konnten:',
+    (offen && offen.length ? offen.map(function (o) { return '- ' + o; }).join('\n') : '- keine'),
+    '',
+    'Der Plan (#uid Vorgang Termin [Herkunft]) — die Vorgangsnamen sind eindeutig:',
+    zeilen.join('\n'),
+    '',
+    'Regeln für deine Antwort:',
+    '- Schlage NUR Termine vor, die du in einem Dokument gefunden hast. Kein Beleg = kein Vorschlag. Schätzungen gehören in die Hinweise.',
+    '- Jeder Beleg nennt Datei oder Mail, deren Datum und ein wörtliches kurzes Zitat.',
+    '- Korrigiere bestehende Vorgänge über "vorgang" (der Name genau wie in der Liste, z. B. "Vergabe Estricharbeiten › Submission" oder "AUSFÜHRUNG › Estricharbeiten"), die #uid zusätzlich, wenn du sie noch weißt. Neue Meilensteine (z. B. Förderfrist) nur, wenn sie im Plan fehlen.',
+    '- Schreib dir diese Plan-Liste zu Beginn als Datei in deine Werkbank, damit sie dir bei langer Recherche nicht verloren geht.',
+    '- Schreibe zuerst eine kurze Zusammenfassung für Menschen (was stimmt, was du korrigierst, was offen bleibt).',
+    '- Schließe mit GENAU einem Block in diesem Format (Daten als JJJJ-MM-TT, "ende" nur bei Vorgängen mit Dauer):',
+    '```' + RE_AGENT_BLOCK,
+    '{"korrekturen":[{"vorgang":"Vergabe Estricharbeiten › Submission","uid":12,"start":"2027-03-01","ende":null,"beleg":"Datei, Datum: \\"Zitat\\""}],',
+    ' "meilensteine":[{"name":"Förderfrist: erste Vergabe","datum":"2027-01-15","beleg":"…"}],',
+    ' "hinweise":["…"]}',
+    '```'
+  ].join('\n');
+}
+
+function reIstIso(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) { return false; }
+  var d = new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)));
+  return d.getUTCMonth() === +s.slice(5, 7) - 1 && d.getUTCDate() === +s.slice(8, 10);
+}
+
+// text: Agentenantwort; tasks: der Plan. Zuordnung über "vorgang" (Pfad), sonst über die uid.
+// Ergebnis: { korrekturen, meilensteine, hinweise, verworfen, fehler }
+function rahmenAgentAntwortLesen(text, tasks) {
+  var leer = { korrekturen: [], meilensteine: [], hinweise: [], verworfen: [], fehler: null };
+  var m = new RegExp('```' + RE_AGENT_BLOCK + '\\s*([\\s\\S]*?)```').exec(text || '');
+  if (!m) { leer.fehler = 'Die Antwort enthält keinen ' + RE_AGENT_BLOCK + '-Block.'; return leer; }
+  var j;
+  try { j = JSON.parse(m[1]); } catch (e) { leer.fehler = 'Der ' + RE_AGENT_BLOCK + '-Block ist kein gültiges JSON.'; return leer; }
+  var gueltig = {};
+  var nachPfad = {};
+  for (var u = 0; u < (tasks || []).length; u++) {
+    gueltig[tasks[u].uid] = true;
+    nachPfad[reNorm(rahmenVorgangPfad(tasks, u))] = tasks[u].uid;
+  }
+  var erg = { korrekturen: [], meilensteine: [], hinweise: [], verworfen: [], fehler: null };
+  var belegt = function (b) { return typeof b === 'string' && b.trim().length >= 8; };
+  (Array.isArray(j.korrekturen) ? j.korrekturen : []).forEach(function (k) {
+    if (k && k.vorgang) {
+      var perPfad = nachPfad[reNorm(k.vorgang)];
+      if (perPfad === undefined) {
+        // Kurzform („AUSFÜHRUNG › Baumeisterarbeiten“ für einen langen Namen): nur wenn eindeutig
+        var kurz = reNorm(k.vorgang).replace(/…$/, '');
+        var treffer = Object.keys(nachPfad).filter(function (p) { return p.indexOf(kurz) === 0 || (/…$/.test(p) && kurz.indexOf(p.slice(0, -1)) === 0); });
+        if (treffer.length === 1) { perPfad = nachPfad[treffer[0]]; }
+      }
+      if (perPfad === undefined) { erg.verworfen.push('Vorgang „' + k.vorgang + '“ nicht im Plan'); return; }
+      k.uid = perPfad;
+    }
+    if (!k || !gueltig[k.uid]) { erg.verworfen.push('Korrektur für unbekannten Vorgang #' + (k && k.uid)); return; }
+    if (!reIstIso(k.start)) { erg.verworfen.push('#' + k.uid + ': Startdatum ungültig'); return; }
+    if (k.ende !== null && k.ende !== undefined && (!reIstIso(k.ende) || k.ende < k.start)) { erg.verworfen.push('#' + k.uid + ': Enddatum ungültig'); return; }
+    if (!belegt(k.beleg)) { erg.verworfen.push('#' + k.uid + ': ohne Beleg'); return; }
+    erg.korrekturen.push({ uid: k.uid, start: k.start, ende: k.ende || null, beleg: k.beleg.trim() });
+  });
+  (Array.isArray(j.meilensteine) ? j.meilensteine : []).forEach(function (ms) {
+    if (!ms || typeof ms.name !== 'string' || !ms.name.trim() || !reIstIso(ms.datum)) { erg.verworfen.push('Meilenstein ohne Name oder gültiges Datum'); return; }
+    if (!belegt(ms.beleg)) { erg.verworfen.push('Meilenstein „' + ms.name + '“ ohne Beleg'); return; }
+    erg.meilensteine.push({ name: ms.name.trim().slice(0, 120), datum: ms.datum, beleg: ms.beleg.trim() });
+  });
+  (Array.isArray(j.hinweise) ? j.hinweise : []).forEach(function (h) { if (typeof h === 'string' && h.trim()) { erg.hinweise.push(h.trim()); } });
+  return erg;
 }
 
 // ---------- Baustein: mspdi_export.js (geprueft, Tests unter _bausteine/) ----------
@@ -5447,6 +6047,7 @@ function erzeugeMspdiXml(tasks, edges, planName) {
     '  </Assignments>\n' +
     '</Project>';
 }
+
 </script>
 </body>
 </html>
