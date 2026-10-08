@@ -177,6 +177,16 @@ function chatDokPanel(panel, d) {
         onclick: () => window.open(URL.createObjectURL(new Blob([d.html], { type: 'text/html' }))) }, 'Öffnen')] : []),
     ...(d.anhang_pfad ? [el('button', { class: 'kichip', type: 'button', title: 'In neuem Fenster öffnen',
       onclick: () => oeffneAnhaenge([{ pfad: d.anhang_pfad, name: d.name || 'Dokument.html' }]) }, 'Öffnen')] : []),
+    // Herunterladen von aussen: im Bericht selbst scheitert der Speichern-Dialog an der Sandbox, und der
+    // Ersatz-Download traegt nur die Blob-Kennung als Namen.
+    ...(d.html || d.anhang_pfad ? [el('button', { class: 'kichip', type: 'button', title: 'Als HTML-Datei herunterladen',
+      onclick: async () => {
+        const u = d.html ? URL.createObjectURL(new Blob([d.html], { type: 'text/html' }))
+          : await anhangUrl({ pfad: d.anhang_pfad, name: d.name || 'Dokument.html' }).catch(() => null);
+        if (!u) return uiHinweis('Dokument nicht abrufbar.');
+        const a = el('a', { href: u, download: String(d.titel || 'Dokument').replace(/[\\/:*?"<>|]+/g, '-').trim() + '.html' });
+        a.click();
+      } }, 'HTML')] : []),
     // Anhalten wie Esc in Claude Code (Migration 214): wartet er noch, ist er sofort weg, sonst in Sekunden.
     ...(arbeitet && d.id && d.agent !== 'tony' ? [el('button', { class: 'kichip', type: 'button', title: 'Agent anhalten', onclick: async (ev) => {
       ev.currentTarget.disabled = true;
