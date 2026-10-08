@@ -4560,11 +4560,23 @@ async function liveOberflaeche(befehle) {
         await ladeBoard();
         liveZeile('bildschirm', 'Board neu geladen.');
       } else if (b.tu === 'plan') {
+        // Migration 241: terminplan_takt hat in die Datenbank geschrieben -- offenen Plan neu laden,
+        // sonst ueberschreibt sein naechstes Speichern den Takt. Ist keiner offen, gibt es nichts zu tun.
+        if (b.plan?.tu === 'neu_laden') {
+          const rahmen = S.ansicht === 'termin' ? document.querySelector('#termin-root iframe') : null;
+          try { rahmen?.contentWindow?.location.reload(); } catch {}
+          if (rahmen) liveZeile('bildschirm', 'Terminplan neu geladen.');
+          continue;
+        }
         const api = livePlanApi();
         if (!api) { schiefging('Der Terminplan ist gerade nicht offen — sag mir zuerst, welches Projekt, dann mache ich ihn auf.'); continue; }
         const r = api.tu(b.plan || {}) || {};
         if (r.fehler) { schiefging(r.fehler); continue; }
         liveZeile('bildschirm', r.satz || 'Im Terminplan erledigt.');
+        // Tony antwortet, bevor der Plan rechnet: was mitgewandert ist oder jetzt kollidiert,
+        // kann er nicht wissen. Die Rueckgabe dieser Funktion haengen alle Aufrufer an seine
+        // Antwort an -- so spricht er die Folgen trotzdem aus (Marcel 08.10.2026).
+        if (r.meldung) misslungen.push(r.meldung);
       } else if (b.tu === 'klick') {
         // Wartet ein Dialog, gehört die Antwort ihm — sonst klickt Tony blind dahinter.
         if (liveDialog()) { schiefging('Ein Dialog wartet noch auf Ja oder Nein — erst den beantworten.'); continue; }

@@ -4727,6 +4727,78 @@ function planSatz(t){
   return t.name + ' steht jetzt auf ' + fmtDE(t.start) + (t.milestone ? '' : ' bis ' + fmtDE(t.finish));
 }
 
+// Folgen eines Sprachbefehls: Stand vorher merken, danach vergleichen. Sammelvorgaenge zaehlen
+// nicht -- sie bilden nur ihre Kinder ab und wuerden jede Meldung verdoppeln.
+function planStandMerken(){
+  const m = new Map();
+  TASKS.forEach(t => m.set(t.uid, { start: t.start, finish: t.finish }));
+  return m;
+}
+function planGebremst(b, vorher, haupt){
+  const tu = String(b.tu || '');
+  if(!['verschieben', 'termin'].includes(tu) || haupt.size !== 1) return '';
+  const uid = [...haupt][0], t = byUid[uid], alt = vorher.get(uid);
+  if(!t || !alt) return '';
+  const einheit = String(b.einheit || 'tage').toLowerCase();
+  const ziel = tu === 'verschieben'
+    ? fmtISO(addDays(parseISO(alt.start), planVersatzInTage(b.tage, einheit, alt.start)))
+    : (String(b.art || 'start').toLowerCase() === 'ende' && !t.milestone ? null : String(b.datum || '').slice(0, 10));
+  if(!ziel || ziel === t.start) return '';
+  // Wer haelt ihn? Fixierte Vorgaenge in der Kette dahinter.
+  const fix = [], gesehen = new Set([uid]), weiter = [uid];
+  while(weiter.length){
+    const u = weiter.shift();
+    EDGES.filter(e => e.from === u).forEach(e => {
+      if(gesehen.has(e.to)) return; gesehen.add(e.to);
+      const n = byUid[e.to]; if(!n) return;
+      if(n.lockStart || n.lockFinish) fix.push(n.name); else weiter.push(e.to);
+    });
+  }
+  return t.name + ' sollte auf ' + fmtDE(ziel) + ', steht aber auf ' + fmtDE(t.start)
+    + (fix.length ? ' — gehalten von fixiert ' + fix.slice(0, 3).join(', ') : '')
+    + '. Fixierung lösen oder rückgängig machen?';
+}
+function planFolgen(vorher, haupt){
+  return TASKS
+    .filter(t => !t.summary && !t.hidden && !haupt.has(t.uid) && vorher.has(t.uid))
+    .filter(t => vorher.get(t.uid).start !== t.start || vorher.get(t.uid).finish !== t.finish)
+    .map(t => ({ name: t.name, meilenstein: !!t.milestone,
+      tage: daysBetween(parseISO(vorher.get(t.uid).start), parseISO(t.start)),
+      alt: vorher.get(t.uid).start, start: t.start, ende: t.finish }))
+    .sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+}
+// Viele Folgen vorzulesen hilft niemandem: Meilensteine zuerst, hoechstens fuenf mit Namen,
+// der Rest als Zahl -- auf Nachfrage liest Tony ihn aus der Rueckgabe vor.
+function planFolgenSatz(folgen){
+  if(!folgen.length) return '';
+  const um = f => f.name + ' (' + (f.tage > 0 ? '+' : '') + f.tage + (Math.abs(f.tage) === 1 ? ' Tag' : ' Tage') + ', jetzt ab ' + fmtDE(f.start) + ')';
+  const reihe = folgen.filter(f => f.meilenstein).concat(folgen.filter(f => !f.meilenstein));
+  const genannt = reihe.slice(0, 5).map(um);
+  const rest = folgen.length - genannt.length;
+  return (folgen.length === 1 ? 'Mitverschoben hat sich ' : 'Mitverschoben haben sich ' + folgen.length + ' Vorgänge: ')
+    + genannt.join(', ') + (rest > 0 ? ' und ' + rest + ' weitere' : '') + '.';
+}
+// Verknuepfungen, die der Plan nicht mehr einhaelt -- meist, weil ein fixierter Vorgang die Kette
+// anhaelt (vorwaerts stehen bleibt oder seine Vorgaenger zurueckzieht). Rechnung wie applyEdgeAnchor.
+// Gemeldet werden nur NEUE Verletzungen (Vergleich vorher/nachher in tu()).
+function planKonflikte(){
+  const aus = [];
+  EDGES.forEach(e => {
+    const v = byUid[e.from], n = byUid[e.to];
+    if(!v || !n) return;
+    const dauer = daysBetween(parseISO(n.start), parseISO(n.finish));
+    const lag = e.lag || 0;
+    const soll = e.type === 'AA' ? addDays(parseISO(v.start), lag)
+      : e.type === 'EE' ? addDays(parseISO(v.finish), lag - dauer)
+      : e.type === 'AE' ? addDays(parseISO(v.start), lag - dauer)
+      : addDays(parseISO(v.finish), lag);
+    const zuFrueh = daysBetween(parseISO(n.start), soll);
+    if(zuFrueh > 0) aus.push({ schluessel: e.from + '>' + e.to,
+      text: n.name + (n.lockStart || n.lockFinish ? ' ist fixiert und' : '') + ' liegt jetzt ' + zuFrueh + (zuFrueh === 1 ? ' Tag' : ' Tage') + ' zu früh hinter ' + v.name + ' (' + (e.type || 'EA') + ')' });
+  });
+  return aus;
+}
+
 window.terminplanApi = {
   // Was im Plan steht -- geht als Teil des Bildschirms an die Denkstufe.
   lage(){
@@ -4751,8 +4823,40 @@ window.terminplanApi = {
     }catch(e){ return { fehler: 'Plan nicht lesbar: ' + (e && e.message || e) }; }
   },
 
-  // Ein Befehl aus dem Gespraech. Rueckgabe: {ok, satz} oder {fehler} -- beides spricht Tony aus.
+  // Ein Befehl aus dem Gespraech. Rueckgabe: {ok, satz, folgen, konflikte} oder {fehler} -- beides
+  // spricht Tony aus. Marcel 08.10.2026: „sagt er auch, ok das habe ich verschoben, es werden sich
+  // x, y, z Abhaengigkeiten mitverschieben?" Die Kette rechnet der Plan schon immer nach; hier wird
+  // sie verglichen und mitgemeldet, samt fixierter Vorgaenge, die die Kette jetzt nicht mehr haelt.
   tu(b){
+    const tu = String(b && b.tu || '').trim();
+    const vergleichen = !['lesen', 'rueckgaengig', 'speichern', 'einfrieren'].includes(tu) && typeof TASKS !== 'undefined' && Array.isArray(TASKS);
+    const vorher = vergleichen ? planStandMerken() : null;
+    const konfliktVorher = vergleichen ? new Set(planKonflikte().map(k => k.schluessel)) : null;
+    // Der Vorgang, den Tony selbst bewegt, steht schon im Satz -- Folgen sind nur die anderen.
+    const haupt = new Set();
+    if(vergleichen){
+      const name = tu === 'verknuepfen' ? b.nach : (['verschieben', 'termin', 'dauer'].includes(tu) ? b.vorgang : null);
+      const f = name ? planVorgangFinden(name) : null;
+      if(f && f.t) haupt.add(f.t.uid);
+    }
+    const r = window.terminplanApi._tuEinzeln(b);
+    if(!vergleichen || !r || !r.ok) return r;
+    const folgen = planFolgen(vorher, haupt);
+    const konflikte = planKonflikte().filter(k => !konfliktVorher.has(k.schluessel));
+    // Ein fixierter Nachfolger kann den Vorgang selbst zurueckhalten -- dann steht er nicht dort,
+    // wo er hinsollte, und der Satz „steht jetzt auf ..." klingt trotzdem nach Erfolg.
+    const gebremst = planGebremst(b, vorher, haupt);
+    if(gebremst) konflikte.unshift({ text: gebremst });
+    const punkt = x => /[.!?]$/.test(x) ? x : x + '.';
+    // meldung = nur das, was Tony noch nicht wissen kann (er antwortet, bevor der Plan rechnet);
+    // das Board haengt sie an seine Antwort an (app.js, liveOberflaeche).
+    const meldung = [planFolgenSatz(folgen), konflikte.length ? 'Achtung, Konflikt: ' + konflikte.map(k => k.text).join('; ') : '']
+      .filter(Boolean).map(punkt).join(' ');
+    const satz = [r.satz, meldung].filter(Boolean).map(punkt).join(' ');
+    return { ...r, satz, meldung, folgen, konflikte: konflikte.map(k => k.text) };
+  },
+
+  _tuEinzeln(b){
     try{
       const tu = String(b && b.tu || '').trim();
       if(!tu) return { fehler: 'Kein Terminplan-Befehl angegeben.' };
@@ -4846,11 +4950,19 @@ window.terminplanApi = {
         pushUndo();
         const anker = edgeAnchors(art);
         const wert = Math.round(Number(b.tage) || 0);
-        EDGES.push({ from: a.t.uid, to: c.t.uid, type: art, lagUnit: (einheit === 'arbeitstage' || einheit === 'wd') ? 'wd' : 'cd', lagValue: wert,
-          lag: lagToCalendarDays(a.t[anker.predEnd] || a.t.finish, wert, (einheit === 'arbeitstage' || einheit === 'wd') ? 'wd' : 'cd') });
-        resolveLockedConstraints();
+        const wd = einheit === 'arbeitstage' || einheit === 'wd';
+        // „8 Wochen" sind 56 Kalendertage, nicht 8 -- Wochen und Monate gehen als Kalendertage ein.
+        const kt = wd ? wert : planVersatzInTage(wert, einheit, a.t[anker.predEnd] || a.t.finish);
+        const kante = { from: a.t.uid, to: c.t.uid, type: art, lagUnit: wd ? 'wd' : 'cd', lagValue: kt,
+          lag: lagToCalendarDays(a.t[anker.predEnd] || a.t.finish, kt, wd ? 'wd' : 'cd') };
+        EDGES.push(kante);
+        // Von Hand angelegte Verknuepfungen docken bestehende Vorgaenge nie an (Benjamins Regel).
+        // Takten per Sprache will genau das: nur mit ausdruecklichem Schalter.
+        if(b.ausrichten === true) applyEdgeAnchor(kante);
+        else resolveLockedConstraints();
         renderAll();
-        return { ok: true, satz: c.t.name + ' hängt jetzt an ' + a.t.name + ' (' + art + (wert ? (wert > 0 ? ' plus ' : ' minus ') + Math.abs(wert) + ' Tage' : '') + ').' };
+        const versatz = wert ? (wert > 0 ? ' plus ' : ' minus ') + Math.abs(wert) + ' ' + (wd ? 'Arbeitstage' : einheit === 'wochen' ? 'Wochen' : einheit === 'monate' ? 'Monate' : 'Tage') : '';
+        return { ok: true, satz: c.t.name + ' hängt jetzt an ' + a.t.name + ' (' + art + versatz + ')' + (b.ausrichten === true ? ', ' + planSatz(c.t).replace(c.t.name + ' ', '') : '') + '.' };
       }
 
       if(tu === 'verknuepfung_loesen'){
