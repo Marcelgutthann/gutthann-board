@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude verbinden · Gutthann Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#F3F3F1;color:#1C1C1A;font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+input,button{font-family:'Inter',sans-serif;font-size:14px;color:#1C1C1A}
+.blatt{background:#fff;border:1px solid #E8E8E6;border-radius:12px;max-width:440px;width:100%;padding:28px}
+h1{font-size:19px;font-weight:700;margin-bottom:6px}
+.leise{color:#6B6B63;line-height:1.5}
+.liste{margin:16px 0;padding:14px 16px;background:#FAFAF8;border:1px solid #E8E8E6;border-radius:8px;line-height:1.6}
+.liste li{margin-left:18px}
+label{display:block;font-size:12.5px;font-weight:600;margin:14px 0 6px}
+input{width:100%;padding:10px 12px;border:1px solid #D8D8D4;border-radius:8px;background:#fff}
+.knoepfe{display:flex;gap:10px;margin-top:20px}
+button{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #1C1C1A;background:#1C1C1A;color:#fff;font-weight:600;cursor:pointer}
+button.zweit{background:#fff;color:#1C1C1A;border-color:#D8D8D4}
+button:disabled{opacity:.5;cursor:default}
+.fehler{color:#B4432E;margin-top:12px;line-height:1.5}
+.wer{margin-top:14px;font-size:12.5px;color:#6B6B63}
+.wer a{color:#4E6117}
+</style>
+</head>
+<body>
+<main class="blatt" id="blatt"><p class="leise">Einen Moment …</p></main>
+<script>
+// Freigabeseite fuer den Claude-Zugang (Migration 245, 09.10.2026). Supabase (OAuth-Server) schickt
+// Mitarbeiter hierher, wenn sie in Claude den Gutthann-Connector verbinden. Wer schon im Board
+// angemeldet ist, muss nur zustimmen -- die Sitzung liegt unter gb_session (gleicher Ursprung wie das Board).
+const SUPA = 'https://lzrfyxejlejxfpvqpket.supabase.co';
+const ANON = 'sb_publishable_adwNO1cSP6M2OmOV-8t_1g_lmGuj40V';
+const authId = new URLSearchParams(location.search).get('authorization_id');
+const blatt = document.getElementById('blatt');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function sitzung() { try { return JSON.parse(localStorage.getItem('gb_session')); } catch { return null; } }
+function merken(j, email) { localStorage.setItem('gb_session', JSON.stringify({ access_token: j.access_token, refresh_token: j.refresh_token, email })); }
+
+async function token(grant, body) {
+  const r = await fetch(SUPA + '/auth/v1/token?grant_type=' + grant, { method: 'POST',
+    headers: { apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error_description || j.msg || 'Anmeldung fehlgeschlagen');
+  return j;
+}
+
+// Die gespeicherte Board-Sitzung auffrischen; scheitert das, neu anmelden lassen.
+async function frischeSitzung() {
+  const s = sitzung();
+  if (!s?.refresh_token) return null;
+  try { const j = await token('refresh_token', { refresh_token: s.refresh_token }); merken(j, s.email); return sitzung(); }
+  catch { return null; }
+}
+
+async function oauth(pfad, s, body) {
+  const r = await fetch(SUPA + '/auth/v1/oauth/authorizations/' + encodeURIComponent(authId) + pfad, {
+    method: body ? 'POST' : 'GET',
+    headers: { apikey: ANON, Authorization: 'Bearer ' + s.access_token, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.msg || j.error_description || j.message || 'Die Anfrage ist abgelaufen. Bitte in Claude erneut auf „Verbinden“ klicken.');
+  return j;
+}
+
+function anmelden(meldung) {
+  blatt.innerHTML = `
+    <h1>Claude mit dem Board verbinden</h1>
+    <p class="leise">Melde dich mit deinem Board-Zugang an. Danach arbeitet Claude in deinem Namen.</p>
+    <form id="f">
+      <label for="m">E-Mail</label><input id="m" type="email" autocomplete="username" required>
+      <label for="p">Passwort</label><input id="p" type="password" autocomplete="current-password" required>
+      <div class="knoepfe"><button id="los">Anmelden</button></div>
+      <p class="fehler" id="err">${esc(meldung)}</p>
+    </form>`;
+  document.getElementById('f').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('m').value.trim();
+    document.getElementById('los').disabled = true;
+    try { merken(await token('password', { email, password: document.getElementById('p').value }), email); await zustimmen(sitzung()); }
+    catch (err) { document.getElementById('err').textContent = err.message; document.getElementById('los').disabled = false; }
+  };
+}
+
+async function zustimmen(s) {
+  const d = await oauth('', s);
+  // Schon einmal zugestimmt: Supabase gibt direkt den Ruecksprung zu Claude.
+  if (d.redirect_url) { location.href = d.redirect_url; return; }
+  const app = d.client?.client_name || d.client_name || 'Claude';
+  blatt.innerHTML = `
+    <h1>${esc(app)} verbinden?</h1>
+    <p class="leise">${esc(app)} möchte in deinem Namen mit dem Gutthann Board arbeiten. Für den Anfang heißt das:</p>
+    <ul class="liste">
+      <li>Projekte und Terminpläne lesen</li>
+      <li>Taktanweisungen vorschlagen und nach deinem Ja in den Terminplan übernehmen</li>
+      <li>geklärte Regeln als Bürostandard ablegen</li>
+    </ul>
+    <p class="leise">Jede Änderung läuft unter deinem Namen. Löschen, Mails und Anrufe gehen über diesen Zugang nicht.</p>
+    <div class="knoepfe"><button class="zweit" id="nein">Ablehnen</button><button id="ja">Zulassen</button></div>
+    <p class="fehler" id="err"></p>
+    <p class="wer">Angemeldet als ${esc(s.email)} · <a href="#" id="anders">anderes Konto</a></p>`;
+  const entscheiden = async (action) => {
+    document.getElementById('ja').disabled = document.getElementById('nein').disabled = true;
+    try { const r = await oauth('/consent', s, { action }); location.href = r.redirect_url || r.redirect_to; }
+    catch (err) { document.getElementById('err').textContent = err.message; }
+  };
+  document.getElementById('ja').onclick = () => entscheiden('approve');
+  document.getElementById('nein').onclick = () => entscheiden('deny');
+  document.getElementById('anders').onclick = (e) => { e.preventDefault(); localStorage.removeItem('gb_session'); anmelden(''); };
+}
+
+(async () => {
+  if (!authId) { blatt.innerHTML = '<h1>Kein Verbindungsauftrag</h1><p class="leise">Diese Seite öffnet sich von selbst, wenn du in Claude den Gutthann-Connector verbindest.</p>'; return; }
+  const s = await frischeSitzung();
+  if (!s) return anmelden('');
+  try { await zustimmen(s); } catch (err) { anmelden(err.message); }
+})();
+</script>
+</body>
+</html>
