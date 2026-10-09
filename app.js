@@ -41,7 +41,6 @@ const S = {
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
-  tonyKarte: null, // {todoId, text, tut, stopp} — Tony schreibt gerade im Kartenchat (Migration 220)
   komAuf: new Set(), // Kommentare, die der Nutzer aufgeklappt hat — ueberlebt das Neuzeichnen
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
   tags: { liste: [], proKarte: {} }, // Etiketten des offenen Boards (assistant_board_tags)
@@ -319,7 +318,7 @@ async function ladeBoard() {
   if (!S.active) return;
   const token = ++ladeToken;
   ladeMeldungen(); // blockiert nichts; zeichnet die Topbar selbst nach
-  if (S.active.typ === 'chat' || S.active.typ === 'vergabe') return;
+  if (S.active.typ === 'vergabe') return;
   if (S.active.typ === 'radar') {
     const d = await lotse('mein_radar').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (token !== ladeToken) return;
@@ -467,7 +466,7 @@ async function wechsle(typ, id, name) {
   S.newCardCol = null; S.newCardText = '';
   zeigeAnsicht('board'); // beim Wechsel immer zuerst die Aufgaben zeigen
   renderSidebar(); renderTopbar();
-  if (typ === 'dev' || typ === 'chat' || typ === 'vergabe') return; // DEV, Chat, Vergabeuebersicht haben kein Board zu laden
+  if (typ === 'vergabe') return; // Vergabeuebersicht hat kein Board zu laden
   renderBoard(); await ladeBoard();
 }
 
@@ -481,28 +480,20 @@ function zeigeAnsicht(welche) {
   const term = document.getElementById('termin-root');
   if (!dash || !board) return;
   const radar = document.getElementById('radar-root');
-  const devRoot = document.getElementById('dev-root');
   const istProjekt = S.active?.typ === 'projekt';
   const istRadar = S.active?.typ === 'radar';
-  const istDev = S.active?.typ === 'dev';
-  const istChat = S.active?.typ === 'chat';
-  const chatRoot = document.getElementById('chat-root');
   const istVergabe = S.active?.typ === 'vergabe';
   const vergabeRoot = document.getElementById('vergabe-root');
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
   const termAn = welche === 'termin' && istProjekt;
-  board.style.display = (dashAn || kalAn || termAn || istRadar || istDev || istChat || istVergabe) ? 'none' : '';
+  board.style.display = (dashAn || kalAn || termAn || istRadar || istVergabe) ? 'none' : '';
   if (vergabeRoot) vergabeRoot.hidden = !istVergabe;
   if (istVergabe) ladeVergabe();
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
   if (term) term.hidden = !termAn;
   if (radar) radar.hidden = !istRadar;
-  if (devRoot) devRoot.hidden = !istDev;
-  if (istDev) ladeDev();
-  if (chatRoot) chatRoot.hidden = !istChat;
-  if (istChat) { renderChat(); ladeChats(); } else chatDiktatEnde();
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
@@ -852,7 +843,6 @@ function renderSidebar() {
     el('div', { class: 'sub' }, el('span', { class: 'dot' }), 'Digitaler Mitarbeiter aktiv')));
   const li = S.liste; if (!li) return;
   const grp = (label) => { const g = el('div', { class: 'sect' }); g.append(el('div', { class: 'lbl' }, label)); sb.append(g); return g; };
-  const imChat = S.active?.typ === 'chat' && !S.kiProjekteFrei;
 
   // Radar zuerst: der Einstieg, nicht ein Board unter vielen.
   const gR = el('div', { class: 'sect' });
@@ -865,23 +855,6 @@ function renderSidebar() {
       : (S.radar?.kpi?.gesamt || 0) > 0
         ? el('span', { class: 'zahl', title: 'Offene Aufgaben, die dir gehören oder dir zugewiesen sind' }, String(S.radar.kpi.gesamt))
         : ''));
-  // DEV: hier sagt man der Anwendung, was sie koennen soll. Steht bewusst oben beim
-  // Radar und nicht bei den Boards -- es ist kein Board, sondern der Draht zur Werkstatt.
-  gR.append(el('div', {
-    class: 'row' + (S.active?.typ === 'dev' ? ' active' : ''),
-    onclick: () => wechsle('dev', null, 'DEV'),
-    title: 'Sag, was die Anwendung koennen soll — der Klaerer fragt zurueck, der Coding Agent baut',
-  }, ico('dev'), 'DEV',
-    (S.devOffen || 0) > 0
-      ? el('span', { class: 'badge', title: 'Fragen des Klärers warten auf deine Antwort' }, String(S.devOffen))
-      : ''));
-  // Chat: freies Gespraech mit Tony per Text -- dieselbe Denkstufe wie der Moderator
-  // (live-backend, kanal board), nur ohne Mikrofon.
-  gR.append(el('div', {
-    class: 'row' + (S.active?.typ === 'chat' ? ' active' : ''),
-    onclick: () => wechsle('chat', null, 'Chat'),
-    title: 'Mit Tony schreiben — er kennt Board, Projekte und Dokumente',
-  }, ico('chat'), 'Chat'));
   sb.append(gR);
 
   const g1 = grp('Meine Boards');
@@ -921,10 +894,10 @@ function renderSidebar() {
     for (const p of li.pins) {
       const istProjekt = p.art !== 'board';
       const aktiv = istProjekt
-        ? (imChat ? S.kiProjekt === p.project_id : S.active?.typ === 'projekt' && S.active.name === p.name)
+        ? S.active?.typ === 'projekt' && S.active.name === p.name
         : (S.active?.typ === 'board' && S.active.id === p.board_id);
       g3.append(el('div', { class: 'row' + (aktiv ? ' active' : ''),
-        onclick: () => istProjekt && imChat ? kiProjektKlick(p.project_id) : wechsle(istProjekt ? 'projekt' : 'board',
+        onclick: () => wechsle(istProjekt ? 'projekt' : 'board',
           istProjekt ? p.project_id : p.board_id, p.name) },
         istProjekt ? el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }) : ico('team'),
         p.name,
@@ -940,23 +913,12 @@ function renderSidebar() {
   }
 
   // Darunter der Rest -- was oben steht, steht hier nicht noch einmal.
-  // Im Chat (Marcel 29.09.): „Projekte" wird ein weisser Knopf, darunter ein Strich und die Liste
-  // grau wie die Chat-Spalte -- sie gehoert dann zum Chat. Knopf: Projekte wieder normal anklicken.
-  let g4;
-  if (S.active?.typ === 'chat') {
-    const box = el('div', { class: 'sect kiprojekte' + (imChat ? ' imchat' : '') });
-    box.append(el('button', { class: 'kiprojknopf', type: 'button',
-      title: imChat ? 'Projekte wieder normal öffnen' : 'Projekte an den Chat binden',
-      onclick: () => { S.kiProjekteFrei = !S.kiProjekteFrei; renderSidebar(); } }, 'Projekte'));
-    g4 = el('div', { class: 'kiprojliste' });
-    box.append(g4); sb.append(box);
-  } else g4 = grp('Projekte');
+  const g4 = grp('Projekte');
   const gepinnt = new Set((li.pins || []).filter((p) => p.art !== 'board').map((p) => p.name));
   for (const p of S.projects) {
     if (gepinnt.has(p.name)) continue;
-    // Im Chat waehlt die Hauptleiste das Projekt des Chats (chat-werkstatt.js, kiProjektKlick).
-    const aktiv = imChat ? S.kiProjekt === p.id : S.active?.typ === 'projekt' && S.active.name === p.name;
-    g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => { if (imChat) return kiProjektKlick(p.id); S.kiProjekteFrei = false; wechsle('projekt', p.id, p.name); } },
+    const aktiv = S.active?.typ === 'projekt' && S.active.name === p.name;
+    g4.append(el('div', { class: 'row' + (aktiv ? ' active' : ''), onclick: () => wechsle('projekt', p.id, p.name) },
       el('span', { class: 'pdot', style: 'background:' + projDot(p.name) }), p.name,
       el('button', { class: 'pin', title: 'Ins Dashboard aufnehmen', onclick: async (e) => {
         e.stopPropagation();
@@ -964,7 +926,7 @@ function renderSidebar() {
         S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
       } }, ico('pin'))));
   }
-  if (!imChat) g4.append(el('div', { class: 'row addrow', onclick: projekteAusSharepoint,
+  g4.append(el('div', { class: 'row addrow', onclick: projekteAusSharepoint,
     title: 'Projektordner aus den SharePoint-Jahrgängen ins Board holen' }, ico('plus'), 'Aus SharePoint'));
 }
 
@@ -1259,469 +1221,12 @@ function mentionHilfe(inp) {
   });
 }
 
-// ---------- DEV: Bau-Chat mit Tony (dev-chat.js, Migration 219) ----------
-
-
-// ---------- Chat: Tony per Text ----------
-// Der Verlauf lebt nur in dieser Sitzung (S.kichat); neu laden beginnt von vorn.
-// Tonys Gedaechtnis (merken) bleibt davon unberuehrt, das liegt im Backend.
-function renderChat() {
-  const root = document.getElementById('chat-root');
-  if (!root) return;
-  S.kichat = S.kichat || { id: null, zeilen: [], denkt: false };
-  const k = S.kichat;
-  let verlauf = root.querySelector('.kiverlauf');
-  if (!verlauf) {
-    root.innerHTML = '';
-    verlauf = el('div', { class: 'kiverlauf' });
-    root.append(el('div', { class: 'kiseite' }), el('div', { class: 'kihaupt' }, verlauf, chatEingabe()));
-  }
-  chatSeite();
-  if (chatAnsichtRender(root)) return; // Agenten, Routinen, Artefakte … statt des Verlaufs (chat-werkstatt.js)
-  verlauf.innerHTML = '';
-  if (!k.zeilen.length) verlauf.append(el('div', { class: 'kileer' }, 'Frag Tony nach Karten, Projekten, Terminen oder Dokumenten — oder lass ihn etwas anlegen.'));
-  for (const z of k.zeilen) verlauf.append(chatZeile(z));
-  chatKnopf();
-  verlauf.scrollTop = verlauf.scrollHeight;
-  chatDokRender(); // Agent-Leiste und Dokument rechts (chat-dokument.js)
-}
-
-// Linke Spalte im Chat: neuer Chat und die eigenen Verlaeufe (Migration 198). Jeder Account
-// sieht nur seine; gespeichert wird in live-backend, das auch die Liste liefert.
-function chatSeite() {
-  const seite = document.querySelector('#chat-root .kiseite');
-  if (!seite) return;
-  const k = S.kichat;
-  seite.innerHTML = '';
-  chatNav(seite); // Neuer Chat, Routinen, Agenten, GHIW Docs (chat-werkstatt.js, Marcels Skizze 29.09.)
-  seite.append(el('div', { class: 'kilbl' }, 'Verläufe'));
-  if (S.kichats == null) seite.append(el('div', { class: 'kihinweis' }, 'lädt …'));
-  else if (!S.kichats.length) seite.append(el('div', { class: 'kihinweis' }, 'Noch keine Chats.'));
-  for (const c of kiChatsSichtbar()) {
-    seite.append(el('div', {
-      class: 'row' + (c.id === k.id && kiImChat() ? ' active' : ''), title: c.titel,
-      onclick: () => chatOeffnen(c.id),
-      oncontextmenu: (e) => { e.preventDefault(); chatMenu(e, c); },
-    }, ico('chat'), el('span', { class: 'kititel' }, c.titel)));
-  }
-  chatProjekteNav(seite); // „Alle Verläufe" und darunter Projekte (chat-werkstatt.js)
-}
-
-async function chatAktion(aktion, extra = {}) {
-  return liveFetch(LIVE_BACKEND, { chat_aktion: aktion, ...extra });
-}
-async function ladeChats() {
-  try { S.kichats = (await chatAktion('liste')).chats || []; }
-  catch { S.kichats = S.kichats || []; }
-  if (S.active?.typ === 'chat') chatSeite();
-}
-function chatNeu() {
-  if (S.kichat?.denkt) return;
-  chatDiktatEnde();
-  S.kiansicht = null;
-  S.kichat = { id: null, zeilen: [], denkt: false };
-  renderChat();
-  document.querySelector('#chat-root .kita')?.focus();
-}
-async function chatOeffnen(id) {
-  if (S.kichat?.denkt) return;
-  if (S.kichat?.id === id) { if (S.kiansicht) { S.kiansicht = null; renderChat(); } return; }
-  S.kiansicht = null;
-  chatDiktatEnde();
-  const j = await chatAktion('laden', { chat_id: id }).catch((e) => ({ fehler: e.message }));
-  if (j.fehler || j.error) { uiHinweis('Chat nicht geladen: ' + (j.fehler || j.error)); return; }
-  // Arbeitsweg, Quellen und Plan kommen seit Migration 215 mit dem Verlauf; der letzte Plan steht wieder rechts.
-  const zeilen = (j.verlauf || []).map((z) => ({ rolle: z.rolle, text: z.text, karten: z.karten, weg: z.weg, quellen: z.quellen, plan: z.plan, dateien: z.dateien, gruendlich: z.gruendlich }));
-  S.kichat = { id: j.id, zeilen, denkt: false, plan: [...zeilen].reverse().find((z) => z.plan)?.plan || null,
-    projekt: kiChatProjekt(j.id) }; // Chat im Projekt (chat-werkstatt.js, Migration 207)
-  renderChat();
-  chatDokLaden();
-}
-function chatMenu(e, c) {
-  ctxMenu(e.clientX, e.clientY, [
-    { txt: 'Umbenennen', do: async () => {
-      const n = await uiEingabe('Neuer Name:', c.titel);
-      if (!n?.trim()) return;
-      await chatAktion('umbenennen', { chat_id: c.id, titel: n.trim() }); await ladeChats();
-    } },
-    { txt: 'Löschen', danger: true, do: async () => {
-      if (!await uiFrage('Chat „' + c.titel + '" löschen? Was Tony daraus gelernt hat, bleibt in seinem Gedächtnis.')) return;
-      await chatAktion('loeschen', { chat_id: c.id });
-      if (S.kichat?.id === c.id) chatNeu();
-      await ladeChats();
-    } },
-  ]);
-}
-
-// Eingabe nach dem Vorbild "ai-chat-input" (21st.dev, 29.09.): eine Pille, die beim
-// Tippen aufwaechst; rechts EIN runder Knopf, der zwischen Mikrofon, Senden und Stopp
-// wechselt. Modellwahl und Bild-Anhaenge der Vorlage fehlen bewusst -- der Chat spricht
-// immer mit Tony, und live-backend nimmt nur Text. Diktiert wird mit der Spracherkennung
-// des Browsers (Edge/Chrome); kann der Browser das nicht, gibt es keinen Mikrofonknopf.
-const KI_SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const KI_ICON = {
-  pfeil: '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M7 12V2M7 2L2.5 6.5M7 2L11.5 6.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  mic: '<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="5" y="1" width="4" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M2.75 6.5V7a4.25 4.25 0 0 0 8.5 0v-.5M7 11.25V13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
-  stop: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="currentColor"/></svg>',
-};
-
-function chatEingabe() {
-  const ta = el('textarea', { class: 'kita', rows: '1', placeholder: 'Frag Tony …', 'aria-label': 'Nachricht an Tony' });
-  const knopf = el('button', { class: 'kiknopf', type: 'button' });
-  for (const n of ['pfeil', 'mic', 'stop']) { const s = el('span', { class: 'kiic ' + n }); s.innerHTML = KI_ICON[n]; knopf.append(s); }
-  const welle = el('div', { class: 'kiwelle' }, ...[0, 1, 2, 3, 4].map((i) => el('span', { style: 'animation-delay:' + i * 110 + 'ms' })));
-  const pille = el('div', { class: 'kipille' }, ta, welle, knopf);
-  // Klick auf die Pille (nicht auf den Knopf) setzt den Cursor ins Feld.
-  pille.addEventListener('mousedown', (e) => { if (e.target === pille) { e.preventDefault(); ta.focus(); } });
-  knopf.addEventListener('mousedown', (e) => e.preventDefault()); // Fokus bleibt im Feld
-  knopf.addEventListener('click', () => {
-    const k = S.kichat;
-    if (k.rec) chatDiktatEnde();
-    else if (k.denkt) k.stopp?.abort(); // Tony antwortet gerade: anhalten wie Esc in Claude Code
-    else if (ta.value.trim()) chatSenden(ta);
-    else if (KI_SR) chatDiktat(ta);
-  });
-  ta.addEventListener('input', () => chatKnopf());
-  ta.addEventListener('focus', () => chatKnopf());
-  ta.addEventListener('blur', () => chatKnopf());
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSenden(ta); }
-    if (e.key === 'Escape' && S.kichat?.denkt) { e.preventDefault(); S.kichat.stopp?.abort(); }
-    else if (e.key === 'Escape' && !ta.value.trim()) ta.blur();
-  });
-  return el('div', { class: 'kieingabe' }, pille);
-}
-
-// Zieht Hoehe der Pille und Zustand des Knopfes nach. Hoehe in Pixeln, damit die
-// Feder-Kurve der Vorlage (cubic-bezier .175,.885,.32,1.275) greifen kann.
-function chatKnopf() {
-  const root = document.getElementById('chat-root');
-  const ta = root?.querySelector('.kita');
-  if (!ta) return;
-  const k = S.kichat, pille = ta.parentElement, knopf = pille.querySelector('.kiknopf');
-  const voll = !!ta.value.trim();
-  const offen = voll || !!k.rec || document.activeElement === ta;
-  // Messen ohne Uebergang -- sonst liefert scrollHeight die alte, noch animierte Hoehe.
-  const alt = ta.style.height;
-  ta.style.transition = 'none'; ta.style.height = '0px';
-  const h = Math.max(22, Math.min(ta.scrollHeight - 26, 160));
-  ta.style.height = alt; void ta.offsetHeight; ta.style.transition = '';
-  ta.style.height = (h + 26) + 'px';
-  ta.style.overflowY = ta.scrollHeight - 26 > 160 ? 'auto' : 'hidden';
-  pille.style.height = (offen ? Math.max(96, h + 26 + 40) : 48) + 'px';
-  pille.classList.toggle('offen', offen);
-  pille.classList.toggle('hoert', !!k.rec);
-  const modus = k.rec || k.denkt ? 'stop' : (voll || !KI_SR) ? 'pfeil' : 'mic';
-  knopf.dataset.modus = modus;
-  knopf.disabled = modus === 'pfeil' && !voll;
-  knopf.setAttribute('aria-label', k.denkt ? 'Antwort anhalten (Esc)' : { pfeil: 'Senden', mic: 'Diktieren', stop: 'Diktat beenden' }[modus]);
-  knopf.title = knopf.getAttribute('aria-label');
-}
-
-function chatDiktat(ta) {
-  const k = S.kichat;
-  const rec = new KI_SR();
-  rec.lang = 'de-DE'; rec.continuous = true; rec.interimResults = true;
-  let fest = ta.value.trim();
-  rec.onresult = (e) => {
-    if (k.rec !== rec) return; // nach Stopp nachgereichte Ergebnisse verwerfen
-    let vorlaeufig = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) fest += (fest ? ' ' : '') + e.results[i][0].transcript.trim();
-      else vorlaeufig += e.results[i][0].transcript;
-    }
-    ta.value = (fest + (vorlaeufig ? ' ' + vorlaeufig.trim() : '')).trim();
-    chatKnopf();
-  };
-  rec.onerror = (e) => {
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      k.zeilen.push({ rolle: 'fehler', text: 'Mikrofon ist für diese Seite nicht freigegeben.' });
-      renderChat();
-    }
-  };
-  rec.onend = () => { if (k.rec === rec) { k.rec = null; chatKnopf(); ta.focus(); } };
-  k.rec = rec;
-  rec.start();
-  chatKnopf();
-}
-function chatDiktatEnde() {
-  const k = S.kichat;
-  if (!k?.rec) return;
-  const rec = k.rec; k.rec = null;
-  try { rec.stop(); } catch {}
-  chatKnopf();
-}
-
-async function chatSenden(ta) {
-  const k = S.kichat;
-  const text = ta.value.trim();
-  if (!text || k.denkt) return;
-  if (await chatGrSenden(ta, text)) return; // gründlicher Weg (chat-gruendlich.js, Migr. 235)
-  if (k.denkt) return;
-  chatDiktatEnde();
-  const verlauf = k.zeilen.filter((z) => z.rolle !== 'fehler').slice(-10).map((z) => ({ rolle: z.rolle, text: z.text }));
-  // Angehaengte Dateien (Plus ueber der Eingabe, chat-dokument.js) gehen mit dieser einen Nachricht mit.
-  const dateien = k.dateien || [];
-  k.dateien = [];
-  k.zeilen.push({ rolle: 'nutzer', text: text + (dateien.length ? '\n\n[Dateien: ' + dateien.map((d) => d.name).join(', ') + ']' : '') });
-  // Die Antwort waechst in dieser Zeile, waehrend Tony schreibt (live-backend streamt im Chat).
-  const z = { rolle: 'assistent', text: '', laeuft: true, tut: '' };
-  k.zeilen.push(z);
-  ta.value = ''; k.awZu = false; k.denkt = true; k.stopp = new AbortController(); renderChat(); chatKnopf();
-  try {
-    const antwort = await chatStrom({ signal: k.stopp.signal, aufgabe: text, verlauf, projekt: k.projekt?.name || liveProjekt(), projekt_id: k.projekt?.id,
-      ...(dateien.length ? { dateien: dateien.map((d) => ({ name: d.name, mime: d.mime, base64: d.base64 })) } : {}), kanal: 'board', sicht: liveBildschirm(), chat: true, stream: true, chat_id: k.id },
-      (e) => {
-        if (e.t === 'd') z.text += e.x;
-        else if (e.t === 'w') z.tut = e.name === 'websuche' ? 'sucht im Internet' : e.name === 'plan' ? 'plant' : 'sieht nach';
-        // Arbeitsweg (Migr. 205): jeder Werkzeugaufruf bleibt als Zeile stehen, auch wenn Text kommt.
-        else if (e.t === 'wx' && e.name !== 'plan') (z.weg = z.weg || []).push({ n: e.name, was: chatWerkzeugWort(e.name), x: e.x || '', ok: e.ok !== false, f: e.f || '' });
-        // Tonys Arbeitsliste (30.09.): steht rechts, jede neue Fassung ersetzt die alte.
-        else if (e.t === 'plan') { k.plan = e.punkte; k.planZu = false; renderChat(); }
-        chatDokStrom(e, z); // Tony schreibt ein Dokument ins rechte Feld (chat-dokument.js)
-        chatLetzte();
-      });
-    chatDokEnde(antwort);
-    chatWerkstattEnde(antwort); // Agent entworfen oder losgeschickt (chat-werkstatt.js)
-    let t = antwort.text || '';
-    const misslungen = await liveOberflaeche(antwort.oberflaeche);
-    if (misslungen.length) t = (t ? t + '\n\n' : '') + misslungen.join(' ');
-    // Die Schlussfassung gilt: sie kann nachgefasst sein, wenn der Lauf ohne Satz endete.
-    z.karten = antwort.karten || [];
-    z.quellen = antwort.quellen || [];
-    if (!z.weg?.length && antwort.weg?.length) z.weg = antwort.weg; // ohne Strom (alter Dienst) aus dem Schluss
-    if (antwort.plan) k.plan = antwort.plan;
-    z.text = t || (z.karten.length ? '' : '(keine Antwort)');
-    if (antwort.chat_id) { const neu = !k.id; k.id = antwort.chat_id; if (neu || S.kichats?.[0]?.id !== k.id) ladeChats(); }
-  } catch (e) {
-    if (k.stopp?.signal.aborted) {
-      // Angehalten: was schon dastand, bleibt stehen (live-backend speichert denselben Satz).
-      z.text = (z.text ? z.text + '\n\n' : '') + '(Angehalten, bevor die Antwort fertig war.)';
-    } else {
-      k.zeilen.splice(k.zeilen.indexOf(z), 1);
-      k.zeilen.push({ rolle: 'fehler', text: 'Das hat nicht geklappt: ' + (e?.message || e) });
-    }
-  } finally {
-    z.laeuft = false; k.denkt = false; k.stopp = null;
-    if (S.active?.typ === 'chat') { renderChat(); chatKnopf(); }
-  }
-}
-
-// Liest die NDJSON-Zeilen von live-backend: {t:'d'} Textstueck, {t:'w'} Werkzeug,
-// {t:'ende'} die fertige Antwort. Antwortet der Dienst mit einfachem JSON (alter Stand
-// oder Fehler vor dem Start), wird das wie bisher gelesen.
-async function chatStrom(body, beiEreignis, retried = false) {
-  const { signal, ...rumpf } = body; // Stopp-Knopf: bricht Anfrage und Lesen ab
-  const r = await fetch(LIVE_BACKEND, { method: 'POST', signal,
-    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (S.session?.access_token || '') },
-    body: JSON.stringify(rumpf) });
-  if (r.status === 401 && !retried && await authRefresh()) return chatStrom(body, beiEreignis, true);
-  if (!(r.headers.get('content-type') || '').includes('ndjson')) {
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
-    return j;
-  }
-  const leser = r.body.pipeThrough(new TextDecoderStream()).getReader();
-  let puffer = '', ende = null;
-  for (;;) {
-    const { value, done } = await leser.read();
-    if (done) break;
-    puffer += value;
-    let i;
-    while ((i = puffer.indexOf('\n')) >= 0) {
-      const zeile = puffer.slice(0, i).trim(); puffer = puffer.slice(i + 1);
-      if (!zeile) continue;
-      const e = JSON.parse(zeile);
-      if (e.t === 'ende') ende = e;
-      else if (e.t === 'fehler') throw new Error(e.error || 'Fehler im Dienst');
-      else beiEreignis(e);
-    }
-  }
-  if (!ende) throw new Error('Verbindung abgebrochen');
-  return ende;
-}
-
-// Nur die letzte Blase neu zeichnen -- beim Streamen kommen hunderte Stuecke.
-function chatLetzte() {
-  const verlauf = document.querySelector('#chat-root .kiverlauf');
-  const letzte = verlauf?.lastElementChild;
-  const z = S.kichat?.zeilen[S.kichat.zeilen.length - 1];
-  if (!letzte || !z) return;
-  const unten = verlauf.scrollHeight - verlauf.scrollTop - verlauf.clientHeight < 60;
-  letzte.replaceWith(chatZeile(z));
-  chatArbeitsweg(); // schwebendes Fenster Arbeitsweg (chat-arbeitsweg.js)
-  if (unten) verlauf.scrollTop = verlauf.scrollHeight;
-}
-
-const KI_WORT = { wissen: 'durchsucht das Projektwissen', dokument_suche: 'sucht wörtlich in Dokumenten', email_suche: 'sucht in Büro-Mails',
-  projekt_datei_lesen: 'liest Datei', projekt_datei_suchen: 'sucht Dateien', projekt_ordner_listen: 'sieht in den Projektordner', anhang_lesen: 'liest Anhang',
-  web_lesen: 'liest Webseite', mail_suchen: 'sucht Mails', mail_lesen: 'liest Mail', drive_suchen: 'sucht im Drive', drive_lesen: 'liest Drive-Datei',
-  karten_suchen: 'sucht Karten', karte_lesen: 'liest Karte', mein_radar: 'sieht deine Aufgaben an', projekt_detail: 'liest die Projektakte',
-  kosten: 'liest den Kostenstand', fristen: 'sieht Fristen nach', termine: 'sieht Termine nach', doku_beauftragen: 'schickt Agenten los', agent_starten: 'schickt Agenten los' };
-function chatWerkzeugWort(name) {
-  if (name === 'websuche') return 'sucht im Internet';
-  return KI_WORT[name] || String(name || 'Werkzeug').replace(/^assistant_/, '').replace(/_/g, ' ');
-}
-// Quellen-Logos im Arbeitsweg (Marcel 30.09.: "so wie Claude Code mit den Microsoft-SharePoint-Logos").
-// Jede Quelle: Logo + Name. Die Projektdokumente kommen aus SharePoint und vom Laufwerk -> SharePoint-Logo.
-const KI_MS = '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="1" width="6.5" height="6.5" fill="#F25022"/><rect x="8.5" y="1" width="6.5" height="6.5" fill="#7FBA00"/><rect x="1" y="8.5" width="6.5" height="6.5" fill="#00A4EF"/><rect x="8.5" y="8.5" width="6.5" height="6.5" fill="#FFB900"/></svg>';
-const KI_QUELLE = {
-  sharepoint: { name: 'SharePoint', svg: KI_MS },
-  outlook: { name: 'Outlook', svg: KI_MS },
-  laufwerk: { name: 'Projektordner', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="#F2C94C" stroke="#C9A227" stroke-width=".8"/></svg>' },
-  gmail: { name: 'Gmail', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="3" width="14" height="10" rx="1.5" fill="#fff" stroke="#DADCE0"/><path d="M1.5 4l6.5 5 6.5-5" fill="none" stroke="#EA4335" stroke-width="1.8"/></svg>' },
-  drive: { name: 'Google Drive', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M5.5 1.5h5l4.5 8h-5z" fill="#FFBA00"/><path d="M5.5 1.5L1 9.5l2.5 4.5 4.5-8z" fill="#0F9D58"/><path d="M3.5 14h9l2.5-4.5H6z" fill="#4285F4"/></svg>' },
-  poool: { name: 'Poool', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="1" y="1" width="14" height="14" rx="3.5" fill="#1F2937"/><text x="8" y="11.6" font-size="9.5" font-family="Inter,Arial" font-weight="700" fill="#fff" text-anchor="middle">P</text></svg>' },
-  jira: { name: 'Jira', svg: '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 1l7 7-7 7-7-7z" fill="#2684FF"/><path d="M8 5l3 3-3 3-3-3z" fill="#fff"/></svg>' },
-  web: { name: 'Web', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#5F6368" stroke-width="1.2"><circle cx="8" cy="8" r="6.5"/><path d="M1.5 8h13M8 1.5c2 2 2 11 0 13M8 1.5c-2 2-2 11 0 13"/></svg>' },
-  board: { name: 'Board', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#4E6117" stroke-width="1.3"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M6 2v12M10.5 2v12"/></svg>' },
-  agent: { name: 'Agent', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#4E6117" stroke-width="1.3"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 5V2.5M6 9h.01M10 9h.01"/></svg>' },
-  kalender: { name: 'Kalender', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#5F6368" stroke-width="1.2"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3"/></svg>' },
-  datenbank: { name: 'Agentic OS', svg: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#5F6368" stroke-width="1.2"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"/><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>' },
-};
-function chatQuelle(name) {
-  const n = String(name || '');
-  if (n === 'websuche' || n === 'web_lesen' || n === 'kontakt_von_seite') return 'web';
-  if (/^(wissen|dokument_suche|bericht|katalog|kosten)$/.test(n)) return 'sharepoint';
-  if (n === 'email_suche') return 'outlook';
-  if (/^projekt_(ordner|datei)|^anhang_(lesen|felder|ausfuellen)$/.test(n)) return 'laufwerk';
-  if (/^mail_/.test(n)) return 'gmail';
-  if (/^(drive_|doc_)/.test(n)) return 'drive';
-  if (/^poool_/.test(n)) return 'poool';
-  if (/^jira_/.test(n)) return 'jira';
-  if (/^(termin|kalender|fristen|vorausschau)/.test(n)) return 'kalender';
-  if (/^(agent_|doku_|werkstatt_|auftrag_|agenten_)/.test(n)) return 'agent';
-  if (/^(todo_|karte|karten_|board|spalte_|tag_|kommentar_|unterpunkt_|mein_radar|pin$|radar_|umfeld)/.test(n)) return 'board';
-  return 'datenbank';
-}
-function chatLogo(q) {
-  const s = el('span', { class: 'kilogo', title: KI_QUELLE[q]?.name || '' });
-  s.innerHTML = (KI_QUELLE[q] || KI_QUELLE.datenbank).svg;
-  return s;
-}
-// Einklappbarer Arbeitsweg ueber Tonys Antwort: offen, solange er arbeitet. Je Schritt Logo der Quelle,
-// bei einem Fehler der Grund (live-backend werkzeugFehler, 30.09.).
-// Fehlergrund lesbar (30.09.): aus dem rohen MCP-JSON die innerste Meldung, Zeitueberschreitungen in Klartext.
-function chatGrund(f) {
-  const s = String(f || '').replace(/\\+"/g, '"');
-  if (/signal has been aborted|57014|statement timeout|upstream request timeout/i.test(s)) return 'Datenbank hat nicht rechtzeitig geantwortet';
-  const m = s.match(/"fehler"\s*:\s*"([^"]{1,160})/);
-  return (m ? m[1] : s).slice(0, 160);
-}
-function chatWeg(z) {
-  if (!z.weg?.length) return null;
-  const quellen = [...new Set(z.weg.map((w) => chatQuelle(w.n)))];
-  const d = el('details', { class: 'kiweg' }, el('summary', {}, el('span', { class: 'kiweglogos' }, ...quellen.slice(0, 5).map(chatLogo)),
-    `Arbeitsweg · ${z.weg.length} Schritt${z.weg.length === 1 ? '' : 'e'}`));
-  if (z.laeuft) d.open = true;
-  for (const w of z.weg) {
-    const q = chatQuelle(w.n);
-    d.append(el('div', { class: 'kiwegz' + (w.ok ? '' : ' fehl') }, chatLogo(q),
-      el('span', {}, (KI_QUELLE[q]?.name ? KI_QUELLE[q].name + ' · ' : '') + (w.was || chatWerkzeugWort(w.n)) + (w.x ? ': ' + w.x : '') +
-        (w.ok ? '' : ' — ging nicht' + (w.f ? ': ' + chatGrund(w.f) : '')))));
-  }
-  return d;
-}
-// Zitierte Webseiten unter der Antwort, mit dem Favicon der Seite (geladen von der Seite selbst).
-function chatQuellen(z) {
-  if (!z.quellen?.length) return null;
-  return el('div', { class: 'kiquellen' }, ...z.quellen.map((q) => {
-    let host = '';
-    try { host = new URL(q.u).host; } catch { return null; }
-    const img = el('img', { src: 'https://' + host + '/favicon.ico', alt: '', width: '14', height: '14', loading: 'lazy', referrerpolicy: 'no-referrer' });
-    img.addEventListener('error', () => img.replaceWith(chatLogo('web')));
-    return el('a', { class: 'kiquelle', href: q.u, target: '_blank', rel: 'noopener noreferrer', title: q.t || q.u }, img, el('span', {}, host.replace(/^www\./, '')));
-  }).filter(Boolean));
-}
-function chatZeile(z) {
-  if (z.agentLink) return el('div', { class: 'kizeile assistent' }, kwAgentKachel(z.agentLink)); // chat-werkstatt.js
-  const blase = el('div', { class: 'kiblase' });
-  // Die Markerzeile [karten: …] (live-backend, Migration 200) wird zu Kacheln; beim Streamen
-  // kommt sie Stueck fuer Stueck an und darf auch halb nicht als Text aufblitzen.
-  const text = z.rolle === 'assistent'
-    ? String(z.text || '').replace(/\[karten:[^\]]*\]/gi, '').replace(/\[(?:k(?:a(?:r(?:t(?:e(?:n(?::[^\]]*)?)?)?)?)?)?)?$/i, '').trim()
-    : z.text;
-  if (z.rolle === 'assistent' && z.laeuft && !text) {
-    blase.classList.add('kidenkt');
-    blase.textContent = (z.gruendlich ? 'Gründlich: ' : 'Tony ') + (z.tut || 'denkt') + ' …';
-  } else if (z.rolle === 'assistent') {
-    blase.classList.add('md');
-    blase.innerHTML = chatMd(text);
-  } else blase.textContent = text;
-  const weg = z.rolle === 'assistent' ? chatWeg(z) : null;
-  const quellen = z.rolle === 'assistent' && !z.laeuft ? chatQuellen(z) : null;
-  const gr = chatGrFuss(z); // Dokumentkarten + Dauer/Kosten des gründlichen Wegs (chat-gruendlich.js)
-  if (!z.karten?.length) return el('div', { class: 'kizeile ' + z.rolle }, weg || quellen || gr ? el('div', { class: 'kiantwort' }, weg, blase, quellen, gr) : blase);
-  return el('div', { class: 'kizeile ' + z.rolle }, el('div', { class: 'kiantwort' }, weg, text ? blase : null, quellen, gr, chatKacheln(z.karten)));
-}
-
-// Dieselben Kacheln wie auf dem Board (renderCard). Klick oeffnet die Karte; Ziehen und das
-// Spalten-Kontextmenue gehoeren aufs Board und sind hier abgeschaltet.
-function chatKacheln(karten) {
-  const raster = el('div', { class: 'kikarten' });
-  raster.addEventListener('contextmenu', (e) => { e.stopPropagation(); e.preventDefault(); }, true);
-  for (const t of karten) {
-    const c = renderCard(t);
-    c.removeAttribute('draggable');
-    raster.append(c);
-  }
-  return raster;
-}
-
-// Kleines, sicheres Markdown fuer Tonys Antworten: erst alles escapen, dann nur Absaetze,
-// ### Ueberschriften, Listen, Tabellen, Codeblock, **fett**, *kursiv*, `code` und
-// Links mit http(s). Kein fremdes HTML kommt durch.
-function chatMd(roh) {
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const inl = (s) => esc(s)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  const zellen = (s) => s.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
-  const zeilen = String(roh || '').replace(/\r/g, '').split('\n');
-  const aus = [];
-  const UL = /^\s*[-*•]\s+/, OL = /^\s*\d+[.)]\s+/, H = /^\s*#{1,6}\s+/, TREN = /^\s*\|?\s*:?-{2,}/;
-  for (let i = 0; i < zeilen.length;) {
-    const l = zeilen[i];
-    if (!l.trim()) { i++; continue; }
-    if (/^\s*```/.test(l)) {
-      const code = []; i++;
-      while (i < zeilen.length && !/^\s*```/.test(zeilen[i])) code.push(zeilen[i++]);
-      i++; aus.push('<pre><code>' + esc(code.join('\n')) + '</code></pre>'); continue;
-    }
-    if (H.test(l)) { aus.push('<h4>' + inl(l.replace(H, '')) + '</h4>'); i++; continue; }
-    if (l.trim().startsWith('|') && TREN.test(zeilen[i + 1] || '')) {
-      const kopf = zellen(l); i += 2;
-      const rumpf = [];
-      while (i < zeilen.length && zeilen[i].trim().startsWith('|')) rumpf.push(zellen(zeilen[i++]));
-      aus.push('<div class="kitab"><table><thead><tr>' + kopf.map((c) => '<th>' + inl(c) + '</th>').join('') + '</tr></thead><tbody>' +
-        rumpf.map((r) => '<tr>' + r.map((c) => '<td>' + inl(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
-      continue;
-    }
-    if (UL.test(l) || OL.test(l)) {
-      const re = UL.test(l) ? UL : OL, tag = re === UL ? 'ul' : 'ol', punkte = [];
-      while (i < zeilen.length && re.test(zeilen[i])) punkte.push('<li>' + inl(zeilen[i++].replace(re, '')) + '</li>');
-      aus.push('<' + tag + '>' + punkte.join('') + '</' + tag + '>'); continue;
-    }
-    const absatz = [];
-    while (i < zeilen.length && zeilen[i].trim() && !H.test(zeilen[i]) && !UL.test(zeilen[i]) && !OL.test(zeilen[i])
-      && !/^\s*```/.test(zeilen[i]) && !(zeilen[i].trim().startsWith('|') && TREN.test(zeilen[i + 1] || ''))) absatz.push(inl(zeilen[i++]));
-    aus.push('<p>' + absatz.join('<br>') + '</p>');
-  }
-  return aus.join('');
-}
-
 // ---------- Topbar + Board ----------
 function renderTopbar() {
   const tb = document.getElementById('topbar'); tb.innerHTML = '';
   if (!S.active) return;
-  document.getElementById('app')?.classList.toggle('seitezu', S.active.typ === 'chat' && chatSeiteZu());
-  if (S.active.typ === 'chat') tb.append(chatSeitenKnopf()); // Seitenleiste ein-/ausklappen (chat-dokument.js)
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
-    : S.active.typ === 'dev' ? 'Mit Tony bauen wie in Claude Code · eine Sitzung je Faden'
-    : S.active.typ === 'chat' ? 'Mit Tony schreiben · er kennt Board, Projekte und Dokumente'
     : S.active.typ === 'vergabe' ? 'Büro intern · alle Vergabeterminpläne · maßgeblich ist die Lesefassung beim Bauherrn'
     : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
@@ -1747,7 +1252,6 @@ function renderTopbar() {
     if (r.fehler) { uiHinweis(r.fehler); rufBtn.replaceChildren(...alt); rufBtn.disabled = false; }
     else setTimeout(() => { rufBtn.replaceChildren(...alt); rufBtn.disabled = false; }, 20000);
   } }, ico('phone'), 'Ruf mich an');
-  if (S.active.typ === 'chat') tb.append(chatDokKnopf()); // Zwei-Fenster-Knopf (chat-dokument.js)
   tb.append(rufBtn);
   tb.append(liveKnopf());
   // Glocke direkt neben dem Anruf-Knopf: die eine Stelle, an der alles auflaeuft,
@@ -2211,27 +1715,7 @@ function mailOrt() {
   return { kurz: 'das Board ' + name, satz: 'das Board "' + name + '"', hinweis: '' };
 }
 
-function mailAuftrag(ort, wunsch) {
-  const eigen = (wunsch && wunsch.auftrag || '').trim();
-  return [
-    '@agent Diese Karte ist gerade entstanden, weil eine Outlook-Mail auf ' + ort.satz + ' gezogen wurde. Die Mail haengt als Datei an der Karte.',
-    'Lies die Mail zuerst vollstaendig — der Kartentitel ist nur ihr Betreff.',
-    // Was Marcel beim Ablegen hineingeschrieben hat, ist der Auftrag. Die Gliederung
-    // darunter ist nur das Geruest fuer den Fall, dass er nichts gesagt hat.
-    eigen ? 'DEIN AUFTRAG — das ist die Hauptsache, alles andere ordnet sich dem unter:\n' + eigen : '',
-    wunsch && wunsch.frist ? 'Frist: ' + wunsch.frist + ' — sie steht schon an der Karte.' : '',
-    wunsch && wunsch.melden === 'mail' ? 'Es ist ein Rueckruf bestellt, sobald die Antwort auf diese Mail eintrifft.' : '',
-    eigen ? 'Zur Orientierung, soweit der Auftrag nichts anderes verlangt:' : 'Arbeite in dieser Reihenfolge:',
-    '1. Worum geht es und was ist zu tun? Schreib das als Notiz an die Karte: in ganzen Saetzen, mit den Zahlen, Namen und Fristen aus der Mail.',
-    '2. Steht eine Frist oder ein Termin darin, schlag sie als Frist vor.',
-    '3. Wer wird gebraucht? Intern die Kollegin oder den Kollegen aus public.personen, extern die Beteiligten des Projekts — beide mit Namen und dazu, wofuer.',
-    '4. Was davon kannst du JETZT selbst erledigen: Antwortentwurf schreiben, Unterlagen im Projektordner heraussuchen, Zahlen nachrechnen, Angaben gegen den Bestand pruefen? Tu es und leg das Ergebnis als Datei an die Karte.',
-    '5. Was danach uebrig bleibt und nur ein Mensch tun kann, kommt als Unterpunkte an die Karte — je Unterpunkt eine Handlung.',
-    ort.hinweis,
-  ].filter(Boolean).join('\n');
-}
-
-// 'agent' = wenn der Agent durch ist, 'mail' = wenn die Antwort eintrifft, 'frist' = zur Frist.
+// 'mail' = wenn die Antwort eintrifft, 'frist' = zur Frist.
 // Welche Bedingung entsteht, entscheidet assistant_rueckruf_anfordern anhand der Argumente:
 // todo_id -> agent_fertig, suche -> mail, sonst -> zeit. Darum hier bewusst nur je eines.
 async function mailMelden(wunsch, betreff, todoId) {
@@ -2280,7 +1764,6 @@ function mailWunschDialog(betreff, anzahl, ort) {
         '<label>Frist<input type="date" class="uidlg-i" data-ui="frist"></label>' +
         '<label>Melden<select class="uidlg-i" data-ui="melden">' +
           '<option value="">nicht</option>' +
-          '<option value="agent">wenn der Agent durch ist</option>' +
           '<option value="mail">wenn die Antwort da ist</option>' +
           '<option value="frist">zur Frist</option>' +
         '</select></label>' +
@@ -2347,10 +1830,9 @@ async function mailAblegen(datei, zeile, sp, wunsch) {
   }
   if (sp && !sp.ist_erledigt) await mut('todo_verschieben', { todo_id: r.todo_id, spalte_id: sp.id });
   await ladeDateienHoch([datei], r.todo_id);
-  await mut('kommentar_anlegen', { todo_id: r.todo_id, text: mailAuftrag(ort, wunsch) });
   await mailMelden(wunsch, betreff, r.todo_id);
   await ladeBoard();
-  uiHinweis('Mail liegt als Karte "' + betreff + '" — der Agent liest sie gerade.', 'ok');
+  uiHinweis('Mail liegt als Karte "' + betreff + '" — Claude bearbeitet sie, wenn du es sagst.', 'ok');
 }
 
 function spaltenMenu(e, sp, nSpalten) {
@@ -3443,45 +2925,6 @@ function chatTakt(id) {
     }
   }, 2500);
 }
-// Tony im Kartenchat (Migration 220, 01.10.): er antwortet auf jede Nachricht, ausser sie geht
-// erkennbar an einen Kollegen (@Name ohne @tony) oder an den Karten-Agenten (@agent).
-function tonyAntwortet(txt) {
-  if (/@tony\b/i.test(txt)) return true;
-  if (/@agent\b/i.test(txt)) return false;
-  return !/(?:^|[^A-Za-z0-9_@])@[A-Za-zÄÖÜäöüß]/.test(txt);
-}
-function tonyKarteBlase() {
-  const t = S.tonyKarte;
-  const kopf = el('div', { class: 'von' }, 'Tony · ' + (t.text ? 'schreibt…' : t.tut || 'denkt nach…'),
-    el('button', { class: 'del', title: 'Anhalten', style: 'opacity:1', onclick: () => t.stopp?.abort() }, '■'));
-  return el('div', { class: 'kom kom-agent', id: 'tony-karte-live' }, kopf,
-    t.text ? chatText(t.text) : el('div', { class: 'agenttippt' }, el('span', { class: 'punkte' }, '•••')));
-}
-async function tonyInKarte(todoId, aufgabe, verlauf) {
-  const t = S.tonyKarte = { todoId, text: '', tut: '', stopp: new AbortController() };
-  const neuZeichnen = () => {
-    const alt = document.getElementById('tony-karte-live');
-    if (alt) alt.replaceWith(tonyKarteBlase()); else if (S.detail?.id === todoId) renderDrawer();
-    const v = document.querySelector('.dchat-verlauf'); if (v) v.scrollTop = v.scrollHeight;
-  };
-  neuZeichnen();
-  let antwort = null;
-  try {
-    antwort = await chatStrom({ signal: t.stopp.signal, aufgabe, verlauf, karte_id: todoId, karte_chat: true, stream: true,
-      kanal: 'board', sicht: liveBildschirm(), projekt: liveProjekt() }, (e) => {
-      if (e.t === 'd') t.text += e.x;
-      else if (e.t === 'w') t.tut = chatWerkzeugWort(e.name) + '…';
-      neuZeichnen();
-    });
-  } catch (e) {
-    if (!t.stopp.signal.aborted) uiHinweis('Tony konnte nicht antworten: ' + (e?.message || e), 'fehler');
-  }
-  S.tonyKarte = null;
-  if (antwort) await liveOberflaeche(antwort.oberflaeche);
-  if (S.detail?.id === todoId) await openCard(todoId);
-  await ladeBoard();
-}
-
 function closeDrawer() { clearInterval(S.chatPoll); S.chatPoll = null; S.detail = null; S.komEntwurf = ''; S.zuruf = null; document.getElementById('drawer-root').innerHTML = ''; }
 
 function renderDrawer() {
@@ -3528,7 +2971,7 @@ function renderDrawer() {
   if (chip) chipRow.append(el('span', { class: 'chip', style: `display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${chip.bg};color:${chip.fg}` }, chip.txt));
   if (d.zuarbeit) chipRow.append(el('span', { class: 'chip zu', style: 'font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px' }, ico('swap'), 'Zuarbeit · vom Agenten' + (d.projekt ? ' für ' + d.projekt.name : '')));
   chipRow.append(el('span', { style: 'font-size:12px;color:#75756E' },
-    ...(d.quelle === 'agent' ? [ico('bot'), 'vom Agenten angelegt'] : d.quelle === 'voice' ? [ico('phone'), 'per Anruf erstellt'] : [ico('tastatur'), 'in der App erstellt'])));
+    ...(d.quelle === 'agent' ? [ico('bot'), 'vom Agenten angelegt'] : d.quelle === 'voice' ? [ico('phone'), 'per Anruf erstellt'] : d.quelle === 'claude' ? [ico('bot'), 'von Claude angelegt'] : [ico('tastatur'), 'in der App erstellt'])));
   // Tags stehen oben rechts im Kopf (Marcels Stelle, 17.09.) — beim Aufklappen als
   // Erstes im Blick, mit dem Anlege-Knopf direkt daneben.
   const tagNeu = async () => { await ladeTags(S.board?.board_id); renderDrawer(); };
@@ -3713,6 +3156,26 @@ function renderDrawer() {
     dinfo.append(sec);
   }
 
+  // Ticket (Migration 246/247): Claude legt Aufträge per MCP als Ticket an — Problem, Kontext,
+  // Definition of Done. Die DoD-Punkte sind Unterpunkte mit art 'dod' und stehen nur hier.
+  if (d.ticket_status) {
+    const TS = { offen: 'Offen', in_arbeit: 'In Arbeit', rueckfrage: 'Rückfrage', pruefen: 'Zur Prüfung', erledigt: 'Erledigt' };
+    const sec = el('div', { class: 'dsec' });
+    sec.append(el('div', { class: 'slbl' }, `Ticket ${d.schluessel} · ${TS[d.ticket_status] || d.ticket_status}`));
+    if (d.problem) sec.append(el('div', { class: 'slbl', style: 'margin-top:6px' }, 'Problem'), el('div', { class: 'feldtext lesen' }, d.problem));
+    if (d.kontext) sec.append(el('div', { class: 'slbl', style: 'margin-top:10px' }, 'Kontext'), ...feldFaltung(el('div', { class: 'feldtext lesen' }, d.kontext), d.kontext, 'kontext-' + d.id));
+    const dod = d.unterpunkte.filter((u) => u.art === 'dod');
+    if (dod.length) {
+      sec.append(el('div', { class: 'slbl', style: 'margin-top:10px' }, `Definition of Done (${dod.filter((u) => u.erledigt).length}/${dod.length})`));
+      const li = el('div', { class: 'subliste' });
+      for (const u of dod) li.append(el('div', { class: 'sub' },
+        el('input', { type: 'checkbox', ...(u.erledigt ? { checked: '' } : {}), onchange: async (e) => { await mut('unterpunkt_setzen',{ unterpunkt_id: u.id, erledigt: e.target.checked }); await openCard(d.id); } }),
+        el('span', { style: u.erledigt ? 'text-decoration:line-through;color:#8A8A83' : '' }, u.text)));
+      sec.append(li);
+    }
+    dinfo.append(sec);
+  }
+
   // Rueckfragen — Sammel-Modus (Marcels Wunsch 24.07.): Antworten zwischenspeichern
   // ('entwurf', Agent wartet weiter), Dateien in Ruhe anhaengen, erst "Losschicken" laesst
   // den Agenten weiterarbeiten. Telefon-Antworten bleiben sofort final.
@@ -3770,15 +3233,16 @@ function renderDrawer() {
     dinfo.append(sec);
   }
 
-  // Unterpunkte
+  // Unterpunkte (ohne die DoD-Punkte eines Tickets, die stehen oben im Ticket)
+  const ups = d.unterpunkte.filter((u) => u.art !== 'dod');
   const su = el('div', { class: 'dsec' });
   // Leere Sektionen zeigen kein Label — nur die schlanke Hinzufuegen-Zeile (Redesign 10.08.).
-  if (d.unterpunkte.length) su.append(el('div', { class: 'slbl' }, `Unterpunkte (${d.unterpunkte.filter(u => u.erledigt).length}/${d.unterpunkte.length})`));
+  if (ups.length) su.append(el('div', { class: 'slbl' }, `Unterpunkte (${ups.filter(u => u.erledigt).length}/${ups.length})`));
   // Redesign 16.09.: die Punkte stehen in einer umrandeten Liste mit Trennlinie je Zeile.
   // Vorher lagen sie ohne Abgrenzung untereinander und lasen sich wie ein Absatz.
   const suListe = el('div', { class: 'subliste' });
-  if (d.unterpunkte.length) su.append(suListe);
-  for (const u of d.unterpunkte) {
+  if (ups.length) su.append(suListe);
+  for (const u of ups) {
     suListe.append(el('div', { class: 'sub' },
       el('input', { type: 'checkbox', ...(u.erledigt ? { checked: '' } : {}), onchange: async (e) => { await mut('unterpunkt_setzen',{ unterpunkt_id: u.id, erledigt: e.target.checked }); await openCard(d.id); } }),
       el('span', { style: u.erledigt ? 'text-decoration:line-through;color:#8A8A83' : '' }, u.text),
@@ -3934,21 +3398,13 @@ function renderDrawer() {
       // Schritt fuer Schritt mit Sekunde, dazu der Vergleich mit der ueblichen Dauer.
       arbeitsweg(d)));
   }
-  // Tony schreibt (Migration 220): die Antwort waechst hier Wort fuer Wort und wird danach
-  // ein Kommentar von "tony". Steht im Zustand, damit ein Neuzeichnen sie nicht verliert.
-  if (S.tonyKarte && S.tonyKarte.todoId === d.id) sk.append(tonyKarteBlase());
   const addK = el('div', { class: 'dchat-eingabe' });
   const senden = async () => {
-    const txt = kInp.value.trim(); if (!txt || (S.tonyKarte && S.tonyKarte.todoId === d.id)) return;
+    const txt = kInp.value.trim(); if (!txt) return;
     kInp.value = ''; S.komEntwurf = '';
     kInp.style.height = 'auto';   // mitgewachsenes Feld wieder auf eine Zeile
-    // Erst die Bestaetigung zeichnen, dann zum Server: ein Zuruf darf sich nie
-    // anfuehlen, als waere er ins Leere gegangen.
-    if (/@agent\b/i.test(txt)) { S.zuruf = { todoId: d.id, seit: Date.now() }; renderDrawer(); }
-    const verlauf = (d.kommentare || []).slice(-20).map((k) => ({ rolle: k.von === 'tony' ? 'assistent' : 'nutzer', text: (k.von === 'tony' ? '' : k.von + ': ') + k.text }));
     await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
     await openCard(d.id); await ladeBoard();
-    if (tonyAntwortet(txt)) await tonyInKarte(d.id, txt, verlauf);
   };
   // Mehrzeiliges Eingabefeld, das mitwaechst (Marcel, 26.08.: "passt sich nicht der
   // Masse an Text an, ich muss mit der Pfeiltaste durchzippen"). Aufgebaut wie das
@@ -3956,7 +3412,7 @@ function renderDrawer() {
   // dem Text bis zu einer Deckelung -- danach scrollt das Feld selbst, statt den
   // halben Chat zu verdraengen.
   const kInp = el('textarea', { id: 'kom-inp', rows: '1',
-    placeholder: 'Nachricht an Tony…  @Name schreibt nur einem Kollegen',
+    placeholder: 'Kommentar…  @Name benachrichtigt einen Kollegen',
     oninput: () => { S.komEntwurf = kInp.value; hoeheAnpassen(); },
     onkeydown: (e) => {
       // Waehrend die @-Vorschlagsliste offen ist, gehoert Enter der Auswahl.
@@ -3971,8 +3427,8 @@ function renderDrawer() {
   addK.append(kInp, el('button', { class: 'btn', title: 'Senden (Enter) · Shift+Enter macht einen Absatz', onclick: senden }, 'Senden'));
   // Nach dem Einhaengen messen: vorher ist scrollHeight 0.
   setTimeout(hoeheAnpassen);
-  dchat.append(el('div', { class: 'dchat-kopf' }, 'Chat',
-    el('span', { class: 'dchat-hinweis' }, 'Tony liest mit und antwortet')), sk, addK);
+  dchat.append(el('div', { class: 'dchat-kopf' }, 'Kommentare',
+    el('span', { class: 'dchat-hinweis' }, 'Claude liest sie über den MCP')), sk, addK);
 
   // Verlauf
   if ((d.verlauf || []).length) {
@@ -4373,8 +3829,6 @@ function liveKarteFinden(ziel) {
 function liveBretter() {
   return [
     { typ: 'radar', id: null, name: 'Mein Dashboard' },
-    { typ: 'dev', id: null, name: 'DEV' },
-    { typ: 'chat', id: null, name: 'Chat' },
     ...(S.liste?.boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
     ...(S.liste?.team_boards || []).map((b) => ({ typ: 'board', id: b.id, name: b.name })),
     ...(S.projects || []).map((p) => ({ typ: 'projekt', id: p.id, name: p.name, begriffe: p.begriffe || [] })),
