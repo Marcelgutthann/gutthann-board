@@ -92,11 +92,12 @@ async function zustimmen(s) {
   const app = d.client?.client_name || d.client_name || 'Claude';
   blatt.innerHTML = `
     <h1>${esc(app)} verbinden?</h1>
-    <p class="leise">${esc(app)} möchte in deinem Namen mit dem Gutthann Board arbeiten. Für den Anfang heißt das:</p>
+    <p class="leise">${esc(app)} möchte in deinem Namen mit dem Gutthann Board arbeiten. Das heißt:</p>
     <ul class="liste">
       <li>Projekte und Terminpläne lesen</li>
       <li>Taktanweisungen vorschlagen und nach deinem Ja in den Terminplan übernehmen</li>
       <li>geklärte Regeln als Bürostandard ablegen</li>
+      <li>auf deinen Boards und den Projektboards Karten anlegen, bearbeiten, verschieben, zuweisen, kommentieren und abhaken</li>
     </ul>
     <p class="leise">Jede Änderung läuft unter deinem Namen. Löschen, Mails und Anrufe gehen über diesen Zugang nicht.</p>
     <div class="knoepfe"><button class="zweit" id="nein">Ablehnen</button><button id="ja">Zulassen</button></div>
