@@ -4404,6 +4404,7 @@ function anlageZeigen(){
           <div class="anlage-zeile" id="anZeileGen"><label>Genehmigung</label><input id="anGenehmigung" type="date"></div>
           <div class="anlage-zeile" id="anZeilePlab"><label>Planung ab</label><input id="anPlanungAb" type="date"></div>
           <div class="anlage-zeile"><label>Baubeginn</label><input id="anBaubeginn" type="date"></div>
+          <div class="anlage-zeile"><label>Hülle dicht</label><input id="anHuelle" type="date" title="Dach, Fassade, Fenster zu — ab hier beginnt der Innenausbau mit dem Trockenbau (optional)"></div>
           <div class="anlage-zeile"><label>Übergabe</label><input id="anUebergabe" type="date"></div>
           <button id="anLosRahmen">Rahmenterminplan erzeugen</button>
         </div>
@@ -4458,15 +4459,22 @@ function anlageZeigen(){
   // entscheiden koennen, landet in RAHMEN_EINGABEN.offen — das prueft spaeter der Agent.
   // Der Mensch sieht jede Herkunft und bestaetigt (Vorschlag-Freigabe-Prinzip).
   let eingaben = null;
+  let eingabenKB = null;   // dieselben Eingaben, Gewerke aus der Kostenberechnung — nur für den Bauzeitenplan ohne Druck
   let druck = { plan: null, hinweis: null };   // massgeblicher vorhandener Bauzeitenplan-Druck (Migr. 238)
-  const FELDER = { genehmigung:'anGenehmigung', planungStart:'anPlanungAb', baubeginn:'anBaubeginn', uebergabe:'anUebergabe' };
+  const FELDER = { genehmigung:'anGenehmigung', planungStart:'anPlanungAb', baubeginn:'anBaubeginn', huelleDicht:'anHuelle', uebergabe:'anUebergabe' };
   (async ()=>{
     const hint = document.getElementById('anRahmenHint');
-    hint.textContent = 'liest die Projektdaten (Terminprüfung, Kennzahlen, Terminebene, Vergabeterminplan) …';
+    hint.textContent = 'liest die Projektdaten (Terminprüfung, Kennzahlen, Terminebene, Vergabeterminplan, Kostenberechnung) …';
     try {
       const q = await db('rpc/termin_rahmen_quellen', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) });
       if(q?.fehler) throw new Error(q.fehler);
+      // Gewerke aus der neuesten gelesenen Kostenberechnung (Migr. 244); fehlt sie, bleibt es beim Vergabeterminplan
+      let kbListe = [];
+      try { kbListe = await db('rpc/termin_kostenberechnung', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) }) || []; } catch(e){}
       eingaben = rahmenEingabenAusQuellen(q, fmtISO(new Date()));
+      if(kbListe.length) eingabenKB = rahmenEingabenAusQuellen(Object.assign({}, q, { kostenberechnung: kbListe[0] }), fmtISO(new Date()));
+      if(kbListe.length > 1) eingabenKB.offen.push('Weitere Kostenberechnungen nach Gewerken im Projekt, nicht verwendet: '
+        + kbListe.slice(1).map(k=>'„' + k.datei + '“ (Stand ' + fmtDE(k.stand) + ')').join(', ') + ' — Bauabschnitt oder ältere Fassung?');
       druck = bzpMassgeblich(q.bauzeitenplaene);
       if(druck.plaene.length){
         // Vorgaenge der gewaehlten Drucke (Migr. 239) — Kopfdaten kamen mit termin_rahmen_quellen
@@ -4481,7 +4489,7 @@ function anlageZeigen(){
       const zeile = (text, farbe)=>{ const d = document.createElement('div'); d.className = 'anlage-hint';
         if(farbe) d.style.cssText = 'color:' + farbe + ';font-weight:600;'; d.textContent = text; return d; };
       const quellen = Object.entries(FELDER).filter(([k])=>eingaben[k])
-        .map(([k])=>({ genehmigung:'Genehmigung', planungStart:'Planung ab', baubeginn:'Baubeginn', uebergabe:'Übergabe' })[k] + ': ' + eingaben[k].quelle);
+        .map(([k])=>({ genehmigung:'Genehmigung', planungStart:'Planung ab', baubeginn:'Baubeginn', huelleDicht:'Hülle dicht', uebergabe:'Übergabe' })[k] + ': ' + eingaben[k].quelle);
       hint.textContent = quellen.length ? 'Vorbelegt aus den Projektdaten (Herkunft je Feld beim Darüberfahren) — bitte prüfen.'
         : 'Keine Ecktermine in den Projektdaten gefunden — bitte von Hand eintragen.';
       hint.title = quellen.join('\n');
@@ -4490,7 +4498,14 @@ function anlageZeigen(){
       // Bauzeitenplan: ein vorhandener Druck ist die Grundlage, Regeln fuellen nur Luecken
       const dz = zeile(druck.plaene.length
         ? 'Bauzeitenplan-Grundlage (deterministisch gelesen): ' + druck.plaene.map(tp=>'„' + tp.datei + '“ (Stand ' + fmtDE(tp.stand) + ', ' + tp.anzahl + ' Vorgänge)').join(' + ')
+        : eingabenKB ? 'Kein lesbarer Bauzeitenplan-Druck im Projekt — ' + eingabenKB.hinweise[eingabenKB.hinweise.length - 1] + ', Dauer aus den Kosten'
         : 'Kein lesbarer Bauzeitenplan-Druck im Projekt — Bauzeitenplan entsteht aus Vergabeeinheiten + Regeln');
+      if(druck.plaene.length && eingabenKB){
+        // Besprechung 08.10.: „ich will wirklich bei 0 anfangen“ — Druck bewusst beiseitelassen
+        const l = document.createElement('label'); l.style.cssText = 'display:block;margin-top:4px;font-weight:400;cursor:pointer;';
+        l.innerHTML = '<input type="checkbox" id="anVonNull"> von 0 aufbauen: Druck nicht verwenden, Gewerke aus der Kostenberechnung';
+        dz.appendChild(l);
+      }
       dz.id = 'anDruckHinweis';
       if(druck.hinweis) dz.title = druck.hinweis;
       dz.style.display = document.getElementById('anArt').value === 'bauzeitenplan' ? '' : 'none';
@@ -4521,6 +4536,8 @@ function anlageZeigen(){
         const gen = bzp ? null : document.getElementById('anGenehmigung').value;
         const bau = document.getElementById('anBaubeginn').value;
         const ueb = document.getElementById('anUebergabe').value;
+        const huelle = document.getElementById('anHuelle').value || null;
+        if(huelle && !(bau < huelle && huelle < ueb)) return fehler('Reihenfolge prüfen: Baubeginn < Hülle dicht < Übergabe.');
         if(bzp){
           if(!bau || !ueb) return fehler('Bitte Baubeginn und Übergabe angeben.');
           if(!(bau < ueb)) return fehler('Reihenfolge prüfen: Baubeginn < Übergabe.');
@@ -4536,19 +4553,21 @@ function anlageZeigen(){
           if(inp.value) herkunft[k] = (eingaben?.[k] && inp.dataset.vorbelegt === inp.value)
             ? eingaben[k].quelle : 'von Hand im Anlegedialog eingetragen';
         }
-        if(bzp && druck.plaene.length){
+        if(bzp && druck.plaene.length && !document.getElementById('anVonNull')?.checked){
           // Vorhandene Drucke 1:1 (je Planfamilie einer), nur Vergabeeinheiten ohne Vorgang nach Regel; offen = nur diese Luecken
           const r = bauzeitenplanAusDruck(druck.plaene, eingaben?.vergabeeinheiten, bau, ueb);
           tasks = r.tasks; edges = r.edges;
           planOffen = r.offen.concat(druck.hinweise);
           quelleText = 'Bauzeitenplan aus ' + druck.plaene.map(tp=>'„' + tp.datei + '“ (Stand ' + fmtDE(tp.stand) + ')').join(' + ') + ', Lücken nach Regel';
         } else {
-        const erg = erzeugeRahmenplan({ genehmigung: gen, baubeginn: bau, uebergabe: ueb,
-          planungStart: plab || undefined, vergabeeinheiten: eingaben?.vergabeeinheiten || undefined,
+        // Bauzeitenplan von 0 (kein Druck): Gewerke aus der Kostenberechnung; Rahmenplan bleibt beim Vergabeterminplan
+        const ein = (bzp && eingabenKB) ? eingabenKB : eingaben;
+        const erg = erzeugeRahmenplan({ genehmigung: gen, baubeginn: bau, uebergabe: ueb, huelleDicht: huelle || undefined,
+          planungStart: plab || undefined, vergabeeinheiten: ein?.vergabeeinheiten || undefined,
           genehmigungErteilt: !!eingaben?.genehmigungErteilt, herkunft, nurAusfuehrung: bzp });
         tasks = erg.tasks;
         edges = erg.edges;
-        planOffen = eingaben?.offen || [];
+        planOffen = ein?.offen || [];
         quelleText = (bzp ? 'Bauzeitenplan' : 'Rahmenplan') + '-Generator (Projektdaten + Regeln, bestätigt)';
         if(erg.warnungen.length) console.warn('Rahmenplan:', erg.warnungen.join(' | '));
         }
@@ -5720,6 +5739,9 @@ function rpDefaultVergabeeinheiten() {
   ];
 }
 
+// Lage von Hülle dicht in den Gewerke-Anteilen: Fenster+Fassade enden bei 0,38 + 0,22 = 60 % der Bauzeit
+var RP_HUELLE_ANTEIL = 0.60;
+
 // Default-Kettenglieder (alle Werte in Kalendertagen, ausser lvErstellungAT)
 function rpDefaultKette() {
   return {
@@ -5738,17 +5760,21 @@ function rpDefaultKette() {
 //   genehmigung  'YYYY-MM-DD'  Meilenstein "Baugenehmigung (erwartet)"
 //   baubeginn    'YYYY-MM-DD'  Beginn Ausführung
 //   uebergabe    'YYYY-MM-DD'  Soll-Ende, Meilenstein wird fixiert
+//   huelleDicht  'YYYY-MM-DD'  optional Zwischentermin (Dach, Fassade, Fenster zu): Meilenstein fixiert,
+//                              Hülle-Gewerke davor, Innenausbau danach, Trockenbau beginnt ab hier
 //   planungStart 'YYYY-MM-DD'  optional, Default = genehmigung
 //   vergabeeinheiten            optional [{name, startAnteil, dauerAnteil,
 //                                 bekannt?: {veroeffentlichung, submission, sitzung, baubeginn},
 //                                 quelle?: Text zu den bekannten Terminen,
-//                                 regel?: Text, woher startAnteil/dauerAnteil stammen}]
+//                                 regel?: Text, woher startAnteil/dauerAnteil stammen,
+//                                 dauerKT?: Dauer in KT (aus den Kosten), ersetzt dauerAnteil,
+//                                 abHuelle?: true = beginnt ab Hülle dicht}]
 //                               Bekannte Termine werden fixiert übernommen, die fehlenden
 //                               Kettenglieder rechnet die Regel um sie herum.
 //   kette                       optional, Einzelwerte überschreiben Defaults
 //   genehmigungErteilt          optional true: Meilenstein heißt "Baugenehmigung (erteilt)",
 //                               keine Warnung "Vergabe vor Genehmigung"
-//   herkunft                    optional {genehmigung, baubeginn, uebergabe, planungStart}:
+//   herkunft                    optional {genehmigung, baubeginn, huelleDicht, uebergabe, planungStart}:
 //                               Text je Eckdatum, landet in quelleText der Vorgänge
 // Ergebnis: { tasks, edges, warnungen }
 function erzeugeRahmenplan(param) {
@@ -5784,6 +5810,19 @@ function erzeugeRahmenplan(param) {
   // mit Dauer 0 bzw. rückwärts laufende Balken.
   if (bauzeitKT <= 0) {
     warnungen.push('Bauzeit nicht positiv (' + bauzeitKT + ' KT): Uebergabe liegt nicht nach dem Baubeginn');
+  }
+
+  // Zwischentermin Hülle dicht (Dach, Fassade, Fenster zu): teilt die Bauzeit in Hülle und Ausbau
+  var huelleMs = param.huelleDicht ? rpParseDatum(param.huelleDicht) : null;
+  if (huelleMs !== null && !(baubeginnMs < huelleMs && huelleMs < uebergabeMs)) {
+    warnungen.push('Hülle dicht (' + param.huelleDicht + ') liegt nicht zwischen Baubeginn und Übergabe');
+  }
+  var vorKT = huelleMs === null ? 0 : Math.round((huelleMs - baubeginnMs) / 86400000);
+  var nachKT = huelleMs === null ? 0 : Math.round((uebergabeMs - huelleMs) / 86400000);
+  // Anteil der Bauzeit -> Datum, stückweise um Hülle dicht
+  function lage(anteil) {
+    if (anteil <= RP_HUELLE_ANTEIL) { return rpPlusTage(baubeginnMs, Math.round(anteil / RP_HUELLE_ANTEIL * vorKT)); }
+    return rpPlusTage(huelleMs, Math.round((anteil - RP_HUELLE_ANTEIL) / (1 - RP_HUELLE_ANTEIL) * nachKT));
   }
 
   // Vorgang anlegen; uid fortlaufend ab 1 in Push-Reihenfolge.
@@ -5832,6 +5871,7 @@ function erzeugeRahmenplan(param) {
 
   // --- Schritt 1: alle Termine je Vergabeeinheit rechnen ---------------------
   var daten = [];
+  var abHuelleIdx = [];   // Einheiten, die ab Hülle dicht beginnen (Kante vom Meilenstein)
   for (var i = 0; i < einheiten.length; i++) {
     var einheit = einheiten[i];
 
@@ -5840,9 +5880,30 @@ function erzeugeRahmenplan(param) {
 
     // AUSFÜHRUNG: Lage + Dauer anteilig an der Bauzeit; Start ggf. auf Montag.
     // Ein bekannter Ausführungsbeginn ersetzt die Lage, die Dauer bleibt Regel.
-    var gewerkStartMs = bekanntMs('baubeginn') !== null ? bekanntMs('baubeginn')
-      : rpSnapAufMontag(rpPlusTage(baubeginnMs, Math.round(einheit.startAnteil * bauzeitKT)));
-    var gewerkFinishMs = rpPlusTage(gewerkStartMs, Math.round(einheit.dauerAnteil * bauzeitKT));
+    var gewerkStartMs, gewerkFinishMs;
+    if (huelleMs === null) {
+      gewerkStartMs = bekanntMs('baubeginn') !== null ? bekanntMs('baubeginn')
+        : rpSnapAufMontag(rpPlusTage(baubeginnMs, Math.round(einheit.startAnteil * bauzeitKT)));
+      gewerkFinishMs = rpPlusTage(gewerkStartMs, Math.round(einheit.dauerAnteil * bauzeitKT));
+    } else {
+      // Mit Hülle dicht: Anteile bis RP_HUELLE_ANTEIL laufen in [Baubeginn, Hülle], der Rest in
+      // [Hülle, Übergabe]. Der Innenausbau beginnt mit dem Trockenbau genau ab Hülle dicht.
+      var abHuelle = einheit.abHuelle === true || (einheit.abHuelle === undefined && /trockenbau/i.test(einheit.name));
+      var lageS = abHuelle ? RP_HUELLE_ANTEIL : einheit.startAnteil;
+      gewerkStartMs = bekanntMs('baubeginn') !== null ? bekanntMs('baubeginn') : rpSnapAufMontag(lage(lageS));
+      gewerkFinishMs = gewerkStartMs + (lage(lageS + einheit.dauerAnteil) - lage(lageS));
+      if (abHuelle) { abHuelleIdx.push(i); }
+    }
+    // Dauer aus den Kosten (dauerKT, rahmenplan_eingaben.js) statt Anteil; sie darf ihr Zeitfenster
+    // nicht sprengen: Hülle-Gewerke enden spätestens mit Hülle dicht, alle anderen mit der Übergabe.
+    // Passt sie nicht, wird verdichtet (mehr Leute) — das steht in der Herkunft.
+    var verdichtet = false;
+    if (typeof einheit.dauerKT === 'number') {
+      gewerkFinishMs = rpPlusTage(gewerkStartMs, einheit.dauerKT);
+      var huelleGewerk = huelleMs !== null && einheit.startAnteil + einheit.dauerAnteil <= RP_HUELLE_ANTEIL && !(einheit.abHuelle === true);
+      var fensterEndeMs = huelleGewerk ? huelleMs : uebergabeMs;
+      if (gewerkFinishMs > fensterEndeMs && gewerkStartMs < fensterEndeMs) { gewerkFinishMs = fensterEndeMs; verdichtet = true; }
+    }
 
     // VERGABE: Rückwärtskette vom (ggf. gesnappten) Ausführungsbeginn A. Ein bekanntes
     // Glied ersetzt den Regelwert, die früheren Glieder rechnen dann von ihm aus weiter.
@@ -5896,7 +5957,8 @@ function erzeugeRahmenplan(param) {
     }
 
     // Herkunft je Termin: bekannt = Quelle der Einheit (fixiert), sonst die Regel
-    var regelText = 'Regel: ' + (einheit.regel || 'Standardablauf kommunaler Hochbau');
+    var regelText = 'Regel: ' + (einheit.regel || 'Standardablauf kommunaler Hochbau')
+      + (verdichtet ? ' · auf ' + (huelleGewerk ? 'Hülle dicht' : 'die Übergabe') + ' verdichtet (mehr Kolonnen)' : '');
     var quelleBek = einheit.quelle || 'Projektdaten';
     // (keine Closure über die Schleifen-vars — die würden von der letzten Einheit überschrieben)
     var herkunftVon = rpHerkunft.bind(null, bekannt, quelleBek, regelText);
@@ -5927,7 +5989,10 @@ function erzeugeRahmenplan(param) {
   var wbsNr = nur ? 0 : 1;
   if (!nur) neueTask({ name: erteilt ? 'Baugenehmigung (erteilt)' : 'Baugenehmigung (erwartet)', wbs: '1', level: 1, startMs: genehmigungMs, finishMs: genehmigungMs, milestone: true, category: 'planung', quelle: herkunft.genehmigung });
   neueTask({ name: 'Baubeginn', wbs: String(wbsNr + 1), level: 1, startMs: baubeginnMs, finishMs: baubeginnMs, milestone: true, category: 'ausfuehrung', quelle: herkunft.baubeginn });
-  neueTask({ name: 'Übergabe (Soll)', wbs: String(wbsNr + 2), level: 1, startMs: uebergabeMs, finishMs: uebergabeMs, milestone: true, category: 'ausfuehrung', lock: true, quelle: herkunft.uebergabe });
+  var hv = huelleMs === null ? 0 : 1;   // Hülle dicht schiebt alle folgenden Nummern um eins
+  var huelleTask = huelleMs === null ? null
+    : neueTask({ name: 'Hülle dicht', wbs: String(wbsNr + 2), level: 1, startMs: huelleMs, finishMs: huelleMs, milestone: true, category: 'ausfuehrung', lock: true, quelle: herkunft.huelleDicht });
+  neueTask({ name: 'Übergabe (Soll)', wbs: String(wbsNr + 2 + hv), level: 1, startMs: uebergabeMs, finishMs: uebergabeMs, milestone: true, category: 'ausfuehrung', lock: true, quelle: herkunft.uebergabe });
 
   // Leere Vergabeeinheiten-Liste (leeres Array ist truthy, umgeht also den
   // Default oben): keine Schichten möglich — nur Ecktermine plus Warnung,
@@ -5964,16 +6029,16 @@ function erzeugeRahmenplan(param) {
     if (planungStartMs < planungVon) { planungVon = planungStartMs; }
     werkplanung = true;
   }
-  neueTask({ name: 'PLANUNG', wbs: '4', level: 1, startMs: planungVon, finishMs: planungBis, summary: true, category: 'planung' });
+  neueTask({ name: 'PLANUNG', wbs: String(4 + hv), level: 1, startMs: planungVon, finishMs: planungBis, summary: true, category: 'planung' });
   if (werkplanung) {
-    neueTask({ name: 'Werk- und Detailplanung (durchgehend)', wbs: '4.1', level: 2,
+    neueTask({ name: 'Werk- und Detailplanung (durchgehend)', wbs: (4 + hv) + '.1', level: 2,
       startMs: planungStartMs, finishMs: planungBis, category: 'planung', quelle: herkunft.planungStart });
   }
   var planungWbsBasis = werkplanung ? 1 : 0;
   for (var p = 0; p < daten.length; p++) {
     daten[p].planungTask = neueTask({
       name: 'Ausführungsplanung + LV ' + daten[p].name,
-      wbs: '4.' + (p + 1 + planungWbsBasis),
+      wbs: (4 + hv) + '.' + (p + 1 + planungWbsBasis),
       level: 2,
       startMs: daten[p].planungBeginnMs,
       finishMs: daten[p].planungEndeMs,
@@ -5983,12 +6048,12 @@ function erzeugeRahmenplan(param) {
   }
 
   // Schicht VERGABE mit Rückwärtskette je Einheit
-  neueTask({ name: 'VERGABE', wbs: '5', level: 1, startMs: vergabeVon, finishMs: vergabeBis, summary: true, category: 'vergabe' });
+  neueTask({ name: 'VERGABE', wbs: String(5 + hv), level: 1, startMs: vergabeVon, finishMs: vergabeBis, summary: true, category: 'vergabe' });
   // Viele Einheiten (echter Vergabeterminplan): die Ketten zugeklappt anlegen
   var zuklappen = daten.length > 8;
   for (var v = 0; v < daten.length; v++) {
     var d = daten[v];
-    var basisWbs = '5.' + (v + 1);
+    var basisWbs = (5 + hv) + '.' + (v + 1);
     neueTask({ name: 'Vergabe ' + d.name, wbs: basisWbs, level: 2, startMs: d.veroeffentlichungMs, finishMs: d.beauftragungMs, summary: true, category: 'vergabe', collapsed: zuklappen });
 
     var tLv = neueTask({ name: 'Veröffentlichung LV', wbs: basisWbs + '.1', level: 3, startMs: d.veroeffentlichungMs, finishMs: d.veroeffentlichungMs, milestone: true, category: 'vergabe',
@@ -6013,7 +6078,7 @@ function erzeugeRahmenplan(param) {
   }
 
   // Schicht AUSFÜHRUNG
-  var ausWbs = nur ? '3' : '6';
+  var ausWbs = String((nur ? 3 : 6) + hv);
   neueTask({ name: 'AUSFÜHRUNG', wbs: ausWbs, level: 1, startMs: ausfuehrungVon, finishMs: ausfuehrungBis, summary: true, category: 'ausfuehrung' });
   for (var g = 0; g < daten.length; g++) {
     daten[g].gewerkTask = neueTask({
@@ -6032,6 +6097,10 @@ function erzeugeRahmenplan(param) {
   }
 
   // --- Schritt 3: schichtübergreifende Kanten --------------------------------
+  // Hülle dicht -> Innenausbau (Trockenbau): Ausbau erst, wenn es nicht mehr reinregnet
+  for (var h = 0; h < abHuelleIdx.length && huelleTask; h++) {
+    kanteZwischen(huelleTask, daten[abHuelleIdx[h]].gewerkTask, false);
+  }
   for (var q = 0; q < daten.length && !nur; q++) {
     // Beauftragung -> Gewerk: Einspruchsfrist als harte Obergrenze
     kanteZwischen(daten[q].beauftragungTask, daten[q].gewerkTask, true);
@@ -6065,22 +6134,31 @@ function erzeugeRahmenplan(param) {
 // Erste passende Zeile gewinnt — Reihenfolge ist Absicht (z. B. "Sonnenschutz" vor "Schutz").
 function reProfile() {
   return [
-    { profil: 'Bautafel/Baustelleneinrichtung', muster: /^\s*(bautafel|bauzaun)/i, startAnteil: 0.00, dauerAnteil: 0.02 },
-    { profil: 'Rohbau', muster: /baumeister|rohbau|abbruch|erdarb|beton|maurer|spezial.?tiefbau|verbau/i, startAnteil: 0.00, dauerAnteil: 0.40 },
-    { profil: 'Gerüst', muster: /gerüst|geruest/i, startAnteil: 0.20, dauerAnteil: 0.55 },
+    { profil: 'Bautafel/Baustelleneinrichtung', muster: /^\s*(bautafel|bauzaun|baustelleneinr)/i, startAnteil: 0.00, dauerAnteil: 0.02, dauerNachKosten: false },
+    { profil: 'Rohbau', muster: /baumeister|rohbau|abbruch|erdarb|beton|maurer|spezial.?tiefbau|verbau/i, startAnteil: 0.00, dauerAnteil: 0.40, dauerNachKosten: false },
+    { profil: 'Gerüst', muster: /gerüst|geruest/i, startAnteil: 0.20, dauerAnteil: 0.55, dauerNachKosten: false },
     { profil: 'Dach/Holzbau', muster: /zimmer|holzbau|dach|spengler|klempner/i, startAnteil: 0.28, dauerAnteil: 0.18 },
     { profil: 'Aufzug', muster: /aufzug/i, startAnteil: 0.60, dauerAnteil: 0.20 },
     { profil: 'Fassade/Fenster', muster: /fenster|fassade|pfosten|riegel|wärmedämmverbund|waermedaemmverbund|wdvs|sonnenschutz|außentür|aussentuer|verglasung außen/i, startAnteil: 0.38, dauerAnteil: 0.22 },
-    { profil: 'Technische Gebäudeausrüstung', muster: /elektro|sanitär|sanitaer|heizung|wärmeversorg|waermeversorg|lüftung|lueftung|raumluft|gebäudeautom|gebaeudeautom|automation|msr|\bhls\b|\belt\b|blitzschutz|fernmelde|nachrichten|sprinkler|kälte|kaelte|photovoltaik|pv-anlage/i, startAnteil: 0.30, dauerAnteil: 0.60 },
+    { profil: 'Technische Gebäudeausrüstung', muster: /elektro|sanitär|sanitaer|heizung|wärmeversorg|waermeversorg|lüftung|lueftung|raumluft|gebäudeautom|gebaeudeautom|automation|msr|\bhls\b|\belt\b|blitzschutz|fernmelde|nachrichten|sprinkler|kälte|kaelte|photovoltaik|pv-anlage/i, startAnteil: 0.30, dauerAnteil: 0.60, dauerNachKosten: false },
     { profil: 'Küchentechnik', muster: /küche|kueche/i, startAnteil: 0.80, dauerAnteil: 0.10 },
     { profil: 'Trockenbau', muster: /trockenbau|akustik|abgehängte decke|unterdecke/i, startAnteil: 0.55, dauerAnteil: 0.25 },
     { profil: 'Estrich', muster: /estrich/i, startAnteil: 0.65, dauerAnteil: 0.12 },
-    { profil: 'Bodenbeläge/Fliesen', muster: /fliesen|platten|bodenbelag|linoleum|parkett|teppich/i, startAnteil: 0.75, dauerAnteil: 0.15 },
+    { profil: 'Bodenbeläge/Fliesen', muster: /fliesen|platten|bodenbelag|linoleum|parkett|teppich|sportboden/i, startAnteil: 0.75, dauerAnteil: 0.15 },
     { profil: 'Ausstattung', muster: /möblierung|moeblierung|ausstattung|lose möbel/i, startAnteil: 0.88, dauerAnteil: 0.10 },
     { profil: 'Reinigung', muster: /reinigung/i, startAnteil: 0.95, dauerAnteil: 0.04 },
     { profil: 'Außenanlagen', muster: /außenanlage|aussenanlage|freianlage|erschließung|erschliessung|pflaster|landschaft/i, startAnteil: 0.80, dauerAnteil: 0.20 },
-    { profil: 'Innenausbau', muster: /maler|tür|tuer|schreiner|schlosser|trennw|einbau|beschriftung|folierung|blendschutz|schließ|schliess|innenverglasung|tischler/i, startAnteil: 0.80, dauerAnteil: 0.15 }
+    { profil: 'Innenausbau', muster: /maler|tür|tuer|schreiner|schlosser|trennw|einbau|beschriftung|folierung|blendschutz|schließ|schliess|innenverglasung|tischler|prallwand|trennvorh/i, startAnteil: 0.80, dauerAnteil: 0.15 }
   ];
+}
+
+// Dauer eines Gewerks aus seinen Kosten (Besprechung 08.10.: nicht 1:1 strecken — ein großes Dach heißt
+// mehr Leute auf der Baustelle, nicht im gleichen Maß mehr Wochen). 7 Wochen bei 150.000 EUR netto,
+// Exponent 0,25 (doppelte Kosten = 19 % länger), mindestens 2 Wochen. Geeicht an den Bauzeitenplänen
+// Maxhütte 260916 und Regenstauf 240221. Ergebnis in Kalendertagen.
+var RE_DAUER_WOCHEN = 7, RE_DAUER_BEZUG = 150000, RE_DAUER_EXPONENT = 0.25;
+function reDauerAusKosten(betrag) {
+  return Math.max(14, Math.round(RE_DAUER_WOCHEN * Math.pow(betrag / RE_DAUER_BEZUG, RE_DAUER_EXPONENT) * 7));
 }
 
 function reProfilFuer(name) {
@@ -6181,6 +6259,10 @@ function rahmenEingabenAusQuellen(q, heuteIso) {
     ausKennzahl('fertigstellung', 'Fertigstellung'),
     ausPhase(8, 'soll_ende', 'Soll-Ende LPH 8')
   ]);
+  // Hülle dicht ist optional: fehlt er, setzt ihn der Mensch im Dialog (kein offener Punkt)
+  var huelleDicht = waehle('Hülle dicht', [
+    ausTerminebene(/h(ü|ue)lle\s*dicht|geb(ä|ae)ude\s*dicht|dicht\s*e?\s*h(ü|ue)lle/i, 'ende')
+  ]);
   var planungStart = ausPhase(5, 'soll_start', 'Soll-Start LPH 5');
   if (!genehmigung) { offen.push('Baugenehmigung: kein Datum in den Projektdaten'); }
   if (!baubeginn) { offen.push('Baubeginn: kein Datum in den Projektdaten'); }
@@ -6237,13 +6319,59 @@ function rahmenEingabenAusQuellen(q, heuteIso) {
       name: name,
       startAnteil: prof.startAnteil,
       dauerAnteil: prof.dauerAnteil,
+      abHuelle: prof.profil === 'Trockenbau',
       bekannt: bekannt,
       quelle: (ve.quelle || 'Vergabeterminplan') + (ve.stand ? ' (Stand ' + reDE(reDatum(ve.stand)) + ')' : ''),
       regel: 'Gewerke-Profil ' + prof.profil + ' (Beginn ' + Math.round(prof.startAnteil * 100) + ' %, Dauer ' + Math.round(prof.dauerAnteil * 100) + ' % der Bauzeit)',
       budget: ve.budget || null
     });
   }
-  if (!einheiten.length) {
+  // --- Gewerke aus der Kostenberechnung (kb_lesen.js) -------------------------
+  // Liegt eine Kostenberechnung nach Gewerken vor, ist SIE die Gewerkeliste. Termine aus dem
+  // Vergabeterminplan gehen an das Gewerk mit demselben Hauptschlüssel; Vergabeeinheiten ohne
+  // Gewerk (meist TGA der Fachplaner) bleiben als eigene Einheiten dabei.
+  var kb = q.kostenberechnung;
+  if (kb && kb.gewerke && kb.gewerke.length) {
+    var kbQuelle = 'Kostenberechnung „' + kb.datei + '“' + (kb.stand ? ' (Stand ' + reDE(kb.stand) + ')' : '');
+    var ersterBereich = kb.gewerke[0].bereich;
+    var kbEinheiten = kb.gewerke.map(function (g) {
+      var p = reProfilFuer(g.name);
+      if (!p) {
+        p = { profil: 'ohne Profil', startAnteil: 0.50, dauerAnteil: 0.30 };
+        offen.push('Gewerk „' + g.name + '“ (' + kbQuelle + ', OZ ' + g.oz + '): kein Gewerke-Profil, Lage nur geschätzt (Mitte der Bauzeit)');
+      }
+      var nachKosten = p.dauerNachKosten !== false && g.betrag > 0;
+      var e = {
+        name: g.name + (g.bereich !== ersterBereich && g.bereichName ? ' (' + g.bereichName + ')' : ''),
+        startAnteil: p.startAnteil,
+        dauerAnteil: p.dauerAnteil,
+        abHuelle: p.profil === 'Trockenbau',
+        bekannt: {},
+        quelle: kbQuelle + ', OZ ' + g.oz,
+        regel: 'Gewerke-Profil ' + p.profil + ' (Beginn ' + Math.round(p.startAnteil * 100) + ' % der Bauzeit), Dauer '
+          + (nachKosten ? 'aus ' + Math.round(g.betrag).toLocaleString('de-DE') + ' EUR netto (' + kbQuelle + ', OZ ' + g.oz + ')'
+            : Math.round(p.dauerAnteil * 100) + ' % der Bauzeit'),
+        budget: g.betrag
+      };
+      if (nachKosten) { e.dauerKT = reDauerAusKosten(g.betrag); }
+      return e;
+    });
+    var zugeordnet = 0;
+    var uebrig = einheiten.filter(function (ve) {
+      var haupt = reSchluessel(ve.name)[0];
+      var ziel = haupt ? kbEinheiten.filter(function (k) { return !k.veZugeordnet && reSchluessel(k.name)[0] === haupt; })[0] : null;
+      if (!ziel) { return true; }
+      ziel.bekannt = ve.bekannt;
+      ziel.veZugeordnet = true;
+      if (Object.keys(ve.bekannt).length) { ziel.quelle = ve.quelle; }
+      zugeordnet++;
+      return false;
+    });
+    kbEinheiten.forEach(function (k) { delete k.veZugeordnet; });
+    hinweise.push(kbEinheiten.length + ' Gewerke aus der Kostenberechnung (' + kbQuelle + ')'
+      + (einheiten.length ? ', ' + zugeordnet + ' Vergabeeinheiten zugeordnet, ' + uebrig.length + ' ohne Gewerk ergänzt' : ''));
+    einheiten = kbEinheiten.concat(uebrig);
+  } else if (!einheiten.length) {
     hinweise.push('Kein Vergabeterminplan im Projekt — Standard-Gewerke kommunaler Hochbau verwendet');
   } else {
     hinweise.push(einheiten.length + ' Vergabeeinheiten aus dem Vergabeterminplan');
@@ -6253,6 +6381,7 @@ function rahmenEingabenAusQuellen(q, heuteIso) {
     genehmigung: genehmigung,
     planungStart: planungStart,
     baubeginn: baubeginn,
+    huelleDicht: huelleDicht,
     uebergabe: uebergabe,
     genehmigungErteilt: genehmigungErteilt,
     vergabeeinheiten: einheiten.length ? einheiten : null,
