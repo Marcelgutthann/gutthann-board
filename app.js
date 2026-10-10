@@ -3163,6 +3163,7 @@ function renderDrawer() {
     const sec = el('div', { class: 'dsec' });
     sec.append(el('div', { class: 'slbl' }, `Ticket ${d.schluessel} · ${TS[d.ticket_status] || d.ticket_status}`));
     if (d.problem) sec.append(el('div', { class: 'slbl', style: 'margin-top:6px' }, 'Problem'), el('div', { class: 'feldtext lesen' }, d.problem));
+    if (d.ursache) sec.append(el('div', { class: 'slbl', style: 'margin-top:10px' }, 'Ursache'), el('div', { class: 'feldtext lesen' }, d.ursache));
     if (d.kontext) sec.append(el('div', { class: 'slbl', style: 'margin-top:10px' }, 'Kontext'), ...feldFaltung(el('div', { class: 'feldtext lesen' }, d.kontext), d.kontext, 'kontext-' + d.id));
     const dod = d.unterpunkte.filter((u) => u.art === 'dod');
     if (dod.length) {
@@ -3237,7 +3238,8 @@ function renderDrawer() {
   const ups = d.unterpunkte.filter((u) => u.art !== 'dod');
   const su = el('div', { class: 'dsec' });
   // Leere Sektionen zeigen kein Label — nur die schlanke Hinzufuegen-Zeile (Redesign 10.08.).
-  if (ups.length) su.append(el('div', { class: 'slbl' }, `Unterpunkte (${ups.filter(u => u.erledigt).length}/${ups.length})`));
+  // Bei einem Ticket sind die Schritte das Vorgehen (Migration 248).
+  if (ups.length) su.append(el('div', { class: 'slbl' }, `${d.ticket_status ? 'Vorgehen' : 'Unterpunkte'} (${ups.filter(u => u.erledigt).length}/${ups.length})`));
   // Redesign 16.09.: die Punkte stehen in einer umrandeten Liste mit Trennlinie je Zeile.
   // Vorher lagen sie ohne Abgrenzung untereinander und lasen sich wie ein Absatz.
   const suListe = el('div', { class: 'subliste' });
