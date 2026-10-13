@@ -296,6 +296,7 @@
     <option value="ausfuehrung">Nur Ausführung</option>
   </select>
   <button id="btnEinfrieren" class="secondary" title="Aktuellen Stand als unveränderliche SOLL-Fassung sichern" hidden>❄ Einfrieren</button>
+  <button id="btnPlanLoeschen" class="secondary" title="Ausgewählten Terminplan dauerhaft löschen" hidden>🗑 Plan löschen</button>
   <span class="tb-trenner"></span>
   <div class="toolbar-dropdown-wrap">
     <button id="btnExport">⬇ Export ▾</button>
@@ -3778,6 +3779,7 @@ async function planListeLaden(){
   sel.appendChild(neu);
   sel.hidden = false;
   document.getElementById('btnEinfrieren').hidden = false;
+  document.getElementById('btnPlanLoeschen').hidden = !PLAN_LISTE.length;
 }
 
 // Arbeitskalender des Plans (oder Buero-Standard) laden und rechenwirksam machen.
@@ -3832,7 +3834,7 @@ async function planLaden(gewuenschtePlanId){
     db('termin_sondertermine?plan_id=eq.' + planId + '&select=*'),
     db('termin_plaene?id=eq.' + planId + '&select=quelle_xml'),
   ]);
-  if(!v.length) return false;
+  // Ein neu angelegter, noch leerer Plan ist ebenfalls ein gueltiger Plan.
   ORIGINAL_XML = kopf[0]?.quelle_xml || null;
   TASKS = v.map(r=>({
     uid: r.uid, name: r.name, wbs: r.wbs, level: r.ebene,
@@ -3918,6 +3920,35 @@ async function planWechseln(zielId){
   const ok = await planLaden(zielId || undefined).catch(e=>{ console.error(e); return false; });
   if(ok){ undoStack.length = 0; zeichnenNachLaden(); saveStatus(SCHREIBSCHUTZ ? 'eingefrorener Stand' : 'geladen', 'ok'); }
   ladeVorgang = SCHREIBSCHUTZ;   // eingefrorene Staende speichern nie
+}
+
+async function planLoeschen(){
+  const plan = PLAN_LISTE.find(p=>p.id===planId);
+  if(!plan) return saveStatus('Kein Plan ausgewählt.', 'err');
+  if(speichernLaeuft) return saveStatus('Speichern läuft noch. Bitte gleich erneut versuchen.', 'err');
+  if(!confirm('Terminplan „' + plan.name + '“ dauerhaft löschen? Alle Vorgänge und Verknüpfungen dieses Plans gehen verloren. Dieser Schritt kann nicht rückgängig gemacht werden.')) return;
+  const button = document.getElementById('btnPlanLoeschen');
+  button.disabled = true;
+  const vorherLaden = ladeVorgang;
+  ladeVorgang = true;
+  clearTimeout(speicherTimer);
+  saveStatus('löscht Plan …');
+  try {
+    const geloescht = await db('termin_plaene?id=eq.' + plan.id + '&project_id=eq.' + PROJEKT_ID + '&select=id', {
+      method:'DELETE', headers:{ Prefer:'return=representation' },
+    });
+    if(!Array.isArray(geloescht) || !geloescht.some(p=>p.id===plan.id))
+      throw new Error('Die Datenbank hat keine Löschung bestätigt.');
+    const url = new URL(location.href);
+    url.searchParams.delete('plan');
+    history.replaceState(null, '', url);
+    location.reload();
+  } catch(e) {
+    ladeVorgang = vorherLaden;
+    button.disabled = false;
+    saveStatus('Plan nicht gelöscht: ' + e.message, 'err');
+    if(!SCHREIBSCHUTZ) speichernAnstossen();
+  }
 }
 
 // Aktuellen Arbeitsstand als unveraenderliche Fassung kopieren (SOLL/Baseline).
@@ -4674,6 +4705,7 @@ document.getElementById('planWahl').addEventListener('change', (ev)=>{
   planWechseln(ev.target.value);
 });
 document.getElementById('btnEinfrieren').addEventListener('click', standEinfrieren);
+document.getElementById('btnPlanLoeschen').addEventListener('click', planLoeschen);
 // Blick-Wechsel ist reiner Anzeigezustand: kein pushUndo, kein Speichern — nur neu zeichnen.
 document.getElementById('blickWahl').addEventListener('change', (ev)=>{
   BLICK = ev.target.value;
