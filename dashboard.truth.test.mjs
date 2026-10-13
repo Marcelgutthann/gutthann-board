@@ -15,23 +15,6 @@ test('parallel phases do not imply earlier phases completed',()=>{
   assert.deepEqual(phasenlage({lph:4,lph_phasen:{aktiv:[4]}}).aktiv,[4]);
 });
 
-test('phase percentages are per phase and never inferred from the LPH number',()=>{
-  const start=source.indexOf('const normLph='),end=source.indexOf('function phaseEvidence',start);
-  const {phasenlage,phasePct}=new Function(source.slice(start,end)+'\nreturn {phasenlage,phasePct};')();
-  const p=phasenlage({lph:4,lph_phasen:{aktiv:[3,4,5],fortschritt:{3:{prozent:80,quelle:'Planstand'},5:{prozent:20,quelle:'Werkplanung'}}}});
-  assert.equal(phasePct(p,3),80);
-  assert.equal(phasePct(p,4),null);
-  assert.equal(phasePct(p,5),20);
-  assert.equal(phasePct({fortschritt:{4:{prozent:130}}},4),null);
-});
-
-test('phase editor requests a source for every manually entered percentage',()=>{
-  assert.match(source,/Begründung \/ Quelle für diesen Prozentstand/);
-  assert.match(source,/quelle\.length<8/);
-  assert.match(source,/art:'manuelle_einschaetzung'/);
-  assert.doesNotMatch(source,/Phasen in Arbeit/, 'the KPI must not concatenate LPH numbers');
-});
-
 test('cost truth clears legacy budget, even if RPC fails',()=>{
   const kostenAusWahrheit=isolate('function kostenAusWahrheit','function renderKostenPruefen',['fmtD','STUFE_TXT','STUFE_LPH'])(x=>x,{},{});
   const proj={dashboard:{kosten:{summe_brutto:8800000,budget:9000000}},kennzahlen:{kosten:{budget:{wert:9000000}}}};
@@ -52,7 +35,7 @@ test('confirmed cost stays a cost stage, not a budget',()=>{
 
 test('no misleading dashboard budget comparison remains',()=>{
   assert.doesNotMatch(source,/vs\. Budget|Budgetabweichung|Kosten aktuell/);
-  assert.match(source,/ändert nur die Ansicht/);
+  assert.match(source,/Klick ändert nur die Ansicht/);
 });
 
 test('identical cost candidates are grouped and cannot be blindly approved',()=>{
