@@ -366,7 +366,7 @@ async function renderProject(){
    const tKz=KZ?(kzTeaser(KZ)):tz('warn','Noch nicht erfasst — der Agent zieht die Hardfacts aus Flächenermittlung, Bauantrag und Kostenberechnung','');
    const nBel=KZ?kzCount(KZ):0;
    h+=sec('kennzahlen','prominent','▤','Projekt-Kennzahlen',KZ?('Angaben aus Analyse · Stand '+(proj.kennzahlen_stand?fmtD(proj.kennzahlen_stand):'—')):'Flächen, Kubatur, Auftrag',
-     (KZ?'<span class="stat warn">'+nBel+' Angaben · Quelle prüfen</span>':'<span class="stat warn">offen</span>'),renderKennzahlen(KZ,D,proj.name),tKz);}
+     (KZ?'<span class="stat warn">'+nBel+' Angaben · Originale prüfen</span>':'<span class="stat warn">offen</span>'),renderKennzahlen(KZ,D,proj.name),tKz);}
   // LPH-Katalog der AKTIVEN Phase — Fragenkatalog + Abschnitts-Stand je LPH (LPH 1 = Grundlagen inkl. Raumprogramm, Fallback lph1-Spalte)
   {const kLph=phaseView;const kat=(proj.lph_kataloge&&proj.lph_kataloge[String(kLph)])||(kLph===1?(proj.lph1||null):null);
     lastKat=kat;lastKatLph=kLph;
@@ -466,17 +466,17 @@ function kzZ(n,dez){return n==null?'—':Number(n).toLocaleString('de-DE',{minim
 function kzRow(g,k,label,einheit,dez){const f=kzW(g,k);
   const roh=f?f.wert:null;const num=typeof roh==='number'?roh:(typeof roh==='string'&&/^-?[0-9.]+$/.test(roh)?+roh:null);
   const txt=f?(num!=null?kzZ(num,dez):esc(String(roh))):'—';
-  const st=f?(f.status==='verifiziert'?'ok':'warn'):'';
-  const q=f&&(f.quelle||f.stand)?esc([f.quelle,f.stand].filter(Boolean).join(' · ')):'';
-  return '<div class="kz-row'+(f?'':' leer')+'" title="'+(q||'nicht belegt')+'"><span class="kz-l">'+esc(label)+'<small class="kz-source">'+(q||'Originalquelle nicht belegt')+' · '+esc(f&&f.status||'offen')+'</small></span>'+
-    '<span class="kz-v">'+txt+(f&&einheit?'<span class="kz-u">'+esc(einheit)+'</span>':'')+'</span>'+
-    (st?'<span class="pdot '+st+'"></span>':'<span class="kz-dot-leer"></span>')+'</div>';}
-function kzCount(KZ){let n=0;['groesse','kosten','auftrag','nutzung','termine'].forEach(b=>{const g=KZ[b]||{};Object.keys(g).forEach(k=>{if(kzW(g,k))n++;});});return n;}
+  const status=f&&f.status==='verifiziert'?'verifiziert':'aus Analyse · Original prüfen';
+  const q=f&&f.quelle?esc(String(f.quelle)):'Originalquelle nicht hinterlegt';
+  const stand=f&&f.stand?'<span>Stand: '+esc(String(f.stand))+'</span>':'';
+  return '<div class="kz-field'+(f?'':' leer')+(num===null?' kz-text':'')+'"><div class="kz-field-main"><span class="kz-l">'+esc(label)+'</span><strong class="kz-v">'+txt+(f&&einheit?'<span class="kz-u">'+esc(einheit)+'</span>':'')+'</strong></div>'+
+    '<details class="kz-proof"><summary>Herkunft · '+status+'</summary><div class="kz-proof-body"><span>Quelle laut Analyse: '+q+'</span>'+stand+'</div></details></div>';}
+function kzCount(KZ){let n=0;['groesse','auftrag','nutzung','termine'].forEach(b=>{const g=KZ[b]||{};Object.keys(g).forEach(k=>{if(kzW(g,k))n++;});});return n;}
 // KPI-Karte oben: die drei meistgebrauchten Zahlen; Klick öffnet das Kennzahlen-Fenster.
 function kzKpi(KZ,kostenVal){
   const g=(KZ&&KZ.groesse)||{},ko=(KZ&&KZ.kosten)||{};
   const bgf=kzNum(g,'bgf_m2'),nuf=kzNum(g,'nuf_m2');
-  const sub=[nuf!=null?'NUF '+kzZ(nuf)+' m²':null].filter(Boolean).join(' · ')||
+  const sub=[nuf!=null?'NUF '+kzZ(nuf)+' m²':null,'Originalquelle prüfen'].filter(Boolean).join(' · ')||
     (KZ?'weitere Kennzahlen im Fenster':'Hardfacts noch nicht erfasst');
   const v=bgf!=null?dm(kzZ(bgf),3.1,'var(--c-navy-900)'):'—';
   return '<div class="kpi kz-kpi" data-openwin="kennzahlen" title="Fenster öffnen: Projekt-Kennzahlen">'+
@@ -484,38 +484,28 @@ function kzKpi(KZ,kostenVal){
     '<div class="kpi-value">'+v+(bgf!=null?'<span class="kpi-unit">m² BGF</span>':'')+'</div>'+
     '<div class="kpi-sub">'+esc(sub)+'</div></div>';}
 function kzTeaser(KZ){const g=KZ.groesse||{},ko=KZ.kosten||{},nu=KZ.nutzung||{};
-  const bgf=kzNum(g,'bgf_m2'),bri=kzNum(g,'bri_m3'),kg=kzNum(ko,'kg300_400_brutto'),bw=kzW(nu,'bauweise');
+  const bgf=kzNum(g,'bgf_m2'),bri=kzNum(g,'bri_m3'),bw=kzW(nu,'bauweise');
   return (bgf!=null?tz('warn','BGF · Quelle prüfen',kzZ(bgf,2)+' m²'):tz('warn','BGF','—'))+
     (bri!=null?tz('warn','BRI · Quelle prüfen',kzZ(bri)+' m³'):tz('warn','BRI','—'))+
-    (kg!=null?tz('warn','KG 300+400 · Quelle prüfen',(kg/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €'):'')+
     (bw?tz(null,esc(String(bw.wert)),''):'');}
 // Fenster-Inhalt: fünf Blöcke nebeneinander + Referenzblatt-Knopf
 function renderKennzahlen(KZ,D,pname){
   if(!KZ)return '<div class="empty" style="padding:26px">Die Hardfacts sind für dieses Projekt noch nicht erfasst.<br>Der Kennzahlen-Agent zieht sie automatisch aus Flächenermittlung (DIN 277), Bauantragsberechnung und Kostenberechnung (DIN 276) — meist innerhalb eines Tages nach der Grundlagen-Analyse.</div>';
-  const g=KZ.groesse||{},ko=KZ.kosten||{},au=KZ.auftrag||{},nu=KZ.nutzung||{},te=KZ.termine||{},rf=KZ.referenz||{};
+  const g=KZ.groesse||{},au=KZ.auftrag||{},nu=KZ.nutzung||{},te=KZ.termine||{},rf=KZ.referenz||{};
   const bgf=kzNum(g,'bgf_m2'),nuf=kzNum(g,'nuf_m2');
   const eff=(bgf&&nuf)?Math.round(nuf/bgf*100):null;
-  const hero=ovHero([
-    ovK('',bgf!=null?kzZ(bgf,2)+'<span class="ov-k-u">m² BGF</span>':'—','Bruttogrundfläche'),
-    ovK('',kzNum(g,'bri_m3')!=null?kzZ(kzNum(g,'bri_m3'))+'<span class="ov-k-u">m³</span>':'—','Bruttorauminhalt'),
-    ovK('',kzNum(g,'nuf_m2')!=null?kzZ(kzNum(g,'nuf_m2'),2)+'<span class="ov-k-u">m² NUF</span>':'—','Nutzfläche'),
-    ovK('',eff!=null?eff+'<span class="ov-k-u">%</span>':'—','NUF/BGF · rechnerisch')]);
+  const intro='<div class="kz-intro">Projektangaben aus der Analyse. Ein Wert ist erst belastbar, wenn die Originaldatei und ihre Textstelle geprüft sind. Kostenermittlungen stehen ausschließlich im Kostenfenster.</div>';
   const blk=(titel,rows)=>'<div class="kz-block"><div class="kz-h">'+titel+'</div>'+rows.join('')+'</div>';
   const B=[];
   B.push(blk('Größe & Kubatur',[
     kzRow(g,'bgf_m2','BGF (DIN 277)','m²',2),kzRow(g,'bri_m3','BRI','m³',0),kzRow(g,'nuf_m2','Nutzfläche NUF','m²',2),
-    (eff!=null?'<div class="kz-row"><span class="kz-l">Effizienz NUF/BGF</span><span class="kz-v">'+eff+'<span class="kz-u">%</span></span><span class="pdot warn"></span></div>':''),
+    (eff!=null?'<div class="kz-field"><div class="kz-field-main"><span class="kz-l">NUF/BGF · rechnerisch</span><strong class="kz-v">'+eff+'<span class="kz-u">%</span></strong></div><div class="kz-derived">Aus den oben angezeigten BGF- und NUF-Werten berechnet; kein eigener Originalwert.</div></div>':''),
     kzRow(g,'grundstueck_m2','Grundstück','m²',0),kzRow(g,'grz','GRZ','',2),kzRow(g,'gfz','GFZ','',2),
     kzRow(g,'geschosse','Geschosse',''),kzRow(g,'hoehe_m','Gebäudehöhe','m',2),kzRow(g,'gebaeude_n','Gebäude / Bauabschnitte','',0)]));
-  B.push(blk('Kosten & Kennwerte',[
-    kzRow(ko,'gesamt_brutto','Baukosten gesamt','€',0),kzRow(ko,'kg300_400_brutto','KG 300+400 brutto','€',0),
-    kzRow(ko,'kg300_brutto','davon KG 300','€',0),kzRow(ko,'kg400_brutto','davon KG 400','€',0),
-    kzRow(ko,'kostenstufe','Kostenstufe',''),kzRow(ko,'kostenstand','Kostenstand','')]));
   B.push(blk('Auftrag & Honorar',[
     kzRow(au,'bauherr','Bauherr',''),kzRow(au,'ag_typ','Auftraggeber-Typ',''),kzRow(au,'lph_umfang','Leistungsphasen',''),
     kzRow(au,'rolle','Rolle',''),kzRow(au,'honorarzone','Honorarzone',''),kzRow(au,'anrechenbare_kosten','Anrechenbare Kosten','€',0),
-    kzRow(au,'honorar_netto','Honorar netto','€',0),
-    (D&&D.honorare?'<div class="kz-row" title="aus der Tiefenanalyse"><span class="kz-l">Verträge / offene Nachträge</span><span class="kz-v">'+(D.honorare.anzahl_vertraege!=null?D.honorare.anzahl_vertraege:'—')+'<span class="kz-u">/ '+(D.honorare.offene_nachtraege||0)+'</span></span><span class="pdot '+((D.honorare.offene_nachtraege||0)?'warn':'ok')+'"></span></div>':'')]));
+    kzRow(au,'honorar_netto','Honorar netto','€',0)]));
   B.push(blk('Nutzung & Konstruktion',[
     kzRow(nu,'nutzungsart','Nutzung',''),kzRow(nu,'zuegigkeit','Zügigkeit / Gruppen',''),kzRow(nu,'einheiten','Klassen / Einheiten','',0),
     kzRow(nu,'nutzer_n','Nutzer (Schüler/Kinder)','',0),kzRow(nu,'bauweise','Bauweise',''),kzRow(nu,'energiestandard','Energiestandard',''),
@@ -531,7 +521,7 @@ function renderKennzahlen(KZ,D,pname){
      (hw?'<div class="kz-ref-m warn">Vor Verwendung prüfen: '+esc(String(hw.wert))+'</div>':'')+
      '<div class="page-sub">Export erst nach Originalprüfung der Projektkennzahlen.</div>'+
      '<span class="kz-ref-h" id="kzcopyh"></span></div>';}
-  return hero+'<div class="kz-wrap">'+B.join('')+ref+'</div>';}
+  return intro+'<div class="kz-wrap">'+B.join('')+ref+'</div>';}
 // Zwischenablage-Text im Format der Referenzdatenbank
 function kzRefText(){const KZ=lastKz;if(!KZ)return '';
   const g=KZ.groesse||{},ko=KZ.kosten||{},au=KZ.auftrag||{},nu=KZ.nutzung||{},te=KZ.termine||{},rf=KZ.referenz||{};
@@ -915,7 +905,7 @@ const STUFE_LPH={Kostenrahmen:1,Kostenschaetzung:2,Kostenberechnung:3,Kostenansc
 function kostenAusWahrheit(proj,ks){
   const a=ks&&ks.aktuell||null,D=proj.dashboard=Object.assign({},proj.dashboard||{});
   D.kosten={summe_brutto:a?+a.betrag_brutto:null,stufe:a?a.stufe:null,stand:a?fmtD(a.stichtag):null,
-    quelle:a?a.datei+(a.kg_umfang?' · KG '+a.kg_umfang:''):null,beleg:a?a.beleg_stelle:null,bemerkung:a?a.bemerkung:null,
+    quelle:a?a.datei:null,doc_id:a?a.doc_id:null,kg_umfang:a?a.kg_umfang:null,beleg_spalte:a?a.beleg_spalte:null,beleg:a?a.beleg_stelle:null,bemerkung:a?a.bemerkung:null,
     geprueft:a&&a.geprueft_von?a.geprueft_von+(a.geprueft_am?', '+fmtD(a.geprueft_am):''):null,
     budget:null,kg:[],
     verlauf:((ks&&ks.verlauf)||[]).map(v=>({stufe:v.stufe,lph:STUFE_LPH[v.stufe],betrag:+v.betrag_brutto,stand:v.stichtag,quelle:v.datei})),
@@ -927,28 +917,38 @@ function kostenAusWahrheit(proj,ks){
     else{const q={wert:null,stand:null,quelle:'kein geprüfter Kostenstand',status:'offen'};Object.assign(KK,{gesamt_brutto:q,kostenstufe:q,kostenstand:q});}}
 }
 function renderKostenPruefen(k){
-  let h='';
-  if(k.beleg)h+='<div class="page-sub" style="margin-top:10px">Beleg: „'+esc(k.beleg)+'“</div>';
-  if(k.bemerkung)h+='<div class="page-sub">'+esc(k.bemerkung)+'</div>';
-  if(k.geprueft)h+='<div class="page-sub">Geprüft: '+esc(k.geprueft)+'</div>';
+  let h=k.quelle?'<section class="cost-origin"><div class="cost-origin-title">Maßgebliche Fassung laut Datenbank</div><strong>'+esc(k.quelle)+'</strong><div class="cost-origin-grid"><span>Stufe: '+esc(STUFE_TXT[k.stufe]||k.stufe||'offen')+'</span><span>Stichtag: '+esc(k.stand||'offen')+'</span><span>KG-Umfang: '+esc(k.kg_umfang||'nicht hinterlegt')+'</span></div>'+
+    (k.beleg_spalte?'<div class="cost-origin-meta">Belegspalte: '+esc(k.beleg_spalte)+'</div>':'')+
+    (k.beleg?'<blockquote>'+esc(k.beleg)+'</blockquote>':'<div class="cost-origin-missing">Textstelle nicht hinterlegt – Original-PDF prüfen.</div>')+
+    (k.bemerkung?'<div class="cost-origin-meta">'+esc(k.bemerkung)+'</div>':'')+
+    (k.geprueft?'<div class="cost-origin-meta">In der Datenbank bestätigt: '+esc(k.geprueft)+'</div>':'')+
+    '<div class="cost-origin-meta">Die Datenbankbestätigung ersetzt keinen Abgleich mit dem SharePoint-Original.</div></section>':'';
   const z=k.zu_pruefen||[];
-  if(z.length)h+='<div class="kt-h" style="margin-top:14px">Neue Kostendateien · zu prüfen ('+z.length+')</div>'+z.map(c=>
-    '<div class="act-row"><span class="af">'+esc(STUFE_TXT[c.stufe]||c.stufe)+' '+fmtD(c.stichtag)+' · '+
-    (c.betrag_brutto!=null?(+c.betrag_brutto).toLocaleString('de-DE',{minimumFractionDigits:2})+' € brutto':'kein eindeutiger Betrag')+
-    '<br><small>'+esc(c.datei)+(c.bemerkung?' — '+esc(c.bemerkung):'')+'</small></span><span class="ad">'+
-    (c.betrag_brutto!=null?'<button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="1">Bestätigen</button> ':'')+
-    '<button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="0">Verwerfen</button></span></div>').join('');
+  const groups=new Map();
+  for(const c of z){const key=[c.stufe,c.stichtag,c.betrag_brutto,(c.datei||'').toLocaleLowerCase('de-DE').trim()].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(c);}
+  if(z.length)h+='<section class="cost-candidates"><div class="kt-h">Automatische Funde · Originale prüfen ('+groups.size+(groups.size!==z.length?' Gruppen aus '+z.length+' Datensätzen':'')+')</div><p class="cost-candidate-help">Diese Funde ändern den bestätigten Kostenstand nicht. Betrag, Stufe, Brutto/Netto, KG-Umfang und Fassung müssen im Original zusammenpassen.</p>'+Array.from(groups.values()).map(group=>{
+    const c=group[0],dup=group.length>1,hasProof=!!c.beleg_stelle;
+    return '<details class="cost-candidate"><summary><span class="cost-candidate-label">'+esc(STUFE_TXT[c.stufe]||c.stufe||'Kostenermittlung')+' · '+esc(fmtD(c.stichtag))+'<small>'+esc(c.datei||'Datei unbekannt')+'</small></span><strong>'+(c.betrag_brutto!=null?(+c.betrag_brutto).toLocaleString('de-DE',{minimumFractionDigits:2})+' € brutto':'Betrag widersprüchlich')+'</strong>'+(dup?'<span class="cost-dup">'+group.length+' gleiche Funde</span>':'')+'</summary><div class="cost-candidate-body">'+
+      '<div class="cost-origin-grid"><span>Kostengruppe: '+esc(c.kg_umfang||'nicht hinterlegt')+'</span><span>Stichtag: '+esc(fmtD(c.stichtag))+'</span></div>'+
+      (c.beleg_stelle?'<blockquote>'+esc(c.beleg_stelle)+'</blockquote>':'<div class="cost-origin-missing">Keine Textstelle hinterlegt.</div>')+
+      (c.bemerkung?'<p>'+esc(c.bemerkung)+'</p>':'')+
+      (dup?'<div class="cost-duplicate-warning">Mehrere Datensätze zeigen dieselbe Datei, Stufe, Datum und Summe. Welche SharePoint-Fassung maßgeblich ist, lässt sich hier nicht unterscheiden. Deshalb ist die Bestätigung gesperrt.'+(new Set(group.map(x=>x.kg_umfang||'')).size>1?' Auch der KG-Umfang weicht zwischen den Funden ab.':'')+' Kandidaten-IDs: '+group.map(x=>esc(x.id)).join(' · ')+'</div>':
+      '<div class="cost-origin-meta">Kandidat-ID: '+esc(c.id)+'</div>'+
+      (c.betrag_brutto!=null&&hasProof?'<label class="cost-check"><input type="checkbox" data-cost-reviewed="'+esc(c.id)+'"> Ich habe die Originaldatei geöffnet und Stufe, Betrag, Brutto/Netto, KG-Umfang und Stichtag geprüft.</label><div class="cost-actions"><button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="1">Als Kostenstand übernehmen</button><button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="0">Fund verwerfen</button></div>':'<div class="cost-origin-missing">Ohne eindeutigen Betrag und zitierbare Textstelle keine Übernahme. Bitte Original und Auslesedaten klären.</div>'))+
+      '</div></details>';}).join('')+'</section>';
   return h;
 }
 document.addEventListener('click',async function(e){
   const b=e.target.closest&&e.target.closest('[data-kk]');if(!b)return;e.preventDefault();b.disabled=true;
+  if(!b.closest('.cost-candidate')?.querySelector('[data-cost-reviewed]')?.checked){uiHinweis('Bitte erst Originaldatei und Beleg prüfen und die Prüfung bestätigen.');b.disabled=false;return;}
+  if(b.dataset.ok==='0'&&!window.confirm('Diesen Fund verwerfen? Der Datensatz bleibt nachvollziehbar, erscheint aber nicht mehr in der Prüfliste.')){b.disabled=false;return;}
   const{data,error}=await sb.rpc('kostenkandidat_entscheiden',{p_id:b.dataset.kk,p_bestaetigen:b.dataset.ok==='1'});
   if(error||(data&&data.fehler)){uiHinweis('Nicht gespeichert: '+(error?error.message:data.fehler));b.disabled=false;return;}
   await render();
 });
 function renderKostenTrend(k){
   const v=(k.verlauf||[]).filter(s=>s&&s.betrag!=null).slice().sort((a,b)=>(a.lph||0)-(b.lph||0));
-  if(!v.length)return '';
+  if(v.length<2)return '';
   let h='<div class="kt"><div class="kt-h">Belegte Kostenermittlungen · keine davon ist automatisch ein Budget</div>';
   if(v.length){h+='<div class="kt-steps">';
     for(const s of v){h+='<div class="kt-step"><div class="kt-step-top"><span class="kt-stufe">'+esc(STUFE_TXT[s.stufe]||s.stufe||'')+'</span>'+(s.lph?'<span class="kt-lph">LPH '+esc(''+s.lph)+'</span>':'')+'</div><div class="kt-betrag mono">'+eur(s.betrag)+'</div><div class="kt-foot">'+(s.stand?esc(fmtFrist(s.stand)):'')+(s.quelle?'<div class="kt-q">Quelle: '+esc(s.quelle)+'</div>':'')+'</div></div>';}
@@ -975,7 +975,6 @@ function renderKosten(D,costDocs){
     h+=renderKostenTrend(k);
     if(k.kg&&k.kg.length){h+='<div class="kt-h" style="margin-top:14px">Kostengruppen · DIN 276</div><table class="kg-table"><tr><th>'+gl('KG','Kostengruppe nach DIN 276 — z. B. KG 300 Bauwerk, KG 400 Technik.')+' (DIN 276)</th><th style="text-align:right">Betrag</th></tr>'+k.kg.map(r=>'<tr><td>KG '+esc(''+r.kg)+'</td><td class="n">'+(Number(r.betrag)||0).toLocaleString('de-DE')+' €</td></tr>').join('')+'</table>';}
     if(!k.summe_brutto)h+='<div class="empty">Kein geprüfter Kostenstand — nicht schätzen.</div>';
-    if(k.quelle)h+='<div class="page-sub" style="margin-top:10px">Quelle: '+esc(k.quelle)+'</div>';
     h+=renderKostenPruefen(k);
     h+=renderHonorar(D);
     return h;}

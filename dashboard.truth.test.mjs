@@ -37,3 +37,24 @@ test('no misleading dashboard budget comparison remains',()=>{
   assert.doesNotMatch(source,/vs\. Budget|Budgetabweichung|Kosten aktuell/);
   assert.match(source,/Klick ändert nur die Ansicht/);
 });
+
+test('identical cost candidates are grouped and cannot be blindly approved',()=>{
+  const start=source.indexOf('function renderKostenPruefen'),end=source.indexOf("document.addEventListener('click',async function(e){",start);
+  const render=new Function('esc','fmtD','STUFE_TXT',source.slice(start,end)+'\nreturn renderKostenPruefen;')(
+    x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;'),x=>x,{Kostenberechnung:'Kostenberechnung'});
+  const c={stufe:'Kostenberechnung',stichtag:'2025-10-20',betrag_brutto:16111638.45,datei:'251020_Kostenberechnung Maxhütte.pdf',kg_umfang:'200-700',beleg_stelle:'Originaltext'};
+  const html=render({zu_pruefen:[{...c,id:'a'},{...c,id:'b'},{...c,id:'c'}]});
+  assert.match(html,/3 gleiche Funde/);
+  assert.match(html,/Bestätigung gesperrt/);
+  assert.doesNotMatch(html,/data-kk=/);
+  assert.equal((html.match(/<summary>/g)||[]).length,1);
+});
+
+test('a single cost candidate requires visible evidence review',()=>{
+  const start=source.indexOf('function renderKostenPruefen'),end=source.indexOf("document.addEventListener('click',async function(e){",start);
+  const render=new Function('esc','fmtD','STUFE_TXT',source.slice(start,end)+'\nreturn renderKostenPruefen;')(String,x=>x,{});
+  const html=render({zu_pruefen:[{id:'single',stufe:'Kostenberechnung',stichtag:'2025-10-20',betrag_brutto:42,datei:'x.pdf',beleg_stelle:'Belegtext'}]});
+  assert.match(html,/Belegtext/);
+  assert.match(html,/data-cost-reviewed="single"/);
+  assert.match(html,/data-kk="single"/);
+});
