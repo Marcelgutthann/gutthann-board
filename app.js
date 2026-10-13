@@ -1228,14 +1228,14 @@ function renderTopbar() {
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'vergabe' ? 'Büro intern · alle Vergabeterminpläne · maßgeblich ist die Lesefassung beim Bauherrn'
-    : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
+    : S.active.typ === 'projekt' ? ''
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
-  tb.append(el('div', { class: 'scope' }, scope));
+  if (scope) tb.append(el('div', { class: 'scope' }, scope));
   // Im Projekt: Aufgaben und Dashboard sind zwei Ansichten derselben Ebene
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['board', 'Aufgaben'], ['kal', 'Kalender'], ['dash', 'Dashboard'], ['termin', 'Terminplanung']]) {
+    for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['kal', 'Kalender']]) {
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
     tb.append(tabs);
@@ -1292,32 +1292,6 @@ function renderTopbar() {
       onclick: () => { if (l.todo_id) openCard(l.todo_id); },
     }, el('span', { class: 'tdot' }), 'gescheitert: ' + (l.projekt ? l.projekt.replace(/^\d+\s*-?\s*/, '').slice(0, 14) + ' · ' : '') + (l.titel || l.agent).slice(0, 26)));
     tb.append(tb2);
-  }
-  // "Gerade in Arbeit" (Loop D): wer im Projekt woran dran ist — nur Karten-Daten.
-  // Immer sichtbar (auch leer), sonst findet niemand das Feature (Marcels Befund 10.08.);
-  // rechts steht das Team, damit die Personen im Projekt greifbar sind.
-  const ia = S.board?.in_arbeit || [];
-  if (S.active.typ === 'projekt' && S.ansicht === 'board') {
-    const z = el('div', { class: 'inarbeit' }, 'Gerade in Arbeit:');
-    let n = 0;
-    for (const p2 of ia.slice(0, 5)) {
-      const t0 = (p2.themen || [])[0];
-      if (!t0) continue;
-      n++;
-      z.append(el('span', { class: 'who', title: (p2.themen || []).map((x) => x.titel).slice(0, 5).join(' · ') },
-        el('span', { class: 'av', style: 'background:' + avColor(p2.person) }, initialen(p2.name)),
-        String(p2.name).split(' ')[0] + ' · ' + t0.titel.slice(0, 36)));
-    }
-    if (!n) z.append(el('span', { style: 'color:#8A8A83' }, 'noch niemand — Karten mit Besitzer oder Zuweisung erscheinen hier automatisch'));
-    const team = personListe();
-    if (team.length) {
-      const avs = el('span', { style: 'display:flex' });
-      for (const p3 of team.slice(0, 9)) avs.append(el('span', {
-        class: 'av', style: 'background:' + avColor(p3.kurz) + ';margin-left:-4px;border:1.5px solid #F3F3F1', title: p3.name,
-      }, initialen(p3.name)));
-      z.append(el('span', { style: 'margin-left:auto;display:flex;align-items:center;gap:6px;color:#8A8A83' }, 'Team', avs));
-    }
-    tb.append(z);
   }
 }
 
