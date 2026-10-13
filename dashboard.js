@@ -14,20 +14,24 @@ function phasenlage(proj){
   let aktiv=normLph(P.aktiv);
   if(!aktiv.length)aktiv=normLph(((proj.termin_check||{}).phasen||[]).filter(p=>p&&p.status==='laufend').map(p=>p.lph));
   if(leit&&!aktiv.includes(leit))aktiv=normLph([...aktiv,leit]);
-  return {aktiv,leit,quelle:P.quelle||'scan',stand:P.stand||null,begruendung:P.begruendung||null,belege:Array.isArray(P.belege)?P.belege:[]};
+  return {aktiv,leit,quelle:P.quelle||'scan',stand:P.stand||null,begruendung:P.begruendung||null,belege:Array.isArray(P.belege)?P.belege:[],fortschritt:P.fortschritt&&typeof P.fortschritt==='object'?P.fortschritt:{}};
 }
+function phasePct(P,i){const f=P.fortschritt&&P.fortschritt[i];const n=f&&f.prozent!==''&&f.prozent!=null?Number(f.prozent):NaN;return Number.isFinite(n)&&n>=0&&n<=100?n:null;}
 function phaseEvidence(P){
   return '<div class="phase-evidence">'+(P.aktiv.length?P.aktiv.map(i=>{
-    const b=P.belege.find(x=>+x.lph===i);
-    return '<div class="phase-evidence-row"><strong>LPH '+i+' · '+esc(LPH_KAT_TITEL[i])+'</strong><span>'+
-      esc(b&&b.warum?b.warum:(P.quelle==='manuell'?P.begruendung||'Manuell gesetzt':'Warum diese Phase aktiv ist: noch nicht belegt'))+'</span><small>'+
-      esc(b&&b.datei?b.datei:'Quelldatei noch nicht zugeordnet')+(b&&b.fundstelle?' · '+esc(b.fundstelle):'')+'</small></div>';
-  }).join(''):'Keine laufende Phase mit Quelle belegt.')+'</div>';
+    const b=P.belege.find(x=>+x.lph===i),f=P.fortschritt[i]||{},pct=phasePct(P,i),lead=i===P.leit;
+    const why=f.quelle||b&&b.warum||P.begruendung||'Begründung noch nicht hinterlegt';
+    const file=b&&b.datei?b.datei:'Originaldatei für Phasenlage noch nicht zugeordnet';
+    return '<div class="phase-evidence-row"><div class="phase-row-top"><div><span class="phase-row-kicker">LPH '+i+(lead?' · Schwerpunkt':' · parallel')+'</span><strong>'+esc(LPH_KAT_TITEL[i])+'</strong></div><div class="phase-row-pct">'+(pct!=null?pct+'<small>%</small>':'<span class="phase-row-open">Stand offen</span>')+'</div></div>'+
+      '<div class="phase-progress" role="progressbar" aria-label="Fortschritt LPH '+i+'" aria-valuemin="0" aria-valuemax="100"'+(pct!=null?' aria-valuenow="'+pct+'"':'')+'><span style="width:'+(pct||0)+'%"></span></div>'+
+      '<div class="phase-row-meta"><span>'+(pct!=null?'Manuell gepflegte Einschätzung'+(f.stand?' · '+esc(fmtD(f.stand)):''):'Keine belastbare Prozentangabe')+'</span><span>'+esc(String(why))+'</span><small>'+esc(file)+(b&&b.fundstelle?' · '+esc(b.fundstelle):'')+'</small></div></div>';
+  }).join(''):'<div class="phase-empty">Keine laufende Phase belegt.</div>')+'</div>';
 }
 function phaseEditor(P){
   const choices=Array.from({length:9},(_,i)=>i+1).map(i=>'<label><input type="checkbox" class="phase-choice" value="'+i+'"'+(P.aktiv.includes(i)?' checked':'')+'> LPH '+i+'</label>').join('');
   const lead=Array.from({length:9},(_,i)=>i+1).map(i=>'<option value="'+i+'"'+(P.leit===i?' selected':'')+'>LPH '+i+' · '+esc(LPH_KAT_TITEL[i])+'</option>').join('');
-  return '<details class="phase-edit"><summary>Phasenlage fachlich korrigieren</summary><div class="phase-edit-body"><p>Nur tatsächlich laufende Phasen wählen. Frühere Phasen gelten dadurch nicht als abgeschlossen.</p><div class="phase-choices">'+choices+'</div><label>Schwerpunkt <select id="phase-lead">'+lead+'</select></label><label>Begründung / Quelldatei <input id="phase-reason" type="text" placeholder="Protokoll, Planstand oder andere Originalquelle" value="'+esc(P.begruendung||'').replace(/"/g,'&quot;')+'"></label><button type="button" class="btn-sm" id="phase-save">Phasenlage speichern</button></div></details>';
+  const pctRows=Array.from({length:9},(_,n)=>n+1).map(i=>{const f=P.fortschritt[i]||{},pct=phasePct(P,i);return '<div class="phase-edit-row" data-phase-edit="'+i+'"'+(P.aktiv.includes(i)?'':' hidden')+'><strong>LPH '+i+' · '+esc(LPH_KAT_TITEL[i])+'</strong><label>Fortschritt in % <input class="phase-pct-input" type="number" min="0" max="100" step="1" inputmode="numeric" value="'+(pct!=null?pct:'')+'" placeholder="offen"></label><label>Begründung / Quelle für diesen Prozentstand <input class="phase-pct-source" type="text" value="'+esc(f.quelle||'').replace(/"/g,'&quot;')+'" placeholder="z. B. Planstand, Prüfliste, Jour fixe"></label></div>';}).join('');
+  return '<details class="phase-edit" id="phase-editor"><summary>Phasen und Prozentstände bearbeiten</summary><div class="phase-edit-body"><p>Prozentwerte sind eine manuell gepflegte fachliche Einschätzung, keine aus der LPH-Nummer errechnete Wahrheit. Für jede Prozentangabe ist eine Begründung nötig. Frühere Phasen gelten nicht automatisch als abgeschlossen.</p><div class="phase-choices">'+choices+'</div><label>Schwerpunkt <select id="phase-lead">'+lead+'</select></label><label>Begründung der Phasenlage <input id="phase-reason" type="text" placeholder="Protokoll, Planstand oder andere Originalquelle" value="'+esc(P.begruendung||'').replace(/"/g,'&quot;')+'"></label><div class="phase-edit-progress"><div class="phase-edit-progress-title">Fortschritt je laufender Phase</div>'+pctRows+'</div><button type="button" class="btn-sm" id="phase-save">Phasenlage und Prozentstände speichern</button></div></details>';
 }
 // ── Glossar & Erklärbarkeit: ein Außenstehender muss erklären können, was abgeht ──
 const GLOSS={
@@ -335,18 +339,19 @@ async function renderProject(){
   if(pview!=='dashboard'){renderAgentPanel(pview,D,{recent:recent||[],costDocs:costDocs||[],folders:folders||[],docCount:docCount||0,dokuCheck:proj.doku_check,angeboteCheck:proj.angebote_check,angeboteStand:proj.angebote_stand,terminCheck:proj.termin_check,terminStand:proj.termin_stand,lph:proj.lph||0});return;}
 
   let h='<header class="hdr"><div><div class="hdr-brand">Gutthann HIW · Projekt-Dashboard · Live</div><h1 class="hdr-title">'+esc(short(proj.name))+'</h1>'+
-    '<div class="hdr-meta">'+(nr?'<span><strong>Nr.</strong> '+nr+'</span>':'')+'<span><strong>In Arbeit</strong> '+(phasen.aktiv.length?'LPH '+phasen.aktiv.join(' · '):'nicht belegt')+'</span><span><strong>Dokumente</strong> '+(docCount||0)+'</span><span><strong>Aufgaben</strong> '+offen+' offen</span></div></div>'+
+    '<div class="hdr-meta">'+(nr?'<span><strong>Nr.</strong> '+nr+'</span>':'')+'<span><strong>Planung</strong> '+(phasen.aktiv.length?'Schwerpunkt LPH '+(phasen.leit||phasen.aktiv[0])+(phasen.aktiv.length>1?' · '+(phasen.aktiv.length-1)+' parallel':''):'nicht belegt')+'</span><span><strong>Dokumente</strong> '+(docCount||0)+'</span><span><strong>Aufgaben</strong> '+offen+' offen</span></div></div>'+
     '<div class="hdr-status">'+(D?'Analyse-Stand':'Stand')+'<span class="stamp">'+(proj.dashboard_stand?fmtD(proj.dashboard_stand):fmtD(today()))+'</span></div></header>';
   const kk=D&&D.kosten;
   let kostenSub=kostenVal?(esc(STUFE_TXT[kk.stufe]||kk.stufe||'Kostenermittlung')+' · '+esc(kk.stand||'Stand offen')):'kein geprüfter Kostenstand';
   {const zp=(kk&&kk.zu_pruefen&&kk.zu_pruefen.length)||0;if(zp)kostenSub+=' · <span class="up">'+zp+' neue Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>';if(!kostenVal)kostenSub=zp?'<span class="up">'+zp+' Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>':'kein geprüfter Kostenstand';}
-  h+='<div class="kpi-strip">'+kpi('accent','Phasen in Arbeit',phasen.aktiv.length?gl('LPH')+' '+phasen.aktiv.join(' · '):'—','',phasen.aktiv.length>1?'parallel · Schwerpunkt LPH '+lph:'keine frühere Phase automatisch abgeschlossen')+
+  const focusLph=phasen.leit||phasen.aktiv[0]||0,leitPct=phasePct(phasen,focusLph),parallelN=phasen.aktiv.filter(i=>i!==focusLph).length;
+  h+='<div class="kpi-strip">'+kpi('accent','Schwerpunkt · LPH '+(focusLph||'—'),leitPct!=null?leitPct:'—',leitPct!=null?'%':'',esc(LPH_KAT_TITEL[focusLph]||'Phase offen')+(parallelN?' · '+parallelN+' weitere '+(parallelN===1?'Phase':'Phasen')+' parallel':'')+(leitPct==null?' · Prozentstand eintragen':' · manuell gepflegt'))+
     kpi(kostenVal?'':'','Kostenermittlung · DB bestätigt',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio € brutto':'',kostenSub)+
     kpi(cOver?'alert':'','Überfällige Vorgänge',cOver,'',cOver?'Nachhaken nötig · '+cOpen+' offen gesamt':(cOpen?cOpen+' offen · nichts überfällig':'nichts offen'))+
     kzKpi(proj.kennzahlen,kostenVal)+abKpi(abdeckung)+'</div>';
-  h+='<nav class="pilgrim"><div class="pilgrim-label">Leistungsphasen · mehrere können parallel laufen; frühere sind nicht automatisch abgeschlossen</div><div class="pilgrim-track"><div class="pilgrim-line"></div>';
+  h+='<nav class="pilgrim"><div class="pilgrim-label">Leistungsphasen · mehrere können parallel laufen; frühere sind nicht automatisch abgeschlossen</div><div class="phase-track-scroll"><div class="pilgrim-track"><div class="pilgrim-line"></div>';
   for(let i=1;i<=9;i++){const cl=phasen.aktiv.includes(i)?'active'+(i===lph?' lead':''):'';h+='<div class="pilgrim-station '+cl+'" data-lph="'+i+'" title="LPH '+i+(cl?' · in Arbeit':' · nicht bestätigt')+'"><div class="pilgrim-dot">'+i+'</div><div class="pilgrim-labelset">'+LPH[i-1]+'</div></div>';}
-  h+='</div><div class="phase-provenance">'+(phasen.quelle==='manuell'?'Manuell gesetzt':'Aus Analyse; gegen Originalunterlagen prüfen')+(phasen.stand?' · '+fmtD(phasen.stand):'')+' · Klick ändert nur die Ansicht.</div>'+phaseEvidence(phasen)+phaseEditor(phasen)+'</nav>';
+  h+='</div></div><div class="phase-provenance">'+(phasen.quelle==='manuell'?'Phasenlage manuell gepflegt':'Phasenlage aus Analyse; Originalunterlagen prüfen')+(phasen.stand?' · '+fmtD(phasen.stand):'')+' · Phasen anklicken ändert nur die Ansicht.</div>'+phaseEvidence(phasen)+phaseEditor(phasen)+'</nav>';
   // Aura-Fenster: Phasen-Reife + engster Zwangspunkt-Puffer (echte Analyse-Werte) + „Diese Woche" —
   // alle drei sind Einstiege in dasselbe Vorausschau-Fenster (Termin-Radar, Reife, Jour-Fixe …)
   {const vs=(D&&D.vorausschau)||{};
@@ -3082,13 +3087,21 @@ function wire(T,C){
     try{await navigator.clipboard.writeText(kzRefText());const h=el('main').querySelector('#kzcopyh');if(h){h.textContent='kopiert ✓';setTimeout(()=>{h.textContent='';},2500);}}
     catch(e){uiHinweis('Kopieren nicht möglich: '+e.message);}};}
   el('main').querySelectorAll('.pilgrim-station').forEach(st=>st.onclick=()=>{viewLph=+st.dataset.lph;render();});
+  el('main').querySelectorAll('.phase-choice').forEach(ch=>ch.onchange=()=>{const row=el('main').querySelector('[data-phase-edit="'+ch.value+'"]');if(row)row.hidden=!ch.checked;});
   {const save=el('main').querySelector('#phase-save');if(save)save.onclick=async()=>{
     const aktiv=normLph([...el('main').querySelectorAll('.phase-choice:checked')].map(x=>x.value));
     const leit=+el('main').querySelector('#phase-lead').value;
     const begruendung=el('main').querySelector('#phase-reason').value.trim();
     if(!aktiv.length||!aktiv.includes(leit)||begruendung.length<8){uiHinweis('Bitte aktive Phasen, passenden Schwerpunkt und eine konkrete Begründung/Quelle angeben.');return;}
     const alt=proj.lph_phasen||{};
-    const neu={...alt,aktiv,leit,quelle:'manuell',begruendung,stand:new Date().toISOString(),scan:alt.scan||(alt.quelle==='scan'?alt:null)};
+    const fortschritt={...(alt.fortschritt||{})},stand=new Date().toISOString();
+    for(const i of aktiv){const row=el('main').querySelector('[data-phase-edit="'+i+'"]'),raw=row.querySelector('.phase-pct-input').value.trim(),quelle=row.querySelector('.phase-pct-source').value.trim();
+      if(!raw){delete fortschritt[i];continue;}
+      const prozent=Number(raw);
+      if(!Number.isInteger(prozent)||prozent<0||prozent>100||quelle.length<8){uiHinweis('LPH '+i+': Bitte einen ganzzahligen Prozentwert von 0 bis 100 und eine konkrete Quelle/Begründung angeben.');return;}
+      fortschritt[i]={prozent,quelle,stand,art:'manuelle_einschaetzung'};
+    }
+    const neu={...alt,aktiv,leit,quelle:'manuell',begruendung,fortschritt,stand,scan:alt.scan||(alt.quelle==='scan'?alt:null)};
     const{error}=await sb.from('projects').update({lph:leit,lph_phasen:neu}).eq('id',current);
     if(error){uiHinweis('Phasenlage nicht gespeichert: '+error.message);return;}
     viewLph=leit;await render();
