@@ -8,6 +8,27 @@ const fmtD=d=>d?new Date(d).toLocaleDateString('de-DE'):'—';
 const LPH=['Grundlagen','Vorentwurf','Entwurf','Genehmigung','Ausführung','Vergabe-Vorb.','Vergabe','Objekt-ÜW','Gewährl.'];
 // Phasen-Titel fuer das LPH-Katalog-Fenster (deckungsgleich mit LPH_KATALOG_DEF im Runner)
 const LPH_KAT_TITEL={1:'Grundlagenermittlung',2:'Vorplanung',3:'Entwurfsplanung',4:'Genehmigungsplanung',5:'Ausführungsplanung',6:'Vorbereitung der Vergabe',7:'Mitwirkung bei der Vergabe',8:'Objektüberwachung',9:'Objektbetreuung'};
+const normLph=a=>[...new Set((Array.isArray(a)?a:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=9))].sort((x,y)=>x-y);
+function phasenlage(proj){
+  const P=proj.lph_phasen||{},leit=+proj.lph||0;
+  let aktiv=normLph(P.aktiv);
+  if(!aktiv.length)aktiv=normLph(((proj.termin_check||{}).phasen||[]).filter(p=>p&&p.status==='laufend').map(p=>p.lph));
+  if(leit&&!aktiv.includes(leit))aktiv=normLph([...aktiv,leit]);
+  return {aktiv,leit,quelle:P.quelle||'scan',stand:P.stand||null,begruendung:P.begruendung||null,belege:Array.isArray(P.belege)?P.belege:[]};
+}
+function phaseEvidence(P){
+  return '<div class="phase-evidence">'+(P.aktiv.length?P.aktiv.map(i=>{
+    const b=P.belege.find(x=>+x.lph===i);
+    return '<div class="phase-evidence-row"><strong>LPH '+i+' · '+esc(LPH_KAT_TITEL[i])+'</strong><span>'+
+      esc(b&&b.warum?b.warum:(P.quelle==='manuell'?P.begruendung||'Manuell gesetzt':'Warum diese Phase aktiv ist: noch nicht belegt'))+'</span><small>'+
+      esc(b&&b.datei?b.datei:'Quelldatei noch nicht zugeordnet')+(b&&b.fundstelle?' · '+esc(b.fundstelle):'')+'</small></div>';
+  }).join(''):'Keine laufende Phase mit Quelle belegt.')+'</div>';
+}
+function phaseEditor(P){
+  const choices=Array.from({length:9},(_,i)=>i+1).map(i=>'<label><input type="checkbox" class="phase-choice" value="'+i+'"'+(P.aktiv.includes(i)?' checked':'')+'> LPH '+i+'</label>').join('');
+  const lead=Array.from({length:9},(_,i)=>i+1).map(i=>'<option value="'+i+'"'+(P.leit===i?' selected':'')+'>LPH '+i+' · '+esc(LPH_KAT_TITEL[i])+'</option>').join('');
+  return '<details class="phase-edit"><summary>Phasenlage fachlich korrigieren</summary><div class="phase-edit-body"><p>Nur tatsächlich laufende Phasen wählen. Frühere Phasen gelten dadurch nicht als abgeschlossen.</p><div class="phase-choices">'+choices+'</div><label>Schwerpunkt <select id="phase-lead">'+lead+'</select></label><label>Begründung / Quelldatei <input id="phase-reason" type="text" placeholder="Protokoll, Planstand oder andere Originalquelle" value="'+esc(P.begruendung||'').replace(/"/g,'&quot;')+'"></label><button type="button" class="btn-sm" id="phase-save">Phasenlage speichern</button></div></details>';
+}
 // ── Glossar & Erklärbarkeit: ein Außenstehender muss erklären können, was abgeht ──
 const GLOSS={
  'LPH':'Leistungsphase nach HOAI (1–9) — Stufe der Planung bzw. Ausführung. „Aktive Phase" = woran gerade gearbeitet wird.',
@@ -16,7 +37,7 @@ const GLOSS={
  'Zwangspunkt':'Unverrückbarer Termin oder Abhängigkeit, der den Ablauf zwingt (z. B. Frist Bauamt, Liefertermin). Davon wird rückwärts terminiert.',
  'Puffer':'Zeitreserve in Wochen, bis dieser Zwangspunkt kritisch wird. 0–2 Wochen = eng (rot).',
  'Rückwärtsterminierung':'Vom Fixtermin aus rückwärts gerechnet, wann spätestens begonnen werden muss.',
- 'Phasen-Reife':'Wie weit die Grundleistungen der aktiven LPH abgeschlossen sind (0–100 %).',
+ 'Phasen-Reife':'Früherer KI-Schätzwert; ohne Abnahmebeleg keine belastbare Prozentzahl.',
  'Nachhaken':'Offener Vorgang, auf dessen Antwort/Erledigung gewartet wird — wird überfällig, wenn die Frist verstreicht.',
  'Schnittstelle':'Übergabepunkt zwischen Beteiligten (z. B. Architekt → Statiker). „Stillstand" = wie lange dort nichts passiert ist.',
  'P1':'Priorität 1 — kritisch, sofort handeln.',
@@ -67,7 +88,7 @@ function icoPath(n){return({grid:'<rect x="3" y="3" width="7" height="7" rx="1"/
 function navIco(n){return '<svg viewBox="0 0 24 24">'+icoPath(n)+'</svg>';}
 function navItem(id,label,ic,badge){return '<button class="sb-nav'+(pview===id?' active':'')+'" data-pview="'+id+'"><span class="ni">'+ic+'</span><span class="nt">'+esc(label)+'</span>'+(badge?'<span class="nb">'+badge+'</span>':'')+'</button>';}
 const AL={ingest:'Schnell-Sync',scan:'Voll-Scan','auto-sync':'Auto-Sync',nachhaken:'Nachhaken',ping:'KI-Test','email-draft':'Outlook-Entwurf','dashboard-analyse':'Dashboard-Analyse','lph-katalog':'LPH-Katalog',projektbericht:'Projektbericht','termin-check':'Termin-Abgleich','termin-karten':'Termin-Karten','angebote-check':'Angebots-Check',lph2:'LPH 2',lph3:'LPH 3',lph4:'LPH 4',lph5:'LPH 5',lph6:'LPH 6',lph7:'LPH 7',lph8:'LPH 8'};
-let view='cockpit',current=null,currentName='',pview='dashboard',lastD={},lastStand=null,started=false,openRun=null,tab='alle',prioFilters=new Set(),openWin=null;
+let view='cockpit',current=null,currentName='',pview='dashboard',lastD={},lastStand=null,started=false,openRun=null,tab='alle',prioFilters=new Set(),openWin=null,viewLph=null;
 let selTask=null,taskMap={},peopleMail={},lastChecklist={},openCl=new Set(),lastL1=null;
 let fbClosed={},fbUid=0,lastKat=null,lastKatLph=1,lastKz=null,lastKzName='';
 // ---- Projektbericht (ersetzt den Nachtrag-Chat; Konzept: PROJEKTBERICHT-KONZEPT.md) ----
@@ -138,8 +159,8 @@ function berHtml(ber){const j=ber.inhalt||{};let h='';
   if(dHas)h+=berCard('Seit dem letzten Bericht',['neu','verschaerft','entschaerft','erledigt'].map(k=>(dl[k]||[]).map(x=>'<div class="ber-li"><span class="ber-tag '+(k==='verschaerft'?'d':k==='neu'?'w':'o')+'">'+({neu:'NEU',verschaerft:'VERSCHÄRFT',entschaerft:'ENTSCHÄRFT',erledigt:'ERLEDIGT'})[k]+'</span>'+esc(x)+'</div>').join('')).join(''));
   const kh=j.kosten_honorar||{};
   if(kh.lage||kh.kostenstand!=null)h+=berCard('Kosten & Honorar',(kh.lage?'<div class="ber-li">'+esc(kh.lage)+'</div>':'')
-    +berLis([kh.kostenstand!=null?'Kostenstand: <strong>'+berEur(kh.kostenstand)+'</strong>'+(kh.budget!=null?' · Budget '+berEur(kh.budget):''):null,
-      kh.abweichung_hinweis?esc(kh.abweichung_hinweis):null,kh.nachtraege?'Nachträge: '+esc(kh.nachtraege):null,
+    +berLis([kh.kostenstand!=null?'Kostenermittlung laut Bericht (Stufe und Beleg prüfen): <strong>'+berEur(kh.kostenstand)+'</strong>':null,
+      kh.nachtraege?'Nachträge: '+esc(kh.nachtraege):null,
       kh.honorar_hinweis?'<strong>Honorar:</strong> '+esc(kh.honorar_hinweis):null].filter(Boolean)));
   const tm=j.termine||{};
   if(tm.lage||(tm.zwangspunkte||[]).length||(tm.verschiebungen||[]).length)h+=berCard('Termine & Zwangspunkte',(tm.lage?'<div class="ber-li">'+esc(tm.lage)+'</div>':'')
@@ -202,7 +223,7 @@ function boot(){if(started){render();return;}started=true;render();loadRuns();
    .on('postgres_changes',{event:'*',schema:'public',table:'communications'},()=>render())
    .on('postgres_changes',{event:'*',schema:'public',table:'projects'},()=>{if(view==='project')render();})
    .subscribe(st=>{if(st==='SUBSCRIBED')el('runlive').textContent='● live';});}
-function go(v,id){view=v;current=id||null;openWin=null;document.body.style.overflow='';if(v==='project'){pview='dashboard';tab='alle';prioFilters.clear();}setDrawer(false);render();}
+function go(v,id){view=v;current=id||null;openWin=null;viewLph=null;document.body.style.overflow='';if(v==='project'){pview='dashboard';tab='alle';prioFilters.clear();}setDrawer(false);render();}
 async function render(){renderSidebar();if(view==='cockpit')await renderCockpit();else if(view==='project'&&pview==='system')await renderSystemPanel();else await renderProject();}
 function timeAgo(d){if(!d)return '—';const s=(Date.now()-new Date(d).getTime())/1000;if(s<90)return 'gerade';if(s<5400)return 'vor '+Math.round(s/60)+' min';if(s<172800)return 'vor '+Math.round(s/3600)+' h';return 'vor '+Math.round(s/86400)+' d';}
 async function queueAgentFor(projectId,agent,btn){if(btn){btn.disabled=true;btn.textContent='…';}const{error}=await sb.from('agent_runs').insert({project_id:projectId,agent,status:'queued',meta:{trigger:'manuell'}});const dup=error&&error.code==='23505';if(error&&!dup)uiHinweis('Konnte nicht starten: '+error.message);if(btn){btn.textContent=dup?'läuft bereits':'…';setTimeout(()=>{btn.disabled=false;btn.textContent='Aktualisieren';},1600);}loadRuns();}
@@ -286,7 +307,7 @@ async function renderCockpit(){el('crumb').textContent='Cockpit';
 async function renderProject(){
   const td=today();
   const[{data:proj},{data:tasks},{data:comms},{count:docCount},{data:recent},{data:folders},{data:costDocs},{data:fbRows},{data:abdeckung}]=await Promise.all([
-    sb.from('projects').select('id,name,lph,dashboard,dashboard_stand,doku_check,checklist,lph1,lph1_stand,lph_kataloge,angebote_check,angebote_stand,termin_check,termin_stand,ziele,kennzahlen,kennzahlen_stand').eq('id',current).single(),
+    sb.from('projects').select('id,name,lph,lph_phasen,dashboard,dashboard_stand,doku_check,checklist,lph1,lph1_stand,lph_kataloge,angebote_check,angebote_stand,termin_check,termin_stand,ziele,kennzahlen,kennzahlen_stand').eq('id',current).single(),
     sb.from('tasks').select('id,title,status,prio,kategorie,assignee,due_date,meta').eq('project_id',current).order('prio'),
     sb.from('communications').select('id,typ,betreff,empfaenger,empfaenger_email,status,frist,betrag,meta').eq('project_id',current),
     sb.from('documents').select('id',{count:'exact',head:true}).eq('project_id',current),
@@ -296,7 +317,7 @@ async function renderProject(){
     sb.from('item_feedback').select('item_type,item_title,kommentar').eq('project_id',current).order('created_at'),
     sb.from('wissens_abdeckung').select('dokumente,mit_text,mit_embedding,text_pct,embedding_pct,soll_bestand,ballast,letzter_ingest').eq('project_id',current).maybeSingle()]);
   if(!proj){go('cockpit');return;}
-  {const{data:ks,error:ksErr}=await sb.rpc('kostenstand',{p_project:current});if(ksErr)uiHinweis('Kostenstand nicht geladen: '+ksErr.message);else kostenAusWahrheit(proj,ks);}
+  {const{data:ks,error:ksErr}=await sb.rpc('kostenstand',{p_project:current});if(ksErr)uiHinweis('Kostenstand nicht geladen: '+ksErr.message);kostenAusWahrheit(proj,ksErr?null:ks);}
   await betLaden();
   currentName=proj.name;lastD=proj.dashboard||{};lastStand=proj.dashboard_stand;lastChecklist=proj.checklist||{};lastL1=proj.lph1||null;renderSidebar();
   fbClosed={};(fbRows||[]).forEach(r=>{fbClosed[fbKey(r.item_type,r.item_title)]=r;});
@@ -307,35 +328,32 @@ async function renderProject(){
   const AL=getAufgaben(D,T);
   const offen=AL.filter(t=>t.status!=='erledigt').length,p1=AL.filter(t=>t.status!=='erledigt'&&t.prio==='P1').length;
   const cOpen=C.filter(c=>!['beantwortet','erledigt'].includes(c.status)).length,cOver=C.filter(c=>c.status==='ueberfaellig'||(c.frist&&c.frist<td&&!['beantwortet','erledigt'].includes(c.status))).length;
-  const nr=(proj.name.match(/(\d{4})/)||[])[1]||'',lph=proj.lph||0;
+  const nr=(proj.name.match(/(\d{4})/)||[])[1]||'',lph=proj.lph||0,phasen=phasenlage(proj),phaseView=viewLph||lph||phasen.aktiv[0]||1;
   const kostenVal=D&&D.kosten&&D.kosten.summe_brutto?D.kosten.summe_brutto:null;
   const honVal=D&&D.honorare?D.honorare:null;
   if(pview==='bericht'){await renderBericht(proj);return;}
   if(pview!=='dashboard'){renderAgentPanel(pview,D,{recent:recent||[],costDocs:costDocs||[],folders:folders||[],docCount:docCount||0,dokuCheck:proj.doku_check,angeboteCheck:proj.angebote_check,angeboteStand:proj.angebote_stand,terminCheck:proj.termin_check,terminStand:proj.termin_stand,lph:proj.lph||0});return;}
 
   let h='<header class="hdr"><div><div class="hdr-brand">Gutthann HIW · Projekt-Dashboard · Live</div><h1 class="hdr-title">'+esc(short(proj.name))+'</h1>'+
-    '<div class="hdr-meta">'+(nr?'<span><strong>Nr.</strong> '+nr+'</span>':'')+'<span><strong>Phase</strong> '+(lph?'LPH '+lph:'—')+'</span><span><strong>Dokumente</strong> '+(docCount||0)+'</span><span><strong>Aufgaben</strong> '+offen+' offen</span></div></div>'+
+    '<div class="hdr-meta">'+(nr?'<span><strong>Nr.</strong> '+nr+'</span>':'')+'<span><strong>In Arbeit</strong> '+(phasen.aktiv.length?'LPH '+phasen.aktiv.join(' · '):'nicht belegt')+'</span><span><strong>Dokumente</strong> '+(docCount||0)+'</span><span><strong>Aufgaben</strong> '+offen+' offen</span></div></div>'+
     '<div class="hdr-status">'+(D?'Analyse-Stand':'Stand')+'<span class="stamp">'+(proj.dashboard_stand?fmtD(proj.dashboard_stand):fmtD(today()))+'</span></div></header>';
-  const kk=D&&D.kosten,kBudget=(kk&&kk.budget!=null&&!isNaN(+kk.budget)&&+kk.budget>0)?+kk.budget:null;
-  let kostenSub=kostenVal?('brutto'+(kk&&kk.stand?' · Stand '+esc(kk.stand):' · Stand lt. Analyse')):'Tiefenanalyse nötig',kostenBar='';
-  if(kostenVal&&kBudget){const dlt=kostenVal-kBudget;kostenSub=(dlt>0?'<span class="up">+':'<span class="okc">−')+Math.abs(Math.round(dlt/1000)).toLocaleString('de-DE')+' T€</span> vs. Budget '+(kBudget/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €';kostenBar='<div class="kpi-bar"><i class="'+(dlt>0?'over':'')+'" style="width:'+Math.min(100,Math.round(kostenVal/kBudget*100))+'%"></i></div>';}
+  const kk=D&&D.kosten;
+  let kostenSub=kostenVal?(esc(STUFE_TXT[kk.stufe]||kk.stufe||'Kostenermittlung')+' · '+esc(kk.stand||'Stand offen')):'kein geprüfter Kostenstand';
   {const zp=(kk&&kk.zu_pruefen&&kk.zu_pruefen.length)||0;if(zp)kostenSub+=' · <span class="up">'+zp+' neue Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>';if(!kostenVal)kostenSub=zp?'<span class="up">'+zp+' Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>':'kein geprüfter Kostenstand';}
-  h+='<div class="kpi-strip">'+kpi('accent','Aktive Phase',lph?gl('LPH')+' '+lph:'—','','HOAI § 34')+
-    kpi(kostenVal?'':'','Kosten aktuell',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio €':'',kostenSub,kostenBar)+
+  h+='<div class="kpi-strip">'+kpi('accent','Phasen in Arbeit',phasen.aktiv.length?gl('LPH')+' '+phasen.aktiv.join(' · '):'—','',phasen.aktiv.length>1?'parallel · Schwerpunkt LPH '+lph:'keine frühere Phase automatisch abgeschlossen')+
+    kpi(kostenVal?'':'','Kostenermittlung · DB bestätigt',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio € brutto':'',kostenSub)+
     kpi(cOver?'alert':'','Überfällige Vorgänge',cOver,'',cOver?'Nachhaken nötig · '+cOpen+' offen gesamt':(cOpen?cOpen+' offen · nichts überfällig':'nichts offen'))+
     kzKpi(proj.kennzahlen,kostenVal)+abKpi(abdeckung)+'</div>';
-  h+='<nav class="pilgrim"><div class="pilgrim-label">Leistungsphasen HOAI · klick zum Setzen der aktiven Phase</div><div class="pilgrim-track"><div class="pilgrim-line"></div><div class="pilgrim-line-progress" style="width:'+(lph?((lph-1)/8*89+5.5):0)+'%"></div>';
-  for(let i=1;i<=9;i++){const cl=lph&&i<lph?'done':lph&&i===lph?'active':'';h+='<div class="pilgrim-station '+cl+'" data-lph="'+i+'"><div class="pilgrim-dot">'+i+'</div><div class="pilgrim-labelset">'+LPH[i-1]+'</div></div>';}
-  h+='</div></nav>';
+  h+='<nav class="pilgrim"><div class="pilgrim-label">Leistungsphasen · mehrere können parallel laufen; frühere sind nicht automatisch abgeschlossen</div><div class="pilgrim-track"><div class="pilgrim-line"></div>';
+  for(let i=1;i<=9;i++){const cl=phasen.aktiv.includes(i)?'active'+(i===lph?' lead':''):'';h+='<div class="pilgrim-station '+cl+'" data-lph="'+i+'" title="LPH '+i+(cl?' · in Arbeit':' · nicht bestätigt')+'"><div class="pilgrim-dot">'+i+'</div><div class="pilgrim-labelset">'+LPH[i-1]+'</div></div>';}
+  h+='</div><div class="phase-provenance">'+(phasen.quelle==='manuell'?'Manuell gesetzt':'Aus Analyse; gegen Originalunterlagen prüfen')+(phasen.stand?' · '+fmtD(phasen.stand):'')+' · Klick ändert nur die Ansicht.</div>'+phaseEvidence(phasen)+phaseEditor(phasen)+'</nav>';
   // Aura-Fenster: Phasen-Reife + engster Zwangspunkt-Puffer (echte Analyse-Werte) + „Diese Woche" —
   // alle drei sind Einstiege in dasselbe Vorausschau-Fenster (Termin-Radar, Reife, Jour-Fixe …)
   {const vs=(D&&D.vorausschau)||{};
-   const pr=(vs.phasen_reife&&vs.phasen_reife.pct!=null)?Math.max(0,Math.min(100,Math.round(+vs.phasen_reife.pct))):null;
    const zps=(vs.zwangspunkte||[]).filter(z=>z&&z.puffer_wochen!=null).sort((a,b)=>(+a.puffer_wochen)-(+b.puffer_wochen));
    const wk=(vs.diese_woche||[]).slice(0,3);
    {let ar='<section class="win" data-sec="vorausschau"><div class="aurarow">';
-    if(pr!=null){const cl=pr>=66?'green':'amber';const fe=((vs.phasen_reife&&vs.phasen_reife.fehlend)||[]).slice(0,2).map(f=>f&&f.text).filter(Boolean);
-     ar+='<button class="aura '+cl+'" data-winopen title="Fenster öffnen: Termine & Vorausschau"><div class="aura-bg"></div><div class="aura-dots"></div><div class="aura-c"><span class="aura-l">'+(lph?'LPH '+lph+' · ':'')+gl('Fortschritt',GLOSS['Phasen-Reife'])+'</span><span class="aura-v">'+dm(pr,6.5,'#fff')+'<span class="aura-pct">%</span></span><span class="aura-s">der Grundleistungen abgeschlossen</span>'+(fe.length?'<div class="aura-foot"><span>fehlt: '+esc(fe.join(' · '))+'</span></div>':'')+'</div></button>';}
+    ar+='<button class="aura amber" data-openwin="lph1" title="LPH-Katalog öffnen"><div class="aura-bg"></div><div class="aura-dots"></div><div class="aura-c"><span class="aura-l">LPH '+phaseView+' · fachlicher Stand</span><span class="aura-v">Belege</span><span class="aura-s">Kein unbelegter Prozent-Fortschritt</span></div></button>';
     ar+='<button class="aura '+(p1?'amber':'green')+'" data-openwin="aufgaben" title="Fenster öffnen: Aufgaben-Zentrale"><div class="aura-bg"></div><div class="aura-dots"></div><div class="aura-c"><span class="aura-l">Offene Aufgaben</span><span class="aura-v">'+dm(offen,6.5,'#fff')+'</span><span class="aura-s">'+p1+' kritisch · P1</span></div></button>';
     let zfoot='';if(zps.length){const z=zps[0],pw=Math.max(0,Math.round(+z.puffer_wochen));zfoot='<div class="aura-side-foot"><span class="pdot '+(pw<=6?'warn':'ok')+'"></span><span class="asf-t">'+gl('Puffer')+' <strong>'+pw+' Wo</strong> · '+esc(z.name||'')+'</span>'+(z.frist?'<span class="asf-f">'+fmtFrist(z.frist)+'</span>':'')+'</div>';}
     ar+='<button class="aura-side" data-winopen title="Fenster öffnen: Termine & Vorausschau"><div class="aura-side-h">Diese Woche<span class="cnt">'+wk.length+'</span></div>'+(wk.length?wk.map(a=>'<div class="aura-week'+(a.dringlichkeit==='bald'?' soon':'')+'"><span class="dot"></span><div class="aura-week-t">'+esc(a.titel||'')+'</div>'+(a.frist?'<span class="aura-week-f">'+fmtFrist(a.frist)+'</span>':'')+'</div>').join(''):'<div class="empty" style="padding:14px">Keine fixen Fristen in den nächsten 2 Wochen.</div>')+zfoot+'</button>';
@@ -347,10 +365,10 @@ async function renderProject(){
   {const KZ=proj.kennzahlen||null;lastKz=KZ;lastKzName=proj.name;
    const tKz=KZ?(kzTeaser(KZ)):tz('warn','Noch nicht erfasst — der Agent zieht die Hardfacts aus Flächenermittlung, Bauantrag und Kostenberechnung','');
    const nBel=KZ?kzCount(KZ):0;
-   h+=sec('kennzahlen','prominent','▤','Projekt-Kennzahlen',KZ?('Hardfacts · Stand '+(proj.kennzahlen_stand?fmtD(proj.kennzahlen_stand):'—')):'Flächen, Kubatur, Kennwerte, Auftrag',
-     (KZ?'<span class="stat ok">'+nBel+' Werte</span>':'<span class="stat warn">offen</span>'),renderKennzahlen(KZ,D,proj.name),tKz);}
+   h+=sec('kennzahlen','prominent','▤','Projekt-Kennzahlen',KZ?('Angaben aus Analyse · Stand '+(proj.kennzahlen_stand?fmtD(proj.kennzahlen_stand):'—')):'Flächen, Kubatur, Auftrag',
+     (KZ?'<span class="stat warn">'+nBel+' Angaben · Quelle prüfen</span>':'<span class="stat warn">offen</span>'),renderKennzahlen(KZ,D,proj.name),tKz);}
   // LPH-Katalog der AKTIVEN Phase — Fragenkatalog + Abschnitts-Stand je LPH (LPH 1 = Grundlagen inkl. Raumprogramm, Fallback lph1-Spalte)
-  {const kLph=lph||1;const kat=(proj.lph_kataloge&&proj.lph_kataloge[String(kLph)])||(kLph===1?(proj.lph1||null):null);
+  {const kLph=phaseView;const kat=(proj.lph_kataloge&&proj.lph_kataloge[String(kLph)])||(kLph===1?(proj.lph1||null):null);
     lastKat=kat;lastKatLph=kLph;
     const frOff=kat?((kat.fragenkatalog||[]).filter(x=>x&&!fbClosed[fbKey('frage',x.frage)])):[];
     const muss=frOff.filter(x=>x.prioritaet==='muss').length;
@@ -374,17 +392,17 @@ async function renderProject(){
   // Kosten (Pflicht) — groß & präsent
   {let tKost='';const k=D&&D.kosten;
    if(k&&k.summe_brutto){tKost='<span class="win-big">'+dm((k.summe_brutto/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}),3.2,'var(--c-navy-900)')+'<span class="win-big-u">Mio € brutto'+(k.stand?' · Stand '+esc(k.stand):'')+'</span></span>';
-    if(k.budget!=null&&!isNaN(+k.budget)&&+k.budget>0){const dlt=k.summe_brutto-(+k.budget);tKost+=tz(dlt>0?'bad':'ok','vs. '+gl('Budget','Vom Bauherrn vorgegebener Kostenrahmen.')+' '+((+k.budget)/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €','<span style="color:'+(dlt>0?'var(--c-danger)':'var(--c-success)')+'">'+(dlt>0?'+':'−')+Math.abs(Math.round(dlt/1000)).toLocaleString('de-DE')+' T€</span>');}
+    tKost+=tz(null,esc(STUFE_TXT[k.stufe]||k.stufe||'Kostenermittlung'),'Kein Budgetvergleich ohne eigenen Beschluss');
     if(honVal&&honVal.offene_nachtraege)tKost+=tz('warn','Offene Nachträge',''+honVal.offene_nachtraege);
    }else tKost=tz('warn','Noch keine Kostenwerte — Tiefenanalyse starten','');
-   h+=sec('kosten','prominent','€','Kosten-Übersicht',k?'DIN 276 · aus Tiefenanalyse':'noch nicht analysiert',(k?'<span class="stat ok">analysiert</span>':'<span class="stat warn">offen</span>'),'<div class="inner">'+renderKosten(D,costDocs||[])+'</div>',tKost);}
+   h+=sec('kosten','prominent','€','Kostenermittlungen',k&&k.summe_brutto?'DB-Bestätigung · Originalquelle prüfen':'kein bestätigter Kostenstand',(k&&k.summe_brutto?'<span class="stat warn">Quelle prüfen</span>':'<span class="stat warn">offen</span>'),'<div class="inner">'+renderKosten(D,costDocs||[])+'</div>',tKost);}
   // LPH-Bewertung
   {const lb=(D&&D.lph_bewertung)||[];const cN=s=>lb.filter(r=>r.status===s).length;
-   const tLb=lb.length?(tz('ok','vollständig',''+cN('vollstaendig'))+tz('warn','teilweise',''+cN('teilweise'))+tz('bad','fehlend',''+cN('fehlend'))):tz('warn','Noch nicht bewertet — kommt aus der Tiefenanalyse','');
+   const tLb=lb.length?(tz('warn','Laut Analyse vollständig',''+cN('vollstaendig'))+tz('warn','laut Analyse teilweise',''+cN('teilweise'))+tz('warn','laut Analyse fehlend',''+cN('fehlend'))):tz('warn','Noch nicht bewertet — kommt aus der Tiefenanalyse','');
    h+=sec('lphbew','','✓','LPH-Bewertung',(lph?'LPH '+lph+' Grundleistungen':'Grundleistungen'),'','<div class="inner">'+renderLphBew(D)+'</div>',tLb);}
   // LPH-Checkliste (HOAI-Grundleistungen + Vergabe/ZVB) — abhakbar, persistent
-  {const cdone=clCounts(lastChecklist);const clPct=cdone.total?Math.round(cdone.done/cdone.total*100):0;
-   h+=sec('checkliste','','☑','LPH-Checkliste','HOAI-Grundleistungen + Vergabe/ZVB je Phase','<span class="stat">'+cdone.done+'/'+cdone.total+'</span>','<div class="inner">'+renderChecklist(lph)+'</div>',tz(null,'Abgehakt über alle Phasen',cdone.done+'/'+cdone.total)+'<span class="win-bar"><i style="width:'+clPct+'%"></i></span>');}
+  {const cdone=clCounts(lastChecklist);
+   h+=sec('checkliste','','☑','LPH-Checkliste','Manuell abgehakt · keine Leistungsquote','<span class="stat">'+cdone.done+'/'+cdone.total+'</span>','<div class="inner">'+renderChecklist(lph)+'</div>',tz(null,'Manuell abgehakt · nicht abgenommen',cdone.done+'/'+cdone.total));}
   // Offene Entscheidungen (getrennt von gefassten Beschlüssen) — mit Kommentar abgeschlossene zählen nicht mehr als offen
   const eoAll=(D&&D.entscheidungen_offen)||[];
   const eo=eoAll.filter(e=>e&&!fbClosed[fbKey('entscheidung',e.thema||e.titel||e.text||'')]);
@@ -448,9 +466,9 @@ function kzZ(n,dez){return n==null?'—':Number(n).toLocaleString('de-DE',{minim
 function kzRow(g,k,label,einheit,dez){const f=kzW(g,k);
   const roh=f?f.wert:null;const num=typeof roh==='number'?roh:(typeof roh==='string'&&/^-?[0-9.]+$/.test(roh)?+roh:null);
   const txt=f?(num!=null?kzZ(num,dez):esc(String(roh))):'—';
-  const st=f?(f.status==='belegt'?'ok':f.status==='geschaetzt'?'warn':'bad'):'';
+  const st=f?(f.status==='verifiziert'?'ok':'warn'):'';
   const q=f&&(f.quelle||f.stand)?esc([f.quelle,f.stand].filter(Boolean).join(' · ')):'';
-  return '<div class="kz-row'+(f?'':' leer')+'" title="'+(q||'nicht belegt')+'"><span class="kz-l">'+esc(label)+'</span>'+
+  return '<div class="kz-row'+(f?'':' leer')+'" title="'+(q||'nicht belegt')+'"><span class="kz-l">'+esc(label)+'<small class="kz-source">'+(q||'Originalquelle nicht belegt')+' · '+esc(f&&f.status||'offen')+'</small></span>'+
     '<span class="kz-v">'+txt+(f&&einheit?'<span class="kz-u">'+esc(einheit)+'</span>':'')+'</span>'+
     (st?'<span class="pdot '+st+'"></span>':'<span class="kz-dot-leer"></span>')+'</div>';}
 function kzCount(KZ){let n=0;['groesse','kosten','auftrag','nutzung','termine'].forEach(b=>{const g=KZ[b]||{};Object.keys(g).forEach(k=>{if(kzW(g,k))n++;});});return n;}
@@ -458,9 +476,7 @@ function kzCount(KZ){let n=0;['groesse','kosten','auftrag','nutzung','termine'].
 function kzKpi(KZ,kostenVal){
   const g=(KZ&&KZ.groesse)||{},ko=(KZ&&KZ.kosten)||{};
   const bgf=kzNum(g,'bgf_m2'),nuf=kzNum(g,'nuf_m2');
-  let eur=kzNum(ko,'eur_pro_m2_bgf');
-  if(eur==null&&bgf&&kostenVal)eur=kostenVal/bgf;   // Notnagel: aus Gesamtkosten, klar als ca. gekennzeichnet
-  const sub=[eur!=null?kzZ(Math.round(eur))+' €/m² BGF':null,nuf!=null?'NUF '+kzZ(nuf)+' m²':null].filter(Boolean).join(' · ')||
+  const sub=[nuf!=null?'NUF '+kzZ(nuf)+' m²':null].filter(Boolean).join(' · ')||
     (KZ?'weitere Kennzahlen im Fenster':'Hardfacts noch nicht erfasst');
   const v=bgf!=null?dm(kzZ(bgf),3.1,'var(--c-navy-900)'):'—';
   return '<div class="kpi kz-kpi" data-openwin="kennzahlen" title="Fenster öffnen: Projekt-Kennzahlen">'+
@@ -469,9 +485,9 @@ function kzKpi(KZ,kostenVal){
     '<div class="kpi-sub">'+esc(sub)+'</div></div>';}
 function kzTeaser(KZ){const g=KZ.groesse||{},ko=KZ.kosten||{},nu=KZ.nutzung||{};
   const bgf=kzNum(g,'bgf_m2'),bri=kzNum(g,'bri_m3'),kg=kzNum(ko,'kg300_400_brutto'),bw=kzW(nu,'bauweise');
-  return (bgf!=null?tz('ok','BGF',kzZ(bgf,2)+' m²'):tz('bad','BGF','—'))+
-    (bri!=null?tz('ok','BRI',kzZ(bri)+' m³'):tz('bad','BRI','—'))+
-    (kg!=null?tz('ok','KG 300+400 brutto',(kg/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €'):'')+
+  return (bgf!=null?tz('warn','BGF · Quelle prüfen',kzZ(bgf,2)+' m²'):tz('warn','BGF','—'))+
+    (bri!=null?tz('warn','BRI · Quelle prüfen',kzZ(bri)+' m³'):tz('warn','BRI','—'))+
+    (kg!=null?tz('warn','KG 300+400 · Quelle prüfen',(kg/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €'):'')+
     (bw?tz(null,esc(String(bw.wert)),''):'');}
 // Fenster-Inhalt: fünf Blöcke nebeneinander + Referenzblatt-Knopf
 function renderKennzahlen(KZ,D,pname){
@@ -482,8 +498,8 @@ function renderKennzahlen(KZ,D,pname){
   const hero=ovHero([
     ovK('',bgf!=null?kzZ(bgf,2)+'<span class="ov-k-u">m² BGF</span>':'—','Bruttogrundfläche'),
     ovK('',kzNum(g,'bri_m3')!=null?kzZ(kzNum(g,'bri_m3'))+'<span class="ov-k-u">m³</span>':'—','Bruttorauminhalt'),
-    ovK('',kzNum(ko,'eur_pro_m2_bgf')!=null?kzZ(Math.round(kzNum(ko,'eur_pro_m2_bgf')))+'<span class="ov-k-u">€/m²</span>':'—','Kostenkennwert BGF'),
-    ovK(eff!=null?(eff>=60?'ok':'warn'):'',eff!=null?eff+'<span class="ov-k-u">%</span>':'—','Flächeneffizienz NUF/BGF')]);
+    ovK('',kzNum(g,'nuf_m2')!=null?kzZ(kzNum(g,'nuf_m2'),2)+'<span class="ov-k-u">m² NUF</span>':'—','Nutzfläche'),
+    ovK('',eff!=null?eff+'<span class="ov-k-u">%</span>':'—','NUF/BGF · rechnerisch')]);
   const blk=(titel,rows)=>'<div class="kz-block"><div class="kz-h">'+titel+'</div>'+rows.join('')+'</div>';
   const B=[];
   B.push(blk('Größe & Kubatur',[
@@ -494,8 +510,7 @@ function renderKennzahlen(KZ,D,pname){
   B.push(blk('Kosten & Kennwerte',[
     kzRow(ko,'gesamt_brutto','Baukosten gesamt','€',0),kzRow(ko,'kg300_400_brutto','KG 300+400 brutto','€',0),
     kzRow(ko,'kg300_brutto','davon KG 300','€',0),kzRow(ko,'kg400_brutto','davon KG 400','€',0),
-    kzRow(ko,'budget','Budget Bauherr','€',0),kzRow(ko,'eur_pro_m2_bgf','€ / m² BGF','€',0),
-    kzRow(ko,'eur_pro_m3_bri','€ / m³ BRI','€',0),kzRow(ko,'kostenstufe','Kostenstufe',''),kzRow(ko,'kostenstand','Kostenstand','')]));
+    kzRow(ko,'kostenstufe','Kostenstufe',''),kzRow(ko,'kostenstand','Kostenstand','')]));
   B.push(blk('Auftrag & Honorar',[
     kzRow(au,'bauherr','Bauherr',''),kzRow(au,'ag_typ','Auftraggeber-Typ',''),kzRow(au,'lph_umfang','Leistungsphasen',''),
     kzRow(au,'rolle','Rolle',''),kzRow(au,'honorarzone','Honorarzone',''),kzRow(au,'anrechenbare_kosten','Anrechenbare Kosten','€',0),
@@ -514,7 +529,7 @@ function renderKennzahlen(KZ,D,pname){
      (kt?'<div class="kz-ref-t">'+esc(String(kt.wert))+'</div>':'')+
      (kat?'<div class="kz-ref-m">Kategorie: <strong>'+esc(String(kat.wert))+'</strong></div>':'')+
      (hw?'<div class="kz-ref-m warn">Vor Verwendung prüfen: '+esc(String(hw.wert))+'</div>':'')+
-     '<button class="btn-sm" id="kzcopy" style="margin-top:10px">Für Referenzblatt kopieren</button>'+
+     '<div class="page-sub">Export erst nach Originalprüfung der Projektkennzahlen.</div>'+
      '<span class="kz-ref-h" id="kzcopyh"></span></div>';}
   return hero+'<div class="kz-wrap">'+B.join('')+ref+'</div>';}
 // Zwischenablage-Text im Format der Referenzdatenbank
@@ -841,7 +856,7 @@ function panelBody(id,D,ex){
 }
 function renderVorausschauSection(D){
   const vs=D&&D.vorausschau?D.vorausschau:null;
-  const has=vs&&((vs.zwangspunkte&&vs.zwangspunkte.length)||(vs.schnittstellen&&vs.schnittstellen.length)||(vs.diese_woche&&vs.diese_woche.length)||(vs.hotspots&&vs.hotspots.length)||(vs.phasen_reife&&vs.phasen_reife.pct!=null));
+  const has=vs&&((vs.zwangspunkte&&vs.zwangspunkte.length)||(vs.schnittstellen&&vs.schnittstellen.length)||(vs.diese_woche&&vs.diese_woche.length)||(vs.hotspots&&vs.hotspots.length));
   let meta='',body='';
   if(has){
     const eng=(vs.zwangspunkte||[]).filter(z=>z.status==='danger').length;
@@ -856,9 +871,9 @@ function renderVorausschauSection(D){
 }
 function renderVorausschau(vs){
   let h='';
-  const zp=vs.zwangspunkte||[],reife=vs.phasen_reife||null,week=vs.diese_woche||[],jf=vs.jour_fixe||null,sst=vs.schnittstellen||[],hot=vs.hotspots||[];
+  const zp=vs.zwangspunkte||[],week=vs.diese_woche||[],jf=vs.jour_fixe||null,sst=vs.schnittstellen||[],hot=vs.hotspots||[];
   const engst=zp.filter(z=>z&&z.puffer_wochen!=null).slice().sort((a,b)=>(+a.puffer_wochen)-(+b.puffer_wochen))[0];
-  h+=ovHero([reife&&reife.pct!=null?ovK('',Math.max(0,Math.min(100,Math.round(+reife.pct)))+'<span class="ov-k-u"> %</span>','Grundleistungen abgeschlossen'):null,ovK(zp.length?'':'mut',zp.length,'Zwangspunkte'),engst?ovK(Math.round(+engst.puffer_wochen)<=6?'warn':'ok',Math.max(0,Math.round(+engst.puffer_wochen))+'<span class="ov-k-u"> Wo</span>','engster Puffer'):null,week.length?ovK('',week.length,'diese Woche'):null]);
+  h+=ovHero([ovK(zp.length?'':'mut',zp.length,'Zwangspunkte'),engst?ovK(Math.round(+engst.puffer_wochen)<=6?'warn':'ok',Math.max(0,Math.round(+engst.puffer_wochen))+'<span class="ov-k-u"> Wo</span>','engster Puffer'):null,week.length?ovK('',week.length,'diese Woche'):null]);
   let left='';
   if(zp.length){
     left='<div class="vs-block-c"><div class="vs-h">'+icoClock()+'Termin-Radar · '+gl('Rückwärtsterminierung')+'<span class="vs-tag">'+zp.length+' '+gl('Zwangspunkt')+(zp.length>1?'e':'')+'</span></div>';
@@ -867,9 +882,7 @@ function renderVorausschau(vs){
     left+='</div>';
   }
   let right='';
-  if(reife&&reife.pct!=null){const pct=Math.max(0,Math.min(100,Math.round(+reife.pct)));
-    right='<div class="vs-block-c"><div class="vs-h">'+icoCheck()+gl('Phasen-Reife')+'</div><div class="vs-reife"><div class="vs-ring" style="background:conic-gradient(var(--c-blue-600) '+pct+'%,var(--c-slate-200) 0)"><div class="vs-ring-v"><div class="vs-ring-pct">'+pct+'%</div><div class="vs-ring-l">reif</div></div></div><div class="vs-reife-side">'+(reife.hinweis?'<div class="vs-prog">'+esc(reife.hinweis)+'</div>':'')+(reife.fehlend&&reife.fehlend.length?'<ul class="vs-miss">'+reife.fehlend.map(f=>'<li><span class="dot'+(f.status==='teilweise'?' part':'')+'"></span>'+esc(f.text)+'</li>').join('')+'</ul>':'')+'</div></div></div>';
-  }
+  right='';
   if(left||right)h+='<div class="vs-row">'+(left||'<div></div>')+(right||'<div></div>')+'</div>';
   if(week.length||(jf&&((jf.punkte&&jf.punkte.length)||jf.datum))){
     let acts='<div class="vs-block-c"><div class="vs-h">'+icoClock()+'Diese & nächste Woche</div><div class="vs-acts">';
@@ -900,15 +913,17 @@ function eur(n){return (Number(n)||0).toLocaleString('de-DE')+' €';}
 const STUFE_TXT={Kostenrahmen:'Kostenrahmen',Kostenschaetzung:'Kostenschätzung',Kostenberechnung:'Kostenberechnung',Kostenanschlag:'Kostenanschlag',Kostenfeststellung:'Kostenfeststellung'};
 const STUFE_LPH={Kostenrahmen:1,Kostenschaetzung:2,Kostenberechnung:3,Kostenanschlag:7,Kostenfeststellung:8};
 function kostenAusWahrheit(proj,ks){
-  if(!ks)return;const a=ks.aktuell||null,D=proj.dashboard=Object.assign({},proj.dashboard||{});
-  D.kosten={summe_brutto:a?+a.betrag_brutto:null,stand:a?fmtD(a.stichtag)+' · '+STUFE_TXT[a.stufe]:null,
+  const a=ks&&ks.aktuell||null,D=proj.dashboard=Object.assign({},proj.dashboard||{});
+  D.kosten={summe_brutto:a?+a.betrag_brutto:null,stufe:a?a.stufe:null,stand:a?fmtD(a.stichtag):null,
     quelle:a?a.datei+(a.kg_umfang?' · KG '+a.kg_umfang:''):null,beleg:a?a.beleg_stelle:null,bemerkung:a?a.bemerkung:null,
     geprueft:a&&a.geprueft_von?a.geprueft_von+(a.geprueft_am?', '+fmtD(a.geprueft_am):''):null,
-    budget:ks.budget?ks.budget.betrag_brutto:null,kg:[],
-    verlauf:(ks.verlauf||[]).map(v=>({stufe:v.stufe,lph:STUFE_LPH[v.stufe],betrag:+v.betrag_brutto,stand:v.stichtag,quelle:v.datei})),
-    zu_pruefen:ks.zu_pruefen||[]};
+    budget:null,kg:[],
+    verlauf:((ks&&ks.verlauf)||[]).map(v=>({stufe:v.stufe,lph:STUFE_LPH[v.stufe],betrag:+v.betrag_brutto,stand:v.stichtag,quelle:v.datei})),
+    zu_pruefen:(ks&&ks.zu_pruefen)||[]};
   const KK=proj.kennzahlen&&proj.kennzahlen.kosten;
-  if(KK){if(a){const q={stand:a.stichtag,quelle:a.datei,status:'belegt'};Object.assign(KK,{gesamt_brutto:Object.assign({wert:+a.betrag_brutto},q),kostenstufe:Object.assign({wert:a.stufe},q),kostenstand:Object.assign({wert:a.stichtag},q)});}
+  if(KK){const leer={wert:null,stand:null,quelle:'nicht gleichartig belegt',status:'offen'};
+    Object.assign(KK,{budget:leer,eur_pro_m2_bgf:leer,eur_pro_m3_bri:leer});
+    if(a){const q={stand:a.stichtag,quelle:a.datei,status:'belegt'};Object.assign(KK,{gesamt_brutto:Object.assign({wert:+a.betrag_brutto},q),kostenstufe:Object.assign({wert:a.stufe},q),kostenstand:Object.assign({wert:a.stichtag},q)});}
     else{const q={wert:null,stand:null,quelle:'kein geprüfter Kostenstand',status:'offen'};Object.assign(KK,{gesamt_brutto:q,kostenstufe:q,kostenstand:q});}}
 }
 function renderKostenPruefen(k){
@@ -933,13 +948,10 @@ document.addEventListener('click',async function(e){
 });
 function renderKostenTrend(k){
   const v=(k.verlauf||[]).filter(s=>s&&s.betrag!=null).slice().sort((a,b)=>(a.lph||0)-(b.lph||0));
-  const budget=(k.budget!=null&&!isNaN(+k.budget))?+k.budget:null;
-  if(!v.length&&budget==null)return '';
-  let h='<div class="kt"><div class="kt-h">'+gl('Kosten-Verlauf','Die HOAI-Kostenstufen über die Zeit: Kostenrahmen → Schätzung → Berechnung → Anschlag → Feststellung. Zeigt, ob das Projekt im Budget bleibt.')+' · Schätzung → Feststellung</div>';
-  if(budget!=null)h+='<div class="kt-budget"><span class="kt-budget-l">'+gl('Budget','Vom Bauherrn vorgegebener Kostenrahmen, an dem die Stufen gemessen werden.')+' / Kostenrahmen</span><span class="kt-budget-v mono">'+eur(budget)+'</span></div>';
+  if(!v.length)return '';
+  let h='<div class="kt"><div class="kt-h">Belegte Kostenermittlungen · keine davon ist automatisch ein Budget</div>';
   if(v.length){h+='<div class="kt-steps">';
-    for(const s of v){let cls='',dlt='';if(budget!=null&&budget>0){const over=+s.betrag-budget;cls=over>budget*0.02?'over':over<-budget*0.02?'under':'on';dlt=' · <span class="kt-delta '+cls+'">'+(over>=0?'+':'')+eur(over)+' vs. Budget</span>';}
-      h+='<div class="kt-step '+cls+'"><div class="kt-step-top"><span class="kt-stufe">'+esc(s.stufe||'')+'</span>'+(s.lph?'<span class="kt-lph">LPH '+esc(''+s.lph)+'</span>':'')+'</div><div class="kt-betrag mono">'+eur(s.betrag)+'</div><div class="kt-foot">'+(s.stand?esc(fmtFrist(s.stand)):'')+dlt+(s.quelle?'<div class="kt-q">Quelle: '+esc(s.quelle)+'</div>':'')+'</div></div>';}
+    for(const s of v){h+='<div class="kt-step"><div class="kt-step-top"><span class="kt-stufe">'+esc(STUFE_TXT[s.stufe]||s.stufe||'')+'</span>'+(s.lph?'<span class="kt-lph">LPH '+esc(''+s.lph)+'</span>':'')+'</div><div class="kt-betrag mono">'+eur(s.betrag)+'</div><div class="kt-foot">'+(s.stand?esc(fmtFrist(s.stand)):'')+(s.quelle?'<div class="kt-q">Quelle: '+esc(s.quelle)+'</div>':'')+'</div></div>';}
     h+='</div>';}
   return h+'</div>';
 }
@@ -958,8 +970,8 @@ function renderHonorar(D){const ho=D&&D.honorare?D.honorare:null;if(!ho)return '
 }
 function renderKosten(D,costDocs){
   if(D&&D.kosten){const k=D.kosten;let h='';
-    if(k.summe_brutto){const bud=(k.budget!=null&&!isNaN(+k.budget)&&+k.budget>0)?+k.budget:null,ho=D.honorare||null,dlt=bud!=null?k.summe_brutto-bud:null;
-      h+=ovHero([ovK('',(k.summe_brutto/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+'<span class="ov-k-u"> Mio € brutto</span>','Stand '+(k.stand||'?')),dlt!=null?ovK(dlt>0?'bad':'ok',(dlt>0?'+':'−')+Math.abs(Math.round(dlt/1000)).toLocaleString('de-DE')+'<span class="ov-k-u"> T€</span>','vs. Budget '+(bud/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €'):null,ho&&ho.offene_nachtraege?ovK('warn',ho.offene_nachtraege,'offene Nachträge'):null]);}
+    if(k.summe_brutto){const ho=D.honorare||null;
+      h+=ovHero([ovK('',(k.summe_brutto/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+'<span class="ov-k-u"> Mio € brutto</span>',esc(STUFE_TXT[k.stufe]||k.stufe||'Kostenermittlung')+' · '+(k.stand||'Stand offen')),ho&&ho.offene_nachtraege?ovK('warn',ho.offene_nachtraege,'offene Nachträge'):null]);}
     h+=renderKostenTrend(k);
     if(k.kg&&k.kg.length){h+='<div class="kt-h" style="margin-top:14px">Kostengruppen · DIN 276</div><table class="kg-table"><tr><th>'+gl('KG','Kostengruppe nach DIN 276 — z. B. KG 300 Bauwerk, KG 400 Technik.')+' (DIN 276)</th><th style="text-align:right">Betrag</th></tr>'+k.kg.map(r=>'<tr><td>KG '+esc(''+r.kg)+'</td><td class="n">'+(Number(r.betrag)||0).toLocaleString('de-DE')+' €</td></tr>').join('')+'</table>';}
     if(!k.summe_brutto)h+='<div class="empty">Kein geprüfter Kostenstand — nicht schätzen.</div>';
@@ -3070,7 +3082,18 @@ function wire(T,C){
   {const cb=el('main').querySelector('#kzcopy');if(cb)cb.onclick=async()=>{
     try{await navigator.clipboard.writeText(kzRefText());const h=el('main').querySelector('#kzcopyh');if(h){h.textContent='kopiert ✓';setTimeout(()=>{h.textContent='';},2500);}}
     catch(e){uiHinweis('Kopieren nicht möglich: '+e.message);}};}
-  el('main').querySelectorAll('.pilgrim-station').forEach(st=>st.onclick=async()=>{await sb.from('projects').update({lph:+st.dataset.lph}).eq('id',current);render();});
+  el('main').querySelectorAll('.pilgrim-station').forEach(st=>st.onclick=()=>{viewLph=+st.dataset.lph;render();});
+  {const save=el('main').querySelector('#phase-save');if(save)save.onclick=async()=>{
+    const aktiv=normLph([...el('main').querySelectorAll('.phase-choice:checked')].map(x=>x.value));
+    const leit=+el('main').querySelector('#phase-lead').value;
+    const begruendung=el('main').querySelector('#phase-reason').value.trim();
+    if(!aktiv.length||!aktiv.includes(leit)||begruendung.length<8){uiHinweis('Bitte aktive Phasen, passenden Schwerpunkt und eine konkrete Begründung/Quelle angeben.');return;}
+    const alt=proj.lph_phasen||{};
+    const neu={...alt,aktiv,leit,quelle:'manuell',begruendung,stand:new Date().toISOString(),scan:alt.scan||(alt.quelle==='scan'?alt:null)};
+    const{error}=await sb.from('projects').update({lph:leit,lph_phasen:neu}).eq('id',current);
+    if(error){uiHinweis('Phasenlage nicht gespeichert: '+error.message);return;}
+    viewLph=leit;await render();
+  };}
   el('main').querySelectorAll('.task-row').forEach(r=>r.onclick=e=>{if(e.target.classList.contains('tcheck'))return;selTask=r.dataset.trow;el('main').querySelectorAll('.task-row').forEach(x=>x.classList.toggle('sel',x.dataset.trow===selTask));const d=el('aufgdetail');if(d){d.innerHTML=renderTaskDetail(taskMap[selTask]);wireDetail();}});
   el('main').querySelectorAll('.tcheck').forEach(cb=>cb.onchange=()=>toggleTask(cb.dataset.task,cb));
   wireDetail();
