@@ -4217,9 +4217,16 @@ async function handmaus(pfad) { return (await fetch(HANDMAUS + pfad, { method: '
 function handmausStart() {
   const L = S.live;
   if (!L || !handmausGewuenscht() || L.handpuls) return;
+  // Der Puls merkt auch, wenn der Helfer zwischendurch neu gestartet wurde (dann ist er aus,
+  // ohne Fehler: wieder einschalten) oder ganz weg ist (einmal sagen statt still weiterlaufen).
   L.handpuls = setInterval(() => handmaus('/puls').then((j) => {
+    L.handweg = false;
     if (j.fehler && !L.handfehler) { L.handfehler = true; liveZeile('fehler', 'Handmaus: ' + j.fehler); }
-  }).catch(() => {}), 10000);
+    else if (!j.an && !j.fehler) handmaus('/start').catch(() => {});
+  }).catch(() => {
+    if (!L.handweg && S.live === L) liveZeile('hinweis', 'Handmaus: Verbindung zum Helfer verloren — versuche es weiter.');
+    L.handweg = true;
+  }), 10000);
   handmaus('/start')
     .then(() => { if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen.'); else handmausStop(L); })
     .catch(() => { clearInterval(L.handpuls); L.handpuls = null; if (S.live === L) liveZeile('hinweis', 'Handmaus nicht erreichbar: läuft der Helfer auf diesem PC, und darf das Board darauf zugreifen? (Schloss-Symbol neben der Adresse)'); });
