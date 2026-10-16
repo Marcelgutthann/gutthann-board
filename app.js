@@ -4222,7 +4222,7 @@ function handmausStart() {
   }).catch(() => {}), 10000);
   handmaus('/start')
     .then(() => { if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen.'); else handmausStop(L); })
-    .catch(() => { clearInterval(L.handpuls); L.handpuls = null; if (S.live === L) liveZeile('hinweis', 'Handmaus: Helfer läuft auf diesem PC nicht.'); });
+    .catch(() => { clearInterval(L.handpuls); L.handpuls = null; if (S.live === L) liveZeile('hinweis', 'Handmaus nicht erreichbar: läuft der Helfer auf diesem PC, und darf das Board darauf zugreifen? (Schloss-Symbol neben der Adresse)'); });
 }
 function handmausStop(L) {
   if (!L?.handpuls) return;
