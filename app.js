@@ -4248,7 +4248,7 @@ function handmausStart() {
   }), 2000);
   handmausAnzeige(L);
   handmaus('/start')
-    .then((j) => { handmausAnzeige(L, j); if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen.'); else handmausStop(L); })
+    .then((j) => { handmausAnzeige(L, j); if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · Zeige- und Mittelfinger gestreckt (✌): scrollen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen. Das Kamerafenster unten rechts zeigt, was erkannt wird.'); else handmausStop(L); })
     .catch(() => { clearInterval(L.handpuls); L.handpuls = null; handmausAnzeige(L); if (S.live === L) liveZeile('hinweis', 'Handmaus nicht erreichbar: läuft der Helfer auf diesem PC, und darf das Board darauf zugreifen? (Schloss-Symbol neben der Adresse)'); });
 }
 function handmausStop(L) {
