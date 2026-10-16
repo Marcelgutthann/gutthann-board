@@ -3738,8 +3738,8 @@ function liveFenster() {
   const kopf = el('div', { class: 'lkopf' }, el('b', {}, 'Moderator'),
     el('span', { class: 'lstat' }, { aus: 'beendet', verbindet: 'verbindet …', spricht: 'hört zu' }[z]));
   kopf.append(el('button', { class: 'lhand' + (handmausGewuenscht() ? ' an' : ''), id: 'lhand',
-    title: 'Maus per Hand vor der Kamera steuern (nur auf PCs mit Handmaus-Helfer)', onclick: handmausUmschalten },
-  handmausGewuenscht() ? 'Handmaus an' : 'Handmaus aus'));
+    title: handmausGewuenscht() ? 'Klick schaltet die Handmaus aus' : 'Klick schaltet die Handmaus ein (Maus per Hand vor der Kamera, nur auf PCs mit Handmaus-Helfer)',
+    onclick: handmausUmschalten }, handmausText()));
   if (z === 'aus') kopf.append(el('button', { class: 'lzu', title: 'Fenster schließen', onclick: () => { S.live = null; liveFenster(); } }, '×'));
   p.append(kopf);
   const liste = el('div', { class: 'lliste' });
@@ -4210,10 +4210,27 @@ async function liveFetch(url, body, retried = false) {
 // Handmaus (agentic-os/handmaus): ein Helfer auf diesem PC steuert die echte Maus mit der Hand
 // vor der Kamera. Laeuft mit dem Moderator an und aus. Je Geraet einzuschalten (localStorage),
 // damit Kollegen ohne Helfer weder Fehlermeldung noch Chrome-Nachfrage zum lokalen Netz sehen.
-// Der Puls alle 10 s haelt sie an; bleibt er aus (Tab zu), schaltet sie sich nach 30 s selbst ab.
+// Der Puls alle 2 s haelt sie an und liefert den Stand fuer den Knopf (Kamera startet / sucht
+// Hand / Hand erkannt); bleibt er aus (Tab zu), schaltet sie sich nach 30 s selbst ab.
+// 16.10.: der Knopf zeigte nur "Handmaus an" -- Marcel hat ihn elf Mal umgeschaltet, ohne zu
+// sehen, ob die Kamera ueberhaupt lief. Darum steht jetzt der echte Zustand darauf.
 const HANDMAUS = 'http://127.0.0.1:47811';
 function handmausGewuenscht() { try { return localStorage.getItem('handmaus') === 'an'; } catch { return false; } }
 async function handmaus(pfad) { return (await fetch(HANDMAUS + pfad, { method: 'POST' })).json(); }
+function handmausText() {
+  if (!handmausGewuenscht()) return 'Handmaus aus';
+  const L = S.live;
+  if (!L?.handpuls) return 'Handmaus an';
+  if (L.handweg) return 'Handmaus · nicht erreichbar';
+  const st = L.handstand;
+  if (!st?.an) return 'Handmaus · startet';
+  return st.haende ? 'Handmaus · Hand erkannt' : st.bilder ? 'Handmaus · sucht Hand' : 'Handmaus · Kamera startet';
+}
+function handmausAnzeige(L, j) {
+  if (j) L.handstand = j;
+  const k = document.getElementById('lhand');
+  if (k && S.live === L) k.textContent = handmausText();
+}
 function handmausStart() {
   const L = S.live;
   if (!L || !handmausGewuenscht() || L.handpuls) return;
@@ -4221,15 +4238,18 @@ function handmausStart() {
   // ohne Fehler: wieder einschalten) oder ganz weg ist (einmal sagen statt still weiterlaufen).
   L.handpuls = setInterval(() => handmaus('/puls').then((j) => {
     L.handweg = false;
+    handmausAnzeige(L, j);
     if (j.fehler && !L.handfehler) { L.handfehler = true; liveZeile('fehler', 'Handmaus: ' + j.fehler); }
     else if (!j.an && !j.fehler) handmaus('/start').catch(() => {});
   }).catch(() => {
     if (!L.handweg && S.live === L) liveZeile('hinweis', 'Handmaus: Verbindung zum Helfer verloren — versuche es weiter.');
     L.handweg = true;
-  }), 10000);
+    handmausAnzeige(L);
+  }), 2000);
+  handmausAnzeige(L);
   handmaus('/start')
-    .then(() => { if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen.'); else handmausStop(L); })
-    .catch(() => { clearInterval(L.handpuls); L.handpuls = null; if (S.live === L) liveZeile('hinweis', 'Handmaus nicht erreichbar: läuft der Helfer auf diesem PC, und darf das Board darauf zugreifen? (Schloss-Symbol neben der Adresse)'); });
+    .then((j) => { handmausAnzeige(L, j); if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen.'); else handmausStop(L); })
+    .catch(() => { clearInterval(L.handpuls); L.handpuls = null; handmausAnzeige(L); if (S.live === L) liveZeile('hinweis', 'Handmaus nicht erreichbar: läuft der Helfer auf diesem PC, und darf das Board darauf zugreifen? (Schloss-Symbol neben der Adresse)'); });
 }
 function handmausStop(L) {
   if (!L?.handpuls) return;
