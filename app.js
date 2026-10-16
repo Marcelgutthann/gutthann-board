@@ -1228,14 +1228,14 @@ function renderTopbar() {
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'vergabe' ? 'Büro intern · alle Vergabeterminpläne · maßgeblich ist die Lesefassung beim Bauherrn'
-    : S.active.typ === 'projekt' ? ''
+    : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
-  if (scope) tb.append(el('div', { class: 'scope' }, scope));
+  tb.append(el('div', { class: 'scope' }, scope));
   // Im Projekt: Aufgaben und Dashboard sind zwei Ansichten derselben Ebene
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['kal', 'Kalender']]) {
+    for (const [key, label] of [['board', 'Aufgaben'], ['kal', 'Kalender'], ['dash', 'Dashboard'], ['termin', 'Terminplanung']]) {
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
     tb.append(tabs);
@@ -1292,6 +1292,32 @@ function renderTopbar() {
       onclick: () => { if (l.todo_id) openCard(l.todo_id); },
     }, el('span', { class: 'tdot' }), 'gescheitert: ' + (l.projekt ? l.projekt.replace(/^\d+\s*-?\s*/, '').slice(0, 14) + ' · ' : '') + (l.titel || l.agent).slice(0, 26)));
     tb.append(tb2);
+  }
+  // "Gerade in Arbeit" (Loop D): wer im Projekt woran dran ist — nur Karten-Daten.
+  // Immer sichtbar (auch leer), sonst findet niemand das Feature (Marcels Befund 10.08.);
+  // rechts steht das Team, damit die Personen im Projekt greifbar sind.
+  const ia = S.board?.in_arbeit || [];
+  if (S.active.typ === 'projekt' && S.ansicht === 'board') {
+    const z = el('div', { class: 'inarbeit' }, 'Gerade in Arbeit:');
+    let n = 0;
+    for (const p2 of ia.slice(0, 5)) {
+      const t0 = (p2.themen || [])[0];
+      if (!t0) continue;
+      n++;
+      z.append(el('span', { class: 'who', title: (p2.themen || []).map((x) => x.titel).slice(0, 5).join(' · ') },
+        el('span', { class: 'av', style: 'background:' + avColor(p2.person) }, initialen(p2.name)),
+        String(p2.name).split(' ')[0] + ' · ' + t0.titel.slice(0, 36)));
+    }
+    if (!n) z.append(el('span', { style: 'color:#8A8A83' }, 'noch niemand — Karten mit Besitzer oder Zuweisung erscheinen hier automatisch'));
+    const team = personListe();
+    if (team.length) {
+      const avs = el('span', { style: 'display:flex' });
+      for (const p3 of team.slice(0, 9)) avs.append(el('span', {
+        class: 'av', style: 'background:' + avColor(p3.kurz) + ';margin-left:-4px;border:1.5px solid #F3F3F1', title: p3.name,
+      }, initialen(p3.name)));
+      z.append(el('span', { style: 'margin-left:auto;display:flex;align-items:center;gap:6px;color:#8A8A83' }, 'Team', avs));
+    }
+    tb.append(z);
   }
 }
 
@@ -3711,6 +3737,9 @@ function liveFenster() {
   p.innerHTML = '';
   const kopf = el('div', { class: 'lkopf' }, el('b', {}, 'Moderator'),
     el('span', { class: 'lstat' }, { aus: 'beendet', verbindet: 'verbindet …', spricht: 'hört zu' }[z]));
+  kopf.append(el('button', { class: 'lhand' + (handmausGewuenscht() ? ' an' : ''), id: 'lhand',
+    title: 'Maus per Hand vor der Kamera steuern (nur auf PCs mit Handmaus-Helfer)', onclick: handmausUmschalten },
+  handmausGewuenscht() ? 'Handmaus an' : 'Handmaus aus'));
   if (z === 'aus') kopf.append(el('button', { class: 'lzu', title: 'Fenster schließen', onclick: () => { S.live = null; liveFenster(); } }, '×'));
   p.append(kopf);
   const liste = el('div', { class: 'lliste' });
@@ -4178,10 +4207,40 @@ async function liveFetch(url, body, retried = false) {
   return j;
 }
 
+// Handmaus (agentic-os/handmaus): ein Helfer auf diesem PC steuert die echte Maus mit der Hand
+// vor der Kamera. Laeuft mit dem Moderator an und aus. Je Geraet einzuschalten (localStorage),
+// damit Kollegen ohne Helfer weder Fehlermeldung noch Chrome-Nachfrage zum lokalen Netz sehen.
+// Der Puls alle 10 s haelt sie an; bleibt er aus (Tab zu), schaltet sie sich nach 30 s selbst ab.
+const HANDMAUS = 'http://127.0.0.1:47811';
+function handmausGewuenscht() { try { return localStorage.getItem('handmaus') === 'an'; } catch { return false; } }
+async function handmaus(pfad) { return (await fetch(HANDMAUS + pfad, { method: 'POST' })).json(); }
+function handmausStart() {
+  const L = S.live;
+  if (!L || !handmausGewuenscht() || L.handpuls) return;
+  L.handpuls = setInterval(() => handmaus('/puls').then((j) => {
+    if (j.fehler && !L.handfehler) { L.handfehler = true; liveZeile('fehler', 'Handmaus: ' + j.fehler); }
+  }).catch(() => {}), 10000);
+  handmaus('/start')
+    .then(() => { if (S.live === L) liveZeile('hinweis', 'Handmaus an — Kneifen oder Faust: klicken und ziehen · andere Hand heben und senken: Rechtsklick · beide Hände greifen: zoomen und drehen.'); else handmausStop(L); })
+    .catch(() => { clearInterval(L.handpuls); L.handpuls = null; if (S.live === L) liveZeile('hinweis', 'Handmaus: Helfer läuft auf diesem PC nicht.'); });
+}
+function handmausStop(L) {
+  if (!L?.handpuls) return;
+  clearInterval(L.handpuls); L.handpuls = null;
+  handmaus('/stop').catch(() => {});
+}
+function handmausUmschalten() {
+  const an = !handmausGewuenscht();
+  try { localStorage.setItem('handmaus', an ? 'an' : 'aus'); } catch { /* privates Fenster */ }
+  if (S.live?.pc) { if (an) handmausStart(); else { handmausStop(S.live); liveZeile('hinweis', 'Handmaus aus.'); } }
+  liveFenster();
+}
+
 async function liveStart() {
   if (S.live?.pc) return;
   S.live = { zustand: 'verbindet', zeilen: [], pc: null, dc: null, stream: null, audio: null, begonnen: new Date().toISOString() };
   liveZustand('verbindet');
+  handmausStart(); // Kamera braucht ~3 s zum Anlaufen -- parallel zum Verbindungsaufbau
   try {
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) throw new Error('Dieser Browser kann kein Mikrofon/WebRTC');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -4217,6 +4276,7 @@ function liveEnde(hinweis, still) {
   const L = S.live; if (!L) return;
   if (!still && L.dc?.readyState === 'open') L.dc.send(JSON.stringify({ type: 'session.close' }));
   for (const t of L.stream?.getTracks() || []) t.stop();
+  handmausStop(L);
   L.pc?.close(); L.audio?.remove();
   L.pc = null; L.dc = null; L.stream = null; L.audio = null;
   if (hinweis) liveZeile('hinweis', hinweis);
