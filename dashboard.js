@@ -283,7 +283,10 @@ async function renderCockpit(){el('crumb').textContent='Cockpit';
   el('main').innerHTML=h;
   el('main').querySelectorAll('.pcard').forEach(c=>c.onclick=()=>go('project',c.dataset.id));}
 
+// Neuzeichnen-Zähler: ein älterer, langsamerer Durchlauf (voriges Projekt, Realtime) malt nicht über einen neueren.
+let renderNr=0;
 async function renderProject(){
+  const meinNr=++renderNr;
   const td=today();
   const[{data:proj},{data:tasks},{data:comms},{count:docCount},{data:recent},{data:folders},{data:costDocs},{data:fbRows},{data:abdeckung}]=await Promise.all([
     sb.from('projects').select('id,name,lph,lph_phasen,dashboard,dashboard_stand,doku_check,checklist,lph1,lph1_stand,lph_kataloge,angebote_check,angebote_stand,termin_check,termin_stand,ziele,kennzahlen,kennzahlen_stand').eq('id',current).single(),
@@ -296,8 +299,11 @@ async function renderProject(){
     sb.from('item_feedback').select('item_type,item_title,kommentar').eq('project_id',current).order('created_at'),
     sb.from('wissens_abdeckung').select('dokumente,mit_text,mit_embedding,text_pct,embedding_pct,soll_bestand,ballast,letzter_ingest').eq('project_id',current).maybeSingle()]);
   if(!proj){go('cockpit');return;}
-  {const{data:ks,error:ksErr}=await sb.rpc('kostenstand',{p_project:current});if(ksErr)uiHinweis('Kostenstand nicht geladen: '+ksErr.message);else kostenAusWahrheit(proj,ks);}
+  const{data:ks,error:ksErr}=await sb.rpc('kostenstand',{p_project:current});
   await betLaden();
+  if(meinNr!==renderNr)return;
+  // erst nach dem letzten Warten: sonst malt ein älteres Neuzeichnen die vorige Abschnitt-Sicht über einen Klick
+  if(ksErr)uiHinweis('Kostenstand nicht geladen: '+ksErr.message);else kostenAusWahrheit(proj,ks);
   currentName=proj.name;lastD=proj.dashboard||{};lastStand=proj.dashboard_stand;lastChecklist=proj.checklist||{};lastL1=proj.lph1||null;renderSidebar();
   fbClosed={};(fbRows||[]).forEach(r=>{fbClosed[fbKey(r.item_type,r.item_title)]=r;});
   el('crumb').innerHTML='<a id="toC">Cockpit</a><span class="sep">›</span>'+esc(short(proj.name));
@@ -319,8 +325,9 @@ async function renderProject(){
   const kk=D&&D.kosten;
   let kostenSub=kostenVal?('brutto'+(kk&&kk.stand?' · Stand '+esc(kk.stand):' · Stand lt. Analyse')):'Tiefenanalyse nötig',kostenBar='';
   {const zp=(kk&&kk.zu_pruefen&&kk.zu_pruefen.length)||0;if(zp)kostenSub+=' · <span class="up">'+zp+' neue Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>';if(!kostenVal)kostenSub=zp?'<span class="up">'+zp+' Kostendatei'+(zp>1?'en':'')+' zu prüfen</span>':'kein geprüfter Kostenstand';}
+  h+=abTabs(D&&D.kosten)+abVorschlag(D&&D.kosten);
   h+='<div class="kpi-strip">'+kpi('accent','Aktive Phase',lph?gl('LPH')+' '+lph:'—','','HOAI § 34')+
-    kpi(kostenVal?'':'','Kosten aktuell',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio €':'',kostenSub,kostenBar)+
+    kpi(kostenVal?'':'',D&&D.kosten&&D.kosten.sichtKurz?'Kosten '+D.kosten.sichtKurz:'Kosten aktuell',kostenVal?(kostenVal/1e6).toLocaleString('de-DE',{maximumFractionDigits:2}):'—',kostenVal?'Mio €':'',kostenSub,kostenBar)+
     kpi(cOver?'alert':'','Überfällige Vorgänge',cOver,'',cOver?'Nachhaken nötig · '+cOpen+' offen gesamt':(cOpen?cOpen+' offen · nichts überfällig':'nichts offen'))+
     kzKpi(proj.kennzahlen,kostenVal)+abKpi(abdeckung)+'</div>';
   h+='<nav class="pilgrim"><div class="pilgrim-label">Leistungsphasen HOAI · klick zum Setzen der aktiven Phase</div><div class="pilgrim-track"><div class="pilgrim-line"></div><div class="pilgrim-line-progress" style="width:'+(lph?((lph-1)/8*89+5.5):0)+'%"></div>';
@@ -513,7 +520,8 @@ function renderKennzahlen(KZ,D,pname){
      (hw?'<div class="kz-ref-m warn">Vor Verwendung prüfen: '+esc(String(hw.wert))+'</div>':'')+
      '<button class="btn-sm" id="kzcopy" style="margin-top:10px">Für Referenzblatt kopieren</button>'+
      '<span class="kz-ref-h" id="kzcopyh"></span></div>';}
-  return hero+'<div class="kz-wrap">'+B.join('')+ref+'</div>';}
+  const k=D&&D.kosten;
+  return abTabs(k)+hero+(k&&k.sicht?'':abNebeneinander(k))+'<div class="kz-wrap">'+B.join('')+(k&&k.sicht?'':ref)+'</div>';}
 // Zwischenablage-Text im Format der Referenzdatenbank
 function kzRefText(){const KZ=lastKz;if(!KZ)return '';
   const g=KZ.groesse||{},ko=KZ.kosten||{},au=KZ.auftrag||{},nu=KZ.nutzung||{},te=KZ.termine||{},rf=KZ.referenz||{};
@@ -899,26 +907,92 @@ const STUFE_TXT={Kostenrahmen:'Grobkostenschätzung',Kostenschaetzung:'Kostensch
 // ab LPH 6 das bepreiste LV. Keine Stufe ist ein Budget -- es gibt keinen Soll-Wert, nur die Stufe davor.
 const KOSTEN_STUFEN=[{stufe:'Kostenrahmen',lph:[1]},{stufe:'Kostenschaetzung',lph:[2]},{stufe:'Kostenberechnung',lph:[3,4,5]},
   {stufe:'Kostenanschlag',lph:[6,7]},{stufe:'Kostenfeststellung',lph:[8,9],nurMitWert:true}];
+// Bauabschnitte/Bauteile (Migr. 257): jeder Kostenstand trägt seinen Umfang (abschnitte, leer = Gesamt).
+// Die Sicht (Gesamt oder ein Abschnitt) gilt für Kennzahlen, Kosten und KPI zugleich und wird je Projekt gemerkt.
+// Verglichen wird nur innerhalb desselben Umfangs -- Pentling: Grobkosten Gesamt gegen KB BA 1a ist kein Delta.
+let abSicht=(()=>{try{return JSON.parse(localStorage.getItem('gb_abschnitt')||'{}')||{};}catch(e){return {};}})();
+const abKey=u=>(u||[]).slice().sort().join(',');
+const KOSTEN_RANG=['Kostenrahmen','Kostenschaetzung','Kostenberechnung','Kostenanschlag','Kostenfeststellung'];
 function kostenAusWahrheit(proj,ks){
-  if(!ks)return;const a=ks.aktuell||null,D=proj.dashboard=Object.assign({},proj.dashboard||{});
-  const P=proj.lph_phasen||{},aktiv=(Array.isArray(P.aktiv)&&P.aktiv.length?P.aktiv:[proj.lph]).map(Number).filter(Boolean);
+  if(!ks)return;const D=proj.dashboard=Object.assign({},proj.dashboard||{});
+  const AB=ks.abschnitte||[],best=AB.filter(x=>x.status==='bestaetigt'),erk=AB.filter(x=>x.status==='erkannt');
+  const ab=best.find(x=>x.id===abSicht[proj.id])||null;
+  const alle=abKey(best.map(x=>x.id));
+  const istGes=u=>!u||!u.length||(!!best.length&&abKey(u)===alle);
+  const kurz=u=>(u||[]).map(i=>(AB.find(x=>x.id===i)||{kurz:'?'}).kurz).join(' + ');
+  const P=(ab&&ab.lph_phasen)||proj.lph_phasen||{},aktiv=(Array.isArray(P.aktiv)&&P.aktiv.length?P.aktiv:[proj.lph]).map(Number).filter(Boolean);
+  const V=(ks.verlauf||[]).filter(x=>x.betrag_brutto!=null);
+  const neu=L=>L.slice().sort((x,y)=>x.stichtag<y.stichtag?-1:1).pop();
+  const ein=v=>v?{betrag:+v.betrag_brutto,stand:v.stichtag,quelle:v.datei}:null;
+  const hoechst=L=>L.slice().sort((x,y)=>KOSTEN_RANG.indexOf(x.stufe)-KOSTEN_RANG.indexOf(y.stufe)||(x.stichtag<y.stichtag?-1:1)).pop()||null;
+  function fuer(stufe){
+    const S=V.filter(x=>x.stufe===stufe);
+    if(!ab){
+      const e=ein(neu(S.filter(x=>istGes(x.abschnitte))));if(e||!best.length)return e&&Object.assign(e,{umfangKey:'gesamt'});
+      // keine Gesamtzahl dieser Stufe: Summe der Abschnitte -- vergleichbar nur, wenn jeder Abschnitt drin ist
+      const je={};S.filter(x=>!istGes(x.abschnitte)).forEach(x=>{const k=abKey(x.abschnitte);if(!je[k]||je[k].stichtag<x.stichtag)je[k]=x;});
+      const teile=[],drin=new Set();
+      Object.values(je).sort((a,b)=>b.abschnitte.length-a.abschnitte.length).forEach(x=>{if(x.abschnitte.every(i=>!drin.has(i))){teile.push(x);x.abschnitte.forEach(i=>drin.add(i));}});
+      if(!teile.length)return null;
+      const fehlt=best.filter(a=>!drin.has(a.id)).map(a=>a.kurz);
+      return {betrag:teile.reduce((s,x)=>s+(+x.betrag_brutto),0),stand:neu(teile).stichtag,
+        quelle:teile.map(x=>kurz(x.abschnitte)+': '+x.datei).join(' · '),teil:fehlt.length>0,umfangKey:fehlt.length?'teil':'gesamt',
+        umfang:fehlt.length?'nur '+teile.map(x=>kurz(x.abschnitte)).join(' + ')+' · es fehlt '+fehlt.join(', '):'Summe der Abschnitte'};}
+    const e=ein(neu(S.filter(x=>abKey(x.abschnitte)===ab.id)));if(e)return Object.assign(e,{umfangKey:ab.id});
+    const g=neu(S.filter(x=>(x.abschnitte||[]).includes(ab.id)));
+    return g?Object.assign(ein(g),{teil:true,umfangKey:'teil',umfang:'gemeinsam: '+kurz(g.abschnitte)}):null;}
+  const bu=ks.budget,buPasst=bu&&bu.betrag_brutto!=null&&(ab?abKey(bu.abschnitte)===ab.id:istGes(bu.abschnitte));
   const stufen=KOSTEN_STUFEN.map(s=>{
-    const v=(ks.verlauf||[]).filter(x=>x.stufe===s.stufe&&x.betrag_brutto!=null).sort((x,y)=>x.stichtag<y.stichtag?-1:1).pop();
-    let e=v?{betrag:+v.betrag_brutto,stand:v.stichtag,quelle:v.datei}:null;
+    let e=fuer(s.stufe);
     // projekt_budget (LLM-Übernahme) trägt seit Migr. 256 die Stufe aus seiner Quelle; gilt nur, solange diese Stufe keinen geprüften Stand hat
-    if(!e&&ks.budget&&(ks.budget.stufe||'Kostenrahmen')===s.stufe&&ks.budget.betrag_brutto!=null)e={betrag:+ks.budget.betrag_brutto,stand:ks.budget.beschluss_am,quelle:ks.budget.gefunden_in,ungeprueft:true};
+    if(!e&&buPasst&&(bu.stufe||'Kostenrahmen')===s.stufe)e={betrag:+bu.betrag_brutto,stand:bu.beschluss_am,quelle:bu.gefunden_in,ungeprueft:true,umfangKey:ab?ab.id:'gesamt'};
     const hier=s.lph.some(l=>aktiv.includes(l));
     if(!e&&(!hier||s.nurMitWert))return null;
     return Object.assign({stufe:STUFE_TXT[s.stufe],lph:s.lph,aktiv:hier,betrag:null},e||{});}).filter(Boolean);
-  D.kosten={summe_brutto:a?+a.betrag_brutto:null,stand:a?fmtD(a.stichtag)+' · '+STUFE_TXT[a.stufe]:null,
-    quelle:a?a.datei+(a.kg_umfang?' · KG '+a.kg_umfang:''):null,beleg:a?a.beleg_stelle:null,bemerkung:a?a.bemerkung:null,
-    geprueft:a&&a.geprueft_von?a.geprueft_von+(a.geprueft_am?', '+fmtD(a.geprueft_am):''):null,
+  // Stand der Sicht: Gesamt = kostenstand().aktuell (kann ein Abschnitt sein), Abschnitt = höchste Stufe genau dieses Abschnitts
+  const a=ab?hoechst(V.filter(x=>abKey(x.abschnitte)===ab.id)):(ks.aktuell||null);
+  const um=a&&!istGes(a.abschnitte)?kurz(a.abschnitte):null;
+  const jeAb=best.map(x=>{const v=hoechst(V.filter(y=>abKey(y.abschnitte)===x.id));const L=x.lph_phasen&&Array.isArray(x.lph_phasen.aktiv)?x.lph_phasen.aktiv:null;
+    return {id:x.id,kurz:x.kurz,name:x.name,kz:x.kennzahlen||{},lph:L,betrag:v?+v.betrag_brutto:null,stufe:v?v.stufe:null,stand:v?v.stichtag:null};});
+  D.kosten={summe_brutto:a?+a.betrag_brutto:null,stand:a?fmtD(a.stichtag)+' · '+STUFE_TXT[a.stufe]+(um&&!ab?' · nur '+um:''):null,
+    quelle:a?a.datei+(a.kg_umfang?' · KG '+a.kg_umfang:''):null,beleg:!ab&&a?a.beleg_stelle:null,bemerkung:!ab&&a?a.bemerkung:null,
+    geprueft:!ab&&a&&a.geprueft_von?a.geprueft_von+(a.geprueft_am?', '+fmtD(a.geprueft_am):''):null,
     kg:[],stufen:stufen,aktiv:aktiv,
-    zu_pruefen:ks.zu_pruefen||[]};
+    zu_pruefen:(ks.zu_pruefen||[]).filter(c=>!ab||abKey(c.abschnitte)===ab.id).map(c=>Object.assign({},c,{umfangText:istGes(c.abschnitte)?null:kurz(c.abschnitte)})),
+    abschnitte:best,erkannt:erk,sicht:ab?ab.id:'',sichtKurz:ab?ab.kurz:null,umfang:um,jeAbschnitt:jeAb,lphEigen:!!(ab&&ab.lph_phasen)};
+  // Kennzahlen der Sicht: im Abschnitt dessen eigene Werte (belegt je Abschnitt), sonst die des Projekts
+  if(ab)proj.kennzahlen=Object.assign({},ab.kennzahlen||{},{kosten:Object.assign({},(ab.kennzahlen||{}).kosten||{}),stand:proj.kennzahlen&&proj.kennzahlen.stand});
   const KK=proj.kennzahlen&&proj.kennzahlen.kosten;
-  if(KK){if(a){const q={stand:a.stichtag,quelle:a.datei,status:'belegt'};Object.assign(KK,{gesamt_brutto:Object.assign({wert:+a.betrag_brutto},q),kostenstufe:Object.assign({wert:a.stufe},q),kostenstand:Object.assign({wert:a.stichtag},q)});}
+  if(KK){if(a){const q={stand:a.stichtag,quelle:a.datei+(um&&!ab?' (nur '+um+')':''),status:'belegt'};Object.assign(KK,{gesamt_brutto:Object.assign({wert:+a.betrag_brutto},q),kostenstufe:Object.assign({wert:a.stufe},q),kostenstand:Object.assign({wert:a.stichtag},q)});}
     else{const q={wert:null,stand:null,quelle:'kein geprüfter Kostenstand',status:'offen'};Object.assign(KK,{gesamt_brutto:q,kostenstufe:q,kostenstand:q});}}
 }
+// Umschalter Gesamt · BA I · BA II … (nur wenn das Projekt bestätigte Abschnitte hat)
+function abTabs(k){const B=(k&&k.abschnitte)||[];if(!B.length)return '';
+  return '<div class="ab-tabs" role="tablist">'+[{id:'',kurz:'Gesamt',name:'Gesamtmaßnahme'}].concat(B).map(a=>
+    '<button class="ab-tab'+(a.id===k.sicht?' an':'')+'" role="tab" data-absicht="'+esc(a.id)+'" title="'+esc(a.name||a.kurz)+'">'+esc(a.kurz)+'</button>').join('')+
+    (k.sicht?'<span class="ab-info">'+(k.lphEigen?'eigene Leistungsphasen':'Leistungsphasen wie das Projekt')+'</span>':'')+'</div>';}
+// Neu erkannte Abschnitte (Kostendatei, Analyse) als Vorschlag: übernehmen oder verwerfen
+function abVorschlag(k){const E=(k&&k.erkannt)||[];if(!E.length)return '';
+  return '<div class="ab-neu"><span class="ab-neu-t">'+E.length+(E.length>1?' Abschnitte':' Abschnitt')+' erkannt</span>'+E.map(a=>
+    '<span class="ab-neu-a" title="'+esc(a.erkannt_aus||'')+'"><strong>'+esc(a.kurz)+'</strong>'+(a.name?' '+esc(a.name):'')+
+    ' <button class="btn-sm" data-abok="'+esc(a.kurz)+'">Übernehmen</button><button class="btn-sm" data-abweg="'+esc(a.kurz)+'">Verwerfen</button></span>').join('')+'</div>';}
+// Gesamt-Sicht: Abschnitte nebeneinander -- Fläche, Kostenstand und Kennwert je Abschnitt
+function abNebeneinander(k){const J=(k&&k.jeAbschnitt)||[];if(!J.length||k.sicht)return '';
+  const z=(x,f,e,d)=>{const w=kzNum((x.kz||{}).groesse,f);return w!=null?kzZ(w,d)+' '+e:'—';};
+  return '<div class="ab-neben"><div class="kz-h">Je Abschnitt</div><table class="kg-table ab-tab-t"><tr><th></th>'+J.map(x=>'<th title="'+esc(x.name||'')+'">'+esc(x.kurz)+'</th>').join('')+'</tr>'+
+    '<tr><td>BGF</td>'+J.map(x=>'<td class="n">'+z(x,'bgf_m2','m²',0)+'</td>').join('')+'</tr>'+
+    '<tr><td>BRI</td>'+J.map(x=>'<td class="n">'+z(x,'bri_m3','m³',0)+'</td>').join('')+'</tr>'+
+    '<tr><td>Kostenstand</td>'+J.map(x=>'<td class="n">'+(x.betrag!=null?(x.betrag/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+' Mio €<br><small>'+esc(STUFE_TXT[x.stufe]||x.stufe)+' '+fmtD(x.stand)+'</small>':'<small>kein Beleg</small>')+'</td>').join('')+'</tr>'+
+    '<tr><td>Leistungsphasen</td>'+J.map(x=>'<td class="n"><small>'+(x.lph?'LPH '+esc(x.lph.join(', ')):'wie Projekt')+'</small></td>').join('')+'</tr></table></div>';}
+document.addEventListener('click',async function(e){
+  const t=e.target.closest&&e.target.closest('[data-absicht],[data-abok],[data-abweg]');if(!t||!current)return;e.preventDefault();
+  if(t.hasAttribute('data-absicht')){abSicht[current]=t.dataset.absicht;try{localStorage.setItem('gb_abschnitt',JSON.stringify(abSicht));}catch(x){}await render();return;}
+  t.disabled=true;
+  const ok=t.hasAttribute('data-abok');
+  const{data,error}=await sb.rpc('abschnitt_setzen',ok?{p_project:current,p_kurz:t.dataset.abok,p_status:'bestaetigt'}:{p_project:current,p_kurz:t.dataset.abweg,p_entfernen:true});
+  if(error||(data&&data.fehler)){uiHinweis('Nicht gespeichert: '+(error?error.message:data.fehler));t.disabled=false;return;}
+  await render();
+});
 function renderKostenPruefen(k){
   let h='';
   if(k.beleg)h+='<div class="page-sub" style="margin-top:10px">Beleg: „'+esc(k.beleg)+'“</div>';
@@ -926,7 +1000,7 @@ function renderKostenPruefen(k){
   if(k.geprueft)h+='<div class="page-sub">Geprüft: '+esc(k.geprueft)+'</div>';
   const z=k.zu_pruefen||[];
   if(z.length)h+='<div class="kt-h" style="margin-top:14px">Neue Kostendateien · zu prüfen ('+z.length+')</div>'+z.map(c=>
-    '<div class="act-row"><span class="af">'+esc(STUFE_TXT[c.stufe]||c.stufe)+' '+fmtD(c.stichtag)+' · '+
+    '<div class="act-row"><span class="af">'+(c.umfangText?'<strong>'+esc(c.umfangText)+'</strong> · ':'')+esc(STUFE_TXT[c.stufe]||c.stufe)+' '+fmtD(c.stichtag)+' · '+
     (c.betrag_brutto!=null?(+c.betrag_brutto).toLocaleString('de-DE',{minimumFractionDigits:2})+' € brutto':'kein eindeutiger Betrag')+
     '<br><small>'+esc(c.datei)+(c.bemerkung?' — '+esc(c.bemerkung):'')+'</small></span><span class="ad">'+
     (c.betrag_brutto!=null?'<button class="btn-sm" data-kk="'+esc(c.id)+'" data-ok="1">Bestätigen</button> ':'')+
@@ -941,14 +1015,15 @@ document.addEventListener('click',async function(e){
 });
 function renderKostenTrend(k){
   const st=k.stufen||[];if(!st.length)return '';
-  let h='<div class="kt"><div class="kt-h">'+gl('Kosten je Leistungsphase','LPH 1 Grobkostenschätzung, LPH 2 Kostenschätzung, LPH 3 Kostenberechnung, ab LPH 6 das bepreiste LV. Hervorgehoben sind die Stufen der Phasen, in denen das Projekt gerade steht. Verglichen wird jede Stufe mit der vorigen.')+(k.aktiv&&k.aktiv.length?' · aktiv: LPH '+esc(k.aktiv.join(', ')):'')+'</div><div class="kt-steps">';
+  let h='<div class="kt"><div class="kt-h">'+gl('Kosten je Leistungsphase','LPH 1 Grobkostenschätzung, LPH 2 Kostenschätzung, LPH 3 Kostenberechnung, ab LPH 6 das bepreiste LV. Hervorgehoben sind die Stufen der Phasen, in denen das Projekt gerade steht. Verglichen wird jede Stufe mit der vorigen — nur bei gleichem Umfang (Gesamtmaßnahme oder derselbe Bauabschnitt).')+(k.aktiv&&k.aktiv.length?' · aktiv: LPH '+esc(k.aktiv.join(', ')):'')+'</div><div class="kt-steps">';
   let vor=null;
   for(const s of st){let cls='',dlt='';
-    if(s.betrag!=null&&vor){const d=s.betrag-vor.betrag;cls=d>vor.betrag*0.02?'over':d<-vor.betrag*0.02?'under':'on';dlt=' · <span class="kt-delta '+cls+'">'+(d>=0?'+':'')+eur(d)+' vs. '+esc(vor.stufe)+'</span>';}
+    if(s.betrag!=null&&vor&&(s.teil||vor.teil))dlt=' · <span class="kt-delta">kein Vergleich: anderer Umfang</span>';
+    else if(s.betrag!=null&&vor){const d=s.betrag-vor.betrag;cls=d>vor.betrag*0.02?'over':d<-vor.betrag*0.02?'under':'on';dlt=' · <span class="kt-delta '+cls+'">'+(d>=0?'+':'')+eur(d)+' vs. '+esc(vor.stufe)+'</span>';}
     const lt='LPH '+s.lph[0]+(s.lph.length>1?'–'+s.lph[s.lph.length-1]:'');
-    h+='<div class="kt-step '+cls+(s.aktiv?' aktiv':'')+(s.betrag==null?' leer':'')+'"><div class="kt-step-top"><span class="kt-stufe">'+esc(s.stufe)+'</span><span class="kt-lph">'+lt+'</span></div>'+
+    h+='<div class="kt-step '+cls+(s.aktiv?' aktiv':'')+(s.betrag==null?' leer':'')+'" data-umfang="'+esc(s.umfangKey||'gesamt')+'"><div class="kt-step-top"><span class="kt-stufe">'+esc(s.stufe)+'</span><span class="kt-lph">'+lt+'</span></div>'+
       (s.betrag!=null?'<div class="kt-betrag mono">'+eur(s.betrag)+'</div>':'<div class="kt-betrag kt-offen">noch nicht erfasst</div>')+
-      '<div class="kt-foot">'+(s.stand?esc(fmtFrist(s.stand)):'')+dlt+(s.ungeprueft?'<div class="kt-q">nicht aus Datei geprüft</div>':'')+(s.quelle?'<div class="kt-q">Quelle: '+esc(s.quelle)+'</div>':'')+'</div></div>';
+      '<div class="kt-foot">'+(s.stand?esc(fmtFrist(s.stand)):'')+dlt+(s.umfang?'<div class="kt-q kt-umfang">'+esc(s.umfang)+'</div>':'')+(s.ungeprueft?'<div class="kt-q">nicht aus Datei geprüft</div>':'')+(s.quelle?'<div class="kt-q">Quelle: '+esc(s.quelle)+'</div>':'')+'</div></div>';
     if(s.betrag!=null)vor=s;}
   return h+'</div></div>';
 }
@@ -966,10 +1041,11 @@ function renderHonorar(D){const ho=D&&D.honorare?D.honorare:null;if(!ho)return '
   return h+'</div>';
 }
 function renderKosten(D,costDocs){
-  if(D&&D.kosten){const k=D.kosten;let h='';
+  if(D&&D.kosten){const k=D.kosten;let h=abTabs(k)+abVorschlag(k);
     if(k.summe_brutto){const ho=D.honorare||null;
       h+=ovHero([ovK('',(k.summe_brutto/1e6).toLocaleString('de-DE',{maximumFractionDigits:2})+'<span class="ov-k-u"> Mio € brutto</span>','Stand '+(k.stand||'?')),ho&&ho.offene_nachtraege?ovK('warn',ho.offene_nachtraege,'offene Nachträge'):null]);}
     h+=renderKostenTrend(k);
+    h+=abNebeneinander(k);
     if(k.kg&&k.kg.length){h+='<div class="kt-h" style="margin-top:14px">Kostengruppen · DIN 276</div><table class="kg-table"><tr><th>'+gl('KG','Kostengruppe nach DIN 276 — z. B. KG 300 Bauwerk, KG 400 Technik.')+' (DIN 276)</th><th style="text-align:right">Betrag</th></tr>'+k.kg.map(r=>'<tr><td>KG '+esc(''+r.kg)+'</td><td class="n">'+(Number(r.betrag)||0).toLocaleString('de-DE')+' €</td></tr>').join('')+'</table>';}
     if(!k.summe_brutto)h+='<div class="empty">Kein geprüfter Kostenstand — nicht schätzen.</div>';
     if(k.quelle)h+='<div class="page-sub" style="margin-top:10px">Quelle: '+esc(k.quelle)+'</div>';
