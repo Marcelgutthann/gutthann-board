@@ -44,6 +44,11 @@
   .headrow{position:sticky;top:0;background:#eef1f5;z-index:6;border-bottom:1px solid var(--line);}
   .leftpane .headrow{display:flex;align-items:center;height:44px;font-weight:600;border-bottom:2px solid var(--blue-dark);}
   .col-id{width:34px;padding:2px 4px;text-align:right;color:#666;flex:none;border-right:1px solid var(--line);}
+  /* Zeilen umsortieren (22.10.): an der Zeilennummer greifen, Linie zeigt die Einfuegestelle */
+  #leftrows .col-id{cursor:grab;}
+  body.zeile-zieht, body.zeile-zieht *{cursor:grabbing !important;user-select:none;}
+  .rowline.wird-gezogen{opacity:.45;}
+  .zieh-linie{position:fixed;height:0;border-top:2px solid var(--blue);z-index:1500;pointer-events:none;}
   .col-name{width:300px;padding:2px 6px;flex:none;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line);}
   .collapse-toggle{display:inline-flex;align-items:center;justify-content:center;flex:none;width:15px;height:15px;padding:0;border:none;background:transparent;cursor:pointer;font-size:9px;color:#555;vertical-align:middle;margin-right:2px;border-radius:3px;}
   .collapse-toggle:hover{background:#dbe6f7;}
@@ -288,7 +293,8 @@
      Erklaerungen liegen jetzt hinter "?" , die Legende hinter dem Farbfeld-Knopf. -->
 <div class="toolbar">
   <b class="tb-titel" id="tbTitel">Terminplan</b>
-  <select id="planWahl" title="Gespeicherte Pläne dieses Projekts" hidden></select>
+  <select id="planWahl" title="Gespeicherte Pläne dieses Projekts — Rechtsklick: umbenennen, duplizieren, löschen" hidden></select>
+  <button id="btnPlanMenue" class="tb-ic" title="Diesen Plan umbenennen, duplizieren oder löschen" hidden>⋯</button>
   <select id="blickWahl" title="Schicht des Plans: alle Schichten oder nur Planung / Vergabe / Ausführung — Verknüpfungen zwischen den Schichten bleiben dabei lebendig">
     <option value="alle">Alle Schichten</option>
     <option value="planung">Nur Planung</option>
@@ -1398,6 +1404,91 @@ function duplicateTaskTree(uid){
 }
 
 // ==================================================================================
+// Vorgaenge in der Liste umsortieren (22.10.2026, Benjamin Adam): die Zeile wandert MIT ihren
+// Untervorgaengen und uebernimmt die Ebene der Zeile, vor/hinter die sie kommt. Verknuepfungen haengen
+// an der uid und bleiben unberuehrt. Gleiche Regel wie terminplan_bearbeiten tu=reihenfolge (mcp/takt.js).
+// ==================================================================================
+function vorgangUmsortieren(uid, zielUid, dahinter){
+  const t = byUid[uid], ziel = byUid[zielUid];
+  if(!t || !ziel || uid === zielUid) return false;
+  const quelle = getSubtreeRange(uid);
+  const zi = TASKS.indexOf(ziel);
+  if(zi >= quelle.start && zi <= quelle.end) return false;   // in den eigenen Block geht nicht
+  pushUndo();
+  const elternVorher = findParentUid(uid);
+  const block = TASKS.splice(quelle.start, quelle.end - quelle.start + 1);
+  const zr = getSubtreeRange(zielUid);
+  const d = ziel.level - t.level;
+  block.forEach(b=>{ b.level += d; });
+  TASKS.splice(dahinter ? zr.end + 1 : zr.start, 0, ...block);
+  // Ein Sammelvorgang, dem der letzte Untervorgang weggenommen wurde, ist keiner mehr.
+  const e = elternVorher != null ? byUid[elternVorher] : null;
+  if(e && e.summary){ const r = getSubtreeRange(e.uid); if(r.end === r.start) e.summary = false; }
+  recomputeSummaryBars();
+  resolveLockedConstraints();
+  renderAll();
+  return true;
+}
+// Mit dem Nachbarn derselben Ebene (unter demselben Sammelvorgang) tauschen.
+function vorgangNachbarTausch(uid, richtung){
+  const t = byUid[uid]; if(!t) return false;
+  const r = getSubtreeRange(uid);
+  if(richtung < 0){
+    for(let i = r.start - 1; i >= 0; i--){
+      if(TASKS[i].level < t.level) return false;
+      if(TASKS[i].level === t.level) return vorgangUmsortieren(uid, TASKS[i].uid, false);
+    }
+  } else {
+    const n = TASKS[r.end + 1];
+    if(n && n.level === t.level) return vorgangUmsortieren(uid, n.uid, true);
+  }
+  return false;
+}
+// Ziehen an der Zeilennummer: Einfuegestelle = Luecke zwischen zwei sichtbaren Zeilen; die Zeile
+// kommt VOR die untere (deren Ebene), am Listenende HINTER die letzte.
+(function zeilenZiehen(){
+  let zug = null;
+  leftrows.addEventListener('mousedown', (ev)=>{
+    const griff = ev.target.closest('.col-id');
+    if(!griff || ev.button !== 0 || SCHREIBSCHUTZ || linkPickState) return;
+    const row = griff.closest('.rowline');
+    zug = { uid: Number(row.dataset.uid), y0: ev.clientY, aktiv: false, ziel: null };
+    ev.preventDefault();
+  });
+  document.addEventListener('mousemove', (ev)=>{
+    if(!zug) return;
+    if(!zug.aktiv){
+      if(Math.abs(ev.clientY - zug.y0) < 4) return;
+      zug.aktiv = true;
+      document.body.classList.add('zeile-zieht');
+      zug.linie = Object.assign(document.createElement('div'), { className:'zieh-linie' });
+      document.body.appendChild(zug.linie);
+      const block = subtreeUidSet(zug.uid);
+      leftrows.querySelectorAll('.rowline').forEach(r=>{ if(block.has(Number(r.dataset.uid))) r.classList.add('wird-gezogen'); });
+    }
+    const zeilen = [...leftrows.querySelectorAll('.rowline')];
+    if(!zeilen.length) return;
+    let unten = zeilen.find(r=>{ const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height/2; });
+    const lr = leftrows.getBoundingClientRect();
+    const ref = unten || zeilen[zeilen.length-1];
+    const rb = ref.getBoundingClientRect();
+    zug.ziel = unten ? { uid: Number(unten.dataset.uid), dahinter: false } : { uid: Number(ref.dataset.uid), dahinter: true };
+    const zielT = byUid[zug.ziel.uid];
+    const einzug = 34 + (zielT ? zielT.level * 12 : 0);
+    Object.assign(zug.linie.style, { top: (unten ? rb.top : rb.bottom) - 1 + 'px', left: lr.left + einzug + 'px', width: Math.max(40, lr.width - einzug) + 'px' });
+  });
+  document.addEventListener('mouseup', ()=>{
+    if(!zug) return;
+    const z = zug; zug = null;
+    if(!z.aktiv) return;
+    document.body.classList.remove('zeile-zieht');
+    z.linie.remove();
+    leftrows.querySelectorAll('.wird-gezogen').forEach(r=>r.classList.remove('wird-gezogen'));
+    if(z.ziel && !subtreeUidSet(z.uid).has(z.ziel.uid)) vorgangUmsortieren(z.uid, z.ziel.uid, z.ziel.dahinter);
+  });
+})();
+
+// ==================================================================================
 // Auf-/Zuklappen von Sammelvorgängen (Baumeister, Rohbau, ...) - zugeklappte Untervorgänge
 // werden weder in der linken Tabelle noch als Balken im Diagramm angezeigt.
 // ==================================================================================
@@ -1495,7 +1586,7 @@ function taskRowEl(t, idx){
     : `<span class="collapse-toggle-spacer"></span>`;
   const gewerkBadge = t.isGewerk ? `<span class="badge" style="margin-left:6px;">Ausführungsgewerk</span>` : '';
   row.innerHTML = `
-    <div class="col-id">${idx+1}</div>
+    <div class="col-id" title="An der Nummer ziehen: Vorgang samt Untervorgängen in der Liste verschieben">${idx+1}</div>
     <div class="col-name" style="padding-left:${t.level*12}px" title="${t.name}">${toggleHtml}<span class="col-name-text">${t.name}</span>${gewerkBadge}</div>
     <div class="col-date"><input type="date" data-uid="${t.uid}" data-field="start" value="${t.start}">${lockBtnHtml(t,'start')}</div>
     <div class="col-duration">${durCell}</div>
@@ -2025,6 +2116,8 @@ function openTaskContextMenu(uid, clientX, clientY){
     t.hidden = !t.hidden;
     renderAll();
   });
+  addItem('↑ In der Liste nach oben', ()=> vorgangNachbarTausch(uid, -1));
+  addItem('↓ In der Liste nach unten', ()=> vorgangNachbarTausch(uid, 1));
   addItem('⧉ Vorgang duplizieren', ()=>{
     pushUndo();
     const copy = duplicateTaskTree(uid);
@@ -3777,6 +3870,7 @@ async function planListeLaden(){
   neu.value = '__neu__'; neu.textContent = '＋ Neuer Plan …';
   sel.appendChild(neu);
   sel.hidden = false;
+  document.getElementById('btnPlanMenue').hidden = !PLAN_LISTE.length;
   document.getElementById('btnEinfrieren').hidden = false;
 }
 
@@ -3916,7 +4010,12 @@ async function planWechseln(zielId){
   ladeVorgang = true;
   saveStatus('lädt …');
   const ok = await planLaden(zielId || undefined).catch(e=>{ console.error(e); return false; });
-  if(ok){ undoStack.length = 0; zeichnenNachLaden(); saveStatus(SCHREIBSCHUTZ ? 'eingefrorener Stand' : 'geladen', 'ok'); }
+  if(ok){
+    // Ausgangsstand des neuen Plans — sonst faerben die uids des vorigen Plans Zeilen als „geaendert“ (gelb)
+    Object.keys(ORIG_STATE).forEach(k=>delete ORIG_STATE[k]);
+    TASKS.forEach(t=> ORIG_STATE[t.uid] = {start:t.start, finish:t.finish});
+    undoStack.length = 0; zeichnenNachLaden(); saveStatus(SCHREIBSCHUTZ ? 'eingefrorener Stand' : 'geladen', 'ok');
+  }
   ladeVorgang = SCHREIBSCHUTZ;   // eingefrorene Staende speichern nie
 }
 
@@ -3959,6 +4058,106 @@ async function standWiederherstellen(){
     SCHREIBSCHUTZ = false;
     await planWechseln(ziel.id);
   } catch(e){ saveStatus('Wiederherstellen fehlgeschlagen: ' + e.message, 'err'); }
+}
+
+// ---- Planmenue (22.10.2026, Benjamin Adam): Umbenennen, Duplizieren, Loeschen je Plan ----
+// Wirkt auf den Plan, der gerade offen ist (Knopf ⋯ neben der Planauswahl oder Rechtsklick auf sie):
+// so sieht man, was man umbenennt oder loescht. Pentling hatte zwei Plaene „Terminplan“, Bogen drei.
+function namensDialog(titel, wert, knopf, onOk){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'namensDialog';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+  box.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:10px"></div>'
+    + '<input type="text" style="width:100%;box-sizing:border-box;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:4px">'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">'
+    + '<button type="button" class="secondary">Abbrechen</button><button type="button"></button></div>';
+  box.firstChild.textContent = titel;
+  const inp = box.querySelector('input'), [nein, ja] = box.querySelectorAll('button');
+  inp.value = wert; ja.textContent = knopf;
+  function close(){ overlay.remove(); }
+  function ok(){ const n = inp.value.trim(); if(!n) return inp.focus(); close(); onOk(n); }
+  nein.onclick = close; ja.onclick = ok;
+  inp.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter') ok(); if(ev.key === 'Escape') close(); });
+  overlay.addEventListener('click', (ev)=>{ if(ev.target === overlay) close(); });
+  overlay.appendChild(box); document.body.appendChild(overlay);
+  inp.focus(); inp.select();
+}
+function planMenueOeffnen(x, y){
+  closeTaskContextMenu();
+  const kopf = PLAN_LISTE.find(p=>p.id === planId);
+  if(!kopf) return;
+  const menu = document.createElement('div');
+  menu.id = 'rowContextMenu';   // gleiches Schliessen wie das Vorgangsmenue
+  menu.className = 'context-menu';
+  const titel = document.createElement('div');
+  titel.style.cssText = 'padding:6px 10px 4px;font-size:11px;color:#666;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  titel.textContent = 'Plan: ' + kopf.name;
+  menu.appendChild(titel);
+  const punkt = (label, f)=>{ const b = document.createElement('button'); b.type = 'button'; b.className = 'context-menu-item';
+    b.textContent = label; b.addEventListener('click', (ev)=>{ ev.stopPropagation(); closeTaskContextMenu(); f(); }); menu.appendChild(b); };
+  punkt('✎ Umbenennen …', planUmbenennen);
+  punkt('⧉ Duplizieren …', planDuplizieren);
+  menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
+  punkt('🗑 Plan löschen …', planLoeschen);
+  document.body.appendChild(menu);
+  menu.style.left = Math.min(x, window.innerWidth - menu.offsetWidth - 4) + 'px';
+  menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 4) + 'px';
+  setTimeout(()=>{
+    document.addEventListener('click', closeTaskContextMenu, true);
+    document.addEventListener('keydown', contextMenuKeyHandler, true);
+  }, 0);
+}
+function planUmbenennen(){
+  const kopf = PLAN_LISTE.find(p=>p.id === planId); if(!kopf) return;
+  namensDialog('Plan umbenennen', kopf.name, 'Umbenennen', async (name)=>{
+    try {
+      await db('termin_plaene?id=eq.' + kopf.id, { method:'PATCH', headers:{ Prefer:'return=minimal' },
+        body: JSON.stringify({ name, geaendert_von: sitzung()?.email || null, geaendert_am: new Date().toISOString() }) });
+      await protokollSchreiben(kopf.id, 'Plan umbenannt: „' + kopf.name + '“ → „' + name + '“');
+      await planListeLaden();
+      document.getElementById('planWahl').value = planId;
+      saveStatus('umbenannt', 'ok');
+    } catch(e){ saveStatus('Umbenennen fehlgeschlagen: ' + e.message, 'err'); }
+  });
+}
+function planDuplizieren(){
+  const kopf = PLAN_LISTE.find(p=>p.id === planId); if(!kopf) return;
+  namensDialog('Plan duplizieren — Name der Kopie', kopf.name.replace(/^❄ /, '') + ' (Kopie)', 'Duplizieren', async (name)=>{
+    try {
+      saveStatus('dupliziert …');
+      clearTimeout(speicherTimer);
+      await planSpeichern();   // erst den offenen Stand sichern, dann kopieren (eingefroren: speichert nichts)
+      const neu = await db('termin_plaene', { method:'POST', headers:{ Prefer:'return=representation' },
+        body: JSON.stringify([{ project_id: PROJEKT_ID, name, art: kopf.art || 'bauzeitenplan', quelle: 'Kopie von „' + kopf.name + '“',
+          basis_von: kopf.id, kalender_id: kopf.kalender_id || null, erstellt_von: sitzung()?.email || null }]) });
+      await zeilenKopieren(kopf.id, neu[0].id);
+      await protokollSchreiben(neu[0].id, 'Angelegt als Kopie von „' + kopf.name + '“', { quelle_plan: kopf.id });
+      await planListeLaden();
+      await planWechseln(neu[0].id);
+    } catch(e){ saveStatus('Duplizieren fehlgeschlagen: ' + e.message, 'err'); }
+  });
+}
+async function planLoeschen(){
+  const kopf = PLAN_LISTE.find(p=>p.id === planId); if(!kopf) return;
+  const n = TASKS.length, k = EDGES.length;
+  openConfirmDialog('Plan „' + kopf.name + '“ mit ' + n + ' Vorgängen und ' + k + ' Verknüpfungen endgültig löschen?'
+    + (kopf.eingefroren_am ? ' Das ist ein eingefrorener SOLL-Stand.' : '') + ' Das lässt sich nicht rückgängig machen.', async ()=>{
+    try {
+      clearTimeout(speicherTimer);
+      ladeVorgang = true;          // kein Speicherlauf mehr auf den geloeschten Plan
+      saveStatus('löscht …');
+      await db('termin_plaene?id=eq.' + kopf.id, { method:'DELETE', headers:{ Prefer:'return=minimal' } });
+      planId = null; PLAN_LISTE = [];
+      await planListeLaden();
+      if(PLAN_LISTE.length){ await planWechseln((PLAN_LISTE.find(p=>!p.eingefroren_am) || PLAN_LISTE[0]).id); saveStatus('„' + kopf.name + '“ gelöscht', 'ok'); }
+      else {
+        TASKS = []; EDGES.length = 0; Object.keys(byUid).forEach(x=>delete byUid[x]);
+        zeichnenNachLaden(); anlageZeigen(); saveStatus('„' + kopf.name + '“ gelöscht', 'ok');
+      }
+    } catch(e){ ladeVorgang = SCHREIBSCHUTZ; saveStatus('Löschen fehlgeschlagen: ' + e.message, 'err'); }
+  });
 }
 
 // Alle Zeilen eines Plans in einen anderen kopieren — ueber denselben atomaren
@@ -4414,9 +4613,10 @@ function anlageZeigen(){
           <button id="anLosVorlage">Anlegen aus Vorlage</button>
         </div>
         <div class="anlage-quelle">
-          <b>📄 Aus MS Project (.xml)</b>
-          <input type="file" id="anXml" accept=".xml">
-          <button id="anLosXml">XML einlesen &amp; anlegen</button>
+          <b>📄 Aus anderem Programm</b>
+          <div class="anlage-hint">MS Project als XML (Speichern unter → XML) oder Bauzeitenplan als PDF (MS Project, pro-Plan, CAPMO …)</div>
+          <input type="file" id="anXml" accept=".xml,.pdf,.mpp">
+          <button id="anLosXml">Einlesen &amp; anlegen</button>
         </div>
         <div class="anlage-quelle">
           <b>▭ Leer beginnen</b>
@@ -4585,7 +4785,26 @@ function anlageZeigen(){
         tasks = vorlageAusrollen(v.daten, startTag);
       } else {
         const f = document.getElementById('anXml').files[0];
-        if(!f) return fehler('Bitte eine MS-Project-XML-Datei wählen.');
+        if(!f) return fehler('Bitte eine MS-Project-XML- oder PDF-Datei wählen.');
+        const endung = (f.name.split('.').pop() || '').toLowerCase();
+        if(endung === 'mpp') return fehler('.mpp ist das interne MS-Project-Format. Bitte in MS Project „Datei → Speichern unter → XML-Format“ wählen und die XML-Datei einlesen — oder den Plan als PDF drucken.');
+        if(endung === 'pdf'){
+          // Bauzeitenplan-Druck deterministisch lesen (Baustein bzp_pdf.js, dieselben Regeln wie der Server-Leser).
+          // Ein PDF trägt keine Verknüpfungen — nur Vorgänge, Gliederung und Termine kommen an.
+          fehler('liest das PDF …');
+          const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs');
+          pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+          const doc = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()), verbosity: 0 }).promise;
+          const seiten = [];
+          for(let n = 1; n <= doc.numPages; n++) seiten.push({ items: (await (await doc.getPage(n)).getTextContent()).items });
+          const erg = bzpPdfAusSeiten(seiten);
+          if(!erg.vorgaenge.length) return fehler('Im PDF wurde kein Bauzeitenplan erkannt (Kopfzeile „Vorgang · Dauer · Start · Ende“ fehlt). ' + (erg.warnungen[0] || ''));
+          const herkunft = f.name + (erg.stand ? ' (Stand ' + fmtDE(erg.stand) + ')' : '');
+          tasks = bzpPdfZuTasks(erg.vorgaenge, herkunft);
+          quelleText = herkunft;
+          if(name === 'Terminplan') name = f.name.replace(/\.pdf$/i, '');
+          if(erg.warnungen.length) console.warn('PDF-Import:', erg.warnungen.join(' | '));
+        } else {
         if(typeof parseMspdi !== 'function') return fehler('XML-Import-Baustein fehlt in dieser Fassung.');
         const text = await f.text();
         const erg = parseMspdi(text);
@@ -4595,6 +4814,7 @@ function anlageZeigen(){
         edges = erg.edges.map(e=>({ from:e.from, to:e.to,
           type: TYPE_NUM_TO_CODE[e.type] || e.type || 'EA', lag:e.lag, lagUnit:'cd', lagValue:e.lag }));
         quelleText = f.name; quelleXml = text;
+        }
       }
       saveStatus('legt Plan an …');
       const s = sitzung();
@@ -4607,6 +4827,8 @@ function anlageZeigen(){
       TASKS = tasks; normalisiereTasks();
       Object.keys(byUid).forEach(x=>delete byUid[x]);
       TASKS.forEach(t=>{ byUid[t.uid]=t; });
+      Object.keys(ORIG_STATE).forEach(k=>delete ORIG_STATE[k]);
+      TASKS.forEach(t=> ORIG_STATE[t.uid] = {start:t.start, finish:t.finish});
       EDGES.length = 0; edges.forEach(e=>EDGES.push(e));
       SPECIAL_PERIODS = [];
       await kalenderLaden(null);
@@ -4674,6 +4896,9 @@ document.getElementById('planWahl').addEventListener('change', (ev)=>{
   planWechseln(ev.target.value);
 });
 document.getElementById('btnEinfrieren').addEventListener('click', standEinfrieren);
+document.getElementById('btnPlanMenue').addEventListener('click', (ev)=>{
+  ev.stopPropagation(); const r = ev.currentTarget.getBoundingClientRect(); planMenueOeffnen(r.left, r.bottom + 4); });
+document.getElementById('planWahl').addEventListener('contextmenu', (ev)=>{ ev.preventDefault(); planMenueOeffnen(ev.clientX, ev.clientY); });
 // Blick-Wechsel ist reiner Anzeigezustand: kein pushUndo, kein Speichern — nur neu zeichnen.
 document.getElementById('blickWahl').addEventListener('change', (ev)=>{
   BLICK = ev.target.value;
@@ -6109,6 +6334,154 @@ function erzeugeRahmenplan(param) {
   }
 
   return { tasks: tasks, edges: edges, warnungen: warnungen };
+}
+
+// ---------- Baustein: bzp_pdf.js (geprueft, Tests unter _bausteine/) ----------
+// bzp_pdf.js — Baustein: Bauzeitenplan-PDF aus anderen Programmen (MS Project, pro-Plan, CAPMO-Druck)
+// deterministisch lesen, im Browser (Import im Anlegedialog von plan.html, 22.10.2026, Benjamin Adam).
+// Gleiche Regeln wie db/bzp-pdf-lesen.mjs (Server, ingest-graph): die Kopfzeile „Pos/Nr · Vorgang · Dauer ·
+// Start/Anfang · Ende“ legt die Spalten fest, eine Datenzeile hat Start und Ende auf derselben Höhe,
+// mehrzeilige Namen werden über ihren Zeilenabstand zu Blöcken zusammengefasst. Gleichheit beider Leser
+// prüft bzp_pdf.test.mjs an den Proben.
+// Eingabe: je Seite die rohen pdfjs-Textstücke (page.getTextContent().items). Kein DOM, kein pdfjs-Import.
+// Ergebnis: { format, vorgaenge[{pos,name,level,dauerAT,start,ende,summary}], stand, warnungen }
+
+var BZP_PDF_KOPF = {
+  pos: /^(Pos\.?|Nr\.?|Id|PSP|PSP-Code|Gliederung)$/i,
+  name: /^(Vorgang|Vorgangsname|Name|Beschreibung)$/i,
+  dauer: /^Dauer$/i,
+  start: /^(Start|Startdatum|Anfang|Beginn)$/i,
+  ende: /^(Ende|Enddatum|Fertigstellen|Abschluss)$/i
+};
+var BZP_PDF_DATUM = /(\d{2})\.(\d{2})\.(\d{2}|\d{4})\b/;
+function bzpPdfIso(m) { return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[2] + '-' + m[1]; }
+
+function bzpPdfKopf(items) {
+  var kandidaten = items.filter(function (i) { return BZP_PDF_KOPF.name.test(i.s); });
+  for (var n = 0; n < kandidaten.length; n++) {
+    var k = kandidaten[n];
+    var zeile = items.filter(function (i) { return Math.abs(i.y - k.y) <= 2; });
+    var finde = function (re) { return zeile.find(function (i) { return re.test(i.s); }); };
+    var dauer = finde(BZP_PDF_KOPF.dauer), start = finde(BZP_PDF_KOPF.start), ende = finde(BZP_PDF_KOPF.ende);
+    // Dauer-Spalte ist optional (z. B. Wenzenbach: nur Vorgangsname · Startdatum · Enddatum)
+    if (start && ende && start.x > k.x) return { y: k.y, pos: finde(BZP_PDF_KOPF.pos), name: k, dauer: dauer || null, start: start, ende: ende };
+  }
+  return null;
+}
+
+function bzpPdfSeite(roh) {
+  var items = roh.filter(function (i) { return i.str.trim(); }).map(function (i) {
+    return { s: i.str.trim(), x: i.transform[4], y: i.transform[5], w: i.width, h: Math.abs(i.transform[3]) || 8 };
+  });
+  var k = bzpPdfKopf(items);
+  if (!k) return null;
+  // Ohne Pos-Spalte beginnt der Name am linken Rand (Einzug = Gliederung), sonst rechts der Pos-Spalte
+  var nameVon = k.pos ? k.pos.x + k.pos.w + 4 : 0;
+  var nameBis = (k.dauer ? Math.min(k.dauer.x, k.start.x) : k.start.x) - 4;
+  var datenBis = k.ende.x + 120;
+  var unten = items.filter(function (i) { return i.y < k.y - 2 && i.x < datenBis; });
+  var zeilenY = [];
+  unten.forEach(function (i) { var r = Math.round(i.y); if (zeilenY.indexOf(r) < 0) zeilenY.push(r); });
+  var daten = [];
+  zeilenY.forEach(function (y) {
+    var z = unten.filter(function (i) { return Math.abs(i.y - y) <= 1.5; });
+    var st = z.find(function (i) { return i.x >= k.start.x - 25 && i.x < k.ende.x - 15 && BZP_PDF_DATUM.test(i.s); });
+    var en = z.find(function (i) { return i.x >= k.ende.x - 15 && BZP_PDF_DATUM.test(i.s); });
+    if (!st || !en) return;
+    if (daten.some(function (d) { return Math.abs(d.y - y) <= 1.5; })) return;
+    var da = z.find(function (i) { return i.x >= nameBis - 30 && i.x < k.start.x - 5 && /^\d+(,\d+)?\s*(at|AT|T|Tage?|d|Wo\.?)$/.test(i.s); });
+    var po = z.find(function (i) { return i.x < nameVon && /^\d+(\.\d+)*$/.test(i.s); });
+    daten.push({ y: y, start: bzpPdfIso(BZP_PDF_DATUM.exec(st.s)), ende: bzpPdfIso(BZP_PDF_DATUM.exec(en.s)),
+      dauerAT: da ? Number(da.s.replace(/[^\d]/g, '')) : null, pos: po ? po.s : null });
+  });
+  daten.sort(function (a, b) { return b.y - a.y; });
+  // Dieselbe Zeile mit leicht versetzter Höhe (Pos-Stück und Datums-Stück): gleiche Termine, |dy| <= 6 -> eine Zeile
+  for (var i = daten.length - 1; i > 0; i--) {
+    var a = daten[i - 1], b = daten[i];
+    if (a.y - b.y <= 6 && a.start === b.start && a.ende === b.ende && (!a.pos || !b.pos)) {
+      a.pos = a.pos || b.pos; a.dauerAT = a.dauerAT != null ? a.dauerAT : b.dauerAT; a.y = (a.y + b.y) / 2; daten.splice(i, 1);
+    }
+  }
+  // Namenszeilen in Blöcke (Zeilenabstand ~1,3 x Schriftgröße), Block -> Datenzeile in seiner Mitte
+  var namen = unten.filter(function (i) { return i.x >= nameVon && i.x < nameBis; }).sort(function (a, b) { return b.y - a.y; });
+  var bloecke = [];
+  namen.forEach(function (n) {
+    var bl = bloecke[bloecke.length - 1];
+    if (bl && bl.unten - n.y <= n.h * 1.5) { bl.teile.push(n); bl.unten = n.y; }
+    else bloecke.push({ oben: n.y, unten: n.y, teile: [n] });
+  });
+  bloecke.forEach(function (bl) {
+    var mitte = (bl.oben + bl.unten) / 2, beste = null;
+    daten.forEach(function (d) { if (!beste || Math.abs(d.y - mitte) < Math.abs(beste.y - mitte)) beste = d; });
+    if (beste && Math.abs(beste.y - mitte) <= (bl.oben - bl.unten) / 2 + bl.teile[0].h * 2) {
+      (beste.bloecke = beste.bloecke || []).push({ mitte: mitte, x: Math.min.apply(null, bl.teile.map(function (t) { return t.x; })),
+        text: bl.teile.map(function (t) { return t.s; }).join(' ').replace(/[-]/g, '').replace(/\s+/g, ' ').trim() });
+    }
+  });
+  var mitName = daten.map(function (d) {
+    var bl = (d.bloecke || []).sort(function (a, b) { return Math.abs(a.mitte - d.y) - Math.abs(b.mitte - d.y); })[0];
+    return { y: d.y, start: d.start, ende: d.ende, dauerAT: d.dauerAT, pos: d.pos, bloecke: d.bloecke, name: bl ? bl.text : null, nameX: bl ? bl.x : null };
+  });
+  // Ohne Pos-Spalte ist der Einzug die Gliederung: Einzugsstufen (auf 4 pt gerundet) der Reihe nach = Ebene 1, 2, …
+  if (!k.pos) {
+    var stufen = [];
+    mitName.forEach(function (d) { if (d.nameX !== null) { var r = Math.round(d.nameX / 4); if (stufen.indexOf(r) < 0) stufen.push(r); } });
+    stufen.sort(function (a, b) { return a - b; });
+    mitName.forEach(function (d) { d.ebene = d.nameX === null ? 1 : stufen.indexOf(Math.round(d.nameX / 4)) + 1; });
+  }
+  return mitName;
+}
+
+// seiten: [{ items }] in Seitenreihenfolge (rohe pdfjs-Textstücke)
+function bzpPdfAusSeiten(seiten) {
+  var vorgaenge = [], warnungen = [], stand = null;
+  for (var s = 1; s <= seiten.length; s++) {
+    var roh = seiten[s - 1].items;
+    var voll = roh.map(function (i) { return i.str; }).join(' ');
+    var dr = /Druckdatum:\s*(\d{2})\.(\d{2})\.(\d{4})/.exec(voll);
+    if (dr) stand = dr[3] + '-' + dr[2] + '-' + dr[1];
+    var zeilen = bzpPdfSeite(roh);
+    if (!zeilen) { if (s === 1) warnungen.push('Seite 1: keine Kopfzeile „Vorgang · Dauer · Start · Ende“'); continue; }
+    zeilen.forEach(function (z) {
+      if (!z.name) warnungen.push('Seite ' + s + ', Pos ' + (z.pos || '?') + ' (' + z.start + '): kein Vorgangsname zuordenbar');
+      if (z.ende < z.start) { warnungen.push('Seite ' + s + ', Pos ' + (z.pos || '?') + ': Ende vor Start, nicht übernommen'); return; }
+      vorgaenge.push({ pos: z.pos || 'S' + s + '.' + (vorgaenge.length + 1), name: z.name || '(ohne Namen)',
+        level: z.pos ? z.pos.split('.').length : (z.ebene || 1), dauerAT: z.dauerAT, start: z.start, ende: z.ende });
+    });
+  }
+  vorgaenge.forEach(function (v, i) {
+    v.summary = /^S\d/.test(v.pos) ? (i + 1 < vorgaenge.length && vorgaenge[i + 1].level > v.level)
+      : vorgaenge.some(function (w) { return w.pos.indexOf(v.pos + '.') === 0; });
+  });
+  if (!vorgaenge.length) warnungen.push('Keine Vorgangszeilen gefunden');
+  return { format: 'pdf-koordinaten', vorgaenge: vorgaenge, stand: stand, warnungen: warnungen };
+}
+
+// Gliederung ohne Sprünge: im Druck folgt auf Ebene 1 oft direkt Ebene 3 (Einzugsstufen). Das Board rechnet
+// Sammelbalken nur aus DIREKTEN Kindern (recomputeSummaryBars) — darum Ebenen schließen: jede Zeile liegt
+// höchstens eine Ebene unter ihrem Vorgänger, Geschwister bleiben Geschwister. Gleiche Regel in
+// assistant_terminplan_anlegen (Migr. 259).
+function bzpEbenenSchliessen(ebenen) {
+  var stapel = [];
+  return ebenen.map(function (e) {
+    e = Math.max(1, e || 1);
+    while (stapel.length && stapel[stapel.length - 1] >= e) stapel.pop();
+    stapel.push(e);
+    return stapel.length;
+  });
+}
+
+// Gelesene Druckzeilen -> Vorgänge des Plans (uid fortlaufend, Gliederung aus der Ebene, Dauer 0 = Meilenstein).
+// Sammelvorgang = die nächste Zeile liegt tiefer; so auch beim Import über Claude (assistant_terminplan_anlegen).
+function bzpPdfZuTasks(vorgaenge, quelle) {
+  var ebene = bzpEbenenSchliessen(vorgaenge.map(function (v) { return v.level; }));
+  return vorgaenge.map(function (v, i) {
+    var ms = v.dauerAT === 0;
+    return { uid: i + 1, name: v.name, wbs: /^\d+(\.\d+)*$/.test(v.pos) ? v.pos : '', level: ebene[i],
+      start: v.start, finish: ms ? v.start : v.ende, milestone: ms,
+      summary: i + 1 < ebene.length && ebene[i + 1] > ebene[i],
+      quelleText: quelle + ', Pos ' + v.pos };
+  });
 }
 
 // ---------- Baustein: rahmenplan_eingaben.js (geprueft, Tests unter _bausteine/) ----------
