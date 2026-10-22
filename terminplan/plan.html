@@ -3958,6 +3958,8 @@ let SCHREIBSCHUTZ = false;      // true bei eingefrorenem Stand
 let LETZTER_STAND = null;       // Vergleichsbasis fuers Aenderungsprotokoll
 let KALENDER = null;            // Arbeitskalender-Rechner (Baustein kalender.js)
 let speichernLaeuft = false, nochmalSpeichern = false, ladeVorgang = true;
+// Ueberschreib-Schutz (Migration 261): Stand des geladenen Plans; gespeichert wird nur auf diesem Stand.
+let PLAN_STAND = null, UNGESPEICHERT = false, KONFLIKT = false;
 
 function sitzung(){
   try { return JSON.parse(localStorage.getItem('gb_session')); } catch { return null; }
@@ -4060,10 +4062,11 @@ async function planLaden(gewuenschtePlanId){
     db('termin_vorgaenge?plan_id=eq.' + planId + '&select=*&order=pos.asc'),
     db('termin_verknuepfungen?plan_id=eq.' + planId + '&select=*'),
     db('termin_sondertermine?plan_id=eq.' + planId + '&select=*'),
-    db('termin_plaene?id=eq.' + planId + '&select=quelle_xml'),
+    db('termin_plaene?id=eq.' + planId + '&select=quelle_xml,stand'),
   ]);
   if(!v.length) return false;
   ORIGINAL_XML = kopf[0]?.quelle_xml || null;
+  PLAN_STAND = kopf[0]?.stand || null; UNGESPEICHERT = false; konfliktSchliessen();
   TASKS = v.map(r=>({
     uid: r.uid, name: r.name, wbs: r.wbs, level: r.ebene,
     start: r.start_datum, finish: r.end_datum,
@@ -4285,7 +4288,7 @@ async function planLoeschen(){
       ladeVorgang = true;          // kein Speicherlauf mehr auf den geloeschten Plan
       saveStatus('löscht …');
       await db('termin_plaene?id=eq.' + kopf.id, { method:'DELETE', headers:{ Prefer:'return=minimal' } });
-      planId = null; PLAN_LISTE = [];
+      planId = null; PLAN_STAND = null; PLAN_LISTE = [];
       await planListeLaden();
       if(PLAN_LISTE.length){ await planWechseln((PLAN_LISTE.find(p=>!p.eingefroren_am) || PLAN_LISTE[0]).id); saveStatus('„' + kopf.name + '“ gelöscht', 'ok'); }
       else {
@@ -4433,7 +4436,7 @@ document.getElementById('btnVerbindung').onclick = ()=>{
 
 // ---- Schreiben ----
 async function planSpeichern(){
-  if(ladeVorgang || SCHREIBSCHUTZ || !planId) return;
+  if(ladeVorgang || SCHREIBSCHUTZ || !planId || KONFLIKT) return;
   if(speichernLaeuft){ nochmalSpeichern = true; return; }
   speichernLaeuft = true;
   saveStatus('speichert …');
@@ -4472,15 +4475,20 @@ async function planSpeichern(){
     // ATOMAR speichern (Migration 108): EIN Aufruf ersetzt den ganzen Plan in EINER
     // Transaktion. Vorher waren es sieben einzelne Aufrufe — ein Verbindungsabbruch
     // mittendrin hat am 24.08. real die 87 Verknuepfungen des Pentling-Plans gekostet.
+    // Ueberschreib-Schutz (Migration 261): nur auf dem geladenen Stand. Hat Claude (MCP) oder ein
+    // Kollege inzwischen gespeichert, schreibt die Datenbank nichts und meldet termin_plan_veraltet.
     const s = sitzung();
-    await db('rpc/termin_plan_speichern', { method:'POST',
+    const neuerStand = await db('rpc/termin_plan_speichern', { method:'POST',
       body: JSON.stringify({ p_plan: planId, p_vorgaenge: vorgaenge,
-        p_kanten: kanten, p_sonder: sonder, p_von: s?.email || null }) });
+        p_kanten: kanten, p_sonder: sonder, p_von: s?.email || null, p_stand: PLAN_STAND }) });
+    if(typeof neuerStand === 'string') PLAN_STAND = neuerStand;
+    UNGESPEICHERT = false;
     if(diff) await protokollSchreiben(planId, diff.zusammenfassung, diff.details);
     standMerken();
     saveStatus('gespeichert ' + new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}), 'ok');
   } catch(e){
-    saveStatus('nicht gespeichert: ' + e.message, 'err');
+    if(String(e.message).includes('termin_plan_veraltet')){ nochmalSpeichern = false; await konfliktZeigen(); }
+    else saveStatus('nicht gespeichert: ' + e.message, 'err');
     console.error('speichern:', e);
   } finally {
     speichernLaeuft = false;
@@ -4496,6 +4504,8 @@ async function planSpeichern(){
 let speicherTimer = null;
 function speichernAnstossen(){
   if(ladeVorgang || SCHREIBSCHUTZ) return;
+  UNGESPEICHERT = true;
+  if(KONFLIKT) return;   // erst entscheiden, welcher Stand gilt (Leiste oben)
   saveStatus('geändert …', 'warn');
   clearTimeout(speicherTimer);
   speicherTimer = setTimeout(()=>{
@@ -4507,6 +4517,62 @@ function speichernAnstossen(){
     planSpeichern();
   }, 1200);
 }
+
+// ---- Ueberschreib-Schutz (Migration 261, 22.10.2026, Marcel): Claude schreibt ueber den MCP in Plaene, die hier
+//      offen sein koennen. Vorher ersetzte der naechste Klick den ganzen Plan mit dem alten Stand. Jetzt: alle 15 s
+//      den Stand vergleichen und, wenn hier nichts ungespeichert ist, den neuen Stand still nachladen (Ansicht bleibt).
+//      Hat der Mensch inzwischen geklickt, lehnt die Datenbank das Speichern ab und die Leiste fragt, welcher gilt.
+async function fremdeAenderungPruefen(){
+  if(ladeVorgang || SCHREIBSCHUTZ || !planId || UNGESPEICHERT || speichernLaeuft || KONFLIKT || document.hidden) return;
+  let kopf;
+  try { kopf = await db('termin_plaene?id=eq.' + planId + '&select=stand,geaendert_von'); } catch(e){ return; }
+  const neu = kopf?.[0]?.stand;
+  if(!neu || !PLAN_STAND || neu === PLAN_STAND) return;
+  if(UNGESPEICHERT || speichernLaeuft || ladeVorgang) return;   // waehrend der Abfrage geklickt: planSpeichern meldet den Konflikt
+  await fremdenStandLaden();
+}
+async function letzteFremdeAenderung(){
+  try {
+    const a = await db('termin_aenderungen?plan_id=eq.' + planId + '&select=geaendert_von,zusammenfassung&order=geaendert_am.desc&limit=1');
+    return a?.[0] || null;
+  } catch(e){ return null; }
+}
+async function fremdenStandLaden(){
+  const links = rightpane.scrollLeft, oben = rightpane.scrollTop;
+  await planWechseln(planId);
+  rightpane.scrollLeft = links; rightpane.scrollTop = oben; leftpane.scrollTop = oben;
+  const a = await letzteFremdeAenderung();
+  saveStatus('neu geladen – geändert von ' + (a?.geaendert_von || 'jemand anderem') + (a?.zusammenfassung ? ': ' + a.zusammenfassung.slice(0, 140) : ''), 'warn');
+}
+async function konfliktZeigen(){
+  KONFLIKT = true;
+  saveStatus('nicht gespeichert – Plan inzwischen geändert', 'err');
+  if(document.getElementById('konfliktBanner')) return;
+  const a = await letzteFremdeAenderung();
+  const b = document.createElement('div');
+  b.id = 'konfliktBanner';
+  b.className = 'frostbanner';
+  const titel = document.createElement('b');
+  titel.textContent = 'Der Plan wurde inzwischen geändert';
+  b.append(titel, ' – von ' + (a?.geaendert_von || 'jemand anderem')
+    + (a?.zusammenfassung ? ' (' + a.zusammenfassung.slice(0, 160) + ')' : '') + '. Deine letzte Änderung ist nicht gespeichert. ');
+  const laden = document.createElement('button');
+  laden.textContent = 'Neuen Stand laden';
+  laden.title = 'Lädt den gespeicherten Stand; deine letzte Änderung hier wird verworfen';
+  laden.onclick = async ()=>{ KONFLIKT = false; UNGESPEICHERT = false; konfliktSchliessen(); await fremdenStandLaden(); };
+  const behalten = document.createElement('button');
+  behalten.textContent = 'Meine Fassung speichern';
+  behalten.title = 'Überschreibt die andere Änderung mit dem, was du hier siehst';
+  behalten.onclick = async ()=>{
+    try { const k = await db('termin_plaene?id=eq.' + planId + '&select=stand'); PLAN_STAND = k?.[0]?.stand || PLAN_STAND; } catch(e){}
+    KONFLIKT = false; konfliktSchliessen(); planSpeichern();
+  };
+  b.append(laden, behalten);
+  document.querySelector('.toolbar').after(b);
+}
+function konfliktSchliessen(){ KONFLIKT = false; document.getElementById('konfliktBanner')?.remove(); }
+setInterval(fremdeAenderungPruefen, 15000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) fremdeAenderungPruefen(); });
 
 // Vorgaenge von arbeitsfreien Tagen auf den naechsten Arbeitstag ruecken. Nur Starts
 // werden gerueckt (Dauer bleibt); fixierte Vorgaenge bleiben unangetastet. Wirkt auf
@@ -4958,6 +5024,7 @@ function anlageZeigen(){
         body: JSON.stringify([{ project_id: PROJEKT_ID, name, art, quelle: quelleText,
           quelle_xml: quelleXml, erstellt_von: s?.email || null }]) });
       planId = neu[0].id;
+      PLAN_STAND = neu[0].stand || null; konfliktSchliessen();   // Stand des NEUEN Plans, nicht der vorige
       SCHREIBSCHUTZ = false;
       ORIGINAL_XML = quelleXml;
       TASKS = tasks; normalisiereTasks();
