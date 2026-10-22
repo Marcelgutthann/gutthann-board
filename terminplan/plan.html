@@ -308,15 +308,15 @@
   .druck-diagramm .r-h{stroke:#dc2626;stroke-width:.3;stroke-dasharray:1 .7;}
   .druck-diagramm .b-wf{fill:rgba(220,38,38,.10);}
   .druck-diagramm .b-sf{fill:rgba(168,85,247,.09);}
-  .druck-diagramm .bk{stroke:rgba(0,0,0,.35);stroke-width:.12;}
+  .druck-diagramm .bk{stroke:rgba(0,0,0,.22);stroke-width:.12;}
   .druck-diagramm .dl{fill:#333;paint-order:stroke;stroke:#fff;stroke-width:.5;stroke-linejoin:round;}
-  .druck-diagramm .dl-in{fill:#fff;}
+  .druck-diagramm .dl-in{fill:#1C1C1A;}
   .druck-diagramm .dl-bg{fill:#fff;stroke:#8A8A83;stroke-width:.12;}
   .druck-fuss{display:flex;justify-content:space-between;align-items:flex-end;box-sizing:border-box;
     position:absolute;left:8mm;right:8mm;bottom:8mm;font-size:7pt;color:#75756E;border-top:.15mm solid #D9D9D5;padding-top:1mm;}
   .dl-leg i{display:inline-block;width:4mm;height:1.8mm;margin:0 1mm 0 3mm;vertical-align:middle;}
-  .dl-leg i.s{background:#1f2937;height:1mm;}
-  .dl-leg i.m{width:1.8mm;height:1.8mm;background:#111;transform:rotate(45deg);}
+  .dl-leg i.s{background:#9AA4B4;height:1mm;}
+  .dl-leg i.m{width:1.8mm;height:1.8mm;background:#7C879A;transform:rotate(45deg);}
   .dl-leg i.h{width:.4mm;height:3mm;background:#dc2626;}
 </style>
 </head>
@@ -6488,7 +6488,8 @@ function erzeugeRahmenplan(param) {
 
 var DRUCK_PAPIER = { A4: { b: 297, h: 210 }, A3: { b: 420, h: 297 } };
 var DRUCK_MASS = { rand: 8, kopf: 14, fuss: 7, achse: 8, zeile: 4.4, pt: 0.3528 };
-var DRUCK_FARBE = { planung: '#d9a520', vergabe: '#70ad47', ausfuehrung: '#3a5fab', sammel: '#1f2937', heute: '#dc2626' };
+// Pastell (22.10., Marcel: „etwas pastelliger, aktuell schwarz und dunkelblau“) — Schrift im Balken darum dunkel (.dl-in)
+var DRUCK_FARBE = { planung: '#F0D58C', vergabe: '#BCDBA3', ausfuehrung: '#A9C0E6', sammel: '#9AA4B4', meilenstein: '#7C879A', heute: '#dc2626' };
 var DRUCK_MONAT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 
 function druckEsc(s) {
@@ -6647,7 +6648,7 @@ function druckAufbau(e) {
       var frei = function (x0, w) { return x0 >= 0.3 && x0 + w <= diaB - 0.3; };
       if (z.milestone || !z.finish) {
         var mx = x(z.start) + mm / 2, d = 1.5, sM = druckDE(z.start, true), wM = druckBreite(sM, fsKlein);
-        dia += '<path data-druck-balken="' + z.uid + '" d="M' + mx.toFixed(2) + ' ' + (mitte - d).toFixed(2) + 'l' + d + ' ' + d + 'l-' + d + ' ' + d + 'l-' + d + ' -' + d + 'z" fill="' + (z.farbe || '#111') + '"/>';
+        dia += '<path data-druck-balken="' + z.uid + '" d="M' + mx.toFixed(2) + ' ' + (mitte - d).toFixed(2) + 'l' + d + ' ' + d + 'l-' + d + ' ' + d + 'l-' + d + ' -' + d + 'z" fill="' + (z.farbe || DRUCK_FARBE.meilenstein) + '"/>';
         dia += text(frei(mx + d + 0.8, wM) ? mx + d + 0.8 : mx - d - 0.8 - wM, ty, sM, fsKlein, ' class="dl"');
       } else {
         var x1 = x(z.start), x2 = x(z.finish) + mm, bw = Math.max(x2 - x1, 0.6);
