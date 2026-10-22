@@ -140,6 +140,8 @@
   .lockicon.locked-start{background:#22c55e;border-color:#16a34a;color:#fff;}
   .lockicon.locked-finish{background:#eab308;border-color:#ca8a04;color:#fff;}
   .lbl{position:absolute;font-size:10.5px;color:#333;white-space:nowrap;top:2px;transition:color .1s;}
+  .lbl-dat{color:#6b7280;font-weight:400;}
+  .lbl.lbl-start{transform:translateX(-100%);}
   .lbl.namehot{font-weight:700;color:#000;}
   .lbl.namehot-red{font-weight:700;color:#dc2626;}
   .todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--today);z-index:4;}
@@ -268,22 +270,54 @@
   .anlage-hint{font-size:11px;color:#777;}
   .anlage-fehler{color:#b91c1c;font-size:12px;min-height:16px;margin-top:10px;}
 
-  /* ---- PDF-Export (Erstversion): nutzt den nativen Browser-Druckdialog ("Als PDF speichern") -
-     Layout/Umbruch bei sehr breiten/langen Plänen ist hier noch nicht optimiert, das ist ein
-     erster Entwurf zum Betrachten, der auf Wunsch noch verfeinert wird. ---- */
+  /* ---- Druck / PDF (22.10., Julian Neuhoff: „Druckausgabe passt das Layout nicht“): gedruckt wird NICHT der
+     Bildschirm, sondern eigene Blätter aus dem Baustein druck.js (#druckBereich) — Kopf, Zeitachse und
+     Seitenzahl auf jeder Seite, Tabelle und Balken zeilengleich, ganzer Zeitraum eingepasst. Die
+     Blattgröße setzt druckVorbereiten() als @page in #druckSeitenStil. Prüfstand: pruef-druck.mjs ---- */
+  #druckBereich{display:none;}
   @media print{
-    .toolbar, .leftpane-actions, #hint, .footer{ display:none !important; }
-    html,body{ height:auto !important; overflow:visible !important; display:block !important; }
-    header{ position:static !important; }
-    .wrap{ height:auto !important; max-height:none !important; overflow:visible !important; display:flex !important; align-items:flex-start !important; }
-    .leftpane{ overflow:visible !important; }
-    .rightcol{ overflow:visible !important; }
-    .calheader{ position:static !important; overflow:visible !important; }
-    .rightpane{ overflow:visible !important; height:auto !important; }
-    .chartarea{ overflow:visible !important; }
-    .barslayer{ position:relative !important; }
-    @page{ size: landscape; margin: 8mm; }
+    html,body{ height:auto !important; overflow:visible !important; display:block !important; background:#fff !important; }
+    body > *:not(#druckBereich){ display:none !important; }
+    #druckBereich{ display:block !important; }
   }
+  .druck-seite{position:relative;box-sizing:border-box;overflow:hidden;background:#fff;color:#1C1C1A;
+    font-family:"Segoe UI",Arial,sans-serif;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .druck-seite:last-child{break-after:auto;}
+  .druck-seite *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .druck-kopf{display:flex;justify-content:space-between;align-items:flex-end;box-sizing:border-box;
+    padding-bottom:1.6mm;margin-bottom:0;border-bottom:.3mm solid #1C1C1A;}
+  .dk-plan{font-size:13pt;font-weight:600;line-height:1.15;}
+  .dk-projekt{font-size:9pt;color:#4A4A46;margin-top:.6mm;}
+  .dk-meta{font-size:8pt;color:#4A4A46;text-align:right;line-height:1.45;}
+  .druck-rumpf{display:flex;align-items:flex-start;}
+  .druck-tabelle{position:relative;flex:none;border-right:.25mm solid #8A8A83;font-size:7pt;}
+  .druck-diagramm{flex:none;display:block;font-family:"Segoe UI",Arial,sans-serif;}
+  .druck-diagramm text{fill:#333;}
+  .dz-k{position:absolute;top:0;height:8mm;line-height:8mm;padding:0 1mm;box-sizing:border-box;font-weight:600;
+    background:#F1F1EE;border-bottom:.25mm solid #1C1C1A;white-space:nowrap;}
+  .dz{position:absolute;left:0;height:4.4mm;line-height:4.4mm;border-bottom:.1mm solid #E8E8E6;box-sizing:border-box;}
+  .dz span{position:absolute;top:0;padding:0 1mm;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dz-g{background:#F7F7F5;}
+  .dz-s{font-weight:700;}
+  .druck-diagramm .a-g{fill:#F1F1EE;}
+  .druck-diagramm .z-g{fill:#F7F7F5;}
+  .druck-diagramm .r-mo{stroke:#B5B5AE;stroke-width:.2;}
+  .druck-diagramm .r-kw{stroke:#E4E4E0;stroke-width:.12;}
+  .druck-diagramm .r-a{stroke:#D9D9D5;stroke-width:.15;}
+  .druck-diagramm .r-k{stroke:#1C1C1A;stroke-width:.25;}
+  .druck-diagramm .r-h{stroke:#dc2626;stroke-width:.3;stroke-dasharray:1 .7;}
+  .druck-diagramm .b-wf{fill:rgba(220,38,38,.10);}
+  .druck-diagramm .b-sf{fill:rgba(168,85,247,.09);}
+  .druck-diagramm .bk{stroke:rgba(0,0,0,.35);stroke-width:.12;}
+  .druck-diagramm .dl{fill:#333;paint-order:stroke;stroke:#fff;stroke-width:.5;stroke-linejoin:round;}
+  .druck-diagramm .dl-in{fill:#fff;}
+  .druck-diagramm .dl-bg{fill:#fff;stroke:#8A8A83;stroke-width:.12;}
+  .druck-fuss{display:flex;justify-content:space-between;align-items:flex-end;box-sizing:border-box;
+    position:absolute;left:8mm;right:8mm;bottom:8mm;font-size:7pt;color:#75756E;border-top:.15mm solid #D9D9D5;padding-top:1mm;}
+  .dl-leg i{display:inline-block;width:4mm;height:1.8mm;margin:0 1mm 0 3mm;vertical-align:middle;}
+  .dl-leg i.s{background:#1f2937;height:1mm;}
+  .dl-leg i.m{width:1.8mm;height:1.8mm;background:#111;transform:rotate(45deg);}
+  .dl-leg i.h{width:.4mm;height:3mm;background:#dc2626;}
 </style>
 </head>
 <body>
@@ -335,6 +369,9 @@
   <button id="btnHilfe" class="tb-ic" title="Bedienung">?</button>
   <label class="tb-gr" title="Gemeinderatssitzungs-Termine im Diagramm ein-/ausblenden">
     <input type="checkbox" id="toggleGrSitzungen" checked> GR
+  </label>
+  <label class="tb-gr" title="Anfangs- und Enddatum an jedem Balken zeigen — gilt auch für den Druck">
+    <input type="checkbox" id="toggleDaten"> Daten
   </label>
   <span id="saveState" class="tb-save" title="Speicherstand">·</span>
 </div>
@@ -398,6 +435,9 @@
 
 
 
+
+<!-- Druckblätter (Baustein druck.js): nur im Druck sichtbar, gefüllt von druckVorbereiten() -->
+<div id="druckBereich"></div>
 
 <script>
 // ==================================================================================
@@ -504,6 +544,11 @@ let durationUnit = 'cd';
 // - blendet die grünen Gemeinderatssitzungs-Spalten im Diagramm ein/aus, umschaltbar über das
 // Kontrollkästchen neben dem Legenden-Icon "GR-Sitzung (Termin)".
 let showGrSitzungen = true;
+// Anfang und Ende als Datum am Balken (22.10., Julian Neuhoff) — reine Anzeige, je Rechner gemerkt,
+// dieselbe Einstellung wie „Daten am Balken“ im Druckdialog.
+let datenAmBalken = false;
+try { datenAmBalken = !!JSON.parse(localStorage.getItem('terminplan_druck') || '{}').datenAmBalken; } catch(e){}
+function datumKurz(iso){ return iso.slice(8,10) + '.' + iso.slice(5,7) + '.' + iso.slice(2,4); }
 
 // Dauer zwischen zwei Terminen (inklusive beider Endpunkte) in der gewählten Einheit - für die
 // "Dauer"-Spalte links in der Tabelle.
@@ -3359,6 +3404,7 @@ function renderBars(){
       const lbl = document.createElement('div');
       lbl.className='lbl'; lbl.style.left=(xOf(t.start)+10)+'px'; lbl.style.top='4px';
       lbl.textContent = t.name;
+      if(datenAmBalken) lbl.insertAdjacentHTML('afterbegin', '<span class="lbl-dat">' + datumKurz(t.start) + '</span> ');
       lbl.addEventListener('dblclick', (ev)=>{ ev.stopPropagation(); openTaskDetail(t.uid); });
       rowhit.appendChild(lbl);
     } else {
@@ -3429,12 +3475,25 @@ function renderBars(){
         inLbl.textContent = t.name;
         inLbl.title = t.name;
         el.appendChild(inLbl);
+        if(datenAmBalken){
+          const ende = document.createElement('div');
+          ende.className='lbl lbl-dat'; ende.style.left=(x2+6)+'px'; ende.style.top='4px';
+          ende.textContent = datumKurz(t.finish);
+          rowhit.appendChild(ende);
+        }
       } else {
         const lbl = document.createElement('div');
         lbl.className='lbl'; lbl.style.left=(x2+6)+'px'; lbl.style.top='4px';
         lbl.textContent = t.name;
+        if(datenAmBalken) lbl.insertAdjacentHTML('afterbegin', '<span class="lbl-dat">' + datumKurz(t.finish) + '</span> ');
         lbl.addEventListener('dblclick', (ev)=>{ ev.stopPropagation(); openTaskDetail(t.uid); });
         rowhit.appendChild(lbl);
+      }
+      if(datenAmBalken){
+        const anf = document.createElement('div');
+        anf.className='lbl lbl-dat lbl-start'; anf.style.left=(x1-5)+'px'; anf.style.top='4px';
+        anf.textContent = datumKurz(t.start);
+        rowhit.appendChild(anf);
       }
 
       // Transparente Einfassung hinter den (aktuell sichtbaren) Unter-Vorgängen eines
@@ -3670,6 +3729,12 @@ document.getElementById('toggleGrSitzungen').addEventListener('change', (ev)=>{
   showGrSitzungen = ev.target.checked;
   renderAll();
 });
+document.getElementById('toggleDaten').checked = datenAmBalken;
+document.getElementById('toggleDaten').addEventListener('change', (ev)=>{
+  datenAmBalken = ev.target.checked;
+  try { localStorage.setItem('terminplan_druck', JSON.stringify(Object.assign(druckEinstellungen(), { datenAmBalken }))); } catch(e){}
+  renderBars(); drawLinks();
+});
 
 document.getElementById('btnNewTask').addEventListener('click', ()=>{
   openNewTaskDialog({ mode:'insertAt', defaultParentUid:null, defaultStart: safeDefaultDate(), milestoneDefault:false });
@@ -3778,8 +3843,79 @@ function exportXml(){
 // damit ohne zusätzliche Bibliothek und auch ohne Internetzugriff ein PDF erzeugt werden kann.
 // Umbruch/Layout bei sehr breiten oder langen Plänen ist noch nicht optimiert (mehrseitiger
 // Druck, Kopfzeile wird je Seite nicht wiederholt) - das ist als erster Entwurf gedacht.
+// Druck / PDF: eigene Blätter aus dem Baustein druck.js. Gedruckt wird, was der Plan gerade zeigt
+// (Schicht, zugeklappte Gewerke); ausgeblendete Vorgänge nicht. Papier und „Daten am Balken“ merkt sich der Rechner.
+function druckEinstellungen(){
+  try { return Object.assign({ papier:'A3', datenAmBalken:false }, JSON.parse(localStorage.getItem('terminplan_druck') || '{}')); }
+  catch(e){ return { papier:'A3', datenAmBalken:false }; }
+}
+function druckVorbereiten(opt){
+  const e = Object.assign(druckEinstellungen(), opt || {});
+  const eintrag = PLAN_LISTE.find(p=>p.id === planId) || {};
+  const einheit = durationUnit === 'wd' ? 'AT' : 'KT';
+  const zeilen = VISIBLE.filter(({t})=>!t.hidden).map(({t, idx})=>({
+    uid: t.uid, nr: idx + 1, name: t.name, level: t.level || 1, start: t.start, finish: t.finish,
+    milestone: !!t.milestone, summary: !!t.summary, category: t.category || 'ausfuehrung', farbe: t.farbe || null,
+    dauer: t.milestone ? '–' : durationCount(t.start, t.finish, durationUnit) + ' ' + einheit }));
+  const r = druckAufbau({ papier: e.papier, datenAmBalken: !!e.datenAmBalken, zeilen,
+    kopf: { projekt: PROJEKT_NAME, plan: eintrag.name || 'Terminplan',
+      // Stand als Berliner Datum (die Datenbank liefert UTC — kurz vor Mitternacht wäre es sonst der Vortag)
+      stand: new Date(eintrag.eingefroren_am || eintrag.stand || Date.now()).toLocaleDateString('sv-SE'),
+      gedruckt: new Date().toLocaleDateString('sv-SE') },
+    heute: fmtISO(new Date()),
+    sonder: SPECIAL_PERIODS.map(p=>({ kind:p.kind, label:p.label, start:p.start, finish:p.finish })) });
+  let stil = document.getElementById('druckSeitenStil');
+  if(!stil){ stil = document.createElement('style'); stil.id = 'druckSeitenStil'; document.head.appendChild(stil); }
+  stil.textContent = '@page{ size:' + r.papier.b + 'mm ' + r.papier.h + 'mm; margin:0; }';
+  document.getElementById('druckBereich').innerHTML = r.html;
+  return r;
+}
+// Strg+P druckt dieselben Blätter wie der Menüpunkt (mit den gemerkten Einstellungen).
+window.addEventListener('beforeprint', ()=>{ if(!document.getElementById('druckBereich').innerHTML) druckVorbereiten(); });
+window.addEventListener('afterprint', ()=>{ document.getElementById('druckBereich').innerHTML = ''; });
+
 function exportPdf(){
-  window.print();
+  const e = druckEinstellungen();
+  closeTaskDetail();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal-box" style="min-width:420px">
+    <button class="modal-close" title="Schließen">✕</button>
+    <div class="modal-title">Als PDF drucken</div>
+    <div class="modal-grid">
+      <div class="modal-label">Papier</div>
+      <select class="modal-input" id="druckPapier">
+        <option value="A3">A3 quer</option><option value="A4">A4 quer</option>
+      </select>
+      <div class="modal-label">Balken</div>
+      <label class="modal-checkbox-row"><input type="checkbox" id="druckDaten"> Anfang und Ende als Datum am Balken</label>
+    </div>
+    <div class="newtaskdialog-hint" id="druckInfo"></div>
+    <div class="anlage-hint">Im Druckfenster „Als PDF speichern“ wählen. Gedruckt wird, was der Plan gerade zeigt: gewählte Schicht, zugeklappte Gewerke bleiben zu.</div>
+    <button class="modal-primary-btn" id="druckLos">Drucken …</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  window.__openModal = overlay;
+  const papier = overlay.querySelector('#druckPapier'), daten = overlay.querySelector('#druckDaten');
+  papier.value = e.papier; daten.checked = !!e.datenAmBalken;
+  const info = ()=>{
+    const r = druckVorbereiten({ papier: papier.value, datenAmBalken: daten.checked });
+    const m = r.massstab;
+    overlay.querySelector('#druckInfo').textContent = r.seiten.length + (r.seiten.length === 1 ? ' Seite' : ' Seiten')
+      + ' · ' + m.proSeite + ' Zeilen je Seite · Zeitraum ' + fmtDE(m.von) + ' – ' + fmtDE(m.bis)
+      + ' · Zeitachse in ' + (m.achse === 'kw' ? 'Kalenderwochen' : 'Monaten');
+  };
+  papier.addEventListener('change', info); daten.addEventListener('change', info);
+  info();
+  overlay.querySelector('.modal-close').addEventListener('click', closeTaskDetail);
+  overlay.addEventListener('mousedown', (ev)=>{ if(ev.target === overlay) closeTaskDetail(); });
+  overlay.querySelector('#druckLos').addEventListener('click', ()=>{
+    const wahl = { papier: papier.value, datenAmBalken: daten.checked };
+    try { localStorage.setItem('terminplan_druck', JSON.stringify(wahl)); } catch(err){}
+    closeTaskDetail();
+    druckVorbereiten(wahl);
+    window.print();
+  });
 }
 
 function replaceTagAfter(xml, afterIndex, tag, newValue){
@@ -5460,10 +5596,13 @@ window.terminplanApi = {
           const sel = document.getElementById('durationUnitSel');
           const ziel = /arbeit/.test(w) ? 'wd' : 'cd';
           if(sel && [...sel.options].some(o => o.value === ziel)){ sel.value = ziel; sel.dispatchEvent(new Event('change')); }
+        } else if(/daten|datum/.test(w)){
+          const cb = document.getElementById('toggleDaten');
+          if(cb){ cb.checked = !/aus|weg|ausblend/.test(w); cb.dispatchEvent(new Event('change')); }
         } else if(/gr/.test(w)){
           const cb = document.getElementById('toggleGrSitzungen');
           if(cb){ cb.checked = !/aus|weg|ausblend/.test(w); cb.dispatchEvent(new Event('change')); }
-        } else return { fehler: 'Anzeige kennt: hineinzoomen, herauszoomen, einpassen, heute, Arbeitstage, Kalendertage, GR ein, GR aus.' };
+        } else return { fehler: 'Anzeige kennt: hineinzoomen, herauszoomen, einpassen, heute, Arbeitstage, Kalendertage, GR ein, GR aus, Daten ein, Daten aus.' };
         return { ok: true, satz: 'Anzeige umgestellt (' + w + ').' };
       }
       if(tu === 'schicht'){
@@ -6334,6 +6473,238 @@ function erzeugeRahmenplan(param) {
   }
 
   return { tasks: tasks, edges: edges, warnungen: warnungen };
+}
+
+// ---------- Baustein: druck.js (geprueft, Tests unter _bausteine/) ----------
+// druck.js — Baustein: Druckbild des Terminplans (22.10.2026, Julian Neuhoff: „Druckausgabe passt das Layout nicht“).
+// Statt den Bildschirm zu drucken (Diagramm rechts abgeschnitten, Kopf und Zeitachse nur auf Seite 1) baut dieser
+// Baustein eigene Blätter wie MS Project / pro-Plan: Kopf mit Projekt, Plan und Stand auf jeder Seite, Tabelle und
+// Balken zeilengleich auf derselben Seite, Zeitachse auf jeder Seite, der ganze Zeitraum in die Blattbreite
+// eingepasst, Seitenzahl „Seite i von n“, Legende im Fuß. Auf Wunsch Anfangs- und Enddatum am Balken.
+// Alle Maße in mm (SVG-Einheit = 1 mm), Schrift nie unter 6,5 pt. Kein DOM — reiner Text, prüfbar in druck.test.mjs.
+// Eingabe: { papier:'A3'|'A4', kopf:{projekt, plan, stand, gedruckt}, zeilen:[{uid, nr, name, level, start, finish,
+//            milestone, summary, category, farbe, dauer}], heute, datenAmBalken, sonder:[{kind,label,start,finish}] }
+// Ergebnis: { html, seiten:[{von,bis}], papier:{b,h}, massstab:{von, bis, tage, mmProTag, achse} }
+
+var DRUCK_PAPIER = { A4: { b: 297, h: 210 }, A3: { b: 420, h: 297 } };
+var DRUCK_MASS = { rand: 8, kopf: 14, fuss: 7, achse: 8, zeile: 4.4, pt: 0.3528 };
+var DRUCK_FARBE = { planung: '#d9a520', vergabe: '#70ad47', ausfuehrung: '#3a5fab', sammel: '#1f2937', heute: '#dc2626' };
+var DRUCK_MONAT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+
+function druckEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function druckTag(iso) { var p = iso.split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000; }
+function druckIso(tag) { return new Date(tag * 86400000).toISOString().slice(0, 10); }
+function druckDE(iso, kurz) {
+  if (!iso) return '';
+  var p = iso.slice(0, 10).split('-');
+  return p[2] + '.' + p[1] + '.' + (kurz ? p[0].slice(2) : p[0]);
+}
+// Textbreite geschätzt (Segoe UI): Ziffern/Kleinbuchstaben ~0,53 em, Punkt/Leerzeichen ~0,28 em.
+function druckBreite(text, mm) {
+  var b = 0;
+  for (var i = 0; i < text.length; i++) b += /[.,:;\s|il]/.test(text[i]) ? 0.28 : /[A-ZÄÖÜMWmw]/.test(text[i]) ? 0.68 : 0.53;
+  return b * mm;
+}
+function druckKW(tag) {
+  var d = new Date(tag * 86400000), wd = (d.getUTCDay() + 6) % 7;
+  var don = new Date(d); don.setUTCDate(d.getUTCDate() - wd + 3);
+  var j1 = new Date(Date.UTC(don.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((don - j1) / 86400000 - 3 + ((j1.getUTCDay() + 6) % 7)) / 7);
+}
+
+// Seiten bilden: so viele Zeilen wie passen; ein Sammelvorgang steht nie allein als letzte Zeile einer Seite.
+function druckSeitenTeilen(zeilen, proSeite) {
+  var seiten = [], von = 0;
+  while (von < zeilen.length) {
+    var bis = Math.min(zeilen.length, von + proSeite);
+    if (bis < zeilen.length && bis - von > 1 && zeilen[bis - 1].summary && zeilen[bis].level > zeilen[bis - 1].level) bis--;
+    seiten.push({ von: von, bis: bis });
+    von = bis;
+  }
+  return seiten.length ? seiten : [{ von: 0, bis: 0 }];
+}
+
+function druckAufbau(e) {
+  var M = DRUCK_MASS, pap = DRUCK_PAPIER[e.papier] || DRUCK_PAPIER.A3, zeilen = e.zeilen || [];
+  var fs = 7 * M.pt, fsKlein = 6.6 * M.pt;                       // Schriftgrößen in mm
+  var innenB = pap.b - 2 * M.rand, innenH = pap.h - 2 * M.rand;
+  var rumpfH = innenH - M.kopf - M.fuss - M.achse;
+  var proSeite = Math.max(1, Math.floor(rumpfH / M.zeile + 1e-6));
+  // Spalten: Name so breit wie der längste Name (mit Einrückung), aber in festen Grenzen je Papier
+  var maxName = 0;
+  zeilen.forEach(function (z) { maxName = Math.max(maxName, druckBreite(z.name || '', fs * (z.summary ? 1.06 : 1)) + ((z.level || 1) - 1) * 2.5); });
+  var nameB = Math.min(e.papier === 'A4' ? 84 : 110, Math.max(45, Math.ceil(maxName + 3)));
+  var sp = [{ k: 'nr', t: 'Nr.', b: 8, r: true }, { k: 'name', t: 'Vorgang', b: nameB }, { k: 'dauer', t: 'Dauer', b: 11, r: true },
+    { k: 'start', t: 'Anfang', b: 16 }, { k: 'finish', t: 'Ende', b: 16 }];
+  var tabB = sp.reduce(function (s, c) { return s + c.b; }, 0);
+  var diaB = innenB - tabB;
+  // Zeitraum: ganze Monate um den Plan, in die Diagrammbreite eingepasst
+  var t0 = Infinity, t1 = -Infinity;
+  zeilen.forEach(function (z) {
+    if (z.start) t0 = Math.min(t0, druckTag(z.start));
+    if (z.finish || z.start) t1 = Math.max(t1, druckTag(z.finish || z.start));
+  });
+  if (!isFinite(t0)) { t0 = druckTag(e.heute || '2026-01-01'); t1 = t0 + 30; }
+  var d0 = new Date(t0 * 86400000), d1 = new Date(t1 * 86400000);
+  var von = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), 1) / 86400000;
+  var bis = Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth() + 1, 1) / 86400000;   // erster Tag NACH dem Zeitraum
+  var tage = bis - von, mm = diaB / tage;
+  var x = function (iso) { return (druckTag(iso) - von) * mm; };
+  var achse = 7 * mm >= 3.4 ? 'kw' : 'monat';
+  var seiten = druckSeitenTeilen(zeilen, proSeite);
+
+  // Zeitachse und Raster (für jede Seite gleich)
+  var kopfAchse = '', raster = '', h2 = M.achse / 2;
+  var monate = [];
+  for (var y = d0.getUTCFullYear(), m = d0.getUTCMonth(); Date.UTC(y, m, 1) / 86400000 < bis; m++) {
+    if (m === 12) { m = 0; y++; }
+    var a = Date.UTC(y, m, 1) / 86400000, b2 = Date.UTC(y, m + 1, 1) / 86400000;
+    monate.push({ y: y, m: m, x1: (a - von) * mm, x2: (b2 - von) * mm });
+  }
+  var text = function (xx, yy, s, mm2, extra) {
+    return '<text x="' + xx.toFixed(2) + '" y="' + yy.toFixed(2) + '" font-size="' + mm2.toFixed(3) + '"' + (extra || '') + '>' + druckEsc(s) + '</text>';
+  };
+  var oben = [];
+  if (achse === 'kw') {
+    monate.forEach(function (mo) {
+      var w = mo.x2 - mo.x1, s = DRUCK_MONAT[mo.m] + ' ' + mo.y;
+      if (druckBreite(s, fsKlein) > w - 1) s = DRUCK_MONAT[mo.m] + ' ' + String(mo.y).slice(2);
+      if (druckBreite(s, fsKlein) > w - 1) s = DRUCK_MONAT[mo.m];
+      oben.push({ x1: mo.x1, x2: mo.x2, s: s });
+    });
+    var erster = von + ((8 - new Date(von * 86400000).getUTCDay()) % 7);   // erster Montag
+    var kwB = 7 * mm, jede = kwB >= 4.2 ? 1 : 2;
+    for (var t = erster, i = 0; t < bis; t += 7, i++) {
+      var xx = (t - von) * mm;
+      raster += '<line x1="' + xx.toFixed(2) + '" y1="' + M.achse + '" x2="' + xx.toFixed(2) + '" y2="__H__" class="r-kw"/>';
+      if (i % jede === 0 && xx + kwB <= diaB + 0.01) {
+        var kw = String(druckKW(t)), lab = kwB >= 7.5 ? 'KW' + kw : kw;
+        kopfAchse += text(xx + kwB / 2, M.achse - 1.1, lab, fsKlein, ' text-anchor="middle"');
+      }
+    }
+  } else {
+    var jahre = {};
+    monate.forEach(function (mo) {
+      var j = jahre[mo.y] || (jahre[mo.y] = { x1: mo.x1, x2: mo.x2 });
+      j.x2 = mo.x2;
+      var w = mo.x2 - mo.x1, s = DRUCK_MONAT[mo.m];
+      if (druckBreite(s, fsKlein) > w - 0.6) s = s[0];
+      kopfAchse += text((mo.x1 + mo.x2) / 2, M.achse - 1.1, s, fsKlein, ' text-anchor="middle"');
+    });
+    Object.keys(jahre).forEach(function (yy) { oben.push({ x1: jahre[yy].x1, x2: jahre[yy].x2, s: yy }); });
+  }
+  oben.forEach(function (o) {
+    kopfAchse += '<line x1="' + o.x1.toFixed(2) + '" y1="0" x2="' + o.x1.toFixed(2) + '" y2="' + h2 + '" class="r-mo"/>';
+    if (o.x2 - o.x1 >= druckBreite(o.s, fsKlein) + 0.6) kopfAchse += text((o.x1 + Math.min(o.x2, diaB)) / 2, h2 - 1.1, o.s, fsKlein, ' text-anchor="middle" font-weight="600"');
+  });
+  monate.forEach(function (mo) {
+    raster += '<line x1="' + mo.x1.toFixed(2) + '" y1="' + (achse === 'kw' ? h2 : 0) + '" x2="' + mo.x1.toFixed(2) + '" y2="__H__" class="r-mo"/>';
+  });
+  // Ferien als blasse Bänder (Feiertage und GR-Sitzungen bleiben dem Bildschirm vorbehalten)
+  var baender = '';
+  (e.sonder || []).forEach(function (p) {
+    if (p.kind !== 'weihnachtsferien' && p.kind !== 'schulferien') return;
+    var a = Math.max(0, x(p.start)), b3 = Math.min(diaB, x(p.finish) + mm);
+    if (b3 <= a) return;
+    baender += '<rect x="' + a.toFixed(2) + '" y="' + M.achse + '" width="' + (b3 - a).toFixed(2) + '" height="__HR__" class="' + (p.kind === 'weihnachtsferien' ? 'b-wf' : 'b-sf') + '"/>';
+  });
+  var heuteX = e.heute && druckTag(e.heute) >= von && druckTag(e.heute) < bis ? x(e.heute) + mm / 2 : null;
+
+  var html = '';
+  seiten.forEach(function (s, si) {
+    var n = s.bis - s.von, hoehe = M.achse + n * M.zeile;
+    var tab = '', dia = '', zebra = '';
+    // Kopfzeile der Tabelle
+    var cx = 0;
+    sp.forEach(function (c) {
+      tab += '<div class="dz-k" style="left:' + cx + 'mm;width:' + c.b + 'mm;' + (c.r ? 'text-align:right;' : '') + '">' + c.t + '</div>';
+      cx += c.b;
+    });
+    for (var r = 0; r < n; r++) {
+      var z = zeilen[s.von + r], top = M.achse + r * M.zeile, mitte = top + M.zeile / 2;
+      var kl = 'dz' + (r % 2 ? ' dz-g' : '') + (z.summary ? ' dz-s' : '');
+      tab += '<div class="' + kl + '" data-druck-zeile="' + z.uid + '" style="top:' + top.toFixed(2) + 'mm;width:' + tabB + 'mm;">';
+      cx = 0;
+      sp.forEach(function (c) {
+        var w = c.k === 'nr' ? z.nr : c.k === 'name' ? z.name : c.k === 'dauer' ? (z.milestone ? '–' : z.dauer)
+          : c.k === 'start' ? druckDE(z.start) : druckDE(z.milestone ? z.start : z.finish);
+        var pad = '';
+        if (c.k === 'name') {
+          // zu langer Name: Schrift bis 6,5 pt verkleinern, statt ihn abzuschneiden
+          var einzug = 1.2 + ((z.level || 1) - 1) * 2.5, braucht = druckBreite(w || '', fs * (z.summary ? 1.06 : 1)), hat = c.b - einzug - 1.6;
+          pad = 'padding-left:' + einzug.toFixed(1) + 'mm;' + (braucht > hat ? 'font-size:' + Math.max(6.5, 7 * hat / braucht).toFixed(2) + 'pt;' : '');
+        }
+        tab += '<span style="left:' + cx + 'mm;width:' + c.b + 'mm;' + pad + (c.r ? 'text-align:right;' : '') + '">' + druckEsc(w) + '</span>';
+        cx += c.b;
+      });
+      tab += '</div>';
+      if (r % 2) zebra += '<rect x="0" y="' + top.toFixed(2) + '" width="' + diaB.toFixed(2) + '" height="' + M.zeile + '" class="z-g"/>';
+      // Balken
+      var farbe = z.farbe || (z.summary ? DRUCK_FARBE.sammel : DRUCK_FARBE[z.category || 'ausfuehrung'] || DRUCK_FARBE.ausfuehrung);
+      var ty = mitte + fsKlein * 0.36;
+      var frei = function (x0, w) { return x0 >= 0.3 && x0 + w <= diaB - 0.3; };
+      if (z.milestone || !z.finish) {
+        var mx = x(z.start) + mm / 2, d = 1.5, sM = druckDE(z.start, true), wM = druckBreite(sM, fsKlein);
+        dia += '<path data-druck-balken="' + z.uid + '" d="M' + mx.toFixed(2) + ' ' + (mitte - d).toFixed(2) + 'l' + d + ' ' + d + 'l-' + d + ' ' + d + 'l-' + d + ' -' + d + 'z" fill="' + (z.farbe || '#111') + '"/>';
+        dia += text(frei(mx + d + 0.8, wM) ? mx + d + 0.8 : mx - d - 0.8 - wM, ty, sM, fsKlein, ' class="dl"');
+      } else {
+        var x1 = x(z.start), x2 = x(z.finish) + mm, bw = Math.max(x2 - x1, 0.6);
+        if (z.summary) {
+          dia += '<g data-druck-balken="' + z.uid + '"><rect x="' + x1.toFixed(2) + '" y="' + (mitte - 0.9).toFixed(2) + '" width="' + bw.toFixed(2) + '" height="1.5" fill="' + farbe + '"/>'
+            + '<path d="M' + x1.toFixed(2) + ' ' + (mitte + 0.6).toFixed(2) + 'h1.4l-0.7 1z M' + (x1 + bw - 1.4).toFixed(2) + ' ' + (mitte + 0.6).toFixed(2) + 'h1.4l-0.7 1z" fill="' + farbe + '"/></g>';
+        } else {
+          dia += '<rect data-druck-balken="' + z.uid + '" x="' + x1.toFixed(2) + '" y="' + (mitte - 1.3).toFixed(2) + '" width="' + bw.toFixed(2) + '" height="2.6" rx="0.3" fill="' + farbe + '" class="bk"/>';
+        }
+        // Anfang links vor dem Balken, Ende rechts dahinter. Stößt eine Seite an den Diagrammrand, steht das Datum
+        // innen im Balken (weiß auf Farbe); ist auch dafür kein Platz, beide als „Anfang – Ende“ auf der freien Seite.
+        if (e.datenAmBalken) {
+          var sS = druckDE(z.start, true), sE = druckDE(z.finish, true);
+          var wS = druckBreite(sS, fsKlein), wE = druckBreite(sE, fsKlein);
+          // Sammelbalken sind zu dünn für Schrift innen — dort gleich „Anfang – Ende“ auf die freie Seite
+          var pS = frei(x1 - 0.8 - wS, wS) ? x1 - 0.8 - wS : null, pE = frei(x2 + 0.8, wE) ? x2 + 0.8 : null, iS = false, iE = false;
+          if (!z.summary && pS == null && bw >= wS + 1.6 + (pE == null ? wE + 1.6 : 0)) { pS = x1 + 0.8; iS = true; }
+          if (!z.summary && pE == null && bw >= wE + 1.6 + (iS ? wS + 1.6 : 0)) { pE = x2 - 0.8 - wE; iE = true; }
+          if (pS != null && pE != null) {
+            dia += text(pS, ty, sS, fsKlein, iS ? ' class="dl-in"' : ' class="dl"') + text(pE, ty, sE, fsKlein, iE ? ' class="dl-in"' : ' class="dl"');
+          } else {
+            var sB = sS + ' – ' + sE, wB = druckBreite(sB, fsKlein);
+            var pB = frei(x2 + 0.8, wB) ? x2 + 0.8 : frei(x1 - 0.8 - wB, wB) ? x1 - 0.8 - wB : null;
+            if (pB == null) {
+              // Balken über (fast) den ganzen Zeitraum: Daten als Schild auf dem Balken
+              pB = Math.max(0.3, Math.min(diaB - wB - 0.3, x1 + 2));
+              dia += '<rect x="' + (pB - 0.6).toFixed(2) + '" y="' + (mitte - 1.5).toFixed(2) + '" width="' + (wB + 1.2).toFixed(2) + '" height="3" rx="0.4" class="dl-bg"/>';
+            }
+            dia += text(pB, ty, sB, fsKlein, ' class="dl"');
+          }
+        }
+      }
+    }
+    var svg = '<svg class="druck-diagramm" xmlns="http://www.w3.org/2000/svg" width="' + diaB.toFixed(2) + 'mm" height="' + hoehe.toFixed(2) + 'mm" viewBox="0 0 '
+      + diaB.toFixed(2) + ' ' + hoehe.toFixed(2) + '">'
+      + '<rect x="0" y="0" width="' + diaB.toFixed(2) + '" height="' + M.achse + '" class="a-g"/>'
+      + zebra + baender.split('__HR__').join((n * M.zeile).toFixed(2))
+      + raster.split('__H__').join(hoehe.toFixed(2)) + dia
+      + '<line x1="0" y1="' + (achse === 'kw' ? h2 : 0) + '" x2="' + diaB.toFixed(2) + '" y2="' + (achse === 'kw' ? h2 : 0) + '" class="r-a"/>'
+      + '<line x1="0" y1="' + M.achse + '" x2="' + diaB.toFixed(2) + '" y2="' + M.achse + '" class="r-k"/>'
+      + kopfAchse
+      + (heuteX != null ? '<line x1="' + heuteX.toFixed(2) + '" y1="' + M.achse + '" x2="' + heuteX.toFixed(2) + '" y2="' + hoehe.toFixed(2) + '" class="r-h"/>' : '')
+      + '</svg>';
+    html += '<section class="druck-seite" style="width:' + pap.b + 'mm;height:' + (pap.h - 0.6) + 'mm;padding:' + M.rand + 'mm;">'
+      + '<div class="druck-kopf" style="height:' + M.kopf + 'mm;"><div><div class="dk-plan">' + druckEsc(e.kopf.plan) + '</div>'
+      + '<div class="dk-projekt">' + druckEsc(e.kopf.projekt) + '</div></div>'
+      + '<div class="dk-meta">Stand: ' + druckDE(e.kopf.stand) + '<br>Gedruckt: ' + druckDE(e.kopf.gedruckt) + '</div></div>'
+      + '<div class="druck-rumpf" style="height:' + (innenH - M.kopf - M.fuss) + 'mm;">'
+      + '<div class="druck-tabelle" style="width:' + tabB + 'mm;height:' + hoehe.toFixed(2) + 'mm;">' + tab + '</div>' + svg + '</div>'
+      + '<div class="druck-fuss" style="height:' + M.fuss + 'mm;"><span>Gutthann HIW Architekten GmbH</span>'
+      + '<span class="dl-leg"><i style="background:' + DRUCK_FARBE.planung + '"></i>Planung <i style="background:' + DRUCK_FARBE.vergabe + '"></i>Vergabe '
+      + '<i style="background:' + DRUCK_FARBE.ausfuehrung + '"></i>Ausführung <i class="s"></i>Sammelvorgang <i class="m"></i>Meilenstein'
+      + (heuteX != null ? ' <i class="h"></i>Heute' : '') + '</span>'
+      + '<span>Seite ' + (si + 1) + ' von ' + seiten.length + '</span></div></section>';
+  });
+  return { html: html, seiten: seiten, papier: pap,
+    massstab: { von: druckIso(von), bis: druckIso(bis - 1), tage: tage, mmProTag: mm, achse: achse, nameB: nameB, proSeite: proSeite } };
 }
 
 // ---------- Baustein: bzp_pdf.js (geprueft, Tests unter _bausteine/) ----------
