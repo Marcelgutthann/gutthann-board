@@ -719,6 +719,8 @@ function cascadeChange(uid, startDelta, finishDelta, visited){
   EDGES.filter(e=>e.from===uid).forEach(edge=>{
     const succ = byUid[edge.to];
     if(!succ) return;
+    // schon bewegt (Raute) oder Ausgangspunkt einer Rückwärtskorrektur: nicht ein zweites Mal verschieben (Befund 23.10.)
+    if(visited.has(edge.to)) return;
     const anchors = edgeAnchors(edge.type);
     const delta = (edge.type==='EA' || edge.type==='EE') ? finishDelta : startDelta; // AA/AE hängen am Start
     if(delta !== 0){
@@ -754,6 +756,7 @@ function cascadeChangeBackward(uid, startDelta, finishDelta, visited){
   EDGES.filter(e=>e.to===uid).forEach(edge=>{
     const pred = byUid[edge.from];
     if(!pred) return;
+    if(visited.has(edge.from)) return; // schon bewegt: nicht ein zweites Mal verschieben (Befund 23.10.)
     const anchors = edgeAnchors(edge.type);
     const delta = anchors.succEnd==='start' ? startDelta : finishDelta;
     if(delta !== 0){
@@ -4713,6 +4716,11 @@ async function agentPruefung(){
       await new Promise(r=>setTimeout(r, 3000));
       const j = await liveAktion('gruendlich_stand', { run_id: runId }).catch(()=>null);
       if(!j) { if(Date.now() > bis) throw new Error('keine Rückmeldung vom Server'); continue; }
+      // Nimmt der Server-Dienst den Auftrag nicht an, nicht stumm 40 min warten (09.–23.10. lagen so 5 Läufe liegen)
+      if(j.status === 'wartet' && (j.wartet_s || 0) > 120){
+        await liveAktion('gruendlich_anhalten', { run_id: runId }).catch(()=>{});
+        throw new Error('Der KI-Dienst auf dem Server hat den Auftrag nach 2 Minuten nicht angenommen — er läuft vermutlich nicht. Der Plan selbst ist gespeichert; bitte Bescheid geben.');
+      }
       if(j.status === 'wartet') status('wartet auf den Server (' + (j.wartet_s || 0) + ' s) …');
       else if(j.status === 'running') status('arbeitet: ' + ((j.lauf && j.lauf.jetzt) || '…'));
       else { antwort = j.antwort || j.antwort_teil || j.result || ''; break; }
@@ -4738,7 +4746,7 @@ function agentErgebnisZeigen(antwort){
     + '<input type="checkbox" checked data-id="' + id + '"><span><b>' + esc(text) + '</b><br><span style="color:#666;">' + esc(beleg) + '</span></span></label>';
   erg.korrekturen.forEach((k, i)=>{
     const t = byUid[k.uid];
-    const neu = t.milestone || !k.ende ? fmtDE(k.start) : fmtDE(k.start) + ' – ' + fmtDE(k.ende);
+    const neu = !k.start ? 'Ende ' + fmtDE(k.ende) : t.milestone || !k.ende ? fmtDE(k.start) : fmtDE(k.start) + ' – ' + fmtDE(k.ende);
     const alt = t.milestone ? fmtDE(t.start) : fmtDE(t.start) + ' – ' + fmtDE(t.finish);
     html += zeile('k' + i, t.name + ': ' + alt + ' → ' + neu, k.beleg);
   });
@@ -4757,8 +4765,9 @@ function agentErgebnisZeigen(antwort){
     erg.korrekturen.forEach((k, i)=>{
       if(!an('k' + i)) return;
       const t = byUid[k.uid];
-      terminSetzen(t, k.start, k.ende);
-      t.lockStart = true; if(k.ende || t.milestone) t.lockFinish = true;
+      terminSetzen(t, k.start || t.start, k.ende);   // nur Ende belegt: Start bleibt
+      if(k.start) t.lockStart = true;
+      if(k.ende || t.milestone) t.lockFinish = true;
       t.quelleText = 'Agent-Prüfung ' + fmtDE(fmtISO(new Date())) + ': ' + k.beleg;
     });
     let naechste = Math.max(0, ...TASKS.map(t=>t.uid)) + 1;
@@ -4772,10 +4781,24 @@ function agentErgebnisZeigen(antwort){
       TASKS.splice(pos < 0 ? TASKS.length : pos, 0, t);
       byUid[t.uid] = t;
     });
+    // Belegte Termine gehen vor Regel-Verknüpfungen: widerspricht eine Verknüpfung zwei übernommenen Terminen
+    // (z. B. Regel P9 „LPH 4 nach FAG-Abgabe“, das Projekt reicht den FAG-Antrag aber am Ende von LPH 4 ein),
+    // wird sie gelöst und genannt — sonst schöbe resolveLockedConstraints einen belegten Termin weiter (Befund 23.10.)
+    const belegt = new Set(erg.korrekturen.filter((k, i)=>an('k' + i)).map(k=>k.uid));
+    const geloest = [];
+    for(let i = EDGES.length - 1; i >= 0; i--){
+      const e = EDGES[i];
+      if(!belegt.has(e.from) || !belegt.has(e.to)) continue;
+      const a = edgeAnchors(e.type), p = byUid[e.from], s = byUid[e.to];
+      if(parseISO(p[a.predEnd]) > addDays(parseISO(s[a.succEnd]), -(e.lag || 0))){ geloest.push(p.name + ' → ' + s.name); EDGES.splice(i, 1); }
+    }
     resolveLockedConstraints();
     renderAll();
     await planSpeichern();
-    document.getElementById('agentOverlay')?.remove();
+    if(!geloest.length){ document.getElementById('agentOverlay')?.remove(); return; }
+    knopf.style.display = 'none';
+    document.getElementById('agStatus').textContent = 'Übernommen und gespeichert. Diese Verknüpfungen widersprachen den belegten Terminen und sind gelöst: '
+      + geloest.join(' · ') + ' — das Projekt weicht hier vom Regelwerk ab.';
   };
 }
 document.getElementById('btnAgentPruefen').onclick = agentPruefung;
@@ -4802,6 +4825,13 @@ function anlageZeigen(){
         <div class="anlage-quelle anlage-ki" id="anQuelleRahmen">
           <b id="anRahmenTitel">🪄 Rahmenterminplan aus Projektdaten</b>
           <div class="anlage-hint" id="anRahmenHint">liest die Terminprüfung des Projekts …</div>
+          <div class="anlage-zeile" id="anZeileProfil"><label>Bauaufgabe</label><select id="anProfil"></select></div>
+          <div class="anlage-zeile" id="anZeileLph"><label>Planungsstand</label><select id="anLph">
+            <option value="2">LPH 2 läuft</option><option value="3">LPH 3 läuft</option><option value="4">LPH 4 läuft</option><option value="5">LPH 5 läuft</option></select></div>
+          <div class="anlage-zeile" id="anZeileExtras"><label></label><span style="font-size:12px;">
+            <label style="width:auto;display:inline;"><input type="checkbox" id="anFoerderung"> Förderung (saG/FAG)</label>&nbsp;&nbsp;
+            <label style="width:auto;display:inline;"><input type="checkbox" id="anAbbruch"> Abbruch / vorgezogene Maßnahmen</label></span></div>
+          <div class="anlage-hint" id="anRtpHint">Termine unten nur eintragen, wenn sie feststehen — leer = nach dem Regelwerk Rahmenterminplan gerechnet.</div>
           <div class="anlage-zeile" id="anZeileGen"><label>Genehmigung</label><input id="anGenehmigung" type="date"></div>
           <div class="anlage-zeile" id="anZeilePlab"><label>Planung ab</label><input id="anPlanungAb" type="date"></div>
           <div class="anlage-zeile"><label>Baubeginn</label><input id="anBaubeginn" type="date"></div>
@@ -4852,9 +4882,24 @@ function anlageZeigen(){
     document.getElementById('anLosRahmen').textContent = wort + ' erzeugen';
     document.getElementById('anZeileGen').style.display = bzp ? 'none' : '';
     document.getElementById('anZeilePlab').style.display = bzp ? 'none' : '';
+    for(const id of ['anZeileProfil', 'anZeileLph', 'anZeileExtras', 'anRtpHint']) document.getElementById(id).style.display = bzp ? 'none' : '';
     const dh = document.getElementById('anDruckHinweis'); if(dh) dh.style.display = bzp ? '' : 'none';
   };
   document.getElementById('anArt').onchange = artWechsel;
+  // Rahmenterminplan nach Regelwerk (Baustein rtp_generator.js): Bauaufgabe aus dem Projektnamen vorschlagen,
+  // Planungsstand aus dem Projekt — beides bestätigt der Mensch
+  if(typeof RTP_PROFILE === 'object'){
+    const sel = document.getElementById('anProfil');
+    for(const [k, p] of Object.entries(RTP_PROFILE)){ const op = document.createElement('option'); op.value = k; op.textContent = p.name; sel.appendChild(op); }
+    sel.value = rtpProfilVorschlag(PROJEKT_NAME);
+    const foerd = ()=>{ const p = RTP_PROFILE[sel.value]; document.getElementById('anFoerderung').checked = !!(p.saG || p.fag); };
+    sel.onchange = foerd; foerd();
+    db('projects?select=lph&id=eq.' + PROJEKT_ID).then(r=>{
+      const l = r && r[0] && r[0].lph;
+      if(l) document.getElementById('anLph').value = String(Math.max(2, Math.min(5, l)));
+    }).catch(()=>{});
+  }
+  artWechsel();
 
   // Eckdaten und Vergabeeinheiten aus ALLEN Projektdaten (RPC termin_rahmen_quellen, Migr. 237)
   // nach Regeln vorbelegen (Baustein rahmenplan_eingaben.js). Was die Regeln nicht sicher
@@ -4886,6 +4931,8 @@ function anlageZeigen(){
       }
       for(const [k, id] of Object.entries(FELDER)){
         const inp = document.getElementById(id);
+        // „Planung ab“ heißt im Rahmenterminplan: ab hier läuft die aktuelle LPH (nicht Soll-Start LPH 5) — Vorbelegung heute
+        if(k === 'planungStart'){ inp.value = fmtISO(new Date()); inp.title = 'heute — Beginn der laufenden Leistungsphase, bei Bedarf ändern'; continue; }
         if(eingaben[k]){ inp.value = eingaben[k].datum; inp.title = eingaben[k].quelle; inp.dataset.vorbelegt = eingaben[k].datum; }
       }
       const zeile = (text, farbe)=>{ const d = document.createElement('div'); d.className = 'anlage-hint';
@@ -4944,8 +4991,9 @@ function anlageZeigen(){
           if(!bau || !ueb) return fehler('Bitte Baubeginn und Übergabe angeben.');
           if(!(bau < ueb)) return fehler('Reihenfolge prüfen: Baubeginn < Übergabe.');
         } else {
-          if(!gen || !bau || !ueb) return fehler('Bitte Genehmigung, Baubeginn und Übergabe angeben.');
-          if(!(gen <= bau && bau < ueb)) return fehler('Reihenfolge prüfen: Genehmigung ≤ Baubeginn < Übergabe.');
+          // Rahmenterminplan nach Regelwerk: alle Ecktermine optional, nur eingetragene müssen zueinander passen
+          if(gen && bau && gen > bau) return fehler('Reihenfolge prüfen: Genehmigung ≤ Baubeginn.');
+          if(bau && ueb && !(bau < ueb)) return fehler('Reihenfolge prüfen: Baubeginn < Übergabe.');
         }
         const plab = bzp ? null : (document.getElementById('anPlanungAb').value || null);
         // Herkunft je Eckdatum: vorbelegt und unveraendert = Projektdaten, sonst von Hand
@@ -4955,7 +5003,25 @@ function anlageZeigen(){
           if(inp.value) herkunft[k] = (eingaben?.[k] && inp.dataset.vorbelegt === inp.value)
             ? eingaben[k].quelle : 'von Hand im Anlegedialog eingetragen';
         }
-        if(bzp && druck.plaene.length && !document.getElementById('anVonNull')?.checked){
+        if(!bzp && typeof erzeugeRahmenterminplan === 'function'){
+          // Regelwerk Rahmenterminplan (Fassung 1): Planung → Genehmigung/Förderung → Vergabe in Paketen →
+          // Ausführung in Blöcken → Abschluss am Ferienanker. Eingetragene Ecktermine werden fixiert.
+          const bekannt = {};
+          if(gen) bekannt.genehmigung = gen;
+          if(bau) bekannt.baubeginn = bau;
+          if(huelle) bekannt.huelleDicht = huelle;
+          if(ueb) bekannt.uebergabe = ueb;
+          const erg = erzeugeRahmenterminplan({ planungStart: plab || fmtISO(new Date()), lph: +document.getElementById('anLph').value,
+            profil: document.getElementById('anProfil').value, foerderung: document.getElementById('anFoerderung').checked,
+            abbruch: document.getElementById('anAbbruch').checked, bekannt, herkunft });
+          tasks = erg.tasks; edges = erg.edges;
+          // Was Regeln nicht entscheiden: Warnungen, offene Annahmen, belastbare Vergabetermine des Projekts — das klärt der Agent
+          const vergabe = (eingaben?.vergabeeinheiten || []).filter(v=>Object.keys(v.bekannt || {}).length)
+            .map(v=>'Vergabeterminplan des Projekts: ' + v.name + ' — ' + Object.entries(v.bekannt).map(([k, d])=>k + ' ' + fmtDE(d)).join(', ') + ' (' + (v.quelle || 'Projektdaten') + ') — passendem Paket zuordnen');
+          planOffen = erg.warnungen.map(w=>'Warnung: ' + w).concat(erg.offen, vergabe, (eingaben?.offen || []));
+          quelleText = 'Rahmenterminplan nach Regelwerk (Fassung 1, ' + RTP_PROFILE[document.getElementById('anProfil').value].name + ', ab LPH ' + document.getElementById('anLph').value + ') + Projektdaten, bestätigt';
+          if(erg.warnungen.length) console.warn('Rahmenterminplan:', erg.warnungen.join(' | '));
+        } else if(bzp && druck.plaene.length && !document.getElementById('anVonNull')?.checked){
           // Vorhandene Drucke 1:1 (je Planfamilie einer), nur Vergabeeinheiten ohne Vorgang nach Regel; offen = nur diese Luecken
           const r = bauzeitenplanAusDruck(druck.plaene, eingaben?.vergabeeinheiten, bau, ueb);
           tasks = r.tasks; edges = r.edges;
@@ -6542,6 +6608,547 @@ function erzeugeRahmenplan(param) {
   return { tasks: tasks, edges: edges, warnungen: warnungen };
 }
 
+// ---------- Baustein: rtp_generator.js (geprueft, Tests unter _bausteine/) ----------
+// =============================================================================
+// rtp_generator.js — Baustein Rahmenterminplan nach dem Regelwerk des Büros
+// -----------------------------------------------------------------------------
+// Rechnet aus Planungsstand, Bauaufgabe und bekannten Eckterminen einen ganzen
+// Rahmenterminplan: Planung LPH 2–5, Genehmigung und Förderung, Vergabe in
+// Paketen, Ausführung in Blöcken, Abschluss und Nutzung am Ferienanker.
+// Jede Zahl stammt aus regelwerk/REGELWERK_RAHMENTERMINPLAN.md, Kapitel 12
+// (der Test rtp_generator.test.mjs prüft das), jeder Vorgang nennt seine Regel.
+//
+// Browser-Baustein wie rahmenplan_generator.js: reine Funktionsdeklarationen,
+// keine imports/exports, keine DOM-APIs. Datum nur über Date.UTC/getUTC*.
+// Arbeitstage (AT) = Mo–Fr, Feiertage zählen mit (Regelwerk Bauzeitenplan K12),
+// frei ist nur die Weihnachtspause 24.12.–06.01. Ein Vorgang mit n AT belegt
+// n Arbeitstage einschließlich Start- und Endtag.
+// =============================================================================
+
+// --- Werte aus Kapitel 12.1 -----------------------------------------------------
+var RTP_KETTE = {
+  gremiumVorlauf: 14,            // KT  P4
+  lph3NachBeschluss: 0,          // AT  P5
+  entwurfUebergabeBisRat: 29,    // KT  P8
+  foerderAbgabeNachBeschluss: 7, // KT  B1
+  saGPruefung: 90,               // AT  B2
+  fagPruefung: 110,              // AT  B2
+  lph4: 20,                      // AT  P10
+  genehmigung: 90,               // AT  B6
+  genehmigungsstatik: 50,        // AT  B7
+  pruefstatik: 50,               // AT  B8
+  werkplanungRohbau: 140,        // AT  W2
+  lvErstellung: 28,              // AT  E2
+  pruefungBauherr: 10,           // AT  E2
+  angebotsfrist: 36,             // KT  E2
+  submissionBisSitzung: 21,      // KT  E2
+  einspruch: 15,                 // KT  E2
+  vorlaufAN: 14,                 // AT  E2
+  erdbauBisBodenplatte: 56,      // AT  A1
+  huelleVorRohbauende: 40,       // AT  A5
+  tgaVorDicht: 120,              // AT  A6
+  tgaNachRohbaubeginn: 40,       // AT  A6
+  fertigstellung: 60,            // AT  U2
+  reserveVorFerien: 25,          // AT  U4
+  umzug: 10,                     // AT  U5
+  aussenanlagen: 120,            // AT  A9
+  vorlaufHuelle: 110,            // AT  E10
+  vorlaufTGA: 40,                // AT  E10
+  vorlaufAusbau1: 25,            // AT  E10
+  vorlaufAusbau2: 90,            // AT  E10
+  vorlaufAbschluss: 20           // AT  E10
+};
+
+// --- Profile aus Kapitel 12.2 (AT) --------------------------------------------
+var RTP_PROFILE = {
+  'schule-gross':  { name: 'Schule, Neubau groß',            lph2: 90, lph3: 105, rohbau: 160, dicht: 60, ausbau: 220, saG: true,  fag: true,  ferien: true },
+  'schule-mittel': { name: 'Schule, Erweiterung/Lernhaus',   lph2: 90, lph3: 105, rohbau: 120, dicht: 50, ausbau: 160, saG: true,  fag: true,  ferien: true },
+  'schule-klein':  { name: 'Schule, kleiner Anbau',          lph2: 60, lph3: 60,  rohbau: 80,  dicht: 40, ausbau: 130, saG: true,  fag: true,  ferien: true },
+  'kita':          { name: 'Kita',                           lph2: 60, lph3: 60,  rohbau: 80,  dicht: 40, ausbau: 130, saG: false, fag: true,  ferien: false },
+  'sporthalle':    { name: 'Sporthalle',                     lph2: 90, lph3: 105, rohbau: 120, dicht: 60, ausbau: 180, saG: false, fag: true,  ferien: false },
+  'wohnbau':       { name: 'Wohnungsbau',                    lph2: 60, lph3: 45,  rohbau: 126, dicht: 30, ausbau: 250, saG: false, fag: false, ferien: false },
+  'sonstiges':     { name: 'sonstiger Hochbau',              lph2: 90, lph3: 105, rohbau: 120, dicht: 50, ausbau: 160, saG: false, fag: false, ferien: false }
+};
+
+// Profil aus dem Projektnamen vorschlagen (der Mensch bestätigt im Dialog)
+function rtpProfilVorschlag(projektName) {
+  var n = ' ' + (projektName || '') + ' ';
+  if (/kita|kinderhaus|kinderg|kibiz|krippe|hort/i.test(n)) { return 'kita'; }
+  if (/schule|gymnas|lernhaus|\b(gs|ms|rs|fos|bos)\b/i.test(n)) {
+    return /erw|anbau|ogts|ganztag|mensa|sanier|dach/i.test(n) ? 'schule-mittel' : 'schule-gross';
+  }
+  if (/sporthalle|turnhalle|dreifach|\bth\b/i.test(n)) { return 'sporthalle'; }
+  if (/wohn|mfh|appartement|boarding/i.test(n)) { return 'wohnbau'; }
+  return 'sonstiges';
+}
+
+// --- Datums-Helfer --------------------------------------------------------------
+function rtMs(iso) { var t = iso.split('-'); return Date.UTC(+t[0], +t[1] - 1, +t[2]); }
+function rtIso(ms) { return new Date(ms).toISOString().slice(0, 10); }
+function rtPlusKT(iso, n) { return rtIso(rtMs(iso) + n * 86400000); }
+function rtMax(a, b) { return a > b ? a : b; }
+function rtMin(a, b) { return a < b ? a : b; }
+// Weihnachtspause 24.12.–06.01. (Regelwerk Bauzeitenplan K3)
+function rtWeihnachten(iso) { var md = iso.slice(5); return md >= '12-24' || md <= '01-06'; }
+// Winterpause Rohbau 20.12.–31.01. (Regel A4)
+function rtWinterRohbau(iso) { var md = iso.slice(5); return md >= '12-20' || md <= '01-31'; }
+function rtArbeitstag(iso, frei) {
+  var wt = new Date(rtMs(iso)).getUTCDay();
+  return wt !== 0 && wt !== 6 && !rtWeihnachten(iso) && !(frei && frei(iso));
+}
+// nächster Arbeitstag ab iso (iso selbst, wenn Arbeitstag); richtung -1 = rückwärts
+function rtAufAT(iso, richtung, frei) {
+  var d = iso;
+  while (!rtArbeitstag(d, frei)) { d = rtPlusKT(d, richtung || 1); }
+  return d;
+}
+// Ende eines Vorgangs mit n AT ab start (inklusive); n = 0 -> start
+function rtEndeAT(start, n, frei) {
+  var d = rtAufAT(start, 1, frei);
+  for (var i = 1; i < n; i++) { d = rtAufAT(rtPlusKT(d, 1), 1, frei); }
+  return d;
+}
+// Start eines Vorgangs mit n AT, der an ende (inklusive) endet
+function rtStartAT(ende, n, frei) {
+  var d = rtAufAT(ende, -1, frei);
+  for (var i = 1; i < n; i++) { d = rtAufAT(rtPlusKT(d, -1), -1, frei); }
+  return d;
+}
+// Arbeitstag n AT nach iso (n > 0) bzw. vor iso (n < 0), iso selbst nicht mitgezählt
+function rtPlusAT(iso, n, frei) {
+  var d = iso, r = Math.abs(n), s = n < 0 ? -1 : 1;
+  while (r > 0) { d = rtPlusKT(d, s); if (rtArbeitstag(d, frei)) { r--; } }
+  return d;
+}
+// Arbeitstage von..bis einschließlich (0, wenn bis vor von)
+function rtZaehleAT(von, bis) {
+  var n = 0;
+  for (var d = von; d <= bis; d = rtPlusKT(d, 1)) { if (rtArbeitstag(d)) { n++; } }
+  return n;
+}
+function rtMonate(von, bis) { return Math.round((rtMs(bis) - rtMs(von)) / 86400000 / 30.44 * 10) / 10; }
+function rtDE(iso) { return iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4); }
+// Keine Vergabesitzung 20.12.–10.01. (Regel E5): vorwärts auf den 11.01., rückwärts auf den 19.12.
+function rtSitzung(iso, richtung) {
+  var md = iso.slice(5);
+  if (!(md >= '12-20' || md <= '01-10')) { return rtAufAT(iso, richtung); }
+  if (richtung < 0) { return rtAufAT((md >= '12-20' ? iso.slice(0, 4) : String(+iso.slice(0, 4) - 1)) + '-12-19', -1); }
+  return rtAufAT((md <= '01-10' ? iso.slice(0, 4) : String(+iso.slice(0, 4) + 1)) + '-01-11', 1);
+}
+
+// --- Hauptfunktion --------------------------------------------------------------
+// param:
+//   planungStart 'YYYY-MM-DD'  ab hier wird geplant (Default heute)
+//   lph          2..5           Leistungsphase, die gerade läuft (Default 2)
+//   profil       Schlüssel aus RTP_PROFILE (Default 'schule-gross')
+//   foerderung   optional bool, überschreibt das Profil (saG/FAG)
+//   abbruch      optional bool: vorgezogenes Paket 0 (Abbruch, Vorabmaßnahmen)
+//   bekannt      optional {genehmigung, baubeginn, huelleDicht, uebergabe}: fixierte Ecktermine
+//   herkunft     optional Text je bekanntem Ecktermin
+//   ferien       optional Liste wie FERIEN_BY (Default: globale FERIEN_BY)
+// Ergebnis: { tasks, edges, warnungen, offen, kennzahlen }
+function erzeugeRahmenterminplan(param) {
+  var K = RTP_KETTE;
+  var profilName = RTP_PROFILE[param.profil] ? param.profil : 'schule-gross';
+  var P = RTP_PROFILE[profilName];
+  var bekannt = param.bekannt || {};
+  var herkunft = param.herkunft || {};
+  var start0 = param.planungStart || rtIso(Date.now());
+  var lph = Math.max(2, Math.min(5, param.lph || 2));
+  var mitSaG = param.foerderung === false ? false : P.saG;
+  var mitFAG = param.foerderung === false ? false : (param.foerderung === true ? true : P.fag);
+  var ferienListe = param.ferien || (typeof FERIEN_BY !== 'undefined' ? FERIEN_BY : []);
+  var warnungen = [], offen = [], tasks = [], edges = [];
+  var R = function (id, text) { return 'Regel ' + id + ' (Regelwerk Rahmenterminplan): ' + text; };
+
+  function vorgang(f) {
+    var t = { uid: tasks.length + 1, name: f.name, wbs: '', level: f.level, start: f.start, finish: f.finish || f.start,
+      milestone: !!f.ms, summary: !!f.summary, category: f.cat, isGewerk: !!f.gewerk,
+      lockStart: !!f.lock, lockFinish: !!f.lock, grAnchor: false };
+    if (f.quelle) { t.quelleText = f.quelle; }
+    if (f.zu) { t.collapsed = true; }
+    tasks.push(t);
+    return t;
+  }
+  function kante(von, nach, hart) {
+    if (!von || !nach) { return; }
+    var lag = Math.round((rtMs(nach.start) - rtMs(von.finish)) / 86400000);
+    edges.push({ from: von.uid, to: nach.uid, type: 'EA', lag: lag, lagUnit: 'cd', lagValue: lag, hardCeiling: !!hart });
+  }
+  function bekannterTermin(schluessel, regelDatum, text) {
+    var b = bekannt[schluessel];
+    if (!b) { return { datum: regelDatum, fix: false }; }
+    if (b < regelDatum) {
+      warnungen.push(text + ' ' + rtDE(b) + ' aus den Projektdaten liegt vor dem frühesten Termin nach Regel (' + rtDE(regelDatum) + ') — fixiert übernommen, Kette davor prüfen.');
+      offen.push(text + ': Projektdaten ' + rtDE(b) + ', nach Regelwerk frühestens ' + rtDE(regelDatum) + ' — welcher Termin gilt?');
+    }
+    return { datum: b, fix: true };
+  }
+
+  // === 1. Planung vorwärts (Kapitel 3, 4, 5) ===================================
+  var p = {};
+  var d = rtAufAT(start0, 1);
+  if (lph <= 2) {
+    p.lph2 = [d, rtEndeAT(d, P.lph2)];
+    p.gremium2 = rtSitzung(rtPlusKT(p.lph2[1], K.gremiumVorlauf), 1);
+    d = rtPlusAT(p.lph2[1], 1);   // P5: LPH 3 schließt lückenlos an, Beschluss parallel
+  }
+  if (lph <= 3) {
+    p.lph3 = [d, rtEndeAT(d, P.lph3)];
+    p.entwurfUebergabe = p.lph3[1];
+    p.beschluss = rtSitzung(rtPlusKT(p.entwurfUebergabe, K.entwurfUebergabeBisRat), 1);
+  } else {
+    p.beschluss = d;   // Entwurf ist beschlossen: ab Planungsstart weiter
+  }
+  if (mitSaG || mitFAG) {
+    p.foerderAbgabe = rtAufAT(rtPlusKT(p.beschluss, K.foerderAbgabeNachBeschluss), 1);
+    p.saG = mitSaG ? [rtPlusAT(p.foerderAbgabe, 1), rtEndeAT(rtPlusAT(p.foerderAbgabe, 1), K.saGPruefung)] : null;
+    p.fag = mitFAG ? [rtPlusAT(p.foerderAbgabe, 1), rtEndeAT(rtPlusAT(p.foerderAbgabe, 1), K.fagPruefung)] : null;
+    p.foerderbescheid = rtMax(p.saG ? rtPlusAT(p.saG[1], 1) : '0000', p.fag ? rtPlusAT(p.fag[1], 1) : '0000');
+  }
+  var lph4Start = p.foerderAbgabe ? rtPlusAT(p.foerderAbgabe, 1) : rtPlusAT(p.beschluss, 1);   // P9
+  if (lph <= 4) {
+    p.lph4 = [lph4Start, rtEndeAT(lph4Start, K.lph4)];
+    p.bauantrag = rtPlusAT(p.lph4[1], 1);
+  } else {
+    p.bauantrag = d;
+  }
+  p.pruefungBA = [p.bauantrag, rtEndeAT(p.bauantrag, K.genehmigung)];
+  var gen = bekannterTermin('genehmigung', rtPlusAT(p.pruefungBA[1], 1), 'Baugenehmigung');
+  p.genehmigung = gen.datum;
+  p.gStatik = [rtPlusAT(p.beschluss, 1), rtEndeAT(rtPlusAT(p.beschluss, 1), K.genehmigungsstatik)];
+  p.pStatik = [rtPlusAT(p.gStatik[1], 1), rtEndeAT(rtPlusAT(p.gStatik[1], 1), K.pruefstatik)];
+  p.geprueft = rtPlusAT(p.pStatik[1], 1);
+  p.lph5Start = p.bauantrag;   // W1
+
+  // === 2. Paket 1 Erdbau + Baumeister vorwärts mit Toren (E2, B9) ==============
+  var p1 = { name: 'Paket 1 Erd- und Baumeisterarbeiten', regel: 'E1' };
+  p1.lv = [rtPlusAT(p.lph5Start, K.werkplanungRohbau), null];
+  p1.lv[1] = rtEndeAT(p1.lv[0], K.lvErstellung);
+  p1.pruefung = [rtPlusAT(p1.lv[1], 1), rtEndeAT(rtPlusAT(p1.lv[1], 1), K.pruefungBauherr)];
+  p1.veroeff = rtPlusAT(p1.pruefung[1], 1);
+  if (p.foerderbescheid && p1.veroeff < p.foerderbescheid) {
+    p1.tor = 'Veröffentlichung wartet auf Förderbescheid/vorzeitigen Maßnahmenbeginn (' + rtDE(p.foerderbescheid) + ', Regel B9)';
+    p1.veroeff = p.foerderbescheid;
+  }
+  p1.submission = rtAufAT(rtPlusKT(p1.veroeff, K.angebotsfrist), 1);
+  p1.sitzung = rtSitzung(rtPlusKT(p1.submission, K.submissionBisSitzung), 1);
+  p1.zuschlag = rtAufAT(rtPlusKT(p1.sitzung, K.einspruch), 1);
+  if (p1.zuschlag < p.genehmigung) {
+    p1.tor = (p1.tor ? p1.tor + '; ' : '') + 'Zuschlag wartet auf die Baugenehmigung (' + rtDE(p.genehmigung) + ', Regel B9)';
+    p1.zuschlag = rtAufAT(p.genehmigung, 1);
+  }
+  var bb = bekannterTermin('baubeginn', rtPlusAT(p1.zuschlag, K.vorlaufAN), 'Baubeginn');
+  var baubeginn = bb.datum;
+  if (bb.fix && p1.zuschlag > rtPlusAT(baubeginn, -K.vorlaufAN)) {
+    warnungen.push('Mit dem Baubeginn ' + rtDE(baubeginn) + ' reicht die Vergabekette Paket 1 nicht (Zuschlag frühestens ' + rtDE(p1.zuschlag) + ').');
+  }
+
+  // === 3. Ausführung vorwärts (Kapitel 7) ======================================
+  var bodenplatte = rtPlusAT(baubeginn, K.erdbauBisBodenplatte);
+  var rohbauStart = rtMax(bodenplatte, rtAufAT(p.geprueft, 1));   // A2
+  if (rohbauStart > bodenplatte) {
+    offen.push('Rohbau wartet auf „Geprüfte Pläne“ (' + rtDE(p.geprueft) + ') — Prüfstatik früher beauftragen oder Erdbau verlängern (Regel A2).');
+  }
+  var md = rohbauStart.slice(5);
+  if (md >= '12-01' || md <= '01-31') {   // A1: kein Rohbaubeginn im Dez./Jan.
+    var feb = (md >= '12-01' ? String(+rohbauStart.slice(0, 4) + 1) : rohbauStart.slice(0, 4)) + '-02-01';
+    rohbauStart = rtAufAT(feb, 1);
+  }
+  var rohbauEnde = rtEndeAT(rohbauStart, P.rohbau, rtWinterRohbau);
+  var winter = null;
+  for (var j = +rohbauStart.slice(0, 4); j <= +rohbauEnde.slice(0, 4); j++) {
+    var wv = j + '-12-20', wb = (j + 1) + '-01-31';
+    if (wv > rohbauStart && wv < rohbauEnde) { winter = [wv, wb]; }
+  }
+  var dichtRegel = rtPlusAT(rohbauEnde, P.dicht);
+  var dc = bekannterTermin('huelleDicht', dichtRegel, 'Hülle dicht');
+  var dicht = dc.datum;
+  var huelleStart = rtPlusAT(rohbauEnde, -K.huelleVorRohbauende);
+  var tgaStart = rtMax(rtPlusAT(dicht, -K.tgaVorDicht), rtPlusAT(rohbauStart, K.tgaNachRohbaubeginn));
+  var ausbauStart = rtPlusAT(dicht, 1);
+  var ausbauEnde = rtEndeAT(ausbauStart, P.ausbau);
+  var a1Ende = rtEndeAT(ausbauStart, Math.round(P.ausbau * 0.6));
+  var a2Start = rtStartAT(ausbauEnde, Math.round(P.ausbau * 0.6));
+  var fertig = [rtPlusAT(ausbauEnde, 1), rtEndeAT(rtPlusAT(ausbauEnde, 1), K.fertigstellung)];
+  var aussen = [rtStartAT(fertig[1], K.aussenanlagen), fertig[1]];
+
+  // === 4. Abschluss am Ferienanker (Kapitel 8) =================================
+  var fruehUebergabe = rtPlusAT(fertig[1], K.reserveVorFerien);
+  var uebergabe, nutzung = null, umzug = null, ferien = null, ferienGeschaetzt = false, reserve = null;
+  if (P.ferien) {
+    for (var fi = 0; fi < ferienListe.length && !ferien; fi++) {
+      var f = ferienListe[fi];
+      if (/sommer/i.test(f.name) && rtPlusAT(f.von, -1) >= fruehUebergabe) { ferien = f; }
+    }
+    if (!ferien) {
+      // Jahr noch nicht amtlich veröffentlicht: Fenster schätzen und offen melden (U7)
+      var jahr = +fruehUebergabe.slice(0, 4);
+      if (fruehUebergabe > jahr + '-07-25') { jahr++; }
+      ferien = { name: 'Sommerferien (geschätzt)', von: jahr + '-08-01', bis: jahr + '-09-14', ersterSchultag: jahr + '-09-15' };
+      ferienGeschaetzt = true;
+      offen.push('Sommerferien ' + jahr + ' sind noch nicht amtlich veröffentlicht — Fenster geschätzt (Regel U7).');
+    }
+    uebergabe = rtAufAT(rtPlusKT(ferien.von, -1), -1);
+  } else {
+    uebergabe = rtPlusAT(fertig[1], 1);
+  }
+  var ue = bekannterTermin('uebergabe', uebergabe, 'Übergabe');
+  if (ue.fix) {
+    uebergabe = ue.datum;
+    if (uebergabe < fruehUebergabe) {
+      warnungen.push('Übergabe ' + rtDE(uebergabe) + ' ist nach Regel nicht zu halten: Fertigstellung + Reserve enden frühestens ' + rtDE(fruehUebergabe) + ' (Regel U4, R3).');
+    }
+  }
+  if (rtPlusAT(fertig[1], 1) < uebergabe) { reserve = [rtPlusAT(fertig[1], 1), rtPlusAT(uebergabe, -1)]; }
+  // Große Reserve vor dem Schuljahresbeginn: das frühere Ferienfenster als Wahl nennen (U1), nicht still wählen
+  if (P.ferien && !ue.fix && reserve && rtZaehleAT(reserve[0], reserve[1]) > 60) {
+    var frueher = null;
+    for (var fo = 0; fo < ferienListe.length && !frueher; fo++) {
+      var fr = ferienListe[fo];
+      if (/oster|pfingst/i.test(fr.name) && rtPlusAT(fr.von, -1) >= fruehUebergabe && fr.von < uebergabe) { frueher = fr.name + ' ' + rtDE(fr.von); }
+    }
+    if (!frueher && ferienGeschaetzt) { frueher = 'Oster- oder Pfingstferien ' + uebergabe.slice(0, 4) + ' (noch nicht amtlich)'; }
+    if (frueher) {
+      offen.push('Reserve bis zum Schuljahresbeginn ' + rtZaehleAT(reserve[0], reserve[1]) + ' AT — Umzug schon in den ' + frueher + ' möglich (Regel U1, U4); mit dem Bauherrn entscheiden.');
+    }
+  }
+  if (P.ferien) {
+    var umzugStart = rtAufAT(rtPlusKT(uebergabe, 1), 1);
+    umzug = [umzugStart, rtEndeAT(umzugStart, K.umzug)];
+    // Nutzungsbeginn = erster Schultag nach den Ferien, in denen umgezogen wird
+    nutzung = ferien.ersterSchultag;
+    for (var fj = 0; fj < ferienListe.length; fj++) {
+      if (ferienListe[fj].von <= umzugStart && ferienListe[fj].bis >= umzugStart) { nutzung = ferienListe[fj].ersterSchultag; }
+    }
+    if (umzugStart > (ferien.bis || umzugStart)) { offen.push('Übergabe ' + rtDE(uebergabe) + ' liegt nicht vor einem Ferienfenster — Umzug in der Schulzeit (Regel U1).'); }
+  }
+  // U3: Probebetrieb (in der Fertigstellung) spätestens Anfang Juli, wenn in den Sommerferien übergeben wird
+  var probeStart = rtPlusAT(fertig[0], 10);
+  if (P.ferien && probeStart.slice(5) > '07-10' && probeStart.slice(0, 4) === uebergabe.slice(0, 4)) {
+    warnungen.push('Probebetrieb beginnt erst ' + rtDE(probeStart) + ' — nach Regel U3 spätestens Anfang Juli.');
+  }
+
+  // === 5. Folgepakete rückwärts vom Ausführungsbeginn (E10) ====================
+  function paketRueck(name, regel, leistungsbeginn, vorlauf, mitFoerderTor) {
+    var k = { name: name, regel: regel, leistungsbeginn: rtPlusAT(leistungsbeginn, -vorlauf) };
+    k.zuschlag = rtPlusAT(k.leistungsbeginn, -K.vorlaufAN);
+    k.sitzung = rtSitzung(rtPlusKT(k.zuschlag, -K.einspruch), -1);
+    k.submission = rtAufAT(rtPlusKT(k.sitzung, -K.submissionBisSitzung), -1);
+    k.veroeff = rtAufAT(rtPlusKT(k.submission, -K.angebotsfrist), -1);
+    k.pruefung = [rtStartAT(rtPlusAT(k.veroeff, -1), K.pruefungBauherr), rtPlusAT(k.veroeff, -1)];
+    k.lv = [rtStartAT(rtPlusAT(k.pruefung[0], -1), K.lvErstellung), rtPlusAT(k.pruefung[0], -1)];
+    if (k.zuschlag < p.genehmigung) {
+      k.tor = 'Zuschlag vor der Baugenehmigung (' + rtDE(p.genehmigung) + ') — nach Regel B9 unzulässig';
+      warnungen.push(name + ': ' + k.tor + '.');
+    }
+    if (mitFoerderTor && p.foerderbescheid && k.veroeff < p.foerderbescheid) {
+      k.tor = (k.tor ? k.tor + '; ' : '') + 'Veröffentlichung vor Förderbescheid (' + rtDE(p.foerderbescheid) + ') — vorzeitigen Maßnahmenbeginn beantragen (Regel B3)';
+      offen.push(name + ': Veröffentlichung ' + rtDE(k.veroeff) + ' liegt vor dem Förderbescheid — vorzeitiger Maßnahmenbeginn nötig? (Regel B3)');
+    }
+    if (k.lv[0] < p.lph5Start) {
+      offen.push(name + ': LV-Erstellung müsste ' + rtDE(k.lv[0]) + ' beginnen, vor der Werkplanung (' + rtDE(p.lph5Start) + ') — Vorlauf reicht nicht (Regel W2, E10).');
+    }
+    return k;
+  }
+  var pakete = [];
+  var ausf = {};   // Ausführungszeitraum je Paket
+  if (param.abbruch) {
+    var abbruchEnde = rtPlusAT(baubeginn, -1);
+    var abbruchStart = rtStartAT(abbruchEnde, 35);
+    var p0 = paketRueck('Paket 0 Abbruch und vorgezogene Maßnahmen', 'E6', abbruchStart, 0, false);
+    pakete.push(p0);
+    ausf[p0.name] = [abbruchStart, abbruchEnde];
+    if (p0.zuschlag < p.genehmigung) {
+      offen.push('Abbruch vor der Baugenehmigung: Anzeige der Beseitigung rechtzeitig stellen (Regel P13, E6).');
+      warnungen.pop();   // beim Abbruchpaket ist das kein Fehler, nur ein Anzeigeweg
+      p0.tor = 'vor Baugenehmigung — Anzeige der Beseitigung (Regel P13)';
+    }
+  }
+  pakete.push(p1);
+  ausf[p1.name] = [baubeginn, rohbauEnde];
+  var p2 = paketRueck('Paket 2 Hülle: Gerüst, Holzbau/Dach, Fenster, Fassade', 'E1', huelleStart, K.vorlaufHuelle, true);
+  var p3 = paketRueck('Paket 3 Technische Gebäudeausrüstung (HLS, ELT)', 'E1', tgaStart, K.vorlaufTGA, true);
+  var p4 = paketRueck('Paket 4 Ausbau 1: Trockenbau, Estrich, Putz, Fliesen, Maler', 'E1', ausbauStart, K.vorlaufAusbau1, true);
+  var p5 = paketRueck('Paket 5 Ausbau 2: Türen, Böden, Einbauten, Schreiner', 'E1', a2Start, K.vorlaufAusbau2, true);
+  var p6 = paketRueck('Paket 6 Abschluss: Außenanlagen, Reinigung, Beschilderung, Möblierung', 'E1', aussen[0], K.vorlaufAbschluss, true);
+  pakete.push(p2, p3, p4, p5, p6);
+  ausf[p2.name] = [huelleStart, dicht];
+  ausf[p3.name] = [tgaStart, ausbauEnde];
+  ausf[p4.name] = [ausbauStart, a1Ende];
+  ausf[p5.name] = [a2Start, ausbauEnde];
+  ausf[p6.name] = aussen;
+
+  // === 6. Vorgänge anlegen ======================================================
+  var an = function (s) { return 'Annahme: ' + s; };
+  var eGen = vorgang({ name: gen.fix ? 'Baugenehmigung' : 'Baugenehmigung (erwartet)', level: 1, start: p.genehmigung, ms: true, cat: 'planung', lock: gen.fix,
+    quelle: gen.fix ? (herkunft.genehmigung || 'Projektdaten') : R('B6', 'Prüfung Bauantrag ' + K.genehmigung + ' AT') });
+  var eBb = vorgang({ name: 'Baubeginn', level: 1, start: baubeginn, ms: true, cat: 'ausfuehrung', lock: bb.fix,
+    quelle: bb.fix ? (herkunft.baubeginn || 'Projektdaten') : R('E2', 'Zuschlag Paket 1 + ' + K.vorlaufAN + ' AT Vorlauf') + (p1.tor ? ' · ' + p1.tor : '') });
+  var eDicht = vorgang({ name: 'Hülle dicht', level: 1, start: dicht, ms: true, cat: 'ausfuehrung', lock: dc.fix,
+    quelle: dc.fix ? (herkunft.huelleDicht || 'Projektdaten') : R('A5', 'Rohbauende + ' + P.dicht + ' AT') });
+  var eUe = vorgang({ name: 'Übergabe', level: 1, start: uebergabe, ms: true, cat: 'ausfuehrung', lock: ue.fix || P.ferien,
+    quelle: ue.fix ? (herkunft.uebergabe || 'Projektdaten') : (P.ferien ? R('U1', 'letzter Arbeitstag vor den ' + ferien.name + ' ' + rtDE(ferien.von) + (ferienGeschaetzt ? '' : ' (' + (typeof FERIEN_BY_QUELLE !== 'undefined' ? FERIEN_BY_QUELLE : 'amtlich') + ')')) : R('U6', 'nach Fertigstellung')) });
+  var eNutz = nutzung ? vorgang({ name: 'Nutzungsbeginn (Schuljahresbeginn)', level: 1, start: nutzung, ms: true, cat: 'ausfuehrung', lock: true,
+    quelle: R('U1', 'erster Schultag nach den Ferien' + (ferienGeschaetzt ? ' (geschätzt)' : '')) }) : null;
+
+  // PLANUNG
+  var plan = vorgang({ name: 'PLANUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'planung' });
+  var tL2 = null, tL3 = null, tL4 = null, tBA, tL5, tUeb = null, tBes;
+  if (p.lph2) {
+    tL2 = vorgang({ name: 'LPH 2 Vorentwurf mit Kostenschätzung', level: 2, start: p.lph2[0], finish: p.lph2[1], cat: 'planung', quelle: R('P2', P.lph2 + ' AT (' + P.name + ')') });
+    vorgang({ name: 'Gremium: Vorentwurf (Sitzungstermin ?)', level: 2, start: p.gremium2, ms: true, cat: 'planung', quelle: R('P4, B10', 'Abgabe ' + K.gremiumVorlauf + ' KT vor der Sitzung · Sitzungstakt erfragen') });
+  }
+  if (p.lph3) {
+    tL3 = vorgang({ name: 'LPH 3 Entwurf mit Kostenberechnung', level: 2, start: p.lph3[0], finish: p.lph3[1], cat: 'planung', quelle: R('P5, P6, P7', P.lph3 + ' AT, lückenlos nach LPH 2, KB-Block am Ende') });
+    tUeb = vorgang({ name: 'Übergabe Entwurf mit Kostenberechnung an den Bauherrn', level: 2, start: p.entwurfUebergabe, ms: true, cat: 'planung', quelle: R('P8', 'Ende LPH 3') });
+  }
+  tBes = vorgang({ name: p.lph3 ? 'Gremium: Entwurfsbeschluss (Sitzungstermin ?)' : 'Entwurf beschlossen (Planungsstand)', level: 2, start: p.beschluss, ms: true, cat: 'planung',
+    quelle: p.lph3 ? R('P8, B10', 'Übergabe + ' + K.entwurfUebergabeBisRat + ' KT über Ausschuss → Rat · Sitzungstakt erfragen') : 'Planungsstand LPH ' + lph });
+  if (p.lph4) {
+    tL4 = vorgang({ name: 'LPH 4 Genehmigungsplanung', level: 2, start: p.lph4[0], finish: p.lph4[1], cat: 'planung', quelle: R('P9, P10', K.lph4 + ' AT, beginnt nach der FAG-Abgabe') });
+  }
+  tBA = vorgang({ name: 'Bauantrag', level: 2, start: p.bauantrag, ms: true, cat: 'planung', quelle: p.lph4 ? R('P10', 'Ende LPH 4') : 'Planungsstand LPH ' + lph });
+  // W3: reicht ~4 Mo in die Bauzeit; ist der Baubeginn fixiert und liegt früh, endet sie nie vor dem Rohbau-LV
+  var lph5Ende = rtMax(rtPlusAT(baubeginn, 85), rtPlusAT(p.lph5Start, K.werkplanungRohbau));
+  tL5 = vorgang({ name: 'LPH 5 Werkplanung (Rohbau zuerst, Ausbau baubegleitend)', level: 2, start: p.lph5Start, finish: lph5Ende, cat: 'planung', quelle: R('W1, W2, W3', 'ab Bauantrag; Rohbau-LV nach ' + K.werkplanungRohbau + ' AT; Detailplanung Ausbau reicht ~4 Mo in die Bauzeit') });
+  kante(tL2, tL3); kante(tL3, tUeb); kante(tUeb, tBes); kante(tL4, tBA); kante(tBA, tL5);
+
+  // GENEHMIGUNG UND FÖRDERUNG
+  vorgang({ name: 'GENEHMIGUNG UND FÖRDERUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'planung' });
+  var tAb = null, tFb = null;
+  if (p.foerderAbgabe) {
+    tAb = vorgang({ name: 'Abgabe ' + (mitSaG && mitFAG ? 'saG-Antrag + FAG-Antrag' : (mitFAG ? 'FAG-Antrag' : 'saG-Antrag')), level: 2, start: p.foerderAbgabe, ms: true, cat: 'planung',
+      quelle: R('B1, P9', K.foerderAbgabeNachBeschluss + ' KT nach Entwurfsbeschluss, schließt LPH 3 ab') });
+    if (p.saG) { vorgang({ name: 'Prüfung schulaufsichtliche Genehmigung (Regierung)', level: 2, start: p.saG[0], finish: p.saG[1], cat: 'planung', quelle: R('B2', an(K.saGPruefung + ' AT Bearbeitung')) }); }
+    if (p.fag) { vorgang({ name: 'Prüfung FAG-Antrag (Regierung)', level: 2, start: p.fag[0], finish: p.fag[1], cat: 'planung', quelle: R('B2', an(K.fagPruefung + ' AT Bearbeitung')) }); }
+    tFb = vorgang({ name: 'Förderbescheid bzw. vorzeitiger Maßnahmenbeginn (erwartet)', level: 2, start: p.foerderbescheid, ms: true, cat: 'planung', quelle: R('B2, B3', an('Ende der Prüfung; im Ist bis 10 Mo nach Antrag')) });
+    kante(tBes, tAb); kante(tAb, tL4);
+    offen.push('Förderbescheid/vzB ' + rtDE(p.foerderbescheid) + ' ist eine Annahme (' + K.fagPruefung + ' AT) — Bearbeitungsstand bei der Regierung erfragen (Regel B2).');
+  } else {
+    kante(tBes, tL4);
+  }
+  var tPB = vorgang({ name: 'Prüfung Bauantrag (Landratsamt)', level: 2, start: p.pruefungBA[0], finish: p.pruefungBA[1], cat: 'planung', quelle: R('B6', an(K.genehmigung + ' AT; im Ist 55–350 KT')) });
+  kante(tBA, tPB); kante(tPB, eGen);
+  var tGS = vorgang({ name: 'Genehmigungsstatik', level: 2, start: p.gStatik[0], finish: p.gStatik[1], cat: 'planung', quelle: R('B7', K.genehmigungsstatik + ' AT ab Entwurfsbeschluss') });
+  var tPS = vorgang({ name: 'Prüfstatik und Brandschutzprüfung', level: 2, start: p.pStatik[0], finish: p.pStatik[1], cat: 'planung', quelle: R('B8', an(K.pruefstatik + ' AT')) });
+  var tGP = vorgang({ name: 'Geprüfte Pläne – Start Baumeister', level: 2, start: p.geprueft, ms: true, cat: 'planung', quelle: R('B8', 'Ende Prüfstatik') });
+  kante(tBes, tGS); kante(tGS, tPS); kante(tPS, tGP);
+
+  // VERGABE
+  vorgang({ name: 'VERGABE', level: 1, start: start0, finish: start0, summary: true, cat: 'vergabe' });
+  var zuschlagTask = {};
+  for (var pi = 0; pi < pakete.length; pi++) {
+    var k = pakete[pi];
+    var regelK = R(k.regel + ', E2', 'Kette je Paket') + (k.tor ? ' · ' + k.tor : '');
+    vorgang({ name: 'Vergabe ' + k.name, level: 2, start: k.lv[0], finish: k.zuschlag, summary: true, cat: 'vergabe', zu: true });
+    var tLv = vorgang({ name: 'LV-Erstellung', level: 3, start: k.lv[0], finish: k.lv[1], cat: 'vergabe', quelle: R('E2', K.lvErstellung + ' AT') });
+    var tPr = vorgang({ name: 'Lesefassung / Prüfung Bauherr', level: 3, start: k.pruefung[0], finish: k.pruefung[1], cat: 'vergabe', quelle: R('E2', K.pruefungBauherr + ' AT') });
+    var tVe = vorgang({ name: 'Veröffentlichung', level: 3, start: k.veroeff, ms: true, cat: 'vergabe', quelle: regelK });
+    var tSu = vorgang({ name: 'Submission', level: 3, start: k.submission, ms: true, cat: 'vergabe', quelle: R('E2', 'Angebotsfrist ' + K.angebotsfrist + ' KT (EU)') });
+    var tSi = vorgang({ name: 'Vergabesitzung (Sitzungstermin ?)', level: 3, start: k.sitzung, ms: true, cat: 'vergabe', quelle: R('E2, E5, B10', K.submissionBisSitzung + ' KT nach Submission, nicht 20.12.–10.01.') });
+    var tZu = vorgang({ name: 'Zuschlag', level: 3, start: k.zuschlag, ms: true, cat: 'vergabe', quelle: R('E2', 'Einspruchsfrist ' + K.einspruch + ' KT') + (k.tor ? ' · ' + k.tor : '') });
+    kante(tLv, tPr); kante(tPr, tVe); kante(tVe, tSu); kante(tSu, tSi); kante(tSi, tZu);
+    zuschlagTask[k.name] = tZu;
+  }
+
+  // AUSFÜHRUNG
+  vorgang({ name: 'AUSFÜHRUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'ausfuehrung' });
+  var gew = function (name, von, bis, quelle, paket) {
+    var t = vorgang({ name: name, level: 2, start: von, finish: bis, cat: 'ausfuehrung', gewerk: true, quelle: quelle });
+    if (paket && zuschlagTask[paket]) { kante(zuschlagTask[paket], t, true); }
+    return t;
+  };
+  if (param.abbruch) { gew('Abbruch und vorgezogene Maßnahmen', ausf[pakete[0].name][0], ausf[pakete[0].name][1], R('E6', '35 AT vor Baubeginn'), pakete[0].name); }
+  var tErd = gew('Baustelleneinrichtung, Erdarbeiten, Gründung', baubeginn, rtPlusAT(rohbauStart, -1), R('A1', K.erdbauBisBodenplatte + ' AT bis zur ersten Bodenplatte'), p1.name);
+  var tRoh = gew('Rohbau', rohbauStart, rohbauEnde, R('A3, A4', P.rohbau + ' AT (' + P.name + ')' + (winter ? ', ruht in der Winterpause' : '')), null);
+  if (winter) { vorgang({ name: 'Winterpause Rohbau (temperaturabhängige Arbeiten)', level: 2, start: winter[0], finish: winter[1], cat: 'ausfuehrung', quelle: R('A4', '20.12.–31.01., kurze Ansätze gelten als optimistisch') }); }
+  var tHu = gew('Hülle: Gerüst, Holzbau/Dach, Fenster, Fassade', huelleStart, dicht, R('A5', 'beginnt ' + K.huelleVorRohbauende + ' AT vor Rohbauende, endet mit Hülle dicht'), p2.name);
+  gew('TGA-Rohinstallation und Montage', tgaStart, ausbauEnde, R('A6', 'ab ' + K.tgaVorDicht + ' AT vor Hülle dicht'), p3.name);
+  gew('Ausbau 1: Trockenbau, Estrich, Putz, Fliesen, Maler', ausbauStart, a1Ende, R('A7, A8', 'ab Hülle dicht, ' + P.ausbau + ' AT Ausbau gesamt'), p4.name);
+  gew('Ausbau 2: Türen, Böden, Einbauten', a2Start, ausbauEnde, R('A7, A8', 'letzte 60 % des Ausbaus'), p5.name);
+  gew('Außenanlagen', aussen[0], aussen[1], R('A9', K.aussenanlagen + ' AT bis Fertigstellung'), p6.name);
+  kante(eBb, tErd); kante(tErd, tRoh); kante(tHu, eDicht);
+
+  // ABSCHLUSS UND NUTZUNG
+  vorgang({ name: 'ABSCHLUSS UND NUTZUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'ausfuehrung' });
+  var tFe = vorgang({ name: 'Fertigstellung: Reinigung, SV-Abnahmen, Probebetrieb, Abnahmen', level: 2, start: fertig[0], finish: fertig[1], cat: 'ausfuehrung',
+    quelle: R('U2, U3', '5 + 5 + 30 + 10 + 5 AT, Probebetrieb spätestens Anfang Juli') });
+  var tRes = reserve ? vorgang({ name: 'Reserve / Unvorhergesehenes', level: 2, start: reserve[0], finish: reserve[1], cat: 'ausfuehrung',
+    quelle: R('U4', 'mindestens ' + K.reserveVorFerien + ' AT, Rest bis zum Ferienanker') }) : null;
+  var tUm = umzug ? vorgang({ name: 'Umzug in den Ferien', level: 2, start: umzug[0], finish: umzug[1], cat: 'ausfuehrung', quelle: R('U5', K.umzug + ' AT') }) : null;
+  kante(tFe, tRes || eUe); kante(tRes, eUe); kante(eUe, tUm); kante(tUm, eNutz);
+
+  // Sammelvorgänge = Spanne ihrer Kinder; WBS fortlaufend
+  var zaehler = [];
+  for (var s = 0; s < tasks.length; s++) {
+    var t = tasks[s];
+    zaehler[t.level - 1] = (zaehler[t.level - 1] || 0) + 1;
+    zaehler.length = t.level;
+    t.wbs = zaehler.join('.');
+  }
+  for (var u = tasks.length - 1; u >= 0; u--) {
+    var sv = tasks[u];
+    if (!sv.summary) { continue; }
+    var von = null, bis = null;
+    for (var w = u + 1; w < tasks.length && tasks[w].level > sv.level; w++) {
+      if (tasks[w].summary && tasks[w].level > sv.level + 1) { continue; }
+      if (!von || tasks[w].start < von) { von = tasks[w].start; }
+      if (!bis || tasks[w].finish > bis) { bis = tasks[w].finish; }
+    }
+    if (von) { sv.start = von; sv.finish = bis; }
+  }
+
+  offen.push('Sitzungstermine der Gremien sind Platzhalter („?“) — Sitzungstakt der Kommune erfragen und eintragen (Regel B10).');
+  offen.push('Bauaufgabe „' + P.name + '“ und Planungsstand LPH ' + lph + ' sind angenommen — Bauabschnitte, Bestand/Interim im Plan von Hand ergänzen (Regel G5, A11, A12).');
+  var kennzahlen = { bauzeitMo: rtMonate(baubeginn, uebergabe), planungBisBaubeginnMo: rtMonate(start0, baubeginn),
+    reserveAT: rtZaehleAT(rtPlusAT(fertig[1], 1), uebergabe) - 1, baubeginn: baubeginn, uebergabe: uebergabe, nutzung: nutzung, profil: profilName };
+  return { tasks: tasks, edges: edges, warnungen: warnungen, offen: offen, kennzahlen: kennzahlen };
+}
+
+// ---------- Baustein: ferien_bayern.js (geprueft, Tests unter _bausteine/) ----------
+// =============================================================================
+// ferien_bayern.js — Schulferien Bayern, amtlich (erzeugt von regelwerk/ferien-bayern.mjs, nicht von Hand ändern)
+// Quelle: https://www.km.bayern.de/ferientermine-herunterladen (Stand 2026-10-23). von/bis = erster/letzter Ferientag, ersterSchultag = Tag danach.
+// Browser-Baustein: nur Daten, keine imports/exports.
+// =============================================================================
+var FERIEN_BY_QUELLE = 'Kultusministerium Bayern, Ferientermine (abgerufen 2026-10-23)';
+var FERIEN_BY = [
+  { name: 'Osterferien', von: '2024-03-25', bis: '2024-04-06', ersterSchultag: '2024-04-07' },
+  { name: 'Pfingstferien', von: '2024-05-21', bis: '2024-06-01', ersterSchultag: '2024-06-02' },
+  { name: 'Sommerferien', von: '2024-07-29', bis: '2024-09-09', ersterSchultag: '2024-09-10' },
+  { name: 'Weihnachtsferien', von: '2024-12-23', bis: '2025-01-03', ersterSchultag: '2025-01-04' },
+  { name: 'Frühjahrsferien', von: '2025-03-03', bis: '2025-03-07', ersterSchultag: '2025-03-08' },
+  { name: 'Osterferien', von: '2025-04-14', bis: '2025-04-25', ersterSchultag: '2025-04-26' },
+  { name: 'Pfingstferien', von: '2025-06-10', bis: '2025-06-20', ersterSchultag: '2025-06-21' },
+  { name: 'Sommerferien', von: '2025-08-01', bis: '2025-09-15', ersterSchultag: '2025-09-16' },
+  { name: 'Weihnachtsferien', von: '2025-12-22', bis: '2026-01-05', ersterSchultag: '2026-01-06' },
+  { name: 'Frühjahrsferien', von: '2026-02-16', bis: '2026-02-20', ersterSchultag: '2026-02-21' },
+  { name: 'Osterferien', von: '2026-03-30', bis: '2026-04-10', ersterSchultag: '2026-04-11' },
+  { name: 'Pfingstferien', von: '2026-05-26', bis: '2026-06-05', ersterSchultag: '2026-06-06' },
+  { name: 'Sommerferien', von: '2026-08-03', bis: '2026-09-14', ersterSchultag: '2026-09-15' },
+  { name: 'Weihnachtsferien', von: '2026-12-24', bis: '2027-01-08', ersterSchultag: '2027-01-09' },
+  { name: 'Frühjahrsferien', von: '2027-02-08', bis: '2027-02-12', ersterSchultag: '2027-02-13' },
+  { name: 'Osterferien', von: '2027-03-22', bis: '2027-04-02', ersterSchultag: '2027-04-03' },
+  { name: 'Pfingstferien', von: '2027-05-18', bis: '2027-05-28', ersterSchultag: '2027-05-29' },
+  { name: 'Sommerferien', von: '2027-08-02', bis: '2027-09-13', ersterSchultag: '2027-09-14' },
+  { name: 'Weihnachtsferien', von: '2027-12-24', bis: '2028-01-07', ersterSchultag: '2028-01-08' },
+  { name: 'Frühjahrsferien', von: '2028-02-28', bis: '2028-03-03', ersterSchultag: '2028-03-04' },
+  { name: 'Osterferien', von: '2028-04-10', bis: '2028-04-21', ersterSchultag: '2028-04-22' },
+  { name: 'Pfingstferien', von: '2028-06-06', bis: '2028-06-16', ersterSchultag: '2028-06-17' },
+  { name: 'Sommerferien', von: '2028-07-31', bis: '2028-09-11', ersterSchultag: '2028-09-12' },
+  { name: 'Weihnachtsferien', von: '2028-12-23', bis: '2029-01-05', ersterSchultag: '2029-01-06' },
+  { name: 'Frühjahrsferien', von: '2029-02-12', bis: '2029-02-16', ersterSchultag: '2029-02-17' },
+  { name: 'Osterferien', von: '2029-03-26', bis: '2029-04-06', ersterSchultag: '2029-04-07' },
+  { name: 'Pfingstferien', von: '2029-05-22', bis: '2029-06-01', ersterSchultag: '2029-06-02' },
+  { name: 'Sommerferien', von: '2029-07-30', bis: '2029-09-10', ersterSchultag: '2029-09-11' },
+  { name: 'Weihnachtsferien', von: '2029-12-24', bis: '2030-01-04', ersterSchultag: '2030-01-05' },
+  { name: 'Frühjahrsferien', von: '2030-03-04', bis: '2030-03-08', ersterSchultag: '2030-03-09' },
+  { name: 'Osterferien', von: '2030-04-15', bis: '2030-04-26', ersterSchultag: '2030-04-27' },
+  { name: 'Pfingstferien', von: '2030-06-11', bis: '2030-06-21', ersterSchultag: '2030-06-22' },
+  { name: 'Sommerferien', von: '2030-07-29', bis: '2030-09-09', ersterSchultag: '2030-09-10' }
+];
+
 // ---------- Baustein: druck.js (geprueft, Tests unter _bausteine/) ----------
 // druck.js — Baustein: Druckbild des Terminplans (22.10.2026, Julian Neuhoff: „Druckausgabe passt das Layout nicht“).
 // Statt den Bildschirm zu drucken (Diagramm rechts abgeschnitten, Kopf und Zeitachse nur auf Seite 1) baut dieser
@@ -7234,7 +7841,9 @@ function rahmenAgentAuftrag(projektName, tasks, offen, heuteIso, planart, nurOff
       continue;
     }
     if (t.summary) { continue; }
-    var herk = !t.quelleText ? '' : (/^Regel:/.test(t.quelleText) ? ' [Regel]' : ' [' + t.quelleText.slice(0, 80) + ']');
+    // „Regel: …“ (Gewerke-Profil) oder „Regel P6 (Regelwerk Rahmenterminplan): …“ — die Kennung geht mit
+    var kennung = t.quelleText ? /^Regel ([A-Z0-9, ]+) \(/.exec(t.quelleText) : null;
+    var herk = !t.quelleText ? '' : (/^Regel[: ]/.test(t.quelleText) ? ' [Regel' + (kennung ? ' ' + kennung[1] : '') + ']' : ' [' + t.quelleText.slice(0, 80) + ']');
     zeilen.push('#' + t.uid + ' ' + rahmenVorgangPfad(tasks, i) + ' ' + (t.milestone ? t.start : t.start + ' bis ' + t.finish) +
       (t.lockStart ? ' (fixiert)' : '') + herk);
   }
@@ -7242,6 +7851,7 @@ function rahmenAgentAuftrag(projektName, tasks, offen, heuteIso, planart, nurOff
     'Prüfe den ' + (bzp ? 'Bauzeitenplan (Ausführung)' : 'Rahmenterminplan') + ' des Projekts „' + projektName + '“ gegen die Projektunterlagen (heute ist ' + heuteIso + ').',
     '',
     'Der Plan wurde nach Regeln aus den Projektdaten erzeugt. [Regel] heißt: der Termin ist nur geschätzt.',
+    (bzp ? '' : 'Die Regeln stammen aus dem Regelwerk Rahmenterminplan des Büros (Kennung in der Herkunft, z. B. [Regel B6]). Lies es zuerst: Werkzeug regelwerk_rahmenterminplan oder Datei REGELWERK_RAHMENTERMINPLAN.md im Regelwerk-Ordner. Einen Regelwert ersetzt nur ein belegter Projekttermin; findest du keinen, bleibt die Regel stehen.\n') +
     'Suche in der Ablage nach den echten Terminen: aktueller Bauzeitenplan, aktueller Vergabeterminplan, Protokolle (Jour fixe, Planer-Besprechung, Gremium), Baugenehmigung, Förderbescheid, Mails mit Terminzusagen. Neuere Stände schlagen ältere.',
     (bzp ? 'Ziel ist ein belastbarer Bauzeitenplan: für JEDES Gewerk Beginn und Ende der Ausführung („start“ und „ende“) aus dem neuesten Bauzeitenplan, Ablaufplan, Vertragsterminen der Firmen oder Protokollen. Gewerke, die im Plan fehlen, als Hinweis nennen.\n' : '') +
     (nurOffen ? 'WICHTIG: Die Vorgänge mit Herkunft „…, Pos …“ stammen 1:1 aus dem Bauzeitenplan-Druck und gelten als belegt — prüfe sie NICHT erneut. Kläre ausschließlich die offenen Punkte unten (Gewerke ohne Vorgang im Druck: suche ihre Ausführungszeit in Vergabeterminplänen, Verträgen, Protokollen, Firmenterminplänen).\n' : '') +
@@ -7285,9 +7895,10 @@ function rahmenAgentAntwortLesen(text, tasks) {
   var gueltig = {};
   var nachPfad = {};
   for (var u = 0; u < (tasks || []).length; u++) {
-    gueltig[tasks[u].uid] = true;
+    gueltig[tasks[u].uid] = tasks[u];
     nachPfad[reNorm(rahmenVorgangPfad(tasks, u))] = tasks[u].uid;
   }
+  var erstesWort = function (s) { return reNorm(s).split(' › ').pop().split(/[ (]/)[0]; };
   var erg = { korrekturen: [], meilensteine: [], hinweise: [], verworfen: [], fehler: null };
   var belegt = function (b) { return typeof b === 'string' && b.trim().length >= 8; };
   (Array.isArray(j.korrekturen) ? j.korrekturen : []).forEach(function (k) {
@@ -7299,14 +7910,19 @@ function rahmenAgentAntwortLesen(text, tasks) {
         var treffer = Object.keys(nachPfad).filter(function (p) { return p.indexOf(kurz) === 0 || (/…$/.test(p) && kurz.indexOf(p.slice(0, -1)) === 0); });
         if (treffer.length === 1) { perPfad = nachPfad[treffer[0]]; }
       }
+      // Pfad abgekürzt, aber die #uid stimmt und der Vorgang beginnt mit demselben Wort („Förderbescheid bzw. vzB“ für #19)
+      if (perPfad === undefined && gueltig[k.uid] && erstesWort(k.vorgang) === erstesWort(gueltig[k.uid].name)) { perPfad = k.uid; }
       if (perPfad === undefined) { erg.verworfen.push('Vorgang „' + k.vorgang + '“ nicht im Plan'); return; }
       k.uid = perPfad;
     }
     if (!k || !gueltig[k.uid]) { erg.verworfen.push('Korrektur für unbekannten Vorgang #' + (k && k.uid)); return; }
-    if (!reIstIso(k.start)) { erg.verworfen.push('#' + k.uid + ': Startdatum ungültig'); return; }
-    if (k.ende !== null && k.ende !== undefined && (!reIstIso(k.ende) || k.ende < k.start)) { erg.verworfen.push('#' + k.uid + ': Enddatum ungültig'); return; }
+    // Nur das Ende belegt („LPH 2 endet im Oktober“): Start bleibt, gilt nicht für Meilensteine
+    var nurEnde = !reIstIso(k.start) && reIstIso(k.ende) && !gueltig[k.uid].milestone;
+    if (!reIstIso(k.start) && !nurEnde) { erg.verworfen.push('#' + k.uid + ': Startdatum ungültig'); return; }
+    var bezugStart = nurEnde ? gueltig[k.uid].start : k.start;
+    if (k.ende !== null && k.ende !== undefined && (!reIstIso(k.ende) || k.ende < bezugStart)) { erg.verworfen.push('#' + k.uid + ': Enddatum ungültig'); return; }
     if (!belegt(k.beleg)) { erg.verworfen.push('#' + k.uid + ': ohne Beleg'); return; }
-    erg.korrekturen.push({ uid: k.uid, start: k.start, ende: k.ende || null, beleg: k.beleg.trim() });
+    erg.korrekturen.push({ uid: k.uid, start: nurEnde ? null : k.start, ende: k.ende || null, beleg: k.beleg.trim() });
   });
   (Array.isArray(j.meilensteine) ? j.meilensteine : []).forEach(function (ms) {
     if (!ms || typeof ms.name !== 'string' || !ms.name.trim() || !reIstIso(ms.datum)) { erg.verworfen.push('Meilenstein ohne Name oder gültiges Datum'); return; }
