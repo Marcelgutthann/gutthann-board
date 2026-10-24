@@ -65,6 +65,15 @@
   .col-duration input{width:100%;border:1px solid transparent;background:transparent;font-size:11px;font-family:inherit;padding:1px 2px;border-radius:2px;text-align:center;}
   .col-duration input:hover{border-color:var(--line);}
   .col-duration input:focus{border-color:var(--blue);outline:none;background:#fff;}
+  /* Tabelle wie MS Project (23.10.): Vorgaenger-Spalte, Zeilenauswahl, Namen direkt tippen */
+  .col-pred{width:86px;flex:none;padding:1px 2px;display:flex;align-items:center;border-right:1px solid var(--line);}
+  .col-pred input{width:100%;min-width:0;border:1px solid transparent;background:transparent;font-size:11px;font-family:inherit;padding:1px 3px;border-radius:2px;}
+  .col-pred input:hover{border-color:var(--line);}
+  .col-pred input:focus{border-color:var(--blue);outline:none;background:#fff;}
+  .col-pred input.falsch{border-color:#b91c1c;background:#fff1f1;}
+  #leftrows .rowline.gewaehlt, #leftrows .rowline.gewaehlt:hover{background:#dbe6f7;}
+  .col-name input.name-edit{width:calc(100% - 20px);font:inherit;font-size:12px;padding:1px 3px;border:1px solid var(--blue);border-radius:2px;outline:none;background:#fff;}
+  .tabelle-hinweis{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;z-index:1600;box-shadow:0 4px 14px rgba(0,0,0,.3);pointer-events:none;}
   .rowline.summary{font-weight:700;background:#f2f5fa;}
   .rowline.milestonerow{font-style:normal;}
   .rowline.edited{background:#fff7e0;}
@@ -105,29 +114,27 @@
   .bar:active{cursor:grabbing;}
   .bar.leaf{background:linear-gradient(#8fbef0,var(--blue));border:1px solid #2f5fa8;}
   .bar.leafgreen{background:linear-gradient(#a9d18e,var(--green));border:1px solid #4c7a2e;}
-  .bar.cat-planung{background:linear-gradient(#f0d47a,var(--yellow));border:1px solid var(--yellow-dark);}
-  .bar.cat-vergabe{background:linear-gradient(#a9d18e,var(--green));border:1px solid #4c7a2e;}
-  .bar.cat-ausfuehrung{background:linear-gradient(#8fbef0,var(--blue));border:1px solid #2f5fa8;}
-  .bar.summarybar{background:var(--blue-dark);border-radius:2px;}
-  .bar.gr-anchor-outline{background:none;border:3px solid var(--green-dark);box-shadow:none;}
+  /* Farblogik (23.10., Baustein farben.js): Füllfarbe = Phase (Rahmenterminplan) bzw. Gewerk (Bauzeitenplan),
+     gesetzt über --fb/--fr. Schloss, GR-Platzhalter, Gewerk-Kennung und Anker sind Form, keine Farbe. */
+  .bar.fb{background:var(--fb);border:1px solid var(--fr);}
+  .bar.summarybar{border-radius:2px;}
+  .bar.gr-anchor-outline{background:none;border:3px solid #1F2937;box-shadow:none;}
   .bar .handle{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:ew-resize;}
-  .bar.lockstart{border-left:4px solid #16a34a;}
-  .bar.lockfinish{border-right:4px solid #ca8a04;}
+  .bar.lockstart{border-left:4px solid #1F2937;}
+  .bar.lockfinish{border-right:4px solid #1F2937;}
   .bar-inline-label{position:absolute;left:6px;right:20px;top:0;bottom:0;display:flex;align-items:center;color:#fff;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
   .bar-collapse-toggle{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:15px;height:15px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.2);border-radius:3px;color:#fff;font-size:9px;line-height:1;cursor:pointer;user-select:none;}
   .bar-collapse-toggle:hover{background:rgba(255,255,255,.4);}
   .summary-highlight{position:absolute;pointer-events:none;border-radius:3px;border:1px solid rgba(43,74,122,.35);box-sizing:border-box;}
-  .bar.gewerk-outline{outline:2px solid #f59e0b;outline-offset:1px;}
+  .bar.gewerk-outline{outline:2px solid #9CA3AF;outline-offset:1px;}
   .gewerk-calicon{position:absolute;width:16px;height:16px;line-height:15px;text-align:center;font-size:10px;border-radius:3px;background:#fff7ed;border:1px solid #f59e0b;top:50%;margin-top:-8px;z-index:9;opacity:0;cursor:pointer;transition:opacity .1s;}
   .rowhit:hover .gewerk-calicon{opacity:1;}
   .milestone{position:absolute;width:14px;height:14px;background:#111;transform:rotate(45deg);cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.4);box-sizing:border-box;}
   .milestone:active{cursor:grabbing;}
-  .milestone.cat-planung{background:var(--yellow);}
-  .milestone.cat-vergabe{background:var(--green);}
-  .milestone.cat-ausfuehrung{background:#111;}
-  .milestone.lockstart{border-left:3px solid #16a34a;}
-  .milestone.lockfinish{border-right:3px solid #ca8a04;}
-  .milestone.gr-anchor{background:none;border:3px solid var(--green-dark);box-shadow:none;}
+  .milestone.fb{background:var(--fb);}
+  .milestone.lockstart{border-left:3px solid #9CA3AF;}
+  .milestone.lockfinish{border-right:3px solid #9CA3AF;}
+  .milestone.gr-anchor{background:none;border:3px solid #1F2937;box-shadow:none;}
   .rowhit{position:absolute;}
   .connpoint{position:absolute;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #d97706;top:50%;margin-top:-5px;z-index:8;opacity:0;transition:opacity .1s, transform .1s;cursor:crosshair;}
   .rowhit:hover .connpoint{opacity:1;}
@@ -137,8 +144,8 @@
   .lockicon{position:absolute;width:13px;height:13px;line-height:11px;text-align:center;font-size:8.5px;border-radius:3px;background:#f2f3f5;border:1px solid #b5bac2;top:50%;margin-top:-15px;z-index:9;opacity:0;cursor:pointer;transition:opacity .1s;}
   .rowhit:hover .lockicon{opacity:1;}
   .lockicon.locked{opacity:1;}
-  .lockicon.locked-start{background:#22c55e;border-color:#16a34a;color:#fff;}
-  .lockicon.locked-finish{background:#eab308;border-color:#ca8a04;color:#fff;}
+  .lockicon.locked-start{background:#374151;border-color:#1F2937;color:#fff;}
+  .lockicon.locked-finish{background:#374151;border-color:#1F2937;color:#fff;}
   .lbl{position:absolute;font-size:10.5px;color:#333;white-space:nowrap;top:2px;transition:color .1s;}
   .lbl-dat{color:#6b7280;font-weight:400;}
   .lbl.lbl-start{transform:translateX(-100%);}
@@ -170,8 +177,8 @@
   .modal-datewrap .modal-input{flex:1;min-width:0;}
   .modal-lock-btn{flex:none;width:28px;height:26px;border-radius:4px;border:1px solid var(--line);background:#f7f8fa;cursor:pointer;font-size:12px;line-height:1;padding:0;}
   .modal-lock-btn:hover{filter:brightness(0.97);}
-  .modal-lock-btn.locked-start{background:#22c55e;border-color:#16a34a;}
-  .modal-lock-btn.locked-finish{background:#eab308;border-color:#ca8a04;}
+  .modal-lock-btn.locked-start{background:#374151;border-color:#1F2937;}
+  .modal-lock-btn.locked-finish{background:#374151;border-color:#1F2937;}
   .modal-section-title{font-weight:600;font-size:12px;color:#555;margin:10px 0 6px;border-top:1px solid var(--line);padding-top:10px;}
   .modal-links{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;}
   .modal-link-row{display:flex;flex-direction:column;gap:4px;font-size:12px;background:#f7f8fa;padding:5px 7px;border-radius:4px;}
@@ -199,6 +206,11 @@
   .context-menu-item{display:block;width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:12.5px;cursor:pointer;border-radius:4px;color:var(--ink);}
   .context-menu-item:hover{background:#eef2ff;}
   .context-menu-sep{height:1px;background:var(--line);margin:4px 6px;}
+  .context-farben{display:flex;align-items:center;gap:5px;padding:6px 10px;flex-wrap:wrap;max-width:260px;}
+  .context-farben .cf-titel{font-size:12px;color:#555;flex:1 1 100%;margin-bottom:2px;}
+  .context-farben .cf-feld{width:20px;height:20px;border:1px solid #9CA3AF;border-radius:4px;cursor:pointer;padding:0;font-size:10px;font-weight:700;color:#555;line-height:18px;}
+  .context-farben .cf-feld:hover{transform:scale(1.15);}
+  .context-farben .cf-feld.an{outline:2px solid #1F2937;outline-offset:1px;}
   .rowline.hidden-task{opacity:.5;font-style:italic;}
   .bar.hidden-task,.milestone.hidden-task{background:none !important;opacity:.55;border:1.5px dashed #94a3b8 !important;box-shadow:none !important;}
   .footer{padding:8px 16px;font-size:10.5px;color:#777;background:#fff;border-top:1px solid var(--line);}
@@ -237,10 +249,10 @@
   .milestone.kritisch{outline:2px solid #b91c1c;outline-offset:1px;}
   /* Gespiegelte Meilensteine (Anker zu einem anderen Plan): blauer Ring; weicht der
      Partner-Termin ab, wird der Ring orange — das ist der Meilensteintrend-Blick. */
-  .milestone.anker{outline:2px dashed #2563eb;outline-offset:2px;}
-  .milestone.anker.anker-drift{outline:2px dashed #d97706;}
-  .bar.anker{outline:2px dashed #2563eb;outline-offset:1px;}
-  .bar.anker.anker-drift{outline:2px dashed #d97706;}
+  .milestone.anker{outline:2px dashed #374151;outline-offset:2px;}
+  .milestone.anker.anker-drift{outline:2px dashed #b91c1c;}
+  .bar.anker{outline:2px dashed #374151;outline-offset:1px;}
+  .bar.anker.anker-drift{outline:2px dashed #b91c1c;}
   .bar .fortschritt{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.32);
     border-radius:inherit;pointer-events:none;}
   #planWahl{max-width:220px;font-size:12px;padding:5px 8px;border-radius:4px;border:1px solid var(--line);background:#fff;}
@@ -306,8 +318,8 @@
   .druck-diagramm .r-a{stroke:#D9D9D5;stroke-width:.15;}
   .druck-diagramm .r-k{stroke:#1C1C1A;stroke-width:.25;}
   .druck-diagramm .r-h{stroke:#dc2626;stroke-width:.3;stroke-dasharray:1 .7;}
-  .druck-diagramm .b-wf{fill:rgba(220,38,38,.10);}
-  .druck-diagramm .b-sf{fill:rgba(168,85,247,.09);}
+  .druck-diagramm .b-wf{fill:rgba(107,114,128,.13);}
+  .druck-diagramm .b-sf{fill:rgba(107,114,128,.13);}
   .druck-diagramm .bk{stroke:rgba(0,0,0,.22);stroke-width:.12;}
   .druck-diagramm .dl{fill:#333;paint-order:stroke;stroke:#fff;stroke-width:.5;stroke-linejoin:round;}
   .druck-diagramm .dl-in{fill:#1C1C1A;}
@@ -328,7 +340,7 @@
 <div class="toolbar">
   <b class="tb-titel" id="tbTitel">Terminplan</b>
   <select id="planWahl" title="Gespeicherte Pläne dieses Projekts — Rechtsklick: umbenennen, duplizieren, löschen" hidden></select>
-  <button id="btnPlanMenue" class="tb-ic" title="Diesen Plan umbenennen, duplizieren oder löschen" hidden>⋯</button>
+  <button id="btnPlanMenue" class="tb-ic" title="Diesen Plan umbenennen, duplizieren, löschen — und einstellen, wonach gefärbt wird" hidden>⋯</button>
   <select id="blickWahl" title="Schicht des Plans: alle Schichten oder nur Planung / Vergabe / Ausführung — Verknüpfungen zwischen den Schichten bleiben dabei lebendig">
     <option value="alle">Alle Schichten</option>
     <option value="planung">Nur Planung</option>
@@ -378,16 +390,12 @@
 
 <!-- Legende und Bedienhilfe: nur auf Klick sichtbar, damit sie nicht dauerhaft Platz kosten. -->
 <div id="legendePop" class="tb-pop" hidden>
-  <span><i class="swatch" style="background:var(--blue-dark)"></i>Sammelvorgang</span>
-  <span><i class="swatch" style="background:var(--yellow)"></i>Planung</span>
-  <span><i class="swatch" style="background:var(--green)"></i>Vergabe</span>
-  <span><i class="swatch" style="background:var(--blue)"></i>Ausführung</span>
-  <span><i class="swatch" style="background:#111;border-radius:0;transform:rotate(45deg);width:9px;height:9px"></i>Meilenstein</span>
-  <span><i class="swatch" style="border:3px solid var(--green-dark);background:none;width:9px;height:9px;box-sizing:border-box"></i>GR Sitzung (fixiert)</span>
+  <span id="legendeRegel" style="color:#666"></span>
+  <span id="legendeFarben" style="display:contents"></span>
+  <span><i class="swatch" style="border:3px solid #1F2937;background:none;width:9px;height:9px;box-sizing:border-box"></i>GR Sitzung (fixiert)</span>
   <span><i class="swatch" style="background:var(--today);width:3px"></i>Heute</span>
-  <span><i class="swatch" style="background:rgba(220,38,38,.55)"></i>Weihnachtsferien</span>
-  <span><i class="swatch" style="background:rgba(168,85,247,.5)"></i>Sommer-/Schulferien</span>
-  <span><i class="swatch" style="background:rgba(46,125,50,.6)"></i>GR-Sitzung (Termin)</span>
+  <span><i class="swatch" style="background:rgba(107,114,128,.4)"></i>Ferien</span>
+  <span><i class="swatch" style="background:rgba(31,41,55,.5)"></i>GR-Sitzung (Termin)</span>
   <span><i class="swatch" style="background:rgba(238,240,244,1);border:1px solid #c9ccd4"></i>Feiertag</span>
   <span><i class="swatch" style="background:none;border:2px solid #b91c1c"></i>Kritischer Pfad (Puffer ≤ 0)</span>
   <span><i class="swatch" style="background:rgba(0,0,0,.32)"></i>Fortschritt (Ist)</span>
@@ -399,6 +407,8 @@
   <span><b>Schloss</b> fixiert einen Termin gegen Kaskaden.</span>
   <span><b>Doppelklick</b> auf Balken oder Zeile öffnet die Details, dort auch der Versatz je Verknüpfung.</span>
   <span><b>Strg+Z</b> macht rückgängig · <b>Strg+Mausrad</b> zoomt · <b>Umschalt+Mausrad</b> schiebt seitwärts.</span>
+  <span><b>Tabelle wie MS Project:</b> Zeile anklicken (Umschalt/Strg = mehrere), lostippen oder <b>F2</b> = Name, <b>Enter</b> = nächste Zeile (in der letzten: neue), <b>Einfg</b> = neue Zeile, <b>Entf</b> = löschen, <b>Tab</b> / <b>Umschalt+Tab</b> = ein-/ausrücken, <b>Strg+F2</b> = Markierte verketten.</span>
+  <span><b>Vorgänger-Spalte:</b> Zeilennummern mit Art und Pause in Arbeitstagen, z. B. <b>3;5</b> · <b>7AA</b> · <b>4EA+2</b> · <b>9EE-1</b> · <b>4+10KT</b>.</span>
 </div>
 
 <div class="wrap" id="wrap">
@@ -409,6 +419,7 @@
       <div class="col-date">Start</div>
       <div class="col-duration">Dauer</div>
       <div class="col-date">Ende</div>
+      <div class="col-pred" title="Vorgänger wie in MS Project: Zeilennummer, Art, Versatz — z. B. 3;5EA+2 oder 7AA+3KT">Vorgänger</div>
     </div>
     <div id="leftrows"></div>
     <div class="leftpane-actions">
@@ -458,6 +469,7 @@ const TYPE_NUM_TO_CODE = {0:'EE', 1:'EA', 2:'AE', 3:'AA'};
 const TYPE_CODE_TO_NUM = {EE:0, EA:1, AE:2, AA:3};
 const TYPE_LABEL = {EA:'Ende–Anfang', AA:'Anfang–Anfang', EE:'Ende–Ende', AE:'Anfang–Ende'};
 let EDGES = [];
+let AUSWAHL = new Set();   // markierte Zeilen (uid) der Tabelle, siehe „Tabelle wie MS Project“
 // lockStart/lockFinish: wenn gesetzt, bleibt dieser Anschlusspunkt bei JEDER Kaskadierung
 // (vorwärts wie rückwärts, durch andere Vorgänge ausgelöst) fest - der Vorgang kann weiterhin
 // direkt per Hand verschoben werden, wird aber nicht mehr von verknüpften Nachbarn "mitgezogen".
@@ -487,7 +499,7 @@ function snapshotState(){
       // sonst loescht ein Rueckgaengig es stillschweigend (ist mehrfach passiert).
       firmaCrmId: t.firmaCrmId, firmaName: t.firmaName, firmaZuordnung: t.firmaZuordnung,
       istStart: t.istStart, istEnde: t.istEnde, fortschritt: t.fortschritt,
-      notiz: t.notiz, quelleText: t.quelleText
+      notiz: t.notiz, quelleText: t.quelleText, farbe: t.farbe
     })),
     edges: EDGES.map(e=>({from:e.from, to:e.to, type:e.type, lag:e.lag, lagUnit:e.lagUnit, lagValue:e.lagValue, hardCeiling:!!e.hardCeiling})),
     specialPeriods: SPECIAL_PERIODS.map(p=>({id:p.id, kind:p.kind, label:p.label, start:p.start, finish:p.finish}))
@@ -654,7 +666,8 @@ function newSpecialId(){ return _nextSpecialId++; }
 // Feiertag nutzt exakt denselben Grauton wie die Wochenend-Schattierung im Tagesraster (#eef0f4,
 // siehe daygrid.style.backgroundImage weiter unten), damit "kein Arbeitstag" optisch einheitlich
 // aussieht - egal ob Samstag/Sonntag oder ein Feiertag an einem Werktag.
-const SPECIAL_RGB = { weihnachtsferien:'220,38,38', schulferien:'168,85,247', grsitzung:'46,125,50', feiertag:'238,240,244' };
+// Farblogik 23.10.: Ferien grau, GR-Sitzung dunkelgrau — Violett, Grün und Rot gehören Balken und kritischem Pfad
+const SPECIAL_RGB = { weihnachtsferien:'107,114,128', schulferien:'107,114,128', grsitzung:'31,41,55', feiertag:'238,240,244' };
 const SPECIAL_KIND_LABEL = { weihnachtsferien:'Weihnachtsferien', schulferien:'Sommerferien / sonstige Schulferien', grsitzung:'Gemeinderatssitzung', feiertag:'Gesetzlicher Feiertag' };
 function specialColor(kind, alpha){ return `rgba(${SPECIAL_RGB[kind]||'0,0,0'},${alpha})`; }
 
@@ -1537,6 +1550,400 @@ function vorgangNachbarTausch(uid, richtung){
 })();
 
 // ==================================================================================
+// TABELLE WIE MS PROJECT (23.10.2026, Probe Hemau BA2). Ein leer angelegter Plan liess sich nur
+// ueber Doppelklick + Dialog je Vorgang fuellen; Einruecken gab es nicht, Verknuepfungen nur mit
+// der Maus. Jetzt wie in MS Project: Zeile anklicken (Umschalt/Strg = mehrere), Namen tippen,
+// Enter = naechste Zeile (in der letzten: neue), Einfg = neue Zeile darueber, Entf = loeschen,
+// Tab/Umschalt+Tab oder Alt+Umschalt+→/← = ein-/ausruecken, Strg+F2 = Markierte verketten,
+// Strg+Umschalt+F2 = Verknuepfungen zwischen ihnen loesen, Vorgaenger-Spalte zum Eintippen.
+// Versatz in der Spalte = PAUSE dazwischen wie in MS Project: „3“ heisst nahtlos am naechsten
+// Arbeitstag (im Speicher EA mit Versatz bis dorthin, so wie die 138 nahtlosen Kanten im Bestand).
+// ==================================================================================
+let auswahlAnker = null, auswahlCursor = null;
+function zeilenNr(uid){ return TASKS.findIndex(t=>t.uid===uid) + 1; }
+function tabellenHinweis(text){
+  document.querySelector('.tabelle-hinweis')?.remove();
+  const el = Object.assign(document.createElement('div'), { className:'tabelle-hinweis', textContent:text });
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 3500);
+}
+// Arbeitstage von ref (ausschliesslich) bis ref+L Kalendertage, vorzeichenrichtig
+function arbeitstageVersatz(refISO, L){
+  let n = 0, cur = parseISO(refISO);
+  const dir = L >= 0 ? 1 : -1;
+  for(let i = 0; i < Math.abs(L); i++){ cur = addDays(cur, dir); if(!istFreierTag(cur)) n += dir; }
+  return n;
+}
+// Eine Verknuepfung als Vorgaenger-Kuerzel: „3“, „3AA“, „3EA+2“, „3EE-1“, „3EA+13KT“
+function vorgaengerToken(e){
+  const p = byUid[e.from]; if(!p) return null;
+  const ref = p[edgeAnchors(e.type).predEnd];
+  const L = e.lag || 0;
+  const pause = e.type === 'EA' ? 1 : 0;
+  const at = arbeitstageVersatz(ref, L) - pause;
+  let n = at, kt = false;
+  if(at !== 0 && e.lagUnit === 'cd'){ n = L - pause; kt = true; }
+  const zusatz = n ? (n > 0 ? '+' : '') + n + (kt ? 'KT' : '') : '';
+  return zeilenNr(e.from) + (e.type === 'EA' && !zusatz ? '' : e.type) + zusatz;
+}
+function vorgaengerText(uid){
+  return EDGES.filter(e=>e.to===uid && byUid[e.from])
+    .sort((a,b)=>zeilenNr(a.from) - zeilenNr(b.from)).map(vorgaengerToken).join(';');
+}
+const ART_MS = { FS:'EA', SS:'AA', FF:'EE', SF:'AE' };
+function vorgaengerLesen(text){
+  const liste = [];
+  for(const s of String(text || '').split(/[;,]/).map(x=>x.replace(/\s+/g, '')).filter(Boolean)){
+    const m = s.match(/^(\d+)(EA|AA|EE|AE|FS|SS|FF|SF)?(?:([+-])(\d+)(AT|KT|T|D|WO|W)?)?$/i);
+    if(!m) return { fehler: '„' + s + '“ verstehe ich nicht. Beispiele: 3 · 3;5 · 7AA · 4EA+2 · 9EE-1 · 4+10KT' };
+    const k = (m[2] || 'EA').toUpperCase();
+    const einheit = (m[5] || '').toUpperCase();
+    let n = m[3] ? (m[3] === '-' ? -1 : 1) * Number(m[4]) : 0;
+    if(einheit === 'W' || einheit === 'WO') n *= 5;
+    liste.push({ nr: Number(m[1]), art: ART_MS[k] || k, n, einheit: einheit === 'KT' ? 'cd' : 'wd' });
+  }
+  return { liste };
+}
+// Pause n (MS-Project-Sinn) -> Versatz im Speicher (Kalendertage ab Anschlusspunkt, wie lagToCalendarDays)
+function versatzAusPause(pred, art, n, einheit){
+  const ref = pred[edgeAnchors(art).predEnd];
+  const wert = art === 'EA' ? n + 1 : n;
+  return { lag: einheit === 'cd' ? wert : lagToCalendarDays(ref, wert, 'wd'), lagUnit: einheit, lagValue: wert };
+}
+function erreichbar(von, ziel){
+  const gesehen = new Set([von]), offen = [von];
+  while(offen.length){
+    const u = offen.pop();
+    if(u === ziel) return true;
+    EDGES.forEach(e=>{ if(e.from === u && !gesehen.has(e.to)){ gesehen.add(e.to); offen.push(e.to); } });
+  }
+  return false;
+}
+function verwandt(a, b){ return subtreeUidSet(a).has(b) || subtreeUidSet(b).has(a); }
+function geforderterStart(edge){
+  const pred = byUid[edge.from], succ = byUid[edge.to];
+  const dur = daysBetween(parseISO(succ.start), parseISO(succ.finish));
+  const lag = edge.lag || 0;
+  if(edge.type === 'EA') return addDays(parseISO(pred.finish), lag);
+  if(edge.type === 'AA') return addDays(parseISO(pred.start), lag);
+  if(edge.type === 'EE') return addDays(parseISO(pred.finish), lag - dur);
+  return addDays(parseISO(pred.start), lag - dur);
+}
+// Wie MS Project: so frueh, wie alle Vorgaenger es erlauben. Nur nach einer bewussten Aenderung der
+// Vorgaenger (Spalte, Strg+F2) — bestehende Plaene werden beim Laden nie angedockt.
+// Frueheste Lage aus ALLEN Vorgaengern; Kanten in Arbeitstagen werden vorher am heutigen Anschlusspunkt neu bemessen
+function sollStart(uid){
+  let soll = null;
+  EDGES.forEach(e=>{
+    const p = byUid[e.from];
+    if(e.to !== uid || !p) return;
+    if(e.lagUnit === 'wd' && e.lagValue != null) e.lag = lagToCalendarDays(p[edgeAnchors(e.type).predEnd], e.lagValue, 'wd');
+    const d = geforderterStart(e);
+    if(!soll || d > soll) soll = d;
+  });
+  return soll;
+}
+// Vorgang auf soll legen; Arbeitstage bleiben (wie MS Project): 5 AT ueber ein Wochenende geschoben bleiben 5 AT
+function legeAuf(t, soll){
+  const at = durationCount(t.start, t.finish, 'wd'), altS = t.start, altE = t.finish;
+  t.start = fmtISO(soll);
+  t.finish = t.milestone ? t.start : finishFromDuration(t.start, Math.max(1, at), 'wd');
+  return [daysBetween(parseISO(altS), parseISO(t.start)), daysBetween(parseISO(altE), parseISO(t.finish))];
+}
+function andocken(uid){
+  const t = byUid[uid];
+  if(!t || t.lockStart || t.lockFinish || t.summary) return;
+  const soll = sollStart(uid);
+  if(!soll || fmtISO(soll) === t.start) return;
+  const [sd, fd] = legeAuf(t, soll);
+  folgenNachziehen(uid, sd, fd);
+}
+// Wie cascadeChange, aber Kanten in Arbeitstagen halten ihren Abstand in AT statt in KT. Sonst wurde aus einem
+// nahtlosen Anschluss („5“) nach dem Verschieben ueber ein Wochenende „5EA+2“ (Pruefstand 23.10.). Nur auf den neuen
+// Tabellenwegen; die allgemeine Kaskade (Ziehen, Dauer, MCP plan_kern.js) bleibt starr, bis das entschieden ist.
+// Durchlauf in Abhaengigkeitsreihenfolge: jeder Nachfolger wird erst gerechnet, wenn ALLE seine Vorgaenger aus
+// dem betroffenen Teil fertig sind. (Rekursiv mit „besucht“-Liste blieb bei zusammenlaufenden Wegen der Rest der
+// Kette auf dem Zwischenstand stehen — Rueckgabe-Meilenstein 3 Wochen vor seinem Vorgaenger, Pruefstand 12b.)
+function folgenNachziehen(uid, sd, fd){
+  if(!sd && !fd) return;
+  const teil = new Set(), stapel = [uid];
+  while(stapel.length){ const u = stapel.pop(); EDGES.forEach(e=>{ if(e.from === u && byUid[e.to] && e.to !== uid && !teil.has(e.to)){ teil.add(e.to); stapel.push(e.to); } }); }
+  const offen = new Map([...teil].map(v=>[v, 0]));
+  EDGES.forEach(e=>{ if(offen.has(e.to) && (e.from === uid || teil.has(e.from))) offen.set(e.to, offen.get(e.to) + 1); });
+  const delta = new Map([[uid, [sd, fd]]]);
+  const fertig = [uid];
+  while(fertig.length){
+    const u = fertig.shift();
+    EDGES.forEach(e=>{
+      if(e.from !== u || !offen.has(e.to)) return;
+      offen.set(e.to, offen.get(e.to) - 1);
+      if(offen.get(e.to) > 0) return;
+      const v = e.to, t = byUid[v];
+      fertig.push(v);
+      const rein = EDGES.filter(x=>x.to === v && !x.hardCeiling && delta.has(x.from) && (delta.get(x.from)[0] || delta.get(x.from)[1]));
+      if(!rein.length || t.lockStart || t.lockFinish || t.summary){ delta.set(v, [0, 0]); return; }
+      if(rein.some(x=>x.lagUnit === 'wd' && x.lagValue != null && edgeAnchors(x.type).succEnd === 'start')){
+        const soll = sollStart(v);
+        delta.set(v, soll && fmtISO(soll) !== t.start ? legeAuf(t, soll) : [0, 0]);
+        return;
+      }
+      let d = 0;   // sonst wie cascadeChange: starr um den Versatz des Vorgaengers
+      rein.forEach(x=>{ const [s, f] = delta.get(x.from); const y = (x.type === 'EA' || x.type === 'EE') ? f : s; if(Math.abs(y) > Math.abs(d)) d = y; });
+      if(d){ t.start = fmtISO(addDays(parseISO(t.start), d)); t.finish = fmtISO(addDays(parseISO(t.finish), d)); }
+      delta.set(v, [d, d]);
+    });
+  }
+}
+function vorgaengerSetzen(uid, text, inp){
+  const t = byUid[uid];
+  if(!t || SCHREIBSCHUTZ){ renderLeftRows(); return; }
+  const falsch = (m)=>{ tabellenHinweis(m); if(inp){ inp.classList.add('falsch'); inp.focus(); } return false; };
+  const r = vorgaengerLesen(text);
+  if(r.fehler) return falsch(r.fehler);
+  const alt = EDGES.filter(e=>e.to === uid);
+  const bleiben = new Set(), neu = [];
+  for(const v of r.liste){
+    const p = TASKS[v.nr - 1];
+    if(!p) return falsch('Zeile ' + v.nr + ' gibt es nicht');
+    if(p.uid === uid) return falsch('Ein Vorgang kann nicht sein eigener Vorgänger sein');
+    if(verwandt(uid, p.uid)) return falsch('Zeile ' + v.nr + ' ist Sammel- oder Untervorgang von „' + t.name + '“');
+    const kandidat = { from: p.uid, to: uid, type: v.art, ...versatzAusPause(p, v.art, v.n, v.einheit) };
+    const gleich = alt.find(e=>e.from === p.uid && vorgaengerToken(e) === vorgaengerToken(kandidat));
+    if(gleich){ bleiben.add(gleich); continue; }
+    if(neu.some(e=>e.from === p.uid) || [...bleiben].some(e=>e.from === p.uid)) continue;
+    if(!alt.some(e=>e.from === p.uid) && erreichbar(uid, p.uid)) return falsch('Zeile ' + v.nr + ' hängt schon hinter „' + t.name + '“ — das gäbe einen Kreis');
+    neu.push(kandidat);
+  }
+  if(!neu.length && bleiben.size === alt.length){ renderLeftRows(); return true; }
+  pushUndo();
+  for(let i = EDGES.length - 1; i >= 0; i--) if(EDGES[i].to === uid && !bleiben.has(EDGES[i])) EDGES.splice(i, 1);
+  neu.forEach(e=>EDGES.push(e));
+  if(neu.length) andocken(uid);
+  resolveLockedConstraints();
+  renderAll();
+  return true;
+}
+// Zeilenauswahl
+function auswahlZeichnen(){
+  leftrows.querySelectorAll('.rowline').forEach(r=>r.classList.toggle('gewaehlt', AUSWAHL.has(Number(r.dataset.uid))));
+}
+function auswahlSetzen(uid, art){
+  if(art === 'bereich' && auswahlAnker != null && visIndexByUid[auswahlAnker] != null && visIndexByUid[uid] != null){
+    const a = visIndexByUid[auswahlAnker], b = visIndexByUid[uid];
+    AUSWAHL = new Set(VISIBLE.slice(Math.min(a, b), Math.max(a, b) + 1).map(v=>v.t.uid));
+  } else if(art === 'umschalten'){
+    if(AUSWAHL.has(uid)) AUSWAHL.delete(uid); else AUSWAHL.add(uid);
+    auswahlAnker = uid;
+  } else { AUSWAHL = new Set([uid]); auswahlAnker = uid; }
+  auswahlCursor = uid;
+  auswahlZeichnen();
+}
+function zeileZeigen(uid){
+  const i = visIndexByUid[uid]; if(i == null) return;
+  const oben = i * ROW_H, h = rightpane.clientHeight - 40;
+  if(oben < rightpane.scrollTop) rightpane.scrollTop = oben;
+  else if(oben + ROW_H > rightpane.scrollTop + h) rightpane.scrollTop = oben + ROW_H - h;
+}
+function sammelStatusAktualisieren(){
+  TASKS.forEach((t, i)=>{
+    const kinder = i + 1 < TASKS.length && TASKS[i + 1].level > t.level;
+    if(kinder && !t.summary){ t.summary = true; t.milestone = false; t.collapsed = false; }
+    else if(!kinder && t.summary){ t.summary = false; t.collapsed = false; }
+  });
+}
+// oberste markierte Vorgaenge in Listenreihenfolge (Untervorgaenge markierter Sammelvorgaenge gehen mit)
+function markierteBloecke(){
+  return TASKS.filter(t=>{
+    if(!AUSWAHL.has(t.uid)) return false;
+    for(let p = findParentUid(t.uid); p != null; p = findParentUid(p)) if(AUSWAHL.has(p)) return false;
+    return true;
+  });
+}
+function einruecken(richtung){
+  if(SCHREIBSCHUTZ) return;
+  const bloecke = markierteBloecke();
+  if(!bloecke.length) return;
+  pushUndo();
+  let n = 0;
+  for(const t of bloecke){
+    const i = TASKS.indexOf(t);
+    if(richtung > 0 && !(i > 0 && TASKS[i - 1].level >= t.level)) continue;   // braucht einen Vorgang darueber auf gleicher Ebene
+    if(richtung < 0 && t.level <= topLevel()) continue;
+    const r = getSubtreeRange(t.uid);
+    for(let j = r.start; j <= r.end; j++) TASKS[j].level += richtung;
+    n++;
+  }
+  if(!n){ undoStack.pop(); tabellenHinweis(richtung > 0 ? 'Einrücken geht nur unter einen Vorgang darüber' : 'Liegt schon auf der obersten Ebene'); return; }
+  sammelStatusAktualisieren();
+  resolveLockedConstraints();
+  renderAll();
+}
+function neueZeile(bezugUid, darunter){
+  if(SCHREIBSCHUTZ) return null;
+  const b = bezugUid != null ? byUid[bezugUid] : null;
+  let index = TASKS.length, level = topLevel(), start = safeDefaultDate();
+  if(b){
+    level = b.level;
+    if(darunter){ index = getSubtreeRange(b.uid).end + 1; start = b.summary ? b.start : fmtISO(addDays(parseISO(b.finish), 1)); }
+    else { index = TASKS.indexOf(b); start = b.start; }
+  }
+  while(istFreierTag(parseISO(start))) start = fmtISO(addDays(parseISO(start), 1));
+  pushUndo();
+  const t = createTask({ name: 'Neuer Vorgang', milestone: false, start, finish: finishFromDuration(start, 5, 'wd'), level, index,
+    isGewerk: false, category: b ? (b.category || 'ausfuehrung') : 'ausfuehrung' });
+  t.leerNeu = true;   // fluechtig, wird nicht gespeichert: ohne Eingabe verschwindet die Zeile wieder
+  recomputeSummaryBars();
+  renderAll();
+  auswahlSetzen(t.uid, 'einzeln');
+  zeileZeigen(t.uid);
+  nameBearbeiten(t.uid);
+  return t;
+}
+function auswahlLoeschen(){
+  if(SCHREIBSCHUTZ) return;
+  const bloecke = markierteBloecke();
+  if(!bloecke.length) return;
+  const weg = bloecke.reduce((s, t)=>s + subtreeUidSet(t.uid).size, 0);
+  if(weg >= TASKS.length) return tabellenHinweis('Ein Plan braucht mindestens einen Vorgang');
+  const ersterSichtbar = Math.min(...bloecke.map(t=>visIndexByUid[t.uid] ?? 0));
+  pushUndo();
+  bloecke.forEach(t=>{ if(byUid[t.uid]) deleteTaskAndDescendants(t.uid); });
+  sammelStatusAktualisieren();
+  resolveLockedConstraints();
+  AUSWAHL = new Set();
+  renderAll();
+  const naechste = VISIBLE[Math.min(ersterSichtbar, VISIBLE.length - 1)];
+  if(naechste) auswahlSetzen(naechste.t.uid, 'einzeln');
+  tabellenHinweis(weg === 1 ? '1 Vorgang gelöscht — Strg+Z holt ihn zurück' : weg + ' Vorgänge gelöscht — Strg+Z holt sie zurück');
+}
+function auswahlVerketten(loesen){
+  if(SCHREIBSCHUTZ) return;
+  const reihe = VISIBLE.map(v=>v.t).filter(t=>AUSWAHL.has(t.uid));
+  if(reihe.length < 2) return tabellenHinweis('Dafür mindestens zwei Zeilen markieren (Umschalt- oder Strg-Klick)');
+  pushUndo();
+  let n = 0;
+  if(loesen){
+    const ids = new Set(reihe.map(t=>t.uid));
+    for(let i = EDGES.length - 1; i >= 0; i--) if(ids.has(EDGES[i].from) && ids.has(EDGES[i].to)){ EDGES.splice(i, 1); n++; }
+  } else {
+    for(let i = 1; i < reihe.length; i++){
+      const a = reihe[i - 1], b = reihe[i];
+      if(EDGES.some(e=>e.from === a.uid && e.to === b.uid) || verwandt(a.uid, b.uid) || erreichbar(b.uid, a.uid)) continue;
+      EDGES.push({ from: a.uid, to: b.uid, type: 'EA', ...versatzAusPause(a, 'EA', 0, 'wd') });
+      andocken(b.uid);
+      n++;
+    }
+  }
+  if(!n){ undoStack.pop(); return tabellenHinweis(loesen ? 'Zwischen den markierten Zeilen gibt es keine Verknüpfung' : 'Die markierten Zeilen sind schon verkettet'); }
+  resolveLockedConstraints();
+  renderAll();
+  tabellenHinweis(loesen ? n + ' Verknüpfung(en) gelöst' : n + ' Verknüpfung(en) Ende–Anfang angelegt');
+}
+// Namen direkt in der Zeile bearbeiten (F2, Lostippen oder Klick auf den Namen der markierten Zeile)
+let nameTimer = null;
+function nameBearbeiten(uid, vorgabe){
+  clearTimeout(nameTimer);
+  const t = byUid[uid];
+  if(!t || SCHREIBSCHUTZ) return;
+  const span = leftrows.querySelector(`.rowline[data-uid="${uid}"] .col-name-text`);
+  if(!span) return;
+  const inp = Object.assign(document.createElement('input'), { className: 'name-edit', value: vorgabe != null ? vorgabe : t.name, spellcheck: false });
+  inp.dataset.nameUid = uid;
+  span.replaceWith(inp);
+  inp.focus();
+  if(vorgabe != null) inp.setSelectionRange(inp.value.length, inp.value.length); else inp.select();
+  let fertig = false;
+  const ende = (uebernehmen, weiter)=>{
+    if(fertig) return;
+    fertig = true;
+    delete inp.dataset.nameUid;   // abmelden, sonst setzt das Neuzeichnen den Editor wieder ein
+    const name = inp.value.trim();
+    if(t.leerNeu){
+      delete t.leerNeu;
+      if(!uebernehmen || !name || name === 'Neuer Vorgang'){
+        // Wie MS Project: erst das Tippen legt einen Vorgang an. Leer verlassen = Zeile wieder weg (samt ihrem Undo-Schritt).
+        const i = visIndexByUid[uid];
+        deleteTaskAndDescendants(uid);
+        undoStack.pop();
+        AUSWAHL.delete(uid);
+        sammelStatusAktualisieren();
+        renderAll();
+        const vor = VISIBLE[Math.max(0, Math.min((i ?? 1) - 1, VISIBLE.length - 1))];
+        if(vor) auswahlSetzen(vor.t.uid, 'einzeln');
+        return;
+      }
+    }
+    if(uebernehmen && name && name !== t.name){ pushUndo(); t.name = name; }
+    renderAll();
+    auswahlZeichnen();
+    if(weiter){
+      const i = visIndexByUid[uid];
+      if(i != null && i + 1 < VISIBLE.length){ auswahlSetzen(VISIBLE[i + 1].t.uid, 'einzeln'); zeileZeigen(VISIBLE[i + 1].t.uid); }
+      else neueZeile(uid, true);
+    }
+  };
+  inp.addEventListener('keydown', (ev)=>{
+    ev.stopPropagation();
+    if(ev.key === 'Enter'){ ev.preventDefault(); ende(true, true); }
+    else if(ev.key === 'Escape'){ ev.preventDefault(); ende(false, false); }
+    else if(ev.key === 'Tab'){ ev.preventDefault(); ende(true, false); }
+  });
+  inp.addEventListener('blur', ()=>{ if(!TABELLE_UMBAU) ende(true, false); });
+}
+leftrows.addEventListener('click', (ev)=>{
+  if(linkPickState || ev.target.closest('input, button, .collapse-toggle, .table-lock-btn')) return;
+  const row = ev.target.closest('.rowline');
+  if(!row) return;
+  const uid = Number(row.dataset.uid);
+  const warAllein = AUSWAHL.size === 1 && AUSWAHL.has(uid);
+  auswahlSetzen(uid, ev.shiftKey ? 'bereich' : (ev.ctrlKey || ev.metaKey) ? 'umschalten' : 'einzeln');
+  clearTimeout(nameTimer);
+  if(warAllein && !ev.shiftKey && !ev.ctrlKey && ev.target.closest('.col-name-text')) nameTimer = setTimeout(()=>nameBearbeiten(uid), 380);
+});
+leftrows.addEventListener('dblclick', ()=>clearTimeout(nameTimer), true);
+// Vorgaenger-Spalte: Enter uebernimmt, Esc verwirft
+leftrows.addEventListener('keydown', (ev)=>{
+  const inp = ev.target.closest('input[data-field="pred"]');
+  if(!inp) return;
+  if(ev.key === 'Enter'){ ev.preventDefault(); inp.blur(); }
+  else if(ev.key === 'Escape'){ ev.preventDefault(); inp.value = vorgaengerText(Number(inp.dataset.uid)); inp.classList.remove('falsch'); inp.blur(); }
+});
+document.addEventListener('keydown', (ev)=>{
+  clearTimeout(nameTimer);   // Klick-zum-Umbenennen wartet 380 ms — wer inzwischen tippt, meint etwas anderes
+  if(!AUSWAHL.size || window.__openModal || document.querySelector('.modal-overlay, .anlage-overlay, .context-menu')) return;
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+  const aktiv = [...AUSWAHL].filter(u=>visIndexByUid[u] != null);
+  if(!aktiv.length) return;
+  const strg = ev.ctrlKey || ev.metaKey;
+  if(ev.key === 'Enter' && /^(BUTTON|A)$/.test(document.activeElement?.tagName || '')) return;
+  const letzte = auswahlCursor != null && AUSWAHL.has(auswahlCursor) ? auswahlCursor : aktiv[aktiv.length - 1];
+  const i = visIndexByUid[letzte];
+  const tun = (f)=>{ ev.preventDefault(); ev.stopImmediatePropagation(); f(); };
+  if(ev.key === 'ArrowDown' || ev.key === 'ArrowUp' || (ev.key === 'Enter' && !strg)){
+    if(ev.altKey) return;
+    const j = i + (ev.key === 'ArrowUp' ? -1 : 1);
+    if(ev.key === 'Enter' && j >= VISIBLE.length && !SCHREIBSCHUTZ) return tun(()=>neueZeile(letzte, true));
+    if(j < 0 || j >= VISIBLE.length) return tun(()=>{});
+    return tun(()=>{
+      const uid = VISIBLE[j].t.uid;
+      if(ev.shiftKey && ev.key !== 'Enter') auswahlSetzen(uid, 'bereich');
+      else auswahlSetzen(uid, 'einzeln');
+      zeileZeigen(uid);
+    });
+  }
+  if(ev.key === 'Escape') return tun(()=>{ AUSWAHL = new Set(); auswahlZeichnen(); });
+  if(SCHREIBSCHUTZ) return;
+  if(ev.key === 'F2' && strg) return tun(()=>auswahlVerketten(ev.shiftKey));
+  if(ev.key === 'F2') return tun(()=>nameBearbeiten(letzte));
+  if(ev.key === 'Insert') return tun(()=>neueZeile(letzte, false));
+  if(ev.key === 'Delete') return tun(auswahlLoeschen);
+  if(ev.key === 'Tab') return tun(()=>einruecken(ev.shiftKey ? -1 : 1));
+  if(ev.altKey && ev.shiftKey && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) return tun(()=>einruecken(ev.key === 'ArrowRight' ? 1 : -1));
+  if(ev.key.length === 1 && !strg && !ev.altKey && ev.key !== '+' && ev.key !== '-' && ev.key !== ' ' && AUSWAHL.size === 1)
+    return tun(()=>nameBearbeiten(letzte, ev.key));
+}, true);
+
+// ==================================================================================
 // Auf-/Zuklappen von Sammelvorgängen (Baumeister, Rohbau, ...) - zugeklappte Untervorgänge
 // werden weder in der linken Tabelle noch als Balken im Diagramm angezeigt.
 // ==================================================================================
@@ -1621,12 +2028,12 @@ function lockBtnHtml(t, end){
 }
 function taskRowEl(t, idx){
   const row = document.createElement('div');
-  row.className = 'rowline' + (t.summary?' summary':'') + (t.milestone?' milestonerow':'') + (t.hidden?' hidden-task':'');
+  row.className = 'rowline' + (t.summary?' summary':'') + (t.milestone?' milestonerow':'') + (t.hidden?' hidden-task':'') + (AUSWAHL.has(t.uid)?' gewaehlt':'');
   row.dataset.uid = t.uid;
   // Einrückung nur über das Innenpolster der Namensspalte (col-name) - NICHT zusätzlich über die
   // ganze Zeile, da das sonst auch alle nachfolgenden Spalten (Start/Dauer/Ende) je Zeile
   // unterschiedlich weit verschiebt und die Spaltenlinien dadurch "gezackt" statt gerade wirken.
-  const durCell = t.milestone ? '–' : `<input type="number" min="1" step="1" data-uid="${t.uid}" data-field="duration" value="${durationCount(t.start, t.finish, durationUnit)}" title="Dauer (${durationUnit==='wd'?'Arbeitstage':'Kalendertage'}) - ändern verschiebt das Ende, der Beginn bleibt fest">`;
+  const durCell = t.milestone ? '–' : `<input type="number" min="0" step="1" data-uid="${t.uid}" data-field="duration" value="${durationCount(t.start, t.finish, durationUnit)}" title="Dauer (${durationUnit==='wd'?'Arbeitstage':'Kalendertage'}) - ändern verschiebt das Ende, der Beginn bleibt fest; 0 = Meilenstein">`;
   // Auf-/Zuklapp-Symbol: nur Sammelvorgänge bekommen ein echtes Symbol, alle anderen Zeilen
   // einen gleich breiten Platzhalter, damit die Namen unabhängig davon exakt untereinander stehen.
   const toggleHtml = t.summary
@@ -1639,6 +2046,7 @@ function taskRowEl(t, idx){
     <div class="col-date"><input type="date" data-uid="${t.uid}" data-field="start" value="${t.start}">${lockBtnHtml(t,'start')}</div>
     <div class="col-duration">${durCell}</div>
     <div class="col-date"><input type="date" data-uid="${t.uid}" data-field="finish" value="${t.finish}">${lockBtnHtml(t,'finish')}</div>
+    <div class="col-pred"><input type="text" data-uid="${t.uid}" data-field="pred" value="${vorgaengerText(t.uid)}" spellcheck="false" title="Vorgänger: Zeilennummer + Art + Versatz in Arbeitstagen, z. B. 3;5EA+2 · 7AA · 9EE-1 · 4+10KT (Kalendertage)"></div>
   `;
   return row;
 }
@@ -1648,9 +2056,30 @@ function taskRowEl(t, idx){
 // mit ausgeführt, analog zu renderBars() auf der rechten Seite. Zugeklappte Untervorgänge werden
 // einfach nicht mit ausgegeben (VISIBLE) - da die Zeilen im normalen Dokumentfluss stehen,
 // rutscht der Rest dadurch automatisch lückenlos zusammen.
+// Das Neuzeichnen (auch das automatische nach dem Speicher-Timer) darf ein gerade bearbeitetes Feld nicht
+// wegwerfen: sonst ging der halb getippte Text verloren und die restlichen Tasten landeten als Befehle in der
+// Tabelle (23.10., Probe Hemau BA2: „Schadstoffsanierung innen“ wurde zu „nnen …“). Feld, Text und Cursor bleiben.
+let TABELLE_UMBAU = false;
 function renderLeftRows(){
+  const f = document.activeElement;
+  const halten = f && f.tagName === 'INPUT' && leftrows.contains(f) ? { el: f, uid: f.dataset.uid, feld: f.dataset.field, wert: f.value,
+    a: (()=>{ try { return f.selectionStart; } catch(e){ return null; } })(), b: (()=>{ try { return f.selectionEnd; } catch(e){ return null; } })(),
+    nameUid: f.classList.contains('name-edit') ? f.dataset.nameUid : null } : null;
+  TABELLE_UMBAU = true;
   leftrows.innerHTML = '';
   VISIBLE.forEach(({t, idx})=>{ leftrows.appendChild(taskRowEl(t, idx)); });
+  if(halten){
+    let ziel = null;
+    if(halten.nameUid){
+      const span = leftrows.querySelector(`.rowline[data-uid="${halten.nameUid}"] .col-name-text`);
+      if(span){ span.replaceWith(halten.el); ziel = halten.el; }
+    } else if(halten.uid && halten.feld){
+      ziel = leftrows.querySelector(`input[data-uid="${halten.uid}"][data-field="${halten.feld}"]`);
+      if(ziel) ziel.value = halten.wert;
+    }
+    if(ziel){ ziel.focus(); try { if(halten.a != null) ziel.setSelectionRange(halten.a, halten.b); } catch(e){} }
+  }
+  TABELLE_UMBAU = false;
 }
 // (der eigentliche erste Aufbau der Tabelle erfolgt weiter unten über den initialen renderAll()-
 // Aufruf, der zuvor recomputeVisible() ausführt - ein Aufruf hier wäre verfrüht, da VISIBLE erst
@@ -1661,11 +2090,15 @@ leftrows.addEventListener('change', (e)=>{
   const inp = e.target.closest('input[data-uid]');
   if(!inp) return;
   const uid = Number(inp.dataset.uid), field = inp.dataset.field;
+  if(field === 'pred'){ vorgaengerSetzen(uid, inp.value, inp); return; }
   const t = byUid[uid];
   pushUndo();
   const oldStart = t.start, oldFinish = t.finish;
   if(t.milestone){
     t.start = inp.value; t.finish = inp.value;
+  } else if(field==='duration' && String(inp.value).trim() === '0' && !t.summary){
+    // Dauer 0 macht den Vorgang zum Meilenstein, wie in MS Project (23.10., Probe Hemau BA2)
+    t.milestone = true; t.finish = t.start;
   } else if(field==='duration'){
     // Dauer bearbeiten verschiebt nur das Ende - der Beginn bleibt bewusst unverändert.
     const n = Math.max(1, Math.round(Number(inp.value))||1);
@@ -2148,6 +2581,31 @@ function openTaskContextMenu(uid, clientX, clientY){
     addItem(t.isGewerk ? '⚑ Gewerk-Kennzeichnung entfernen' : '⚑ Als Ausführungsgewerk kennzeichnen', ()=>{ pushUndo(); t.isGewerk = !t.isGewerk; renderAll(); });
     if(t.isGewerk) addItem('📅 Vorlauf Vergabe …', ()=> openVorlaufVergabeWizard(uid));
   }
+  // Farbe (Marcel 23.10.: „mit Rechtsklick auf einen Balken auch auftauchen“): A = automatisch, dann die Farben der
+  // Gruppe, nach der der Plan färbt. Am Sammelvorgang gilt sie für alles darunter; mehrere markiert = für alle.
+  if(!t.milestone && !SCHREIBSCHUTZ){
+    const z = farbenJetzt().get(uid);
+    const zeile = document.createElement('div');
+    zeile.className = 'context-farben';
+    const mehr = AUSWAHL.has(uid) && AUSWAHL.size > 1;
+    const titelText = 'Farbe' + (mehr ? ' (' + AUSWAHL.size + ' markiert)' : t.summary ? ' für alles darunter' : '')
+      + (z.vonHand ? ' — ' + FARBEN[z.vonHand].name : ' — automatisch' + (t.summary ? '' : ' (' + FARBEN[z.auto].name + ')'));
+    zeile.innerHTML = '<span class="cf-titel"></span>';
+    zeile.querySelector('.cf-titel').textContent = titelText;
+    const knopf = (schluessel, titel, inhalt, stil)=>{
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'cf-feld' + ((z.vonHand || '') === schluessel ? ' an' : '');
+      b.title = titel; b.dataset.farbe = schluessel; b.innerHTML = inhalt; b.style.cssText = stil;
+      b.addEventListener('click', (ev)=>{ ev.stopPropagation(); closeTaskContextMenu(); farbeVonHand(uid, schluessel); });
+      // Name beim Drüberfahren in der Titelzeile — die Kästchen allein sagen nicht, welches Gewerk/welche Phase
+      b.addEventListener('mouseenter', ()=>{ zeile.querySelector('.cf-titel').textContent = titelText + ': ' + titel; });
+      b.addEventListener('mouseleave', ()=>{ zeile.querySelector('.cf-titel').textContent = titelText; });
+      zeile.appendChild(b);
+    };
+    knopf('', 'automatisch' + (t.summary ? '' : ': ' + FARBEN[z.auto].name), 'A', 'background:#fff;');
+    FARB_GRUPPEN[farbGruppeJetzt()].forEach(k=> knopf(k, FARBEN[k].name, '', 'background:' + FARBEN[k].fill + ';border-color:' + FARBEN[k].rand + ';'));
+    menu.appendChild(zeile);
+  }
   menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
 
   addItem('🗑 Vorgang löschen', ()=>{
@@ -2166,6 +2624,8 @@ function openTaskContextMenu(uid, clientX, clientY){
   });
   addItem('↑ In der Liste nach oben', ()=> vorgangNachbarTausch(uid, -1));
   addItem('↓ In der Liste nach unten', ()=> vorgangNachbarTausch(uid, 1));
+  addItem('→ Einrücken (Tab)', ()=>{ if(!AUSWAHL.has(uid)) auswahlSetzen(uid, 'einzeln'); einruecken(1); });
+  addItem('← Ausrücken (Umschalt+Tab)', ()=>{ if(!AUSWAHL.has(uid)) auswahlSetzen(uid, 'einzeln'); einruecken(-1); });
   addItem('⧉ Vorgang duplizieren', ()=>{
     pushUndo();
     const copy = duplicateTaskTree(uid);
@@ -2655,6 +3115,13 @@ function openTaskDetail(uid){
     herk.textContent = t.quelleText;
     grid.appendChild(herk);
   }
+  // Notiz wie „Notizen“ in MS Project (23.10.): wurde gespeichert, war aber nirgends einzugeben
+  grid.appendChild(modalLabel('Notiz'));
+  const notizInp = document.createElement('textarea');
+  notizInp.className = 'modal-input'; notizInp.rows = 2; notizInp.value = t.notiz || '';
+  notizInp.placeholder = 'z. B. Annahme, Beleg, Regel-ID';
+  notizInp.addEventListener('change', ()=>{ pushUndo(); t.notiz = notizInp.value.trim() || undefined; renderAll(); });
+  grid.appendChild(notizInp);
 
   grid.appendChild(modalLabel('Gewerk'));
   const gewerkDetailRow = document.createElement('div');
@@ -2671,8 +3138,31 @@ function openTaskDetail(uid){
 
   grid.appendChild(modalLabel('Kategorie'));
   const catDetailSel = createCategorySelect(t.category);
-  catDetailSel.addEventListener('change', ()=>{ pushUndo(); t.category = catDetailSel.value; renderAll(); });
+  catDetailSel.addEventListener('change', ()=>{ pushUndo(); t.category = catDetailSel.value; renderAll(); farbeWahlFuellen(); });
   grid.appendChild(catDetailSel);
+
+  // Farbe (23.10.): automatisch nach Phase bzw. Gewerk, von Hand überschreibbar — nur Farben der eigenen Gruppe
+  grid.appendChild(modalLabel('Farbe'));
+  const farbSel = document.createElement('select');
+  farbSel.className = 'modal-input';
+  farbSel.id = 'detailFarbe';
+  const farbeWahlFuellen = ()=>{
+    const z = farbenJetzt().get(t.uid);
+    farbSel.innerHTML = '';
+    farbSel.disabled = !!t.milestone;
+    const auto = document.createElement('option');
+    auto.value = ''; auto.textContent = t.milestone ? 'Meilenstein (immer schwarz)'
+      : t.summary ? 'automatisch (gilt für alles darunter)'
+      : 'automatisch: ' + FARBEN[z.auto].name + (z.geerbtVon ? ' (von „' + z.geerbtVon + '“)' : '');
+    farbSel.appendChild(auto);
+    FARB_GRUPPEN[farbGruppeJetzt()].forEach(k=>{
+      const o = document.createElement('option'); o.value = k; o.textContent = FARBEN[k].name + (t.summary ? ' — für alles darunter' : ''); farbSel.appendChild(o);
+    });
+    farbSel.value = z.vonHand || '';
+  };
+  farbSel.addEventListener('change', ()=>{ pushUndo(); t.farbe = farbSel.value || undefined; renderAll(); });
+  farbeWahlFuellen();
+  grid.appendChild(farbSel);
 
   // --- Ist-Stand (Vollausbau 24.08.): von Menschen ODER Agenten gepflegt (termin_werkzeuge) ---
   grid.appendChild(modalLabel('Ist-Beginn'));
@@ -3328,9 +3818,55 @@ document.getElementById('btnSpecialPeriods').addEventListener('click', openSpeci
   linkSvg.appendChild(defs);
 }
 
+// Farblogik (23.10.2026, Baustein farben.js): je Vorgang der Farbschlüssel, frisch aus dem aktuellen Plan.
+// Wonach gefärbt wird, stellt der Plan ein (termin_plaene.farbe_nach, Migr. 263); leer = nach Planart.
+function farbPlanArt(){ return (PLAN_LISTE.find(p=>p.id === planId) || {}).art; }
+function farbNach(){ return (PLAN_LISTE.find(p=>p.id === planId) || {}).farbe_nach || null; }
+function farbGruppeJetzt(){ return farbGruppe(farbPlanArt(), farbNach()); }
+function farbenJetzt(){
+  const r = farbenZuordnen(TASKS, farbPlanArt(), farbNach());
+  return new Map(TASKS.map((t,i)=>[t.uid, r[i]]));
+}
+// Handfarbe setzen (Rechtsklick, Detail-Dialog): für den Vorgang — oder alle markierten, wenn er dazugehört.
+// schluessel leer = automatisch. Am Sammelvorgang gilt die Farbe für alles darunter (farben.js).
+function farbeVonHand(uid, schluessel){
+  const uids = AUSWAHL.has(uid) && AUSWAHL.size > 1 ? [...AUSWAHL] : [uid];
+  pushUndo();
+  uids.forEach(u=>{ const t = byUid[u]; if(t && !t.milestone) t.farbe = schluessel || undefined; });
+  renderAll();
+}
+async function farbeNachSetzen(wert){
+  const kopf = PLAN_LISTE.find(p=>p.id === planId); if(!kopf) return;
+  try {
+    await db('termin_plaene?id=eq.' + kopf.id, { method:'PATCH', headers:{ Prefer:'return=minimal' },
+      body: JSON.stringify({ farbe_nach: wert || null }) });
+    kopf.farbe_nach = wert || null;
+    await protokollSchreiben(kopf.id, 'Farbe nach: ' + (wert === 'phase' ? 'Phase' : wert === 'gewerk' ? 'Gewerk' : 'Planart (automatisch)'));
+    renderAll();
+    saveStatus('Farbe nach ' + (farbGruppeJetzt() === 'gewerk' ? 'Gewerk' : 'Phase'), 'ok');
+  } catch(e){ saveStatus('Einstellung nicht gespeichert: ' + e.message, 'err'); }
+}
+function farbeSetzen(el, schluessel){
+  const f = FARBEN[schluessel] || FARBEN.allgemein;
+  el.classList.add('fb');
+  el.style.setProperty('--fb', f.fill); el.style.setProperty('--fr', f.rand);
+}
+// Legende hinter ◧: genau die Farben, die dieser Plan zeigt, mit der Regel dazu.
+function legendeFarbenAktualisieren(farbeJe){
+  const ziel = document.getElementById('legendeFarben'), regel = document.getElementById('legendeRegel');
+  if(!ziel) return;
+  const gruppe = farbGruppeJetzt();
+  regel.textContent = gruppe === 'gewerk' ? 'Farbe = Gewerk' : 'Farbe = Phase';
+  ziel.innerHTML = farbLegende(VISIBLE.map(({t})=>farbeJe.get(t.uid).schluessel)).map(l=>{
+    const form = l.schluessel === 'meilenstein' ? 'border-radius:0;transform:rotate(45deg);width:9px;height:9px;' : '';
+    return '<span><i class="swatch" style="background:' + l.fill + ';border:1px solid ' + l.rand + ';' + form + '"></i>' + l.name + '</span>';
+  }).join('');
+}
+
 function renderBars(){
   // remove old row/today elements (keep svg + chipLayer)
   [...barslayer.querySelectorAll('.rowhit,.todayline,.todaylabel,.gridcol,.summary-highlight,.special-band')].forEach(el=>el.remove());
+  const farbeJe = farbenJetzt();
 
   // Sondertermine (Ferien/Gemeinderatssitzungen/Feiertage) - farbige Spalten über die komplette
   // Höhe, ganz zuerst eingefügt (also hinter Gridspalten, Balken und Verknüpfungslinien). Vor
@@ -3360,6 +3896,7 @@ function renderBars(){
     barslayer.insertBefore(band, linkSvg);
   });
   renderSpecialWeekTints();
+  legendeFarbenAktualisieren(farbeJe);
 
   // grid columns per week
   let cur = new Date(minDate);
@@ -3382,7 +3919,8 @@ function renderBars(){
 
     if(t.milestone){
       const el = document.createElement('div');
-      el.className = 'milestone ' + (t.grAnchor ? 'gr-anchor' : 'cat-'+(t.category||'ausfuehrung'));
+      el.className = 'milestone' + (t.grAnchor ? ' gr-anchor' : '');
+      if(!t.grAnchor) farbeSetzen(el, 'meilenstein');
       el.style.left = (xOf(t.start)-7)+'px';
       el.style.top = (ROW_H/2-7)+'px';
       el.dataset.uid = t.uid;
@@ -3414,7 +3952,8 @@ function renderBars(){
       const x1 = xOf(t.start), x2 = xOf(t.finish)+DAY_W;
       const barWidth = Math.max(x2-x1,6);
       const el = document.createElement('div');
-      el.className = 'bar ' + (t.summary?'summarybar':(t.grAnchor?'gr-anchor-outline':'cat-'+(t.category||'ausfuehrung')));
+      el.className = 'bar ' + (t.summary?'summarybar':(t.grAnchor?'gr-anchor-outline':''));
+      if(!t.grAnchor || t.summary) farbeSetzen(el, farbeJe.get(t.uid).schluessel);
       el.style.left = x1+'px';
       el.style.width = barWidth+'px';
       el.style.top = '3px';
@@ -3576,6 +4115,7 @@ function markEdited(){
     row.classList.toggle('newtask', !!t.isNew);
   });
   document.querySelectorAll('input[data-uid]').forEach(inp=>{
+    if(inp === document.activeElement) return;   // nicht unter den Fingern ueberschreiben
     const uid = Number(inp.dataset.uid); const t = byUid[uid]; const field = inp.dataset.field;
     if(field==='start') inp.value = t.start;
     else if(field==='finish') inp.value = t.finish;
@@ -3593,7 +4133,23 @@ function kritischenPfadAktualisieren(){
   try { PUFFER = berechnePuffer(TASKS, EDGES).puffer; }
   catch(e){ PUFFER = null; console.warn('Kritischer Pfad:', e.message); }
 }
-function renderAll(){ kritischenPfadAktualisieren(); recomputeVisible(); updateChartHeight(); renderLeftRows(); renderBars(); drawLinks(); markEdited(); }
+function renderAll(){ achseNachziehen(); kritischenPfadAktualisieren(); recomputeVisible(); updateChartHeight(); renderLeftRows(); renderBars(); drawLinks(); markEdited(); }
+// Die Zeitachse wurde nur beim Laden bemessen. Wer leer beginnt und Vorgang um Vorgang anhaengt
+// (23.10., Probe Hemau BA2), landete jenseits des Achsenendes. Jetzt waechst sie mit, die Ansicht
+// bleibt dabei auf demselben Datum stehen.
+function achseNachziehen(){
+  if(!TASKS.length || !minDate) return;
+  let a = TASKS[0].start, b = TASKS[0].finish;
+  TASKS.forEach(t=>{ if(t.start < a) a = t.start; if(t.finish > b) b = t.finish; });
+  if(parseISO(a) >= addDays(minDate, 7) && parseISO(b) <= addDays(maxDate, -7)) return;
+  const altMin = minDate;
+  zeitachseBerechnen();
+  anzeigeEndeAnpassen();
+  barslayer.style.width = chartWidth+'px';
+  renderCalHeader();
+  const verschub = daysBetween(minDate, altMin) * DAY_W;
+  if(verschub){ rightpane.scrollLeft += verschub; calheader.scrollLeft = rightpane.scrollLeft; }
+}
 
 // ---- drag helpers ----
 function attachBarDrag(el, t){
@@ -3856,11 +4412,16 @@ function druckVorbereiten(opt){
   const e = Object.assign(druckEinstellungen(), opt || {});
   const eintrag = PLAN_LISTE.find(p=>p.id === planId) || {};
   const einheit = durationUnit === 'wd' ? 'AT' : 'KT';
-  const zeilen = VISIBLE.filter(({t})=>!t.hidden).map(({t, idx})=>({
+  // Farben aus derselben Regel wie am Bildschirm (farben.js) — gedruckt wird, was man sieht
+  const farbeJe = farbenJetzt();
+  const sichtbar = VISIBLE.filter(({t})=>!t.hidden);
+  const zeilen = sichtbar.map(({t, idx})=>({
     uid: t.uid, nr: idx + 1, name: t.name, level: t.level || 1, start: t.start, finish: t.finish,
-    milestone: !!t.milestone, summary: !!t.summary, category: t.category || 'ausfuehrung', farbe: t.farbe || null,
+    milestone: !!t.milestone, summary: !!t.summary, category: t.category || 'ausfuehrung', farbe: FARBEN[farbeJe.get(t.uid).schluessel].fill,
     dauer: t.milestone ? '–' : durationCount(t.start, t.finish, durationUnit) + ' ' + einheit }));
   const r = druckAufbau({ papier: e.papier, datenAmBalken: !!e.datenAmBalken, zeilen,
+    legende: farbLegende(sichtbar.map(({t})=>farbeJe.get(t.uid).schluessel)),
+    legendeRegel: farbGruppeJetzt() === 'gewerk' ? 'Farbe = Gewerk' : 'Farbe = Phase',
     kopf: { projekt: PROJEKT_NAME, plan: eintrag.name || 'Terminplan',
       // Stand als Berliner Datum (die Datenbank liefert UTC — kurz vor Mitternacht wäre es sonst der Vortag)
       stand: new Date(eintrag.eingefroren_am || eintrag.stand || Date.now()).toLocaleDateString('sv-SE'),
@@ -3888,13 +4449,15 @@ function exportPdf(){
     <div class="modal-grid">
       <div class="modal-label">Papier</div>
       <select class="modal-input" id="druckPapier">
-        <option value="A3">A3 quer</option><option value="A4">A4 quer</option>
+        <optgroup label="Drucker"><option value="A4">A4 quer</option><option value="A3">A3 quer</option></optgroup>
+        <optgroup label="Plotter"><option value="A2">A2 quer</option><option value="A1">A1 quer</option><option value="A0">A0 quer</option>
+          <option value="R610">Rolle 610 mm (Länge nach Plan)</option><option value="R914">Rolle 914 mm (Länge nach Plan)</option></optgroup>
       </select>
       <div class="modal-label">Balken</div>
       <label class="modal-checkbox-row"><input type="checkbox" id="druckDaten"> Anfang und Ende als Datum am Balken</label>
     </div>
     <div class="newtaskdialog-hint" id="druckInfo"></div>
-    <div class="anlage-hint">Im Druckfenster „Als PDF speichern“ wählen. Gedruckt wird, was der Plan gerade zeigt: gewählte Schicht, zugeklappte Gewerke bleiben zu.</div>
+    <div class="anlage-hint">Im Druckfenster „Als PDF speichern“ wählen. Gedruckt wird, was der Plan gerade zeigt: gewählte Schicht, zugeklappte Gewerke bleiben zu. Plotformate: PDF in Originalgröße (100 %, nicht „an Seite anpassen“) an den Plotter geben; ab A2 mit Faltmarken auf A4.</div>
     <button class="modal-primary-btn" id="druckLos">Drucken …</button>
   </div>`;
   document.body.appendChild(overlay);
@@ -3904,7 +4467,9 @@ function exportPdf(){
   const info = ()=>{
     const r = druckVorbereiten({ papier: papier.value, datenAmBalken: daten.checked });
     const m = r.massstab;
-    overlay.querySelector('#druckInfo').textContent = r.seiten.length + (r.seiten.length === 1 ? ' Seite' : ' Seiten')
+    overlay.querySelector('#druckInfo').textContent = 'Blatt ' + r.papier.b + ' × ' + r.papier.h + ' mm'
+      + (m.skala !== 1 ? ' (Schrift × ' + String(Math.round(m.skala * 100) / 100).replace('.', ',') + ')' : '') + ' · '
+      + r.seiten.length + (r.seiten.length === 1 ? ' Seite' : ' Seiten')
       + ' · ' + m.proSeite + ' Zeilen je Seite · Zeitraum ' + fmtDE(m.von) + ' – ' + fmtDE(m.bis)
       + ' · Zeitachse in ' + (m.achse === 'kw' ? 'Kalenderwochen' : 'Monaten');
   };
@@ -3997,7 +4562,7 @@ async function db(pfad, opt = {}){
 // ---- Planverwaltung: Liste, Auswahl, Anlegen, Einfrieren ----
 async function planListeLaden(){
   PLAN_LISTE = await db('termin_plaene?project_id=eq.' + PROJEKT_ID
-    + '&select=id,name,art,eingefroren_am,stand,basis_von,kalender_id,erstellt_am&order=erstellt_am.desc');
+    + '&select=id,name,art,eingefroren_am,stand,basis_von,kalender_id,erstellt_am,farbe_nach&order=erstellt_am.desc');
   const sel = document.getElementById('planWahl');
   sel.innerHTML = '';
   for(const p of PLAN_LISTE){
@@ -4081,7 +4646,7 @@ async function planLaden(gewuenschtePlanId){
     firmaCrmId: r.firma_crm_id, firmaName: r.firma_name, firmaZuordnung: r.firma_zuordnung,
     istStart: r.ist_start || undefined, istEnde: r.ist_ende || undefined,
     fortschritt: r.fortschritt ?? undefined, notiz: r.notiz || undefined,
-    quelleText: r.quelle_text || undefined,
+    quelleText: r.quelle_text || undefined, farbe: r.farbe || undefined,
   }));
   normalisiereTasks();
   Object.keys(byUid).forEach(x=>delete byUid[x]);
@@ -4241,6 +4806,13 @@ function planMenueOeffnen(x, y){
     b.textContent = label; b.addEventListener('click', (ev)=>{ ev.stopPropagation(); closeTaskContextMenu(); f(); }); menu.appendChild(b); };
   punkt('✎ Umbenennen …', planUmbenennen);
   punkt('⧉ Duplizieren …', planDuplizieren);
+  // Einstellung „Farbe nach“ (Marcel 23.10.): je Plan, für alle sichtbar, die ihn öffnen
+  if(!kopf.eingefroren_am){
+    menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
+    const auto = kopf.art === 'bauzeitenplan' ? 'Gewerk' : 'Phase';
+    [['', 'Farbe nach Planart (' + auto + ')'], ['phase', 'Farbe nach Phase'], ['gewerk', 'Farbe nach Gewerk']].forEach(([w, text])=>
+      punkt(((kopf.farbe_nach || '') === w ? '● ' : '○ ') + text, ()=> farbeNachSetzen(w)));
+  }
   menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
   punkt('🗑 Plan löschen …', planLoeschen);
   document.body.appendChild(menu);
@@ -4458,7 +5030,7 @@ async function planSpeichern(){
       firma_crm_id: t.firmaCrmId ?? null, firma_name: t.firmaName ?? null,
       firma_zuordnung: t.firmaZuordnung ?? null,
       ist_start: t.istStart || null, ist_ende: t.istEnde || null,
-      fortschritt: (t.fortschritt ?? null), notiz: t.notiz || null,
+      fortschritt: (t.fortschritt ?? null), notiz: t.notiz || null, farbe: t.farbe || null,
       quelle_text: t.quelleText || null,
     }));
     // Doppelte Kanten wuerden den Eindeutigkeits-Index verletzen -- vorher zusammenfassen.
@@ -6608,6 +7180,104 @@ function erzeugeRahmenplan(param) {
   return { tasks: tasks, edges: edges, warnungen: warnungen };
 }
 
+// ---------- Baustein: farben.js (geprueft, Tests unter _bausteine/) ----------
+// farben.js — Baustein: EINE Farblogik für Bildschirm und Druck (23.10.2026, Marcel: „da ist keine Logik dahinter,
+// manche Sachen sind gelb, blau oder was weiß ich — kann irgendwie alles sein“).
+// Regel: Die Füllfarbe eines Balkens sagt genau eine Sache, und welche, hängt an der Planart (Marcels Entscheid 23.10.):
+//   Rahmenterminplan → Phase:  Planung · Genehmigung · Vergabe · Ausführung
+//   Bauzeitenplan    → Gewerk: Rohbau · Hülle/Dach · TGA · Ausbau · Außenanlagen · Allgemein
+//   in jedem Plan:     Sammelvorgang dunkelgrau, Meilenstein schwarz
+// Alles andere (kritischer Pfad, Schloss, Anker, Gewerk-Kennung, Ferien) ist Rahmen, Symbol oder graues Band — nie Füllfarbe.
+// Woher die Farbe kommt: von Hand gesetzt (t.farbe, nur ein Schlüssel der eigenen Gruppe) vor abgeleitet:
+//   Phase  = Kategorie des Vorgangs; „Planung“ wird zu „Genehmigung“, wenn der Vorgang oder sein nächster
+//            Sammelvorgang nach Genehmigung/Förderung/Behörde heißt (nicht „Genehmigungsplanung“ — die macht das Büro).
+//   Gewerk = erstes Stichwort im eigenen Namen, sonst im nächsten Sammelvorgang darüber, sonst „Allgemein“.
+// Nachtrag 23.10. (Marcel: „am liebsten eine Einstellung … und mit Rechtsklick auf einen Balken“):
+//   • je Plan einstellbar, wonach gefärbt wird (termin_plaene.farbe_nach: null = nach Planart, 'phase', 'gewerk');
+//   • eine Handfarbe an einem SAMMELVORGANG gilt für alles darunter (Rechtsklick auf „Zimmerer Fa. Haller“ → Hülle),
+//     ein eigener Handeintrag darunter geht vor. Der Sammelbalken selbst bleibt dunkelgrau.
+// Kein DOM — reine Funktionen, prüfbar in farben.test.mjs.
+
+var FARBEN = {
+  planung:     { name: 'Planung',       fill: '#F2D88F', rand: '#B8962E' },
+  genehmigung: { name: 'Genehmigung',   fill: '#D3C1EA', rand: '#7E5BAE' },
+  vergabe:     { name: 'Vergabe',       fill: '#B7DBA0', rand: '#5E8F43' },
+  ausfuehrung: { name: 'Ausführung',    fill: '#A9C0E6', rand: '#4A6FA8' },
+  rohbau:      { name: 'Rohbau',        fill: '#CDBDA9', rand: '#8A7357' },
+  huelle:      { name: 'Hülle / Dach',  fill: '#EDC48C', rand: '#B07F35' },
+  tga:         { name: 'TGA',           fill: '#9FD4D0', rand: '#3E8F8A' },
+  ausbau:      { name: 'Ausbau',        fill: '#A9C0E6', rand: '#4A6FA8' },
+  aussen:      { name: 'Außenanlagen',  fill: '#B7DBA0', rand: '#5E8F43' },
+  allgemein:   { name: 'Allgemein',     fill: '#D6DAE1', rand: '#8A93A3' },
+  sammel:      { name: 'Sammelvorgang', fill: '#5B6472', rand: '#3F4652' },
+  meilenstein: { name: 'Meilenstein',   fill: '#1F2937', rand: '#111827' }
+};
+var FARB_GRUPPEN = {
+  phase:  ['planung', 'genehmigung', 'vergabe', 'ausfuehrung'],
+  gewerk: ['rohbau', 'huelle', 'tga', 'ausbau', 'aussen', 'allgemein']
+};
+// Reihenfolge zählt: das speziellere Gewerk zuerst („TGA-Rohinstallation“ ist TGA, „Trockenbauwände“ Ausbau,
+// „Montage HRB Wände“ Hülle, „Dachabdichtung“ Hülle) — Rohbau fängt als letztes die allgemeinen Bauteilwörter.
+var FARB_GEWERK_REGELN = [
+  ['aussen', /au(ß|ss)enanlage|freianlage|erschlie(ß|ss)ung|garten|landschaftsbau|pflaster|asphalt|stra(ß|ss)enbau|zaun|einfriedung|begrünung|spielplatz/i],
+  ['tga', /\btga\b|\bhls\b|\belt\b|\bmsr\b|\bpv\b|heizung|lüftung|sanitär|elektro|klima|kälte|aufzug|förderanlage|automation|wärmeversorg|raumluft|küchentechn|blitzschutz|photovoltaik|sprinkler|haustechnik|installation/i],
+  ['ausbau', /ausbau|trockenbau|estrich|innenputz|putzarbeit|fliese|maler|anstrich|bodenbel|bodenleger|parkett|linoleum|schreiner|tischler|innentür|schlie(ß|ss)anlage|einbaumöbel|möblierung|beschilderung|beschriftung|folierung|reinigung|akustik/i],
+  ['huelle', /hülle|dach|zimmer|holz|\bhrb\b|spengler|klempner|fenster|fassade|verglasung|sonnenschutz|blendschutz|gerüst|metallbau|schlosser|\btore?\b|außentür|türen|wdvs|wärmedämmverbund/i],
+  ['rohbau', /rohbau|baumeister|erdarbeit|erdbau|aushub|baugrube|verbau|gründung|fundament|bodenplatte|beton|stahlbau|mauer|wände|wand\b|decke|stütze|unterzug|treppe|attika|sockel|abbruch|rückbau|entkernung|kanal|entwässerung|grundleitung|abdichtung|frostschürze|wartungsgrube/i]
+];
+var FARB_GENEHMIGUNG = /genehmigung(?!splanung)|bauantrag|förder|zuwendung|prüfstatik|landratsamt|regierung|behörde|baurecht/i;
+
+function farbGruppe(planArt, farbeNach) {
+  if (farbeNach === 'phase' || farbeNach === 'gewerk') return farbeNach;
+  return planArt === 'bauzeitenplan' ? 'gewerk' : 'phase';
+}
+
+function farbGewerk(namen) {
+  for (var i = 0; i < namen.length; i++) {
+    for (var r = 0; r < FARB_GEWERK_REGELN.length; r++) if (FARB_GEWERK_REGELN[r][1].test(namen[i] || '')) return FARB_GEWERK_REGELN[r][0];
+  }
+  return 'allgemein';
+}
+
+// Schlüssel für jeden Vorgang in Planreihenfolge. tasks: [{name, level, summary, milestone, category, farbe}]
+// Ergebnis je Vorgang: { schluessel, auto, vonHand, geerbtVon } — auto ist, was ohne eigenen Handeintrag gälte
+// (für „automatisch (…)“), geerbtVon der Name des Sammelvorgangs, dessen Handfarbe auto liefert.
+function farbenZuordnen(tasks, planArt, farbeNach) {
+  var gruppe = farbGruppe(planArt, farbeNach), erlaubt = FARB_GRUPPEN[gruppe], stapel = [];
+  return (tasks || []).map(function (t) {
+    var ebene = t.level || 1;
+    while (stapel.length && stapel[stapel.length - 1].ebene >= ebene) stapel.pop();
+    var vorfahren = [], erbe = null;
+    for (var i = stapel.length - 1; i >= 0; i--) {
+      vorfahren.push(stapel[i].name);
+      if (!erbe && stapel[i].farbe) erbe = stapel[i];
+    }
+    var vonHand = t.farbe && erlaubt.indexOf(t.farbe) >= 0 ? t.farbe : null;
+    if (t.summary) stapel.push({ ebene: ebene, name: t.name || '', farbe: vonHand });
+    var auto;
+    if (erbe) {
+      auto = erbe.farbe;
+    } else if (gruppe === 'phase') {
+      var kat = t.category || 'ausfuehrung';
+      auto = kat === 'planung' && (FARB_GENEHMIGUNG.test(t.name || '') || (vorfahren.length && FARB_GENEHMIGUNG.test(vorfahren[0])))
+        ? 'genehmigung' : (erlaubt.indexOf(kat) >= 0 ? kat : 'ausfuehrung');
+    } else {
+      auto = farbGewerk([t.name].concat(vorfahren));
+    }
+    var schluessel = t.summary ? 'sammel' : t.milestone ? 'meilenstein' : (vonHand || auto);
+    return { schluessel: schluessel, auto: auto, vonHand: vonHand, geerbtVon: erbe ? erbe.name : null };
+  });
+}
+
+// Legende: nur was im Plan vorkommt, in fester Reihenfolge (Gruppe, dann Sammelvorgang, Meilenstein).
+function farbLegende(schluessel) {
+  var da = {};
+  (schluessel || []).forEach(function (k) { da[k] = true; });
+  return FARB_GRUPPEN.phase.concat(FARB_GRUPPEN.gewerk, ['sammel', 'meilenstein'])
+    .filter(function (k) { return da[k]; })
+    .map(function (k) { return { schluessel: k, name: FARBEN[k].name, fill: FARBEN[k].fill, rand: FARBEN[k].rand }; });
+}
+
 // ---------- Baustein: rtp_generator.js (geprueft, Tests unter _bausteine/) ----------
 // =============================================================================
 // rtp_generator.js — Baustein Rahmenterminplan nach dem Regelwerk des Büros
@@ -7156,11 +7826,19 @@ var FERIEN_BY = [
 // Balken zeilengleich auf derselben Seite, Zeitachse auf jeder Seite, der ganze Zeitraum in die Blattbreite
 // eingepasst, Seitenzahl „Seite i von n“, Legende im Fuß. Auf Wunsch Anfangs- und Enddatum am Balken.
 // Alle Maße in mm (SVG-Einheit = 1 mm), Schrift nie unter 6,5 pt. Kein DOM — reiner Text, prüfbar in druck.test.mjs.
-// Eingabe: { papier:'A3'|'A4', kopf:{projekt, plan, stand, gedruckt}, zeilen:[{uid, nr, name, level, start, finish,
+// Eingabe: { papier:'A4'|'A3'|'A2'|'A1'|'A0'|'R610'|'R914', legende:[{schluessel,name,fill}], legendeRegel, kopf:{projekt, plan, stand, gedruckt}, zeilen:[{uid, nr, name, level, start, finish,
 //            milestone, summary, category, farbe, dauer}], heute, datenAmBalken, sonder:[{kind,label,start,finish}] }
 // Ergebnis: { html, seiten:[{von,bis}], papier:{b,h}, massstab:{von, bis, tage, mmProTag, achse} }
 
-var DRUCK_PAPIER = { A4: { b: 297, h: 210 }, A3: { b: 420, h: 297 } };
+// Blattformate (23.10.2026, Marcel: „die Dinger müssen wir auch plotten“): DIN A4–A0 quer und Plotterrolle.
+// skala ist die HÖCHSTE Vergrößerung des ganzen Blattbilds (Schrift, Zeilen, Striche) — Plots hängen an der Wand und
+// werden aus Abstand gelesen. Vorrang hat aber „alles auf ein Blatt“: ab A2 wird nur so weit vergrößert, wie alle Zeilen
+// passen, nie unter 1 (A3-Schrift); passt es auch dann nicht, gibt es mehrere Blätter.
+// Faltmarken ab A2 (vereinfacht nach DIN 824 auf A4: Felder 190 mm von rechts, 210 mm links, 297 mm hoch).
+var DRUCK_PAPIER = { A4: { b: 297, h: 210, skala: 1 }, A3: { b: 420, h: 297, skala: 1 }, A2: { b: 594, h: 420, skala: 1.2 },
+  A1: { b: 841, h: 594, skala: 1.4 }, A0: { b: 1189, h: 841, skala: 1.7 },
+  R610: { h: 610, skala: 1.3, rolle: true }, R914: { h: 914, skala: 1.5, rolle: true } };
+var DRUCK_ROLLE_MAX = 5000;
 var DRUCK_MASS = { rand: 8, kopf: 14, fuss: 7, achse: 8, zeile: 4.4, pt: 0.3528 };
 // Pastell (22.10., Marcel: „etwas pastelliger, aktuell schwarz und dunkelblau“) — Schrift im Balken darum dunkel (.dl-in)
 var DRUCK_FARBE = { planung: '#F0D58C', vergabe: '#BCDBA3', ausfuehrung: '#A9C0E6', sammel: '#9AA4B4', meilenstein: '#7C879A', heute: '#dc2626' };
@@ -7201,12 +7879,20 @@ function druckSeitenTeilen(zeilen, proSeite) {
   return seiten.length ? seiten : [{ von: 0, bis: 0 }];
 }
 
+// Faltmarken als kurze Striche am Blattrand (nur Blätter größer als A3).
+function druckFaltmarken(b, h) {
+  if (b <= 420 && h <= 297) return '';
+  var l = '', x, y;
+  for (x = b - 190; x > 210 + 1; x -= 190) l += 'M' + x + ' 0v5M' + x + ' ' + h + 'v-5';
+  l += 'M210 0v5M210 ' + h + 'v-5';
+  for (y = h - 297; y > 1; y -= 297) l += 'M0 ' + y + 'h5M' + b + ' ' + y + 'h-5';
+  return '<svg class="druck-falz" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0;" width="' + b + 'mm" height="' + h
+    + 'mm" viewBox="0 0 ' + b + ' ' + h + '"><path d="' + l + '" stroke="#9CA3AF" stroke-width="0.25" fill="none"/></svg>';
+}
+
 function druckAufbau(e) {
-  var M = DRUCK_MASS, pap = DRUCK_PAPIER[e.papier] || DRUCK_PAPIER.A3, zeilen = e.zeilen || [];
+  var M = DRUCK_MASS, wahl = DRUCK_PAPIER[e.papier] || DRUCK_PAPIER.A3, zeilen = e.zeilen || [];
   var fs = 7 * M.pt, fsKlein = 6.6 * M.pt;                       // Schriftgrößen in mm
-  var innenB = pap.b - 2 * M.rand, innenH = pap.h - 2 * M.rand;
-  var rumpfH = innenH - M.kopf - M.fuss - M.achse;
-  var proSeite = Math.max(1, Math.floor(rumpfH / M.zeile + 1e-6));
   // Spalten: Name so breit wie der längste Name (mit Einrückung), aber in festen Grenzen je Papier
   var maxName = 0;
   zeilen.forEach(function (z) { maxName = Math.max(maxName, druckBreite(z.name || '', fs * (z.summary ? 1.06 : 1)) + ((z.level || 1) - 1) * 2.5); });
@@ -7214,7 +7900,6 @@ function druckAufbau(e) {
   var sp = [{ k: 'nr', t: 'Nr.', b: 8, r: true }, { k: 'name', t: 'Vorgang', b: nameB }, { k: 'dauer', t: 'Dauer', b: 11, r: true },
     { k: 'start', t: 'Anfang', b: 16 }, { k: 'finish', t: 'Ende', b: 16 }];
   var tabB = sp.reduce(function (s, c) { return s + c.b; }, 0);
-  var diaB = innenB - tabB;
   // Zeitraum: ganze Monate um den Plan, in die Diagrammbreite eingepasst
   var t0 = Infinity, t1 = -Infinity;
   zeilen.forEach(function (z) {
@@ -7225,7 +7910,23 @@ function druckAufbau(e) {
   var d0 = new Date(t0 * 86400000), d1 = new Date(t1 * 86400000);
   var von = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), 1) / 86400000;
   var bis = Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth() + 1, 1) / 86400000;   // erster Tag NACH dem Zeitraum
-  var tage = bis - von, mm = diaB / tage;
+  var tage = bis - von;
+  // Blatt: gezeichnet wird in Grundmaßen auf B × H = Blatt / skala; das Blatt zieht es per transform auf echte Größe.
+  // Rolle: Höhe = Rollenbreite; Länge so, dass ein Tag im Grundmaß 0,6 mm hat (Kalenderwochen lesbar), mindestens
+  // quer im A-Verhältnis (Höhe × 1,414).
+  var sk = wahl.skala, pap;
+  if (sk > 1) {
+    var fest = 2 * M.rand + M.kopf + M.fuss + M.achse + 1;
+    sk = Math.max(1, Math.min(wahl.skala, wahl.h / (fest + Math.max(1, zeilen.length) * M.zeile)));
+  }
+  if (wahl.rolle) pap = { b: Math.round(Math.min(DRUCK_ROLLE_MAX, Math.max(wahl.h * 1.414, sk * (2 * M.rand + tabB + tage * 0.6)))), h: wahl.h };
+  else pap = { b: wahl.b, h: wahl.h };
+  var B = pap.b / sk, H = pap.h / sk;
+  var innenB = B - 2 * M.rand, innenH = H - 2 * M.rand;
+  var rumpfH = innenH - M.kopf - M.fuss - M.achse;
+  var proSeite = Math.max(1, Math.floor(rumpfH / M.zeile + 1e-6));
+  var diaB = innenB - tabB;
+  var mm = diaB / tage;
   var x = function (iso) { return (druckTag(iso) - von) * mm; };
   var achse = 7 * mm >= 3.4 ? 'kw' : 'monat';
   var seiten = druckSeitenTeilen(zeilen, proSeite);
@@ -7287,6 +7988,13 @@ function druckAufbau(e) {
   });
   var heuteX = e.heute && druckTag(e.heute) >= von && druckTag(e.heute) < bis ? x(e.heute) + mm / 2 : null;
 
+  // Legende: was der Plan zeigt (e.legende aus farben.js, mit der Regel davor), sonst die festen Phasenfarben
+  var legende = e.legende
+    ? (e.legendeRegel ? druckEsc(e.legendeRegel) + ':' : '') + e.legende.map(function (l) {
+      return '<i' + (l.schluessel === 'meilenstein' ? ' class="m"' : l.schluessel === 'sammel' ? ' class="s"' : '') + ' style="background:' + l.fill + ';"></i>' + druckEsc(l.name);
+    }).join(' ')
+    : '<i style="background:' + DRUCK_FARBE.planung + '"></i>Planung <i style="background:' + DRUCK_FARBE.vergabe + '"></i>Vergabe '
+      + '<i style="background:' + DRUCK_FARBE.ausfuehrung + '"></i>Ausführung <i class="s"></i>Sammelvorgang <i class="m"></i>Meilenstein';
   var html = '';
   seiten.forEach(function (s, si) {
     var n = s.bis - s.von, hoehe = M.achse + n * M.zeile;
@@ -7366,20 +8074,20 @@ function druckAufbau(e) {
       + kopfAchse
       + (heuteX != null ? '<line x1="' + heuteX.toFixed(2) + '" y1="' + M.achse + '" x2="' + heuteX.toFixed(2) + '" y2="' + hoehe.toFixed(2) + '" class="r-h"/>' : '')
       + '</svg>';
-    html += '<section class="druck-seite" style="width:' + pap.b + 'mm;height:' + (pap.h - 0.6) + 'mm;padding:' + M.rand + 'mm;">'
+    html += '<section class="druck-seite" style="width:' + pap.b + 'mm;height:' + (pap.h - 0.6) + 'mm;">' + druckFaltmarken(pap.b, pap.h)
+      + '<div class="druck-blatt" style="position:relative;box-sizing:border-box;width:' + B.toFixed(2) + 'mm;height:' + (H - 0.6 / sk).toFixed(2) + 'mm;padding:' + M.rand + 'mm;'
+      + (sk !== 1 ? 'transform:scale(' + sk.toFixed(4) + ');transform-origin:0 0;' : '') + '">'
       + '<div class="druck-kopf" style="height:' + M.kopf + 'mm;"><div><div class="dk-plan">' + druckEsc(e.kopf.plan) + '</div>'
       + '<div class="dk-projekt">' + druckEsc(e.kopf.projekt) + '</div></div>'
       + '<div class="dk-meta">Stand: ' + druckDE(e.kopf.stand) + '<br>Gedruckt: ' + druckDE(e.kopf.gedruckt) + '</div></div>'
       + '<div class="druck-rumpf" style="height:' + (innenH - M.kopf - M.fuss) + 'mm;">'
       + '<div class="druck-tabelle" style="width:' + tabB + 'mm;height:' + hoehe.toFixed(2) + 'mm;">' + tab + '</div>' + svg + '</div>'
       + '<div class="druck-fuss" style="height:' + M.fuss + 'mm;"><span>Gutthann HIW Architekten GmbH</span>'
-      + '<span class="dl-leg"><i style="background:' + DRUCK_FARBE.planung + '"></i>Planung <i style="background:' + DRUCK_FARBE.vergabe + '"></i>Vergabe '
-      + '<i style="background:' + DRUCK_FARBE.ausfuehrung + '"></i>Ausführung <i class="s"></i>Sammelvorgang <i class="m"></i>Meilenstein'
-      + (heuteX != null ? ' <i class="h"></i>Heute' : '') + '</span>'
-      + '<span>Seite ' + (si + 1) + ' von ' + seiten.length + '</span></div></section>';
+      + '<span class="dl-leg">' + legende + (heuteX != null ? ' <i class="h"></i>Heute' : '') + '</span>'
+      + '<span>Seite ' + (si + 1) + ' von ' + seiten.length + '</span></div></div></section>';
   });
   return { html: html, seiten: seiten, papier: pap,
-    massstab: { von: druckIso(von), bis: druckIso(bis - 1), tage: tage, mmProTag: mm, achse: achse, nameB: nameB, proSeite: proSeite } };
+    massstab: { von: druckIso(von), bis: druckIso(bis - 1), tage: tage, mmProTag: mm, achse: achse, nameB: nameB, proSeite: proSeite, skala: sk } };
 }
 
 // ---------- Baustein: bzp_pdf.js (geprueft, Tests unter _bausteine/) ----------
@@ -7393,112 +8101,278 @@ function druckAufbau(e) {
 // Ergebnis: { format, vorgaenge[{pos,name,level,dauerAT,start,ende,summary}], stand, warnungen }
 
 var BZP_PDF_KOPF = {
-  pos: /^(Pos\.?|Nr\.?|Id|PSP|PSP-Code|Gliederung)$/i,
-  name: /^(Vorgang|Vorgangsname|Name|Beschreibung)$/i,
+  pos: /^(#\s*)?(Pos\.?|Nr\.?|Id|PSP|PSP-Code|Gliederung)$/i,
+  name: /^(Vorgang|Vorgangsname|Name|Beschreibung|Bezeichnung|Leistungsbereich|Leistung|Tätigkeit)$/i,
   dauer: /^Dauer$/i,
   start: /^(Start|Startdatum|Anfang|Beginn)$/i,
-  ende: /^(Ende|Enddatum|Fertigstellen|Abschluss)$/i
+  ende: /^(Ende|Enddatum|Fertigstellen|Abschluss|Stichtag)$/i
 };
 var BZP_PDF_DATUM = /(\d{2})\.(\d{2})\.(\d{2}|\d{4})\b/;
+var BZP_PDF_DAUER = /^\d+(,\d+)?\s*(at|T|Tage?|d|Wo\.?)\??$/i;
+// Abgeschnittenes Jahr („Mo, 27.07.2“: fett gesetzte Sammelzeile in zu schmaler Spalte; Befund 22.10.: Bogen „Tamara“).
+// Die Ziffer ist die Zehnerstelle des Jahres („2“ = 2020–2029); das Jahr kommt aus dem anderen Datum der Zeile:
+// steht eine Dauer in der Zeile („479kt“), das Jahr, das zu ihr passt; sonst der späteste Anfang vor dem Ende bzw. das
+// früheste Ende nach dem Anfang. (Bogen „Hülle“ 20260720: Di 05.05.26 · 479kt · „Do, 26.08.2“ = 26.08.2027)
+var BZP_PDF_DATUM_TEIL = /(\d{2})\.(\d{2})\.(\d)$/;
+var BZP_PDF_DAUER_TAGE = /^(\d+)(?:,\d+)?\s*(kt|at|T|Tage?|d|Wo\.?)\??$/i;
+// Positionsnummer, auch mit vorangestellter laufender Nummer in einem Stück („2 1.4“, CAPMO unter „# NR.“)
+var BZP_PDF_POSNR = /^(?:\d+\s+)?(\d+(?:\.\d+)*)$/;
+function bzpPdfIstDatum(s) { return BZP_PDF_DATUM.test(s) || BZP_PDF_DATUM_TEIL.test(s); }
+function bzpPdfTagNr(d) { return Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5; }
+function bzpPdfTeilErgaenzen(m, bezug, richtung, tage) {
+  var kand = [];
+  for (var j = 0; j < 10; j++) kand.push((2000 + 10 * +m[3] + j) + '-' + m[2] + '-' + m[1]);
+  if (tage != null) return kand.reduce(function (b, d) {
+    return Math.abs((bzpPdfTagNr(d) - bzpPdfTagNr(bezug)) * richtung - tage) < Math.abs((bzpPdfTagNr(b) - bzpPdfTagNr(bezug)) * richtung - tage) ? d : b;
+  });
+  var passt = richtung < 0 ? kand.filter(function (d) { return d <= bezug; }).pop() : kand.find(function (d) { return d >= bezug; });
+  return passt || bezug.slice(0, 4) + '-' + m[2] + '-' + m[1];
+}
+// Dauer in Kalendertage umrechnen (nur für die Jahresergänzung): kt = Kalendertage, Arbeitstage x 7/5, Wochen x 7
+function bzpPdfDauerKT(s) {
+  var m = BZP_PDF_DAUER_TAGE.exec(s);
+  return !m ? null : /kt/i.test(m[2]) ? +m[1] : /^Wo/.test(m[2]) ? 7 * m[1] : Math.round(m[1] * 7 / 5);
+}
 function bzpPdfIso(m) { return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[2] + '-' + m[1]; }
+
+// Toleranzen sind für ~8 pt Schrift gesetzt. Winzig verkleinerte Drucke (ganzer MS-Project-Plan auf einem A4,
+// Kopf 1,2 pt; Befund 22.10.: Bogen 2026_03_05) rechnen sie im Verhältnis der Kopfschrift — erst unter 4 pt,
+// damit sich an normalen Drucken nichts ändert.
+function bzpPdfMassstab(kopfStueck) { return kopfStueck.h < 4 ? kopfStueck.h / 8 : 1; }
 
 function bzpPdfKopf(items) {
   var kandidaten = items.filter(function (i) { return BZP_PDF_KOPF.name.test(i.s); });
   for (var n = 0; n < kandidaten.length; n++) {
     var k = kandidaten[n];
-    var zeile = items.filter(function (i) { return Math.abs(i.y - k.y) <= 2; });
-    var finde = function (re) { return zeile.find(function (i) { return re.test(i.s); }); };
+    var zeile = items.filter(function (i) { return Math.abs(i.y - k.y) <= 2 * bzpPdfMassstab(k); });
+    // Zweizeilige Kopfzellen („Beginn / Baustelle“, „Verant- / wortlich“; Wenzenbach Vorabzug) stehen bis zu einer knappen
+    // Zeilenhöhe versetzt — nur als Rückfall, damit ein Meilenstein „Start“ direkt unter dem Kopf nie Spaltenkopf wird
+    var breit = items.filter(function (i) { return Math.abs(i.y - k.y) <= Math.max(2 * bzpPdfMassstab(k), 0.8 * k.h); });
+    var finde = function (re) {
+      return zeile.find(function (i) { return re.test(i.s); }) || breit.find(function (i) { return re.test(i.s); });
+    };
     var dauer = finde(BZP_PDF_KOPF.dauer), start = finde(BZP_PDF_KOPF.start), ende = finde(BZP_PDF_KOPF.ende);
+    // Die Namensspalte endet am nächsten Spaltenkopf rechts davon (Wenzenbach: „Verantwortlich“ vor „Beginn“)
+    var rechts = breit.filter(function (i) { return i.x > k.x + k.w; }).reduce(function (m, i) { return Math.min(m, i.x); }, Infinity);
     // Dauer-Spalte ist optional (z. B. Wenzenbach: nur Vorgangsname · Startdatum · Enddatum)
-    if (start && ende && start.x > k.x) return { y: k.y, pos: finde(BZP_PDF_KOPF.pos), name: k, dauer: dauer || null, start: start, ende: ende };
+    if (start && ende && start.x > k.x) return { y: k.y, pos: finde(BZP_PDF_KOPF.pos), name: k, dauer: dauer || null, start: start, ende: ende, rechts: rechts };
   }
   return null;
 }
 
-function bzpPdfSeite(roh) {
-  var items = roh.filter(function (i) { return i.str.trim(); }).map(function (i) {
-    return { s: i.str.trim(), x: i.transform[4], y: i.transform[5], w: i.width, h: Math.abs(i.transform[3]) || 8 };
+function bzpPdfSeite(roh, merk) {
+  // Symbole aus Steuerzeichen (Regenstauf 240221: „\u0000“ als Ordnersymbol vor jedem Namen) sind kein Text
+  // … ebenso Symbole aus dem privaten Unicode-Bereich (CAPMO: Ordnersymbol vor jedem Sammelvorgang)
+  var sauber = function (t) { return t.replace(/[\u0000-\u001f\ue000-\uf8ff]/g, '').trim(); };
+  // Gedrehte Seite (PDF24-Druck von MS Project um 90° gedreht; Wenzenbach Index0, Hemau 260428): die meisten Textstücke
+  // laufen senkrecht. Dann alle Koordinaten zurückdrehen, damit Spalten wieder nebeneinander und Zeilen untereinander liegen.
+  var rohe = roh.filter(function (i) { return sauber(i.str); });
+  var hoch = rohe.filter(function (i) { return Math.abs(i.transform[0]) < 1e-3 && i.transform[1] > 1e-3; }).length;
+  var runter = rohe.filter(function (i) { return Math.abs(i.transform[0]) < 1e-3 && i.transform[1] < -1e-3; }).length;
+  var dreh = hoch * 2 > rohe.length ? 1 : runter * 2 > rohe.length ? -1 : 0;
+  var items = rohe.map(function (i) {
+    return { s: sauber(i.str), x: dreh ? dreh * i.transform[5] : i.transform[4], y: dreh ? -dreh * i.transform[4] : i.transform[5],
+      w: i.width, h: Math.hypot(i.transform[2], i.transform[3]) || 8 };
   });
+  // Folgeseiten ohne eigenen Spaltenkopf (Regenstauf 240221: Kopf nur auf Seite 1) lesen mit den Spalten der Vorseite
+  merk = merk || {};
   var k = bzpPdfKopf(items);
+  if (k) merk.k = k;
+  else if (merk.k) k = Object.assign({}, merk.k, { y: Infinity });
   if (!k) return null;
+  var f = bzpPdfMassstab(k.name);
   // Ohne Pos-Spalte beginnt der Name am linken Rand (Einzug = Gliederung), sonst rechts der Pos-Spalte
-  var nameVon = k.pos ? k.pos.x + k.pos.w + 4 : 0;
-  var nameBis = (k.dauer ? Math.min(k.dauer.x, k.start.x) : k.start.x) - 4;
-  var datenBis = k.ende.x + 120;
-  var unten = items.filter(function (i) { return i.y < k.y - 2 && i.x < datenBis; });
+  var nameVon = k.pos ? k.pos.x + k.pos.w + 4 * f : 0;
+  var nameBis = Math.min(k.rechts, k.dauer ? Math.min(k.dauer.x, k.start.x) : k.start.x) - 4 * f;
+  var datenBis = Math.max(k.ende.x, k.dauer ? k.dauer.x : 0) + 120 * f;
+  // Dauer vor Anfang (MS Project, pro-Plan) oder hinter dem Ende (Regenstauf 240221: Anfang · Stichtag · Dauer)
+  var inDauer = k.dauer && k.dauer.x > k.ende.x ? function (i) { return i.x >= k.dauer.x - 30 * f && i.x < k.dauer.x + k.dauer.w + 30 * f; }
+    : function (i) { return i.x >= nameBis - 30 * f && i.x < k.start.x - 5 * f; };
+  var unten = items.filter(function (i) { return i.y < k.y - 2 * f && i.x < datenBis; });
   var zeilenY = [];
-  unten.forEach(function (i) { var r = Math.round(i.y); if (zeilenY.indexOf(r) < 0) zeilenY.push(r); });
-  var daten = [];
+  unten.forEach(function (i) { var r = Math.round(i.y / f) * f; if (zeilenY.indexOf(r) < 0) zeilenY.push(r); });
+  var daten = [], ohneNr = [];
   zeilenY.forEach(function (y) {
-    var z = unten.filter(function (i) { return Math.abs(i.y - y) <= 1.5; });
-    var st = z.find(function (i) { return i.x >= k.start.x - 25 && i.x < k.ende.x - 15 && BZP_PDF_DATUM.test(i.s); });
-    var en = z.find(function (i) { return i.x >= k.ende.x - 15 && BZP_PDF_DATUM.test(i.s); });
-    if (!st || !en) return;
-    if (daten.some(function (d) { return Math.abs(d.y - y) <= 1.5; })) return;
-    var da = z.find(function (i) { return i.x >= nameBis - 30 && i.x < k.start.x - 5 && /^\d+(,\d+)?\s*(at|AT|T|Tage?|d|Wo\.?)$/.test(i.s); });
-    var po = z.find(function (i) { return i.x < nameVon && /^\d+(\.\d+)*$/.test(i.s); });
-    daten.push({ y: y, start: bzpPdfIso(BZP_PDF_DATUM.exec(st.s)), ende: bzpPdfIso(BZP_PDF_DATUM.exec(en.s)),
-      dauerAT: da ? Number(da.s.replace(/[^\d]/g, '')) : null, pos: po ? po.s : null });
+    var z = unten.filter(function (i) { return Math.abs(i.y - y) <= 1.5 * f; });
+    // Ein Datum gehört zu dem Spaltenkopf (Anfang/Ende), dessen Mitte seiner Mitte am nächsten liegt — feste Abstände
+    // brechen bei kleiner Schrift, wo „Mit 17.12.25“ fast so breit ist wie die Spalte (Befund 22.10.: Bogen 2025_05_13)
+    var mS = k.start.x + k.start.w / 2, mE = k.ende.x + k.ende.w / 2, mi = function (i) { return i.x + i.w / 2; };
+    var st = z.find(function (i) { return bzpPdfIstDatum(i.s) && mi(i) >= mS - (mE - mS) && Math.abs(mi(i) - mS) < Math.abs(mi(i) - mE); });
+    var en = z.find(function (i) { return bzpPdfIstDatum(i.s) && mi(i) <= mE + (mE - mS) && Math.abs(mi(i) - mE) <= Math.abs(mi(i) - mS); });
+    if (!st || !en || (!BZP_PDF_DATUM.test(st.s) && !BZP_PDF_DATUM.test(en.s))) return;
+    if (daten.some(function (d) { return Math.abs(d.y - y) <= 1.5 * f; })) return;
+    var start = BZP_PDF_DATUM.test(st.s) ? bzpPdfIso(BZP_PDF_DATUM.exec(st.s)) : null, ende = BZP_PDF_DATUM.test(en.s) ? bzpPdfIso(BZP_PDF_DATUM.exec(en.s)) : null;
+    var dk = z.find(function (i) { return inDauer(i) && BZP_PDF_DAUER_TAGE.test(i.s); });
+    if (!start) start = bzpPdfTeilErgaenzen(BZP_PDF_DATUM_TEIL.exec(st.s), ende, -1, dk ? bzpPdfDauerKT(dk.s) : null);
+    if (!ende) ende = bzpPdfTeilErgaenzen(BZP_PDF_DATUM_TEIL.exec(en.s), start, 1, dk ? bzpPdfDauerKT(dk.s) : null);
+    var da = z.find(function (i) { return inDauer(i) && BZP_PDF_DAUER.test(i.s); });
+    // Positionsnummer: die Zahl, die dem Kopf „Pos/Nr“ am nächsten steht (Regenstauf 240221 hat davor noch eine Spalte „#“)
+    var po;
+    if (k.pos) {
+      po = z.filter(function (i) { return i.x < nameVon && BZP_PDF_POSNR.test(i.s); })
+        .sort(function (a, b) { return Math.abs(a.x - k.pos.x) - Math.abs(b.x - k.pos.x); })[0];
+      // unter „# NR.“ ist eine einzelne Zahl nur die laufende Nummer (CAPMO: Projektzeile ohne Gliederungsnummer)
+      if (po && /^#/.test(k.pos.s) && !/\s/.test(po.s)) po = undefined;
+    } else {
+      // Nummern ohne Spaltenkopf (Leiblfing BT1: laufende Nr.; CAPMO: „51 8.4“ vor dem Namen): reine Zahlen vor dem
+      // ersten Text der Zeile — sie sind nicht Teil des Namens; Position ist die rechte (Gliederung vor laufender Nr.)
+      var text = z.filter(function (i) { return i.x < nameBis && !BZP_PDF_POSNR.test(i.s) && !BZP_PDF_DAUER.test(i.s); });
+      var anfang = text.length ? Math.min.apply(null, text.map(function (i) { return i.x; })) : -Infinity;
+      var nr = z.filter(function (i) { return i.x < anfang && BZP_PDF_POSNR.test(i.s); }).sort(function (a, b) { return a.x - b.x; });
+      nr.forEach(function (i) { ohneNr.push(i); });
+      po = nr[nr.length - 1];
+    }
+    // Anfang, Ende und Dauer sind verbraucht — nie Namensteil (MSR-Zuarbeit: zentrierter Kopf „Anfang“, das Datum darunter
+    // beginnt links davon und lag sonst in der Namensspalte)
+    [st, en, da].forEach(function (i) { if (i) ohneNr.push(i); });
+    daten.push({ y: y, start: start, ende: ende,
+      dauerAT: da ? parseFloat(da.s.replace(',', '.')) : null, pos: po ? BZP_PDF_POSNR.exec(po.s)[1] : null });
   });
   daten.sort(function (a, b) { return b.y - a.y; });
   // Dieselbe Zeile mit leicht versetzter Höhe (Pos-Stück und Datums-Stück): gleiche Termine, |dy| <= 6 -> eine Zeile
   for (var i = daten.length - 1; i > 0; i--) {
     var a = daten[i - 1], b = daten[i];
-    if (a.y - b.y <= 6 && a.start === b.start && a.ende === b.ende && (!a.pos || !b.pos)) {
+    if (a.y - b.y <= 6 * f && a.start === b.start && a.ende === b.ende && (!a.pos || !b.pos)) {
       a.pos = a.pos || b.pos; a.dauerAT = a.dauerAT != null ? a.dauerAT : b.dauerAT; a.y = (a.y + b.y) / 2; daten.splice(i, 1);
     }
   }
   // Namenszeilen in Blöcke (Zeilenabstand ~1,3 x Schriftgröße), Block -> Datenzeile in seiner Mitte
-  var namen = unten.filter(function (i) { return i.x >= nameVon && i.x < nameBis; }).sort(function (a, b) { return b.y - a.y; });
+  // Rechtsbündige Dauer („199 Tage“) ragt in MS Project links über den Spaltenkopf — sie ist kein Namensteil
+  var namen = unten.filter(function (i) { return i.x >= nameVon && i.x < nameBis && ohneNr.indexOf(i) < 0 && !(i.x >= nameBis - 40 * f && BZP_PDF_DAUER.test(i.s)); })
+    .sort(function (a, b) { return b.y - a.y; });
+  // Eine Namenszeile auf der Höhe einer Datenzeile gehört zu genau dieser Zeile (Anker). Ein Block nimmt nie zwei
+  // verschiedene Anker auf — sonst verschmelzen eng gesetzte einzeilige Namen (MS Project, Zeilenabstand < 1,5 x
+  // Schrift; Befund 22.10.: Hemau 25073, 50 von 52 Vorgängen ohne Namen) zu einem einzigen Block.
+  // Bei kleiner Schrift steht der Name bis zu einer halben Zeilenhöhe neben seinen Daten (Bogen „Tamara“: 1,3 bei 3 pt)
+  var anker = function (n) { return daten.find(function (d) { return Math.abs(d.y - n.y) <= (f < 1 ? Math.max(1.5 * f, 0.5 * n.h) : 1.5); }) || null; };
+  var naechste = function (n) { return daten.reduce(function (best, d) { return !best || Math.abs(d.y - n.y) < Math.abs(best.y - n.y) ? d : best; }, null); };
   var bloecke = [];
   namen.forEach(function (n) {
-    var bl = bloecke[bloecke.length - 1];
-    if (bl && bl.unten - n.y <= n.h * 1.5) { bl.teile.push(n); bl.unten = n.y; }
-    else bloecke.push({ oben: n.y, unten: n.y, teile: [n] });
+    var bl = bloecke[bloecke.length - 1], a = anker(n), ziel = a || naechste(n);
+    // Folgezeile eines Namens: Abstand bis 1,5 Zeilenhöhen; bis 1,75 nur, wenn sie dieselbe nächste Datenzeile hat wie der
+    // Block (Bogen „Hülle“: zweizeilige Namen knapp über 1,5 auseinander; 3959: „Baugrubenaushub“ unter „Abbrucharbeiten“
+    // gehört schon zur eigenen Datenzeile). Lange Namen (Hemau, 5 Zeilen) bleiben so ganz. Geprüft 22.10., pruef-bzp-pdf-alle.mjs
+    if (bl && (bl.unten - n.y <= n.h * 1.5 || (bl.unten - n.y <= n.h * 1.75 && ziel === bl.ziel)) && !(a && bl.anker && a !== bl.anker)) { bl.teile.push(n); bl.unten = n.y; bl.anker = bl.anker || a; }
+    else bloecke.push({ oben: n.y, unten: n.y, teile: [n], anker: a, ziel: ziel });
   });
   bloecke.forEach(function (bl) {
-    var mitte = (bl.oben + bl.unten) / 2, beste = null;
-    daten.forEach(function (d) { if (!beste || Math.abs(d.y - mitte) < Math.abs(beste.y - mitte)) beste = d; });
+    var mitte = (bl.oben + bl.unten) / 2, beste = bl.anker;
+    if (!beste) daten.forEach(function (d) { if (!beste || Math.abs(d.y - mitte) < Math.abs(beste.y - mitte)) beste = d; });
     if (beste && Math.abs(beste.y - mitte) <= (bl.oben - bl.unten) / 2 + bl.teile[0].h * 2) {
       (beste.bloecke = beste.bloecke || []).push({ mitte: mitte, x: Math.min.apply(null, bl.teile.map(function (t) { return t.x; })),
-        text: bl.teile.map(function (t) { return t.s; }).join(' ').replace(/[-]/g, '').replace(/\s+/g, ' ').trim() });
+        text: bl.teile.map(function (t) { return t.s; }).join(' ').replace(/[\ue000-\uf8ff]/g, '').replace(/\s+/g, ' ').trim() });
     }
   });
   var mitName = daten.map(function (d) {
     var bl = (d.bloecke || []).sort(function (a, b) { return Math.abs(a.mitte - d.y) - Math.abs(b.mitte - d.y); })[0];
-    return { y: d.y, start: d.start, ende: d.ende, dauerAT: d.dauerAT, pos: d.pos, bloecke: d.bloecke, name: bl ? bl.text : null, nameX: bl ? bl.x : null };
+    return { y: d.y, start: d.start, ende: d.ende, dauerAT: d.dauerAT, pos: d.pos, bloecke: d.bloecke, name: bl ? bl.text : null, nameX: bl ? bl.x : null, nameXn: bl ? bl.x / f : null };
   });
   // Ohne Pos-Spalte ist der Einzug die Gliederung: Einzugsstufen (auf 4 pt gerundet) der Reihe nach = Ebene 1, 2, …
   if (!k.pos) {
     var stufen = [];
-    mitName.forEach(function (d) { if (d.nameX !== null) { var r = Math.round(d.nameX / 4); if (stufen.indexOf(r) < 0) stufen.push(r); } });
+    mitName.forEach(function (d) { if (d.nameX !== null) { var r = Math.round(d.nameX / f / 4); if (stufen.indexOf(r) < 0) stufen.push(r); } });
     stufen.sort(function (a, b) { return a - b; });
-    mitName.forEach(function (d) { d.ebene = d.nameX === null ? 1 : stufen.indexOf(Math.round(d.nameX / 4)) + 1; });
+    mitName.forEach(function (d) { d.ebene = d.nameX === null ? 1 : stufen.indexOf(Math.round(d.nameX / f / 4)) + 1; });
   }
   return mitName;
 }
 
+// Einzugsstufen aus den Namensanfängen (auf 8-pt-Schrift umgerechnet, Abweichung bis 2 pt = dieselbe Stufe). Einzug ist
+// Gliederung, wenn die Stufen ein gemeinsames Raster haben: jeder Abstand ein Vielfaches des kleinsten (mind. 6 pt;
+// Hemau 11 pt, CAPMO 14 pt). Frei gesetzte Namen (Bogen „BA1 – BA3“, Fleischmann) sind unregelmäßig → null.
+function bzpPdfEinzugStufen(xs) {
+  var st = [];
+  xs.slice().sort(function (a, b) { return a - b; }).forEach(function (x) { if (!st.length || x - st[st.length - 1] > 2) st.push(x); });
+  if (st.length <= 1) return st;
+  var abst = st.slice(1).map(function (x, i) { return x - st[i]; }), min = Math.min.apply(null, abst);
+  return st.length <= 12 && min >= 6 && abst.every(function (a) { return Math.abs(a / min - Math.round(a / min)) <= 0.25; }) ? st : null;
+}
+
+// Wochenliste ohne Tabellenkopf (Leiblfing „Bauablaufplan Baumeisterarbeiten“ der Firma): „KW 19/20 · Kanalarbeiten“,
+// Jahr aus der Zeile „2026“ darüber (sonst aus „Stand:“), Zeile „25.09.2026 Fertigstellung“ = Meilenstein. Anfang =
+// Montag der ersten, Ende = Freitag der letzten Woche; springt die Woche zurück (KW 50 → KW 2), beginnt ein neues Jahr.
+var BZP_PDF_KW = /^KW\s*(\d{1,2})(?:\s*[\/–-]\s*(?:KW\s*)?(\d{1,2}))?$/i;
+function bzpPdfKwMontag(jahr, kw) { var j4 = Date.UTC(jahr, 0, 4); return j4 - ((new Date(j4).getUTCDay() + 6) % 7) * 864e5 + (kw - 1) * 7 * 864e5; }
+function bzpPdfIsoTag(ms) { return new Date(ms).toISOString().slice(0, 10); }
+function bzpPdfKwListe(roh, standJahr) {
+  var items = roh.map(function (i) { return { s: i.str.trim(), x: i.transform[4], y: i.transform[5], w: i.width, h: Math.abs(i.transform[3]) || 8 }; })
+    .filter(function (i) { return i.s; });
+  var kws = items.filter(function (i) { return BZP_PDF_KW.test(i.s); });
+  if (kws.length < 3) return [];
+  var spalte = Math.min.apply(null, kws.map(function (i) { return i.x; }));
+  var zeilen = kws.filter(function (i) { return i.x <= spalte + 5; })
+    .concat(items.filter(function (i) { return /^\d{2}\.\d{2}\.\d{4}\s+\S/.test(i.s) && i.x <= spalte + 40; })).sort(function (a, b) { return b.y - a.y; });
+  var jahrStueck = items.filter(function (i) { return /^20\d\d$/.test(i.s) && i.y > zeilen[0].y; }).sort(function (a, b) { return a.y - b.y; })[0];
+  var jahr = jahrStueck ? +jahrStueck.s : standJahr, letzte = 0;
+  if (!jahr) return [];
+  var raus = [];
+  zeilen.forEach(function (z, n) {
+    var naechste = n + 1 < zeilen.length ? zeilen[n + 1].y : -Infinity;
+    var m = BZP_PDF_KW.exec(z.s);
+    if (!m) {
+      var d = /^(\d{2})\.(\d{2})\.(\d{4})\s+(.+)$/.exec(z.s), tag = d[3] + '-' + d[2] + '-' + d[1];
+      raus.push({ name: d[4], start: tag, ende: tag, dauerAT: 0 });
+      return;
+    }
+    // Name: Text rechts der KW auf gleicher Höhe, dazu Folgezeilen bis zur nächsten Zeile (Abstand bis 1,6 Zeilenhöhen)
+    var text = [], unten = z.y;
+    items.filter(function (i) { return i.x > z.x + z.w && i.y <= z.y + 1.5 && i.y > naechste + 1.5; })
+      .sort(function (a, b) { return b.y - a.y || a.x - b.x; }).forEach(function (i) {
+        if (Math.abs(i.y - z.y) <= 1.5 || unten - i.y <= i.h * 1.6) { text.push(i.s); unten = Math.min(unten, i.y); }
+      });
+    var von = +m[1], bis = m[2] ? +m[2] : von;
+    if (von < letzte) jahr++;
+    letzte = von;
+    // „Dauer: 4 Wochen“ im Text verlängert den Vorgang ab seiner ersten Woche (Leiblfing: Abschottung EG/OG)
+    var wo = /Dauer:?\s*(\d+)\s*Woche/i.exec(text.join(' '));
+    raus.push({ name: text.join(' ') || z.s, start: bzpPdfIsoTag(bzpPdfKwMontag(jahr, von)),
+      ende: bzpPdfIsoTag(wo ? bzpPdfKwMontag(jahr, von) + (7 * wo[1] - 3) * 864e5 : bzpPdfKwMontag(bis < von ? jahr + 1 : jahr, bis) + 4 * 864e5), dauerAT: null });
+  });
+  return raus;
+}
+
 // seiten: [{ items }] in Seitenreihenfolge (rohe pdfjs-Textstücke)
 function bzpPdfAusSeiten(seiten) {
-  var vorgaenge = [], warnungen = [], stand = null;
+  var vorgaenge = [], warnungen = [], stand = null, merk = {};
   for (var s = 1; s <= seiten.length; s++) {
     var roh = seiten[s - 1].items;
     var voll = roh.map(function (i) { return i.str; }).join(' ');
     var dr = /Druckdatum:\s*(\d{2})\.(\d{2})\.(\d{4})/.exec(voll);
     if (dr) stand = dr[3] + '-' + dr[2] + '-' + dr[1];
-    var zeilen = bzpPdfSeite(roh);
+    var zeilen = bzpPdfSeite(roh, merk);
     if (!zeilen) { if (s === 1) warnungen.push('Seite 1: keine Kopfzeile „Vorgang · Dauer · Start · Ende“'); continue; }
     zeilen.forEach(function (z) {
       if (!z.name) warnungen.push('Seite ' + s + ', Pos ' + (z.pos || '?') + ' (' + z.start + '): kein Vorgangsname zuordenbar');
       if (z.ende < z.start) { warnungen.push('Seite ' + s + ', Pos ' + (z.pos || '?') + ': Ende vor Start, nicht übernommen'); return; }
       vorgaenge.push({ pos: z.pos || 'S' + s + '.' + (vorgaenge.length + 1), name: z.name || '(ohne Namen)',
-        level: z.pos ? z.pos.split('.').length : (z.ebene || 1), dauerAT: z.dauerAT, start: z.start, ende: z.ende });
+        level: z.pos ? z.pos.split('.').length : (z.ebene || 1), dauerAT: z.dauerAT, start: z.start, ende: z.ende, _x: z.nameXn });
     });
   }
+  // Laufende Nummer statt Gliederungsnummer (MS Project „Nr.“ 1, 2, 3 …): die Gliederung steckt im Einzug des Namens,
+  // über das ganze Dokument in Einzugsstufen (bzpPdfEinzugStufen) = Ebene 1, 2, … (Befund 22.10.: Hemau 25073)
+  var lfd = vorgaenge.length > 1 && vorgaenge.every(function (v) { return /^\d+$/.test(v.pos); });
+  if (lfd) {
+    var stufen = bzpPdfEinzugStufen(vorgaenge.filter(function (v) { return v._x != null; }).map(function (v) { return v._x; }));
+    // unregelmäßige Stufen = kein Einzug, sondern frei (z. B. zentriert) gesetzte Namen: dann flach lassen
+    if (stufen) vorgaenge.forEach(function (v) { v.level = v._x == null ? 1 : stufen.filter(function (st) { return st <= v._x + 2; }).length; });
+    else lfd = false;
+  }
   vorgaenge.forEach(function (v, i) {
-    v.summary = /^S\d/.test(v.pos) ? (i + 1 < vorgaenge.length && vorgaenge[i + 1].level > v.level)
+    v.summary = lfd || /^S\d/.test(v.pos) ? (i + 1 < vorgaenge.length && vorgaenge[i + 1].level > v.level)
       : vorgaenge.some(function (w) { return w.pos.indexOf(v.pos + '.') === 0; });
   });
+  vorgaenge.forEach(function (v) { delete v._x; });
+  if (!vorgaenge.length) {
+    // keine Tabelle: vielleicht eine Wochenliste der Firma
+    seiten.forEach(function (seite, n) {
+      var st = /Stand:?\s*(\d{2})\.(\d{2})\.(\d{4})/.exec(seite.items.map(function (i) { return i.str; }).join(' '));
+      if (st && !stand) stand = st[3] + '-' + st[2] + '-' + st[1];
+      bzpPdfKwListe(seite.items, st ? +st[3] : null).forEach(function (z) {
+        vorgaenge.push({ pos: 'S' + (n + 1) + '.' + (vorgaenge.length + 1), name: z.name, level: 1, dauerAT: z.dauerAT, start: z.start, ende: z.ende, summary: false });
+      });
+    });
+    if (vorgaenge.length) return { format: 'pdf-kw-liste', vorgaenge: vorgaenge, stand: stand, warnungen: [] };
+  }
   if (!vorgaenge.length) warnungen.push('Keine Vorgangszeilen gefunden');
   return { format: 'pdf-koordinaten', vorgaenge: vorgaenge, stand: stand, warnungen: warnungen };
 }
