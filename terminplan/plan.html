@@ -7650,104 +7650,72 @@ function erzeugeRahmenterminplan(param) {
   ausf[p6.name] = aussen;
 
   // === 6. Vorgänge anlegen ======================================================
+  // Gliederung nach Leistungsphasen wie die Rahmenterminpläne des Büros (Regel G9): je LPH ein Balken,
+  // Ausschreibung und Vergabe als EIN Balken, die Ausführung unter LPH 8 als wenige Meilensteine.
+  // Was die Regeln dazwischen rechnen (Gremien, Pakete, Rohbau, Reserve), steht in der Herkunft.
   var an = function (s) { return 'Annahme: ' + s; };
-  var eGen = vorgang({ name: gen.fix ? 'Baugenehmigung' : 'Baugenehmigung (erwartet)', level: 1, start: p.genehmigung, ms: true, cat: 'planung', lock: gen.fix,
-    quelle: gen.fix ? (herkunft.genehmigung || 'Projektdaten') : R('B6', 'Prüfung Bauantrag ' + K.genehmigung + ' AT') });
-  var eBb = vorgang({ name: 'Baubeginn', level: 1, start: baubeginn, ms: true, cat: 'ausfuehrung', lock: bb.fix,
-    quelle: bb.fix ? (herkunft.baubeginn || 'Projektdaten') : R('E2', 'Zuschlag Paket 1 + ' + K.vorlaufAN + ' AT Vorlauf') + (p1.tor ? ' · ' + p1.tor : '') });
-  var eDicht = vorgang({ name: 'Hülle dicht', level: 1, start: dicht, ms: true, cat: 'ausfuehrung', lock: dc.fix,
-    quelle: dc.fix ? (herkunft.huelleDicht || 'Projektdaten') : R('A5', 'Rohbauende + ' + P.dicht + ' AT') });
-  var eUe = vorgang({ name: 'Übergabe', level: 1, start: uebergabe, ms: true, cat: 'ausfuehrung', lock: ue.fix || P.ferien,
-    quelle: ue.fix ? (herkunft.uebergabe || 'Projektdaten') : (P.ferien ? R('U1', 'letzter Arbeitstag vor den ' + ferien.name + ' ' + rtDE(ferien.von) + (ferienGeschaetzt ? '' : ' (' + (typeof FERIEN_BY_QUELLE !== 'undefined' ? FERIEN_BY_QUELLE : 'amtlich') + ')')) : R('U6', 'nach Fertigstellung')) });
-  var eNutz = nutzung ? vorgang({ name: 'Nutzungsbeginn (Schuljahresbeginn)', level: 1, start: nutzung, ms: true, cat: 'ausfuehrung', lock: true,
-    quelle: R('U1', 'erster Schultag nach den Ferien' + (ferienGeschaetzt ? ' (geschätzt)' : '')) }) : null;
-
-  // PLANUNG
-  var plan = vorgang({ name: 'PLANUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'planung' });
-  var tL2 = null, tL3 = null, tL4 = null, tBA, tL5, tUeb = null, tBes;
+  var tStart = vorgang({ name: 'Projektstart', level: 1, start: start0, ms: true, cat: 'planung', quelle: 'Planungsstand LPH ' + lph + ' ab ' + rtDE(start0) + ' (Anlegedialog)' });
+  var tL2 = null, tL3 = null, tL4 = null;
   if (p.lph2) {
-    tL2 = vorgang({ name: 'LPH 2 Vorentwurf mit Kostenschätzung', level: 2, start: p.lph2[0], finish: p.lph2[1], cat: 'planung', quelle: R('P2', P.lph2 + ' AT (' + P.name + ')') });
-    vorgang({ name: 'Gremium: Vorentwurf (Sitzungstermin ?)', level: 2, start: p.gremium2, ms: true, cat: 'planung', quelle: R('P4, B10', 'Abgabe ' + K.gremiumVorlauf + ' KT vor der Sitzung · Sitzungstakt erfragen') });
+    tL2 = vorgang({ name: 'LPH 2 – Vorentwurf', level: 1, start: p.lph2[0], finish: p.lph2[1], cat: 'planung',
+      quelle: R('P2, P4', P.lph2 + ' AT (' + P.name + '); Gremium zum Vorentwurf ' + rtDE(p.gremium2) + ' (Sitzungstermin ?)') });
   }
   if (p.lph3) {
-    tL3 = vorgang({ name: 'LPH 3 Entwurf mit Kostenberechnung', level: 2, start: p.lph3[0], finish: p.lph3[1], cat: 'planung', quelle: R('P5, P6, P7', P.lph3 + ' AT, lückenlos nach LPH 2, KB-Block am Ende') });
-    tUeb = vorgang({ name: 'Übergabe Entwurf mit Kostenberechnung an den Bauherrn', level: 2, start: p.entwurfUebergabe, ms: true, cat: 'planung', quelle: R('P8', 'Ende LPH 3') });
+    tL3 = vorgang({ name: 'LPH 3 – Entwurfsplanung', level: 1, start: p.lph3[0], finish: p.lph3[1], cat: 'planung',
+      quelle: R('P5, P6, P7, P8', P.lph3 + ' AT mit Kostenberechnung; Übergabe an den Bauherrn ' + rtDE(p.entwurfUebergabe) + ', Entwurfsbeschluss ' + rtDE(p.beschluss) + ' (Sitzungstermin ?)') });
   }
-  tBes = vorgang({ name: p.lph3 ? 'Gremium: Entwurfsbeschluss (Sitzungstermin ?)' : 'Entwurf beschlossen (Planungsstand)', level: 2, start: p.beschluss, ms: true, cat: 'planung',
-    quelle: p.lph3 ? R('P8, B10', 'Übergabe + ' + K.entwurfUebergabeBisRat + ' KT über Ausschuss → Rat · Sitzungstakt erfragen') : 'Planungsstand LPH ' + lph });
   if (p.lph4) {
-    tL4 = vorgang({ name: 'LPH 4 Genehmigungsplanung', level: 2, start: p.lph4[0], finish: p.lph4[1], cat: 'planung', quelle: R('P9, P10', K.lph4 + ' AT, beginnt nach der FAG-Abgabe') });
+    var foerd = p.foerderAbgabe ? (mitSaG && mitFAG ? 'saG + FAG' : (mitFAG ? 'FAG' : 'saG')) : null;
+    tL4 = vorgang({ name: 'LPH 4 – Genehmigungsplanung' + (foerd ? ' + Förderantrag' : ''), level: 1, start: p.foerderAbgabe || p.lph4[0], finish: p.lph4[1], cat: 'planung',
+      quelle: R('P9, P10, B1', (foerd ? 'Abgabe ' + foerd + ' ' + rtDE(p.foerderAbgabe) + ' (' + K.foerderAbgabeNachBeschluss + ' KT nach Entwurfsbeschluss), danach ' : '')
+        + K.lph4 + ' AT Genehmigungsplanung, Bauantrag ' + rtDE(p.bauantrag)) });
   }
-  tBA = vorgang({ name: 'Bauantrag', level: 2, start: p.bauantrag, ms: true, cat: 'planung', quelle: p.lph4 ? R('P10', 'Ende LPH 4') : 'Planungsstand LPH ' + lph });
+  var eGen = vorgang({ name: gen.fix ? 'Erteilung Baugenehmigung' : 'Erteilung Baugenehmigung (erwartet)', level: 1, start: p.genehmigung, ms: true, cat: 'planung', lock: gen.fix,
+    quelle: gen.fix ? (herkunft.genehmigung || 'Projektdaten') : R('B6, B7, B8', an(K.genehmigung + ' AT Prüfung ab Bauantrag ' + rtDE(p.bauantrag) + ', im Ist 55–350 KT') + '; geprüfte Statik „Start Baumeister“ ' + rtDE(p.geprueft)) });
+  var eFb = null;
+  if (p.foerderbescheid) {
+    eFb = vorgang({ name: 'Förderbescheid bzw. vorzeitiger Maßnahmenbeginn (erwartet)', level: 1, start: p.foerderbescheid, ms: true, cat: 'planung',
+      quelle: R('B2, B3', an((p.saG ? 'saG ' + K.saGPruefung + ' AT' : '') + (p.saG && p.fag ? ', ' : '') + (p.fag ? 'FAG ' + K.fagPruefung + ' AT' : '') + ' Bearbeitung; im Ist bis 10 Mo nach Antrag')) });
+    offen.push('Förderbescheid/vzB ' + rtDE(p.foerderbescheid) + ' ist eine Annahme (' + K.fagPruefung + ' AT) — Bearbeitungsstand bei der Regierung erfragen (Regel B2).');
+  }
   // W3: reicht ~4 Mo in die Bauzeit; ist der Baubeginn fixiert und liegt früh, endet sie nie vor dem Rohbau-LV
   var lph5Ende = rtMax(rtPlusAT(baubeginn, 85), rtPlusAT(p.lph5Start, K.werkplanungRohbau));
-  tL5 = vorgang({ name: 'LPH 5 Werkplanung (Rohbau zuerst, Ausbau baubegleitend)', level: 2, start: p.lph5Start, finish: lph5Ende, cat: 'planung', quelle: R('W1, W2, W3', 'ab Bauantrag; Rohbau-LV nach ' + K.werkplanungRohbau + ' AT; Detailplanung Ausbau reicht ~4 Mo in die Bauzeit') });
-  kante(tL2, tL3); kante(tL3, tUeb); kante(tUeb, tBes); kante(tL4, tBA); kante(tBA, tL5);
+  vorgang({ name: 'LPH 5 – Ausführungsplanung', level: 1, start: p.lph5Start, finish: lph5Ende, cat: 'planung',
+    quelle: R('W1, W2, W3', 'ab Bauantrag; Rohbau-LV nach ' + K.werkplanungRohbau + ' AT; Detailplanung Ausbau reicht ~4 Mo in die Bauzeit') });
+  var vVon = pakete[0].lv[0], vBis = pakete[0].zuschlag;
+  for (var pi = 0; pi < pakete.length; pi++) { vVon = rtMin(vVon, pakete[pi].lv[0]); vBis = rtMax(vBis, pakete[pi].zuschlag); }
+  vorgang({ name: 'LPH 6/7 – Ausschreibung und Vergabe (baubegleitend)', level: 1, start: vVon, finish: vBis, cat: 'vergabe',
+    quelle: R('E1, E2, E5, E10', pakete.length + ' Pakete: ' + pakete.map(function (k) {
+      return k.name.replace(/:.*$/, '') + ' LV ab ' + rtDE(k.lv[0]) + ', Submission ' + rtDE(k.submission) + ', Zuschlag ' + rtDE(k.zuschlag) + (k.tor ? ' (' + k.tor + ')' : '');
+    }).join(' · ')) });
 
-  // GENEHMIGUNG UND FÖRDERUNG
-  vorgang({ name: 'GENEHMIGUNG UND FÖRDERUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'planung' });
-  var tAb = null, tFb = null;
-  if (p.foerderAbgabe) {
-    tAb = vorgang({ name: 'Abgabe ' + (mitSaG && mitFAG ? 'saG-Antrag + FAG-Antrag' : (mitFAG ? 'FAG-Antrag' : 'saG-Antrag')), level: 2, start: p.foerderAbgabe, ms: true, cat: 'planung',
-      quelle: R('B1, P9', K.foerderAbgabeNachBeschluss + ' KT nach Entwurfsbeschluss, schließt LPH 3 ab') });
-    if (p.saG) { vorgang({ name: 'Prüfung schulaufsichtliche Genehmigung (Regierung)', level: 2, start: p.saG[0], finish: p.saG[1], cat: 'planung', quelle: R('B2', an(K.saGPruefung + ' AT Bearbeitung')) }); }
-    if (p.fag) { vorgang({ name: 'Prüfung FAG-Antrag (Regierung)', level: 2, start: p.fag[0], finish: p.fag[1], cat: 'planung', quelle: R('B2', an(K.fagPruefung + ' AT Bearbeitung')) }); }
-    tFb = vorgang({ name: 'Förderbescheid bzw. vorzeitiger Maßnahmenbeginn (erwartet)', level: 2, start: p.foerderbescheid, ms: true, cat: 'planung', quelle: R('B2, B3', an('Ende der Prüfung; im Ist bis 10 Mo nach Antrag')) });
-    kante(tBes, tAb); kante(tAb, tL4);
-    offen.push('Förderbescheid/vzB ' + rtDE(p.foerderbescheid) + ' ist eine Annahme (' + K.fagPruefung + ' AT) — Bearbeitungsstand bei der Regierung erfragen (Regel B2).');
-  } else {
-    kante(tBes, tL4);
+  vorgang({ name: 'LPH 8 – Objektüberwachung', level: 1, start: baubeginn, finish: baubeginn, summary: true, cat: 'ausfuehrung' });
+  vorgang({ name: 'Hochbau', level: 2, start: baubeginn, finish: baubeginn, summary: true, cat: 'ausfuehrung' });
+  if (param.abbruch) {
+    vorgang({ name: 'Abbruch und vorgezogene Maßnahmen', level: 3, start: ausf[pakete[0].name][0], finish: ausf[pakete[0].name][1], cat: 'ausfuehrung', gewerk: true,
+      quelle: R('E6', '35 AT vor Baubeginn, Vergabe ' + rtDE(pakete[0].lv[0]) + '–' + rtDE(pakete[0].zuschlag)) });
   }
-  var tPB = vorgang({ name: 'Prüfung Bauantrag (Landratsamt)', level: 2, start: p.pruefungBA[0], finish: p.pruefungBA[1], cat: 'planung', quelle: R('B6', an(K.genehmigung + ' AT; im Ist 55–350 KT')) });
-  kante(tBA, tPB); kante(tPB, eGen);
-  var tGS = vorgang({ name: 'Genehmigungsstatik', level: 2, start: p.gStatik[0], finish: p.gStatik[1], cat: 'planung', quelle: R('B7', K.genehmigungsstatik + ' AT ab Entwurfsbeschluss') });
-  var tPS = vorgang({ name: 'Prüfstatik und Brandschutzprüfung', level: 2, start: p.pStatik[0], finish: p.pStatik[1], cat: 'planung', quelle: R('B8', an(K.pruefstatik + ' AT')) });
-  var tGP = vorgang({ name: 'Geprüfte Pläne – Start Baumeister', level: 2, start: p.geprueft, ms: true, cat: 'planung', quelle: R('B8', 'Ende Prüfstatik') });
-  kante(tBes, tGS); kante(tGS, tPS); kante(tPS, tGP);
-
-  // VERGABE
-  vorgang({ name: 'VERGABE', level: 1, start: start0, finish: start0, summary: true, cat: 'vergabe' });
-  var zuschlagTask = {};
-  for (var pi = 0; pi < pakete.length; pi++) {
-    var k = pakete[pi];
-    var regelK = R(k.regel + ', E2', 'Kette je Paket') + (k.tor ? ' · ' + k.tor : '');
-    vorgang({ name: 'Vergabe ' + k.name, level: 2, start: k.lv[0], finish: k.zuschlag, summary: true, cat: 'vergabe', zu: true });
-    var tLv = vorgang({ name: 'LV-Erstellung', level: 3, start: k.lv[0], finish: k.lv[1], cat: 'vergabe', quelle: R('E2', K.lvErstellung + ' AT') });
-    var tPr = vorgang({ name: 'Lesefassung / Prüfung Bauherr', level: 3, start: k.pruefung[0], finish: k.pruefung[1], cat: 'vergabe', quelle: R('E2', K.pruefungBauherr + ' AT') });
-    var tVe = vorgang({ name: 'Veröffentlichung', level: 3, start: k.veroeff, ms: true, cat: 'vergabe', quelle: regelK });
-    var tSu = vorgang({ name: 'Submission', level: 3, start: k.submission, ms: true, cat: 'vergabe', quelle: R('E2', 'Angebotsfrist ' + K.angebotsfrist + ' KT (EU)') });
-    var tSi = vorgang({ name: 'Vergabesitzung (Sitzungstermin ?)', level: 3, start: k.sitzung, ms: true, cat: 'vergabe', quelle: R('E2, E5, B10', K.submissionBisSitzung + ' KT nach Submission, nicht 20.12.–10.01.') });
-    var tZu = vorgang({ name: 'Zuschlag', level: 3, start: k.zuschlag, ms: true, cat: 'vergabe', quelle: R('E2', 'Einspruchsfrist ' + K.einspruch + ' KT') + (k.tor ? ' · ' + k.tor : '') });
-    kante(tLv, tPr); kante(tPr, tVe); kante(tVe, tSu); kante(tSu, tSi); kante(tSi, tZu);
-    zuschlagTask[k.name] = tZu;
-  }
-
-  // AUSFÜHRUNG
-  vorgang({ name: 'AUSFÜHRUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'ausfuehrung' });
-  var gew = function (name, von, bis, quelle, paket) {
-    var t = vorgang({ name: name, level: 2, start: von, finish: bis, cat: 'ausfuehrung', gewerk: true, quelle: quelle });
-    if (paket && zuschlagTask[paket]) { kante(zuschlagTask[paket], t, true); }
-    return t;
-  };
-  if (param.abbruch) { gew('Abbruch und vorgezogene Maßnahmen', ausf[pakete[0].name][0], ausf[pakete[0].name][1], R('E6', '35 AT vor Baubeginn'), pakete[0].name); }
-  var tErd = gew('Baustelleneinrichtung, Erdarbeiten, Gründung', baubeginn, rtPlusAT(rohbauStart, -1), R('A1', K.erdbauBisBodenplatte + ' AT bis zur ersten Bodenplatte'), p1.name);
-  var tRoh = gew('Rohbau', rohbauStart, rohbauEnde, R('A3, A4', P.rohbau + ' AT (' + P.name + ')' + (winter ? ', ruht in der Winterpause' : '')), null);
-  if (winter) { vorgang({ name: 'Winterpause Rohbau (temperaturabhängige Arbeiten)', level: 2, start: winter[0], finish: winter[1], cat: 'ausfuehrung', quelle: R('A4', '20.12.–31.01., kurze Ansätze gelten als optimistisch') }); }
-  var tHu = gew('Hülle: Gerüst, Holzbau/Dach, Fenster, Fassade', huelleStart, dicht, R('A5', 'beginnt ' + K.huelleVorRohbauende + ' AT vor Rohbauende, endet mit Hülle dicht'), p2.name);
-  gew('TGA-Rohinstallation und Montage', tgaStart, ausbauEnde, R('A6', 'ab ' + K.tgaVorDicht + ' AT vor Hülle dicht'), p3.name);
-  gew('Ausbau 1: Trockenbau, Estrich, Putz, Fliesen, Maler', ausbauStart, a1Ende, R('A7, A8', 'ab Hülle dicht, ' + P.ausbau + ' AT Ausbau gesamt'), p4.name);
-  gew('Ausbau 2: Türen, Böden, Einbauten', a2Start, ausbauEnde, R('A7, A8', 'letzte 60 % des Ausbaus'), p5.name);
-  gew('Außenanlagen', aussen[0], aussen[1], R('A9', K.aussenanlagen + ' AT bis Fertigstellung'), p6.name);
-  kante(eBb, tErd); kante(tErd, tRoh); kante(tHu, eDicht);
-
-  // ABSCHLUSS UND NUTZUNG
-  vorgang({ name: 'ABSCHLUSS UND NUTZUNG', level: 1, start: start0, finish: start0, summary: true, cat: 'ausfuehrung' });
-  var tFe = vorgang({ name: 'Fertigstellung: Reinigung, SV-Abnahmen, Probebetrieb, Abnahmen', level: 2, start: fertig[0], finish: fertig[1], cat: 'ausfuehrung',
-    quelle: R('U2, U3', '5 + 5 + 30 + 10 + 5 AT, Probebetrieb spätestens Anfang Juli') });
-  var tRes = reserve ? vorgang({ name: 'Reserve / Unvorhergesehenes', level: 2, start: reserve[0], finish: reserve[1], cat: 'ausfuehrung',
-    quelle: R('U4', 'mindestens ' + K.reserveVorFerien + ' AT, Rest bis zum Ferienanker') }) : null;
-  var tUm = umzug ? vorgang({ name: 'Umzug in den Ferien', level: 2, start: umzug[0], finish: umzug[1], cat: 'ausfuehrung', quelle: R('U5', K.umzug + ' AT') }) : null;
-  kante(tFe, tRes || eUe); kante(tRes, eUe); kante(eUe, tUm); kante(tUm, eNutz);
+  var eBb = vorgang({ name: 'Baubeginn', level: 3, start: baubeginn, ms: true, cat: 'ausfuehrung', lock: bb.fix,
+    quelle: bb.fix ? (herkunft.baubeginn || 'Projektdaten') : R('E2', 'Zuschlag Erd- und Baumeisterarbeiten + ' + K.vorlaufAN + ' AT Vorlauf') + (p1.tor ? ' · ' + p1.tor : '') });
+  var eRoh = vorgang({ name: 'Rohbaufertigstellung', level: 3, start: rohbauEnde, ms: true, cat: 'ausfuehrung',
+    quelle: R('A1, A2, A3, A4', K.erdbauBisBodenplatte + ' AT bis zur ersten Bodenplatte, Rohbau ' + rtDE(rohbauStart) + ' + ' + P.rohbau + ' AT (' + P.name + ')'
+      + (winter ? ', Winterpause ' + rtDE(winter[0]) + '–' + rtDE(winter[1]) : '')) });
+  var eDicht = vorgang({ name: 'Hülle dicht', level: 3, start: dicht, ms: true, cat: 'ausfuehrung', lock: dc.fix,
+    quelle: dc.fix ? (herkunft.huelleDicht || 'Projektdaten') : R('A5', 'Rohbaufertigstellung + ' + P.dicht + ' AT, Hülle ab ' + rtDE(huelleStart)) });
+  var tAus = vorgang({ name: 'Innenausbau / tech. Ausbau', level: 3, start: tgaStart, finish: ausbauEnde, cat: 'ausfuehrung', gewerk: true,
+    quelle: R('A6, A7, A8', 'TGA ab ' + K.tgaVorDicht + ' AT vor Hülle dicht, Trockenbau/Estrich ab Hülle dicht, ' + P.ausbau + ' AT Ausbau') });
+  var eUe = vorgang({ name: 'Fertigstellung / Übergabe' + (ue.fix ? '' : ' (Soll)'), level: 3, start: uebergabe, ms: true, cat: 'ausfuehrung', lock: ue.fix || P.ferien,
+    quelle: ue.fix ? (herkunft.uebergabe || 'Projektdaten')
+      : R('U1, U2, U4', 'Fertigstellung (Reinigung, Abnahmen, Probebetrieb ' + K.fertigstellung + ' AT) bis ' + rtDE(fertig[1])
+        + (reserve ? ', Reserve ' + rtZaehleAT(reserve[0], reserve[1]) + ' AT' : '')
+        + (P.ferien ? ', letzter Arbeitstag vor den ' + ferien.name + ' ' + rtDE(ferien.von) + (ferienGeschaetzt ? '' : ' (' + (typeof FERIEN_BY_QUELLE !== 'undefined' ? FERIEN_BY_QUELLE : 'amtlich') + ')') : '')) });
+  var eNutz = nutzung ? vorgang({ name: 'Nutzungsbeginn (Schuljahresbeginn)', level: 3, start: nutzung, ms: true, cat: 'ausfuehrung', lock: true,
+    quelle: R('U1, U5', 'Umzug ' + K.umzug + ' AT in den Ferien, erster Schultag' + (ferienGeschaetzt ? ' (geschätzt)' : '')) }) : null;
+  vorgang({ name: 'Freianlagen', level: 2, start: aussen[0], finish: aussen[1], summary: true, cat: 'ausfuehrung' });
+  vorgang({ name: 'Beginn Freianlagen', level: 3, start: aussen[0], ms: true, cat: 'ausfuehrung', quelle: R('A9', K.aussenanlagen + ' AT bis zur Fertigstellung') });
+  vorgang({ name: 'Fertigstellung Freianlagen', level: 3, start: aussen[1], ms: true, cat: 'ausfuehrung', quelle: R('A9', 'mit der Fertigstellung des Hochbaus; Pflanzung im Herbst') });
+  kante(tL2, tL3); kante(tL3, tL4); kante(tL4, eGen);
+  kante(eBb, eRoh); kante(eRoh, eDicht); kante(tAus, eUe); kante(eUe, eNutz);
 
   // Sammelvorgänge = Spanne ihrer Kinder; WBS fortlaufend
   var zaehler = [];
@@ -7773,7 +7741,12 @@ function erzeugeRahmenterminplan(param) {
   offen.push('Bauaufgabe „' + P.name + '“ und Planungsstand LPH ' + lph + ' sind angenommen — Bauabschnitte, Bestand/Interim im Plan von Hand ergänzen (Regel G5, A11, A12).');
   var kennzahlen = { bauzeitMo: rtMonate(baubeginn, uebergabe), planungBisBaubeginnMo: rtMonate(start0, baubeginn),
     reserveAT: rtZaehleAT(rtPlusAT(fertig[1], 1), uebergabe) - 1, baubeginn: baubeginn, uebergabe: uebergabe, nutzung: nutzung, profil: profilName };
-  return { tasks: tasks, edges: edges, warnungen: warnungen, offen: offen, kennzahlen: kennzahlen };
+  kennzahlen.gepruefteplaene = p.geprueft;
+  kennzahlen.zwischen = { pruefungBA: p.pruefungBA, rohbauStart: rohbauStart, rohbauEnde: rohbauEnde, winter: winter, fertig: fertig, ausbauStart: ausbauStart };
+  kennzahlen.bauantrag = p.bauantrag;
+  // die Vergabekette je Paket (steht im Plan nur in der Herkunft des Paketbalkens)
+  var ketten = pakete.map(function (k) { return { name: k.name, lv: k.lv, veroeff: k.veroeff, submission: k.submission, sitzung: k.sitzung, zuschlag: k.zuschlag, tor: k.tor || null }; });
+  return { tasks: tasks, edges: edges, warnungen: warnungen, offen: offen, kennzahlen: kennzahlen, pakete: ketten };
 }
 
 // ---------- Baustein: ferien_bayern.js (geprueft, Tests unter _bausteine/) ----------
