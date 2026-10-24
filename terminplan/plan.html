@@ -244,6 +244,30 @@
   .tb-pop[hidden]{display:none;}
   .tb-pop span{display:inline-flex;align-items:center;gap:5px;}
   .tb-pop.spalten{flex-direction:column;flex-wrap:nowrap;gap:5px;max-width:480px;line-height:1.45;}
+  /* --- Leiste neu geordnet (24.10.): eine Knopfhöhe, nur Export gefüllt, Menüs mit Zwischentiteln --- */
+  .toolbar button,.toolbar select{height:28px;box-sizing:border-box;}
+  .toolbar button.secondary{color:var(--ink);border-color:var(--line);}
+  .toolbar button.secondary:hover{background:#f3f7ff;filter:none;}
+  .toolbar button.tb-warn{color:#b45309;border-color:#f0c48a;background:#fff7ed;}
+  #planWahl{max-width:230px;}
+  .toolbar-dropdown.rechts{left:auto;right:0;}
+  .tb-farbstreifen{display:inline-flex;gap:1px;margin-right:6px;vertical-align:-1px;}
+  .tb-farbstreifen i{width:6px;height:11px;border-radius:1px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);}
+  .tb-pop .pop-titel{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;margin-top:6px;}
+  .tb-pop .pop-titel:first-child{margin-top:0;}
+  .tb-pop .pop-hinweis{font-size:11px;color:#6b7280;}
+  .tb-pop .pop-zeile{display:flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap;}
+  .tb-pop .pop-zeile small{color:#6b7280;}
+  .tb-pop .pop-zeile select{font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;}
+  .tb-pop .farbliste{display:grid;grid-template-columns:repeat(2,minmax(140px,auto));gap:5px 18px;}
+  .tb-pop .farbliste .fehlt{opacity:.45;}
+  .tb-segment{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;align-self:flex-start;}
+  .tb-segment button{background:#fff;color:var(--ink);border:none;border-left:1px solid var(--line);padding:5px 12px;font-size:12px;cursor:pointer;}
+  .tb-segment button:first-child{border-left:none;}
+  .tb-segment button.an{background:var(--blue);color:#fff;}
+  .tb-segment button:disabled{cursor:default;opacity:.6;}
+  .tb-pop.hilfe{max-width:520px;}
+  .tb-pop.hilfe span{display:block;}
   /* --- Vollausbau 24.08. abends: kritischer Pfad, Fortschritt, Planverwaltung --- */
   .bar.kritisch{box-shadow:0 0 0 2px #b91c1c;}
   .milestone.kritisch{outline:2px solid #b91c1c;outline-offset:1px;}
@@ -334,39 +358,23 @@
 </head>
 <body>
 
-<!-- EINE schlanke Leiste statt Kopfbereich + Legende + Hinweissatz + Fusszeile
-     (Marcels Vorgabe 24.08.: "die ganzen Textinfos oben und unten muessen weg").
-     Erklaerungen liegen jetzt hinter "?" , die Legende hinter dem Farbfeld-Knopf. -->
+<!-- Leiste neu geordnet (24.10.2026, Marcel: „aufräumen, sortieren … von A bis Z“). Regeln aus Fluent 2,
+     Apple HIG, SAP Fiori, NN/g: verwandte Befehle in Gruppen mit Trenner, links „wo bin ich“, rechts höchstens
+     drei Dinge, Seltenes ins Menü, Text statt Rätsel-Symbol, genau EIN hervorgehobener Knopf (Export).
+     Gruppen: Plan (Auswahl + ⋯) · Ansicht (Schicht, Zoom, Heute, Ansicht ▾) · Farben ▾ · rechts Stand, Export, Hilfe.
+     Einfrieren, Sondertermine und „gespeicherten Stand laden“ liegen im Planmenü ⋯; Legende und
+     Farbeinstellung sind EIN Menü „Farben“; „Agent prüft“ ist entfallen. -->
 <div class="toolbar">
   <b class="tb-titel" id="tbTitel">Terminplan</b>
-  <select id="planWahl" title="Gespeicherte Pläne dieses Projekts — Rechtsklick: umbenennen, duplizieren, löschen" hidden></select>
-  <button id="btnPlanMenue" class="tb-ic" title="Diesen Plan umbenennen, duplizieren, löschen — und einstellen, wonach gefärbt wird" hidden>⋯</button>
+  <select id="planWahl" title="Gespeicherte Pläne dieses Projekts — Rechtsklick: Planmenü" hidden></select>
+  <button id="btnPlanMenue" class="tb-ic" title="Plan: umbenennen, duplizieren, Sondertermine und Ferien, als SOLL einfrieren, gespeicherten Stand laden, löschen" hidden>⋯</button>
+  <span class="tb-trenner"></span>
   <select id="blickWahl" title="Schicht des Plans: alle Schichten oder nur Planung / Vergabe / Ausführung — Verknüpfungen zwischen den Schichten bleiben dabei lebendig">
     <option value="alle">Alle Schichten</option>
     <option value="planung">Nur Planung</option>
     <option value="vergabe">Nur Vergabe</option>
     <option value="ausfuehrung">Nur Ausführung</option>
   </select>
-  <button id="btnEinfrieren" class="secondary" title="Aktuellen Stand als unveränderliche SOLL-Fassung sichern" hidden>❄ Einfrieren</button>
-  <span class="tb-trenner"></span>
-  <div class="toolbar-dropdown-wrap">
-    <button id="btnExport">⬇ Export ▾</button>
-    <div id="exportMenu" class="toolbar-dropdown" style="display:none;">
-      <div class="toolbar-dropdown-item" id="exportXmlItem">📄 Als MS Project (.xml) exportieren</div>
-      <div class="toolbar-dropdown-item" id="exportJsonItem">🧾 Als JSON exportieren</div>
-      <div class="toolbar-dropdown-item" id="exportPdfItem">🖨 Als PDF exportieren</div>
-    </div>
-  </div>
-  <button id="btnSpecialPeriods" class="secondary">📅 Sondertermine</button>
-  <button id="btnVerbindung" class="secondary" hidden title="Vergabe-Konflikte mit dem verbundenen Plan">⚠ Konflikte</button>
-  <button id="btnAgentPruefen" class="secondary" title="Ein Agent prüft den Plan gegen die Projektunterlagen (Bauzeitenplan, Protokolle, Bescheide, Mails) und schlägt Korrekturen mit Beleg vor">🔎 Agent prüft</button>
-  <button id="btnReset" class="secondary">↺ Zurücksetzen</button>
-  <span class="tb-trenner"></span>
-  <select id="durationUnitSel" title="Dauer anzeigen und eingeben als Kalendertage oder Arbeitstage">
-    <option value="cd">Dauer: KT</option>
-    <option value="wd">Dauer: AT</option>
-  </select>
-  <span class="tb-trenner"></span>
   <!-- Zoom: die Zeitachse wechselt mit der Stufe die Beschriftung (Tage → KW → Monate →
        Quartale), wie in MS Project. Strg+Mausrad zoomt am Cursor, Umschalt+Mausrad schiebt. -->
   <span class="tb-zoom">
@@ -375,40 +383,72 @@
     <button id="btnZoomIn" class="tb-ic" title="Hineinzoomen (Strg + Mausrad)">+</button>
     <button id="btnZoomFit" class="tb-ic" title="Ganzen Plan einpassen">⤢</button>
   </span>
-  <button id="btnHeute" class="secondary" title="Zum heutigen Tag springen">⊙ Heute</button>
+  <button id="btnHeute" class="secondary" title="Zum heutigen Tag springen">Heute</button>
+  <button id="btnAnsicht" class="secondary" title="Dauer in Kalender- oder Arbeitstagen, Daten an den Balken, Gemeinderatssitzungen">Ansicht ▾</button>
   <span class="tb-trenner"></span>
-  <button id="btnLegende" class="tb-ic" title="Legende">◧</button>
-  <button id="btnHilfe" class="tb-ic" title="Bedienung">?</button>
-  <label class="tb-gr" title="Gemeinderatssitzungs-Termine im Diagramm ein-/ausblenden">
-    <input type="checkbox" id="toggleGrSitzungen" checked> GR
-  </label>
-  <label class="tb-gr" title="Anfangs- und Enddatum an jedem Balken zeigen — gilt auch für den Druck">
-    <input type="checkbox" id="toggleDaten"> Daten
-  </label>
+  <button id="btnFarben" class="secondary" title="Wonach gefärbt wird, die Standardfarben und was jedes Zeichen bedeutet"><span class="tb-farbstreifen" id="farbStreifen"></span>Farben ▾</button>
   <span id="saveState" class="tb-save" title="Speicherstand">·</span>
+  <button id="btnVerbindung" class="secondary tb-warn" hidden title="Vergabe-Konflikte mit dem verbundenen Plan">Konflikte</button>
+  <div class="toolbar-dropdown-wrap">
+    <button id="btnExport">Export ▾</button>
+    <div id="exportMenu" class="toolbar-dropdown rechts" style="display:none;">
+      <div class="toolbar-dropdown-item" id="exportPdfItem">Als PDF drucken / plotten</div>
+      <div class="toolbar-dropdown-item" id="exportXmlItem">Als MS Project (.xml)</div>
+      <div class="toolbar-dropdown-item" id="exportJsonItem">Als JSON</div>
+    </div>
+  </div>
+  <button id="btnHilfe" class="tb-ic" title="Bedienung">?</button>
 </div>
 
-<!-- Legende und Bedienhilfe: nur auf Klick sichtbar, damit sie nicht dauerhaft Platz kosten. -->
-<div id="legendePop" class="tb-pop" hidden>
-  <span id="legendeRegel" style="color:#666"></span>
-  <span id="legendeFarben" style="display:contents"></span>
-  <span><i class="swatch" style="border:3px solid #1F2937;background:none;width:9px;height:9px;box-sizing:border-box"></i>GR Sitzung (fixiert)</span>
-  <span><i class="swatch" style="background:var(--today);width:3px"></i>Heute</span>
-  <span><i class="swatch" style="background:rgba(107,114,128,.4)"></i>Ferien</span>
-  <span><i class="swatch" style="background:rgba(31,41,55,.5)"></i>GR-Sitzung (Termin)</span>
-  <span><i class="swatch" style="background:rgba(238,240,244,1);border:1px solid #c9ccd4"></i>Feiertag</span>
-  <span><i class="swatch" style="background:none;border:2px solid #b91c1c"></i>Kritischer Pfad (Puffer ≤ 0)</span>
-  <span><i class="swatch" style="background:rgba(0,0,0,.32)"></i>Fortschritt (Ist)</span>
+<!-- Menüs der Leiste: nur auf Klick sichtbar. -->
+<div id="ansichtPop" class="tb-pop spalten" hidden>
+  <div class="pop-titel">Ansicht</div>
+  <label class="pop-zeile">Dauer zählen in
+    <select id="durationUnitSel" title="Dauer anzeigen und eingeben als Kalendertage oder Arbeitstage">
+      <option value="cd">Kalendertagen (KT)</option>
+      <option value="wd">Arbeitstagen (AT)</option>
+    </select>
+  </label>
+  <label class="pop-zeile"><input type="checkbox" id="toggleDaten"> Anfangs- und Enddatum an jedem Balken <small>(auch im Druck)</small></label>
+  <label class="pop-zeile"><input type="checkbox" id="toggleGrSitzungen" checked> Gemeinderatssitzungen im Diagramm</label>
 </div>
-<div id="hilfePop" class="tb-pop spalten" hidden>
-  <span><b>Balken ziehen</b> verschiebt den Termin, <b>rechter Rand</b> ändert das Ende.</span>
-  <span><b>Punkte am Balkenrand</b> anklicken, dann Punkt eines anderen Vorgangs: Verknüpfung. Vorgänge werden dabei nicht verschoben.</span>
-  <span><b>Kürzel am Pfeil</b> ändert oder löscht die Verknüpfungsart.</span>
-  <span><b>Schloss</b> fixiert einen Termin gegen Kaskaden.</span>
-  <span><b>Doppelklick</b> auf Balken oder Zeile öffnet die Details, dort auch der Versatz je Verknüpfung.</span>
-  <span><b>Strg+Z</b> macht rückgängig · <b>Strg+Mausrad</b> zoomt · <b>Umschalt+Mausrad</b> schiebt seitwärts.</span>
-  <span><b>Tabelle wie MS Project:</b> Zeile anklicken (Umschalt/Strg = mehrere), lostippen oder <b>F2</b> = Name, <b>Enter</b> = nächste Zeile (in der letzten: neue), <b>Einfg</b> = neue Zeile, <b>Entf</b> = löschen, <b>Tab</b> / <b>Umschalt+Tab</b> = ein-/ausrücken, <b>Strg+F2</b> = Markierte verketten.</span>
+<div id="farbenPop" class="tb-pop spalten" hidden>
+  <div class="pop-titel">Färben nach</div>
+  <div class="tb-segment" id="farbNachWahl">
+    <button type="button" data-wert="">Planart</button>
+    <button type="button" data-wert="phase">Phase</button>
+    <button type="button" data-wert="gewerk">Gewerk</button>
+  </div>
+  <div class="pop-hinweis" id="farbNachHinweis"></div>
+  <div class="pop-titel" id="legendeRegel"></div>
+  <div class="farbliste" id="legendeFarben"></div>
+  <div class="pop-hinweis">Einzelnen Balken umfärben: <b>Rechtsklick</b> auf den Balken. Am Sammelvorgang gilt die Farbe für alles darunter.</div>
+  <div class="pop-titel">Weitere Zeichen</div>
+  <div class="farbliste">
+    <span><i class="swatch" style="background:var(--today);width:3px"></i>Heute</span>
+    <span><i class="swatch" style="background:none;border:2px solid #b91c1c"></i>Kritischer Pfad (Puffer ≤ 0)</span>
+    <span><i class="swatch" style="background:rgba(0,0,0,.32)"></i>Fortschritt (Ist)</span>
+    <span><i class="swatch" style="border:3px solid #1F2937;background:none;width:9px;height:9px;box-sizing:border-box"></i>GR-Sitzung (fixiert)</span>
+    <span><i class="swatch" style="background:rgba(31,41,55,.5)"></i>GR-Sitzung (Termin)</span>
+    <span><i class="swatch" style="background:rgba(107,114,128,.4)"></i>Ferien</span>
+    <span><i class="swatch" style="background:rgba(238,240,244,1);border:1px solid #c9ccd4"></i>Feiertag</span>
+  </div>
+</div>
+<div id="hilfePop" class="tb-pop spalten hilfe" hidden>
+  <div class="pop-titel">Balken</div>
+  <span><b>Ziehen</b> verschiebt den Termin, der <b>rechte Rand</b> ändert das Ende. <b>Doppelklick</b> auf Balken oder Zeile öffnet die Details.</span>
+  <span><b>Rechtsklick</b> auf einen Balken: Farbe und weitere Befehle. <b>Schloss</b> fixiert einen Termin gegen Kaskaden.</span>
+  <div class="pop-titel">Verknüpfungen</div>
+  <span><b>Punkt am Balkenrand</b> anklicken, dann den Punkt eines anderen Vorgangs. Vorgänge werden dabei nicht verschoben.</span>
+  <span><b>Kürzel am Pfeil</b> ändert oder löscht die Art. Den Versatz je Verknüpfung stellst du in den Details ein.</span>
   <span><b>Vorgänger-Spalte:</b> Zeilennummern mit Art und Pause in Arbeitstagen, z. B. <b>3;5</b> · <b>7AA</b> · <b>4EA+2</b> · <b>9EE-1</b> · <b>4+10KT</b>.</span>
+  <div class="pop-titel">Tabelle wie MS Project</div>
+  <span>Zeile anklicken (Umschalt/Strg = mehrere), lostippen oder <b>F2</b> = Name, <b>Enter</b> = nächste Zeile (in der letzten: neue), <b>Einfg</b> = neue Zeile, <b>Entf</b> = löschen.</span>
+  <span><b>Tab</b> / <b>Umschalt+Tab</b> = ein-/ausrücken, <b>Strg+F2</b> = Markierte verketten.</span>
+  <div class="pop-titel">Ansicht und Plan</div>
+  <span><b>Strg+Z</b> macht rückgängig · <b>Strg+Mausrad</b> zoomt · <b>Umschalt+Mausrad</b> schiebt seitwärts.</span>
+  <span><b>⋯</b> neben der Planauswahl: umbenennen, duplizieren, Sondertermine und Ferien, als SOLL einfrieren, löschen.</span>
+  <span><b>Farben ▾</b>: wonach gefärbt wird, die Standardfarben und alle Zeichen im Diagramm.</span>
 </div>
 
 <div class="wrap" id="wrap">
@@ -3809,7 +3849,6 @@ function openSpecialPeriodsDialog(){
   document.body.appendChild(overlay);
   window.__openModal = overlay;
 }
-document.getElementById('btnSpecialPeriods').addEventListener('click', openSpecialPeriodsDialog);
 
 // arrow marker def
 {
@@ -3851,16 +3890,30 @@ function farbeSetzen(el, schluessel){
   el.classList.add('fb');
   el.style.setProperty('--fb', f.fill); el.style.setProperty('--fr', f.rand);
 }
-// Legende hinter ◧: genau die Farben, die dieser Plan zeigt, mit der Regel dazu.
+// Menü „Farben ▾“ (24.10.: Legende + Einstellung in einem): wonach gefärbt wird, alle Standardfarben der
+// Gruppe (was im Plan nicht vorkommt, blass) und ein Farbstreifen im Knopf, der zeigt, was gerade gilt.
 function legendeFarbenAktualisieren(farbeJe){
   const ziel = document.getElementById('legendeFarben'), regel = document.getElementById('legendeRegel');
   if(!ziel) return;
-  const gruppe = farbGruppeJetzt();
-  regel.textContent = gruppe === 'gewerk' ? 'Farbe = Gewerk' : 'Farbe = Phase';
-  ziel.innerHTML = farbLegende(VISIBLE.map(({t})=>farbeJe.get(t.uid).schluessel)).map(l=>{
-    const form = l.schluessel === 'meilenstein' ? 'border-radius:0;transform:rotate(45deg);width:9px;height:9px;' : '';
-    return '<span><i class="swatch" style="background:' + l.fill + ';border:1px solid ' + l.rand + ';' + form + '"></i>' + l.name + '</span>';
+  const gruppe = farbGruppeJetzt(), kopf = PLAN_LISTE.find(p=>p.id === planId) || {};
+  regel.textContent = gruppe === 'gewerk' ? 'Standardfarben je Gewerk' : 'Standardfarben je Phase';
+  const da = new Set(VISIBLE.map(({t})=>farbeJe.get(t.uid).schluessel));
+  ziel.innerHTML = FARB_GRUPPEN[gruppe].concat(['sammel', 'meilenstein']).map(k=>{
+    const f = FARBEN[k];
+    const form = k === 'meilenstein' ? 'border-radius:0;transform:rotate(45deg);width:9px;height:9px;' : '';
+    return '<span' + (da.has(k) ? '' : ' class="fehlt" title="kommt in diesem Plan nicht vor"') + '><i class="swatch" style="background:'
+      + f.fill + ';border:1px solid ' + f.rand + ';' + form + '"></i>' + f.name + '</span>';
   }).join('');
+  const gesperrt = !!kopf.eingefroren_am || SCHREIBSCHUTZ;
+  document.querySelectorAll('#farbNachWahl button').forEach(b=>{
+    b.classList.toggle('an', b.dataset.wert === (kopf.farbe_nach || ''));
+    b.disabled = gesperrt;
+    if(!b.dataset.wert) b.textContent = 'Planart (' + (kopf.art === 'bauzeitenplan' ? 'Gewerk' : 'Phase') + ')';
+  });
+  document.getElementById('farbNachHinweis').textContent = gesperrt
+    ? 'Eingefrorene Fassung — die Einstellung bleibt, wie sie ist.' : 'Gilt für diesen Plan und alle, die ihn öffnen.';
+  document.getElementById('farbStreifen').innerHTML = FARB_GRUPPEN[gruppe].filter(k=>da.has(k)).slice(0, 5)
+    .map(k=>'<i style="background:' + FARBEN[k].fill + '"></i>').join('');
 }
 
 function renderBars(){
@@ -4260,12 +4313,12 @@ document.addEventListener('click', (ev)=>{ if(!btnExport.contains(ev.target) && 
 
 // Zurücksetzen heisst seit der Datenbank-Anbindung: den zuletzt GESPEICHERTEN Stand
 // neu laden (nicht mehr den eingebetteten Ursprungszustand — den gibt es nicht mehr).
-document.getElementById('btnReset').addEventListener('click', async ()=>{
+async function gespeichertenStandLaden(){
   if(!confirm('Ungespeicherte Änderungen verwerfen und den gespeicherten Stand neu laden?')) return;
   clearTimeout(speicherTimer);
   closeTaskDetail(); closeAnyDropdown(); clearPendingLink();
   await planWechseln(planId);
-});
+}
 
 // Dauer-Spalte links: Umschalten zwischen Kalender- und Arbeitstagen (wirkt nur auf die
 // Anzeige/Eingabe der Dauer, ändert an sich keine Termine) - die Dauer jedes Vorgangs wird dabei
@@ -4276,10 +4329,18 @@ const durationUnitSel = document.getElementById('durationUnitSel');
 function setDurationUnit(unit){
   durationUnit = unit;
   durationUnitSel.value = unit;
+  dauerKopfSetzen();
   renderLeftRows();
   markEdited();
 }
 durationUnitSel.addEventListener('change', ()=> setDurationUnit(durationUnitSel.value));
+// Die Einheit steht im Spaltenkopf, seit die Auswahl im Menü „Ansicht“ liegt — sonst wäre sie ein unsichtbarer Modus.
+function dauerKopfSetzen(){
+  const k = document.querySelector('.headrow .col-duration'); if(!k) return;
+  k.style.whiteSpace = 'nowrap';
+  k.innerHTML = 'Dauer <small style="font-size:9px;color:#6b7280">' + (durationUnit === 'wd' ? 'AT' : 'KT') + '</small>';
+}
+dauerKopfSetzen();
 
 // Kontrollkästchen in der Legende neben "GR-Sitzung (Termin)": blendet nur die Anzeige der
 // grünen Sondertermin-Spalten im Diagramm ein/aus (reine Ansichtssache, keine Datenänderung -
@@ -4577,7 +4638,6 @@ async function planListeLaden(){
   sel.appendChild(neu);
   sel.hidden = false;
   document.getElementById('btnPlanMenue').hidden = !PLAN_LISTE.length;
-  document.getElementById('btnEinfrieren').hidden = false;
 }
 
 // Arbeitskalender des Plans (oder Buero-Standard) laden und rechenwirksam machen.
@@ -4806,13 +4866,11 @@ function planMenueOeffnen(x, y){
     b.textContent = label; b.addEventListener('click', (ev)=>{ ev.stopPropagation(); closeTaskContextMenu(); f(); }); menu.appendChild(b); };
   punkt('✎ Umbenennen …', planUmbenennen);
   punkt('⧉ Duplizieren …', planDuplizieren);
-  // Einstellung „Farbe nach“ (Marcel 23.10.): je Plan, für alle sichtbar, die ihn öffnen
-  if(!kopf.eingefroren_am){
-    menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
-    const auto = kopf.art === 'bauzeitenplan' ? 'Gewerk' : 'Phase';
-    [['', 'Farbe nach Planart (' + auto + ')'], ['phase', 'Farbe nach Phase'], ['gewerk', 'Farbe nach Gewerk']].forEach(([w, text])=>
-      punkt(((kopf.farbe_nach || '') === w ? '● ' : '○ ') + text, ()=> farbeNachSetzen(w)));
-  }
+  // Seltene Planbefehle (24.10.: aus der Leiste hierher; „Farbe nach“ liegt jetzt unter Farben ▾)
+  menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
+  punkt('▦ Sondertermine und Ferien …', openSpecialPeriodsDialog);
+  if(!kopf.eingefroren_am && !SCHREIBSCHUTZ) punkt('❄ Als SOLL-Fassung einfrieren', standEinfrieren);
+  punkt('↺ Gespeicherten Stand neu laden', gespeichertenStandLaden);
   menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
   punkt('🗑 Plan löschen …', planLoeschen);
   document.body.appendChild(menu);
@@ -4998,7 +5056,7 @@ async function planeVerbinden(){
     VERBINDUNG = { partnerName: partner.name, konflikte: r.konflikte, anzahl: r.verbindungen.length };
     if(knopf && r.konflikte.length){
       knopf.hidden = false;
-      knopf.textContent = '⚠ ' + r.konflikte.length + ' Vergabe-Konflikte';
+      knopf.textContent = r.konflikte.length + ' Vergabe-Konflikte';
       knopf.title = 'Verbunden mit „' + partner.name + '“ (' + r.verbindungen.length + ' Gewerke)';
     }
   } catch(e){ console.warn('Planverbindung:', e.message); }
@@ -5175,15 +5233,18 @@ function kalenderDurchsetzen(){
   return irgendwasVerschoben;
 }
 
-// ================== Bedienleiste: Zoom, Heute, Legende, Hilfe ==================
+// ================== Bedienleiste: Zoom, Heute, Ansicht, Farben, Hilfe ==================
 document.getElementById('btnZoomIn').addEventListener('click', ()=> zoomAnwenden(zoomIndex+1));
 document.getElementById('btnZoomOut').addEventListener('click', ()=> zoomAnwenden(zoomIndex-1));
 document.getElementById('btnZoomFit').addEventListener('click', zoomEinpassen);
 document.getElementById('btnHeute').addEventListener('click', zumHeuteSpringen);
+document.querySelectorAll('#farbNachWahl button').forEach(b=> b.addEventListener('click', ()=> farbeNachSetzen(b.dataset.wert)));
 (function popsEinrichten(){
-  const paare = [['btnLegende','legendePop'], ['btnHilfe','hilfePop']];
+  const paare = [['btnAnsicht','ansichtPop'], ['btnFarben','farbenPop'], ['btnHilfe','hilfePop']];
   for(const [knopfId, popId] of paare){
     const knopf = document.getElementById(knopfId), pop = document.getElementById(popId);
+    // Klicks im Menü (Kästchen, Auswahl) lassen es offen; zu geht es per Klick daneben, Knopf oder Esc
+    pop.addEventListener('click', (ev)=> ev.stopPropagation());
     knopf.addEventListener('click', (ev)=>{
       ev.stopPropagation();
       const zeigen = pop.hidden;
@@ -5198,6 +5259,7 @@ document.getElementById('btnHeute').addEventListener('click', zumHeuteSpringen);
     });
   }
   document.addEventListener('click', ()=> paare.forEach(([,p])=> document.getElementById(p).hidden = true));
+  document.addEventListener('keydown', (ev)=>{ if(ev.key === 'Escape') paare.forEach(([,p])=> document.getElementById(p).hidden = true); });
 })();
 // Tastatur: +/- zoomen, Pos1/Ende springen an den Anfang bzw. ans Ende des Plans.
 document.addEventListener('keydown', (ev)=>{
@@ -5207,173 +5269,6 @@ document.addEventListener('keydown', (ev)=>{
   else if(ev.key === 'Home') { ev.preventDefault(); rightpane.scrollLeft = 0; calheader.scrollLeft = 0; }
   else if(ev.key === 'End') { ev.preventDefault(); rightpane.scrollLeft = chartWidth; calheader.scrollLeft = chartWidth; }
 });
-
-// ================== Agent prüft den Plan gegen die Projektunterlagen ==================
-// Regeln rechnen den Plan sofort; was sie nicht entscheiden koennen (Freitext, veraltete
-// Vergabetermine, Fristen aus Bescheiden), klaert ein gruendlicher Lauf (runner/chat-agent.mjs,
-// Migr. 235) mit Zugriff auf die Ablage. Er liefert Korrekturen MIT Beleg; der Mensch hakt an,
-// was uebernommen wird (Vorschlag-Freigabe). Der Lauf steht zusaetzlich als Chat im Board.
-const LIVE_BACKEND = SUPA_URL + '/functions/v1/live-backend';
-async function liveAktion(aktion, extra){
-  const s = sitzung();
-  if(!s?.access_token) throw new Error('nicht angemeldet');
-  const r = await fetch(LIVE_BACKEND, { method:'POST',
-    headers:{ 'Content-Type':'application/json', apikey: SUPA_ANON, Authorization:'Bearer ' + s.access_token },
-    body: JSON.stringify({ chat_aktion: aktion, ...extra }) });
-  const j = await r.json().catch(()=>({}));
-  if(!r.ok || j.fehler || j.error) throw new Error(j.fehler || j.error || ('HTTP ' + r.status));
-  return j;
-}
-
-// Termin setzen wie im Bearbeiten-Dialog: Kaskade ueber Verknuepfungen, GR-Anker rueckwaerts
-function terminSetzen(t, start, ende){
-  const oldStart = t.start, oldFinish = t.finish;
-  if(t.milestone){ t.start = start; t.finish = start; }
-  else {
-    const dauer = daysBetween(parseISO(t.start), parseISO(t.finish));
-    t.start = start;
-    t.finish = ende || fmtISO(addDays(parseISO(start), dauer));
-  }
-  const sD = daysBetween(parseISO(oldStart), parseISO(t.start));
-  const fD = daysBetween(parseISO(oldFinish), parseISO(t.finish));
-  cascadeChange(t.uid, sD, fD);
-  if(t.grAnchor) cascadeChangeBackward(t.uid, sD, fD);
-  enforceBackward(t.uid);
-}
-
-async function agentPruefung(){
-  if(!planId) return alert('Erst einen Plan anlegen oder wählen.');
-  if(SCHREIBSCHUTZ) return alert('Eingefrorene Fassung — der Agent prüft nur den Arbeitsstand.');
-  const alt = document.getElementById('agentOverlay'); if(alt) alt.remove();
-  const o = document.createElement('div');
-  o.id = 'agentOverlay'; o.className = 'anlage-overlay';
-  o.innerHTML = `<div class="anlage-box" style="max-width:760px;">
-      <h2>🔎 Agent sucht die echten Termine in den Projektunterlagen</h2>
-      <div class="anlage-hint">Der Plan steht schon (nach Regeln aus den Projektdaten). Der Agent liest jetzt Bauzeitenplan, Protokolle, Bescheide und Mails und schlägt belegte Korrekturen vor.</div>
-      <div class="anlage-hint" id="agStatus">startet …</div>
-      <div id="agInhalt" style="margin-top:10px;font-size:12px;max-height:60vh;overflow:auto;"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
-        <button id="agUebernehmen" style="display:none;">Ausgewählte übernehmen</button>
-        <button id="agSchliessen" class="secondary">Schließen</button>
-      </div></div>`;
-  document.body.appendChild(o);
-  const status = (t)=>{ document.getElementById('agStatus').textContent = t; };
-  let offen = true;
-  document.getElementById('agSchliessen').onclick = ()=>{ offen = false; o.remove(); };
-
-  // Laufenden Lauf zu diesem Plan wieder aufnehmen (Seite neu geladen, Dialog geschlossen)
-  const SCHL = 'rahmenAgent:' + planId;
-  let runId = null;
-  try { runId = localStorage.getItem(SCHL); } catch(e){}
-  try {
-    if(!runId){
-      let offenPunkte = [];
-      let gemerkt = null;
-      try { gemerkt = JSON.parse(localStorage.getItem('rahmenOffen:' + planId) || 'null'); } catch(e){}
-      if(gemerkt) offenPunkte = gemerkt;
-      else try {
-        const q = await db('rpc/termin_rahmen_quellen', { method:'POST', body: JSON.stringify({ p_project: PROJEKT_ID }) });
-        offenPunkte = rahmenEingabenAusQuellen(q, fmtISO(new Date())).offen;
-      } catch(e){ offenPunkte = ['Projektdaten nicht lesbar: ' + e.message]; }
-      const auftrag = rahmenAgentAuftrag(PROJEKT_NAME || 'Projekt', TASKS, offenPunkte, fmtISO(new Date()),
-        PLAN_LISTE.find(p=>p.id===planId)?.art, !!gemerkt && TASKS.some(t=>/, Pos /.test(t.quelleText || '')));
-      const s = await liveAktion('gruendlich_starten', { aufgabe: auftrag, projekt_id: PROJEKT_ID });
-      runId = s.run_id;
-      try { localStorage.setItem(SCHL, runId); } catch(e){}
-    }
-    status('Der Agent liest die Unterlagen — das dauert einige Minuten. Du kannst den Dialog schließen, der Lauf arbeitet weiter.');
-    let antwort = null;
-    const bis = Date.now() + 40 * 60000;
-    while(offen){
-      await new Promise(r=>setTimeout(r, 3000));
-      const j = await liveAktion('gruendlich_stand', { run_id: runId }).catch(()=>null);
-      if(!j) { if(Date.now() > bis) throw new Error('keine Rückmeldung vom Server'); continue; }
-      // Nimmt der Server-Dienst den Auftrag nicht an, nicht stumm 40 min warten (09.–23.10. lagen so 5 Läufe liegen)
-      if(j.status === 'wartet' && (j.wartet_s || 0) > 120){
-        await liveAktion('gruendlich_anhalten', { run_id: runId }).catch(()=>{});
-        throw new Error('Der KI-Dienst auf dem Server hat den Auftrag nach 2 Minuten nicht angenommen — er läuft vermutlich nicht. Der Plan selbst ist gespeichert; bitte Bescheid geben.');
-      }
-      if(j.status === 'wartet') status('wartet auf den Server (' + (j.wartet_s || 0) + ' s) …');
-      else if(j.status === 'running') status('arbeitet: ' + ((j.lauf && j.lauf.jetzt) || '…'));
-      else { antwort = j.antwort || j.antwort_teil || j.result || ''; break; }
-      if(Date.now() > bis) throw new Error('Zeitlimit erreicht — der Lauf steht im Board-Chat');
-    }
-    if(!offen) return;
-    try { localStorage.removeItem(SCHL); } catch(e){}
-    agentErgebnisZeigen(antwort);
-  } catch(e){
-    try { localStorage.removeItem(SCHL); } catch(x){}
-    status('Prüfung nicht möglich: ' + e.message);
-  }
-}
-
-function agentErgebnisZeigen(antwort){
-  const inhalt = document.getElementById('agInhalt');
-  const erg = rahmenAgentAntwortLesen(antwort, TASKS);
-  const zusammenfassung = (antwort || '').replace(/```rahmenplan-json[\s\S]*?```/, '').trim();
-  const esc = (s)=> String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  let html = '<div style="white-space:pre-wrap;color:#333;margin-bottom:10px;">' + esc(zusammenfassung.slice(0, 4000)) + '</div>';
-  if(erg.fehler) html += '<div style="color:#b45309;font-weight:600;">' + esc(erg.fehler) + ' Keine Übernahme möglich — die Antwort steht im Board-Chat.</div>';
-  const zeile = (id, text, beleg)=> '<label style="display:flex;gap:8px;padding:6px 0;border-top:1px solid #eee;">'
-    + '<input type="checkbox" checked data-id="' + id + '"><span><b>' + esc(text) + '</b><br><span style="color:#666;">' + esc(beleg) + '</span></span></label>';
-  erg.korrekturen.forEach((k, i)=>{
-    const t = byUid[k.uid];
-    const neu = !k.start ? 'Ende ' + fmtDE(k.ende) : t.milestone || !k.ende ? fmtDE(k.start) : fmtDE(k.start) + ' – ' + fmtDE(k.ende);
-    const alt = t.milestone ? fmtDE(t.start) : fmtDE(t.start) + ' – ' + fmtDE(t.finish);
-    html += zeile('k' + i, t.name + ': ' + alt + ' → ' + neu, k.beleg);
-  });
-  erg.meilensteine.forEach((m, i)=>{ html += zeile('m' + i, 'Neuer Meilenstein „' + m.name + '“ am ' + fmtDE(m.datum), m.beleg); });
-  if(!erg.korrekturen.length && !erg.meilensteine.length && !erg.fehler) html += '<div class="anlage-hint">Keine belegten Korrekturen — der Plan bleibt, wie er ist.</div>';
-  if(erg.hinweise.length) html += '<div style="margin-top:8px;"><b>Hinweise</b><ul>' + erg.hinweise.map(h=>'<li>' + esc(h) + '</li>').join('') + '</ul></div>';
-  if(erg.verworfen.length) html += '<div class="anlage-hint" style="margin-top:6px;">Verworfen (ohne Beleg oder ungültig): ' + esc(erg.verworfen.join(' · ')) + '</div>';
-  inhalt.innerHTML = html;
-  document.getElementById('agStatus').textContent = 'Fertig. Angehakte Vorschläge werden fixiert und mit Beleg als Herkunft gespeichert.';
-  const knopf = document.getElementById('agUebernehmen');
-  if(!erg.korrekturen.length && !erg.meilensteine.length) return;
-  knopf.style.display = '';
-  knopf.onclick = async ()=>{
-    const an = (id)=> inhalt.querySelector('input[data-id="' + id + '"]')?.checked;
-    pushUndo();
-    erg.korrekturen.forEach((k, i)=>{
-      if(!an('k' + i)) return;
-      const t = byUid[k.uid];
-      terminSetzen(t, k.start || t.start, k.ende);   // nur Ende belegt: Start bleibt
-      if(k.start) t.lockStart = true;
-      if(k.ende || t.milestone) t.lockFinish = true;
-      t.quelleText = 'Agent-Prüfung ' + fmtDE(fmtISO(new Date())) + ': ' + k.beleg;
-    });
-    let naechste = Math.max(0, ...TASKS.map(t=>t.uid)) + 1;
-    erg.meilensteine.forEach((m, i)=>{
-      if(!an('m' + i)) return;
-      // neue Ebene-1-Meilensteine hinter die Ecktermine (vor die erste Sammelzeile)
-      const pos = TASKS.findIndex(t=>t.summary);
-      const t = { uid: naechste++, name: m.name, wbs: '0.' + (i + 1), level: 1, start: m.datum, finish: m.datum,
-        milestone: true, summary: false, category: 'planung', lockStart: true, lockFinish: true, grAnchor: false, hidden: false,
-        isGewerk: false, quelleText: 'Agent-Prüfung ' + fmtDE(fmtISO(new Date())) + ': ' + m.beleg };
-      TASKS.splice(pos < 0 ? TASKS.length : pos, 0, t);
-      byUid[t.uid] = t;
-    });
-    // Belegte Termine gehen vor Regel-Verknüpfungen: widerspricht eine Verknüpfung zwei übernommenen Terminen
-    // (z. B. Regel P9 „LPH 4 nach FAG-Abgabe“, das Projekt reicht den FAG-Antrag aber am Ende von LPH 4 ein),
-    // wird sie gelöst und genannt — sonst schöbe resolveLockedConstraints einen belegten Termin weiter (Befund 23.10.)
-    const belegt = new Set(erg.korrekturen.filter((k, i)=>an('k' + i)).map(k=>k.uid));
-    const geloest = [];
-    for(let i = EDGES.length - 1; i >= 0; i--){
-      const e = EDGES[i];
-      if(!belegt.has(e.from) || !belegt.has(e.to)) continue;
-      const a = edgeAnchors(e.type), p = byUid[e.from], s = byUid[e.to];
-      if(parseISO(p[a.predEnd]) > addDays(parseISO(s[a.succEnd]), -(e.lag || 0))){ geloest.push(p.name + ' → ' + s.name); EDGES.splice(i, 1); }
-    }
-    resolveLockedConstraints();
-    renderAll();
-    await planSpeichern();
-    if(!geloest.length){ document.getElementById('agentOverlay')?.remove(); return; }
-    knopf.style.display = 'none';
-    document.getElementById('agStatus').textContent = 'Übernommen und gespeichert. Diese Verknüpfungen widersprachen den belegten Terminen und sind gelöst: '
-      + geloest.join(' · ') + ' — das Projekt weicht hier vom Regelwerk ab.';
-  };
-}
-document.getElementById('btnAgentPruefen').onclick = agentPruefung;
 
 // ================== Neuen Plan anlegen (Vorlage / MS-Project-XML / leer) ==================
 function anlageZeigen(){
@@ -5532,7 +5427,7 @@ function anlageZeigen(){
       dz.style.display = document.getElementById('anArt').value === 'bauzeitenplan' ? '' : 'none';
       hint.after(dz);
       if(eingaben.offen.length){
-        const o = zeile(eingaben.offen.length + ' Punkte können Regeln nicht entscheiden — die klärt nach dem Erzeugen automatisch ein Agent in der Ablage.', '#b45309');
+        const o = zeile(eingaben.offen.length + ' Punkte können Regeln nicht entscheiden — bitte nach dem Erzeugen im Plan prüfen (Liste beim Drüberfahren).', '#b45309');
         o.title = eingaben.offen.join('\n');
         hint.nextSibling.after(o);
       }
@@ -5680,12 +5575,24 @@ function anlageZeigen(){
       await planSpeichern();
       await planListeLaden();
       document.getElementById('planWahl').value = planId;
-      // Ein Klick: nach dem Regelplan sucht der Agent die echten Termine in der Ablage zusammen
-      // Die offenen Punkte dieses Plans merken: der Agent klaert nur sie (nicht den belegten Rest)
-      if(planOffen){ try { localStorage.setItem('rahmenOffen:' + planId, JSON.stringify(planOffen)); } catch(e){} }
       await ankerLaden();
       planeVerbinden();
-      if(quelle === 'rahmen' && (!planOffen || planOffen.length)) agentPruefung();
+      // Was die Regeln nicht entscheiden konnten, sofort zeigen (seit „Agent prüft“ entfällt, 24.10.2026):
+      // Warnungen zuerst — z. B. ein Wunschtermin aus den Projektdaten, der nach dem Regelwerk nicht hält
+      if(planOffen && planOffen.length){
+        const esc = (s)=> String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        const warn = planOffen.filter(p=>/^Warnung: /.test(p)).map(p=>p.slice(9)), rest = planOffen.filter(p=>!/^Warnung: /.test(p));
+        const liste = (xs, farbe)=> xs.map(x=>'<li style="margin:4px 0;' + (farbe ? 'color:' + farbe + ';' : '') + '">' + esc(x) + '</li>').join('');
+        const ov = document.createElement('div');
+        ov.id = 'offenOverlay'; ov.className = 'anlage-overlay';
+        ov.innerHTML = '<div class="anlage-box" style="max-width:760px;"><h2>Plan angelegt — bitte prüfen</h2>'
+          + '<div class="anlage-hint">Diese Punkte konnten die Regeln nicht entscheiden. Die Herkunft jedes Termins steht beim Darüberfahren am Vorgang.</div>'
+          + (warn.length ? '<div style="margin-top:10px;font-weight:600;color:#b45309;">Widerspricht dem Regelwerk</div><ul style="font-size:12px;padding-left:18px;">' + liste(warn, '#b45309') + '</ul>' : '')
+          + (rest.length ? '<div style="margin-top:10px;font-weight:600;">Offen</div><ul style="font-size:12px;padding-left:18px;max-height:40vh;overflow:auto;">' + liste(rest) + '</ul>' : '')
+          + '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button id="offenSchliessen">Verstanden</button></div></div>';
+        document.body.appendChild(ov);
+        document.getElementById('offenSchliessen').onclick = ()=> ov.remove();
+      }
     } catch(e){ fehler('Anlegen fehlgeschlagen: ' + e.message); }
   }
 }
@@ -5736,7 +5643,6 @@ document.getElementById('planWahl').addEventListener('change', (ev)=>{
   if(ev.target.value === '__neu__'){ ev.target.value = planId || ''; anlageZeigen(); return; }
   planWechseln(ev.target.value);
 });
-document.getElementById('btnEinfrieren').addEventListener('click', standEinfrieren);
 document.getElementById('btnPlanMenue').addEventListener('click', (ev)=>{
   ev.stopPropagation(); const r = ev.currentTarget.getBoundingClientRect(); planMenueOeffnen(r.left, r.bottom + 4); });
 document.getElementById('planWahl').addEventListener('contextmenu', (ev)=>{ ev.preventDefault(); planMenueOeffnen(ev.clientX, ev.clientY); });
@@ -6334,10 +6240,8 @@ window.terminplanApi = {
         return { ok: true, satz: 'Der Export als ' + (w.includes('xml') || w.includes('project') ? 'MS-Project-XML' : w.includes('json') ? 'JSON' : 'PDF') + ' ist angestoßen.' };
       }
       if(tu === 'agent_pruefen'){
-        const k = document.getElementById('btnAgentPruefen');
-        if(!k || k.disabled) return { fehler: 'Die Agentenprüfung läuft schon oder ist hier nicht verfügbar.' };
-        k.click();
-        return { ok: true, satz: 'Der Agent prüft den Plan gegen die Projektunterlagen; das dauert rund zehn Minuten, die Vorschläge erscheinen im Plan zum Abhaken.' };
+        // Knopf „Agent prüft“ am 24.10.2026 entfernt (Marcel: „das braucht es nicht mehr“)
+        return { fehler: 'Die Agentenprüfung gibt es im Terminplan nicht mehr.' };
       }
 
       if(tu === 'rueckgaengig'){
