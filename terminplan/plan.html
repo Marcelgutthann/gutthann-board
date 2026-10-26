@@ -339,8 +339,11 @@
   .tb-pop .farbwahl{position:relative;display:flex;align-items:center;gap:6px;cursor:pointer;border-radius:4px;padding:1px 4px;margin:-1px -4px;}
   .tb-pop .farbwahl:hover:not(.gesperrt){background:#eef2f7;}
   .tb-pop .farbwahl.gesperrt{cursor:default;}
-  .tb-pop .farbwahl .swatch{width:20px;height:14px;}
-  .tb-pop .farbwahl input[type=color]{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;}
+  .tb-pop .farbwahl input[type=color]{-webkit-appearance:none;appearance:none;width:22px;height:16px;padding:0;margin:0;border:1px solid;border-radius:3px;background:none;cursor:pointer;flex:none;}
+  .tb-pop .farbwahl input[type=color]::-webkit-color-swatch-wrapper{padding:0;}
+  .tb-pop .farbwahl input[type=color]::-webkit-color-swatch{border:0;border-radius:2px;}
+  .tb-pop .farbwahl input[type=color]::-moz-color-swatch{border:0;border-radius:2px;}
+  .tb-pop .farbwahl input[type=color]:disabled{cursor:default;}
   .tb-pop .farbwahl .farb-zurueck{margin-left:auto;border:0;background:none;color:#4A6FA8;font-size:11px;padding:0;cursor:pointer;}
   .tb-segment{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;align-self:flex-start;}
   .tb-segment button{background:#fff;color:var(--ink);border:none;border-left:1px solid var(--line);padding:5px 12px;font-size:12px;cursor:pointer;}
@@ -492,12 +495,7 @@
   <span id="saveState" class="tb-save" title="Speicherstand">·</span>
   <button id="btnVerbindung" class="secondary tb-warn" hidden title="Vergabe-Konflikte mit dem verbundenen Plan">Konflikte</button>
   <div class="toolbar-dropdown-wrap">
-    <button id="btnExport">Export ▾</button>
-    <div id="exportMenu" class="toolbar-dropdown rechts" style="display:none;">
-      <div class="toolbar-dropdown-item" id="exportPdfItem">Als PDF drucken / plotten</div>
-      <div class="toolbar-dropdown-item" id="exportXmlItem">Als MS Project (.xml)</div>
-      <div class="toolbar-dropdown-item" id="exportJsonItem">Als JSON</div>
-    </div>
+    <button id="btnExport">Export</button>
   </div>
   <button id="btnHilfe" class="tb-ic" title="Bedienung">?</button>
 </div>
@@ -4533,12 +4531,19 @@ function legendeFarbenAktualisieren(farbeJe){
     const form = k === 'meilenstein' ? 'border-radius:0;transform:rotate(45deg);width:9px;height:9px;' : '';
     const titel = (gesperrt ? '' : 'Klicken, um die Farbe zu ändern') + (da.has(k) ? '' : (gesperrt ? '' : ' — ') + 'kommt in diesem Plan nicht vor');
     return '<label class="farbwahl' + (da.has(k) ? '' : ' fehlt') + (gesperrt ? ' gesperrt' : '') + '" title="' + titel + '">'
-      + '<i class="swatch" style="background:' + f.fill + ';border:1px solid ' + f.rand + ';' + form + '"></i>' + f.name
-      + '<input type="color" data-farbe="' + k + '" value="' + f.fill.toLowerCase() + '"' + (gesperrt ? ' disabled' : '') + '>'
+      + '<input type="color" class="swatch" data-farbe="' + k + '" value="' + f.fill.toLowerCase() + '" style="border-color:' + f.rand + ';' + form + '"'
+      + (gesperrt ? ' disabled' : '') + '>' + f.name
       + (eigene[k] && !gesperrt ? '<button type="button" class="farb-zurueck" data-farbe="' + k + '" title="Standardfarbe wiederherstellen">Standard</button>' : '')
       + '</label>';
   }).join('');
   ziel.querySelectorAll('input[type=color]').forEach(inp=> inp.addEventListener('change', ()=> farbtonSetzen(inp.dataset.farbe, inp.value)));
+  // Klick auf den Namen öffnet denselben Farbwähler (showPicker, wo vorhanden)
+  ziel.querySelectorAll('label.farbwahl:not(.gesperrt)').forEach(l=> l.addEventListener('click', e=>{
+    const inp = l.querySelector('input[type=color]');
+    if (e.target === inp || e.target.closest('.farb-zurueck')) return;
+    e.preventDefault();
+    try { inp.showPicker(); } catch(_) { inp.click(); }
+  }));
   ziel.querySelectorAll('.farb-zurueck').forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); farbtonSetzen(b.dataset.farbe, null); }));
   document.querySelectorAll('#farbNachWahl button').forEach(b=>{
     b.classList.toggle('an', b.dataset.wert === (kopf.farbe_nach || ''));
@@ -4937,15 +4942,9 @@ function attachMilestoneDrag(el, t){
 
 // Ein gemeinsamer "Export"-Knopf statt separater Buttons für XML/JSON (und neu: PDF).
 const btnExport = document.getElementById('btnExport');
-const exportMenu = document.getElementById('exportMenu');
-btnExport.addEventListener('click', (ev)=>{
-  ev.stopPropagation();
-  exportMenu.style.display = (exportMenu.style.display === 'block') ? 'none' : 'block';
-});
-document.getElementById('exportXmlItem').addEventListener('click', ()=>{ exportMenu.style.display='none'; exportXml(); });
-document.getElementById('exportJsonItem').addEventListener('click', ()=>{ exportMenu.style.display='none'; exportJson(); });
-document.getElementById('exportPdfItem').addEventListener('click', ()=>{ exportMenu.style.display='none'; exportPdf(); });
-document.addEventListener('click', (ev)=>{ if(!btnExport.contains(ev.target) && !exportMenu.contains(ev.target)) exportMenu.style.display='none'; });
+// Export führt direkt in die Druckvorschau (26.10., Marcel: „ich will direkt zu einer Vorschau gehen“);
+// MS Project und JSON stehen dort in der Leiste.
+btnExport.addEventListener('click', ()=> exportPdf());
 
 // Zurücksetzen heisst seit der Datenbank-Anbindung: den zuletzt GESPEICHERTEN Stand
 // neu laden (nicht mehr den eingebetteten Ursprungszustand — den gibt es nicht mehr).
@@ -5256,6 +5255,8 @@ function exportPdf(){
       <label><input type="checkbox" id="druckDaten"> Datum am Balken</label>
       <label>Ansicht <select id="druckZoom"><option value="fit">Einpassen</option><option value="0.5">50 %</option><option value="1">100 %</option></select></label>
       <span class="dv-info" id="druckInfo"></span>
+      <button class="dv-zu" id="exportXmlItem" title="Terminplan als MS-Project-Datei herunterladen">MS Project (.xml)</button>
+      <button class="dv-zu" id="exportJsonItem" title="Terminplan als JSON herunterladen">JSON</button>
       <button class="dv-zu" id="druckZu">Schließen</button>
       <button class="dv-los" id="druckLos">Drucken …</button>
     </div>
@@ -5291,6 +5292,8 @@ function exportPdf(){
   document.addEventListener('keydown', taste);
   zeigen();
   overlay.querySelector('#druckZu').addEventListener('click', zu);
+  overlay.querySelector('#exportXmlItem').addEventListener('click', exportXml);
+  overlay.querySelector('#exportJsonItem').addEventListener('click', exportJson);
   overlay.querySelector('#druckLos').addEventListener('click', ()=>{
     const wahl = { papier: papier.value, datenAmBalken: daten.checked };
     try { localStorage.setItem('terminplan_druck', JSON.stringify(wahl)); } catch(err){}
