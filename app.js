@@ -516,10 +516,6 @@ function renderTerminplan() {
   root.innerHTML = '';
   const url = 'terminplan/plan.html?projekt=' + encodeURIComponent(S.active.id)
     + '&name=' + encodeURIComponent(S.active.name);
-  root.append(el('div', { class: 'terminhint' },
-    el('span', { class: 'probe' }, 'PROBE'),
-    el('span', {}, 'Werkzeug von Benjamin Adam · speichert in der Projekt-Datenbank'),
-    el('a', { onclick: () => window.open(url, '_blank') }, 'eigenes Fenster')));
   const f = document.createElement('iframe');
   f.src = url;
   f.title = 'Terminplan ' + S.active.name;
