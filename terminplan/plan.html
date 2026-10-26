@@ -200,9 +200,47 @@
   .lf-satz{font-size:12.5px;line-height:1.5;margin:0 0 10px;}
   .lf-hinweise{background:#fff8e6;border:1px solid #f0d9a0;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:11.5px;}
   .lf-hinweise ul{margin:4px 0 0;padding-left:18px;}
-  .lf-wahl{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
-  .lf-wahl label{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:7px 9px;cursor:pointer;font-size:12px;}
-  .lf-wahl label:has(input:checked){border-color:var(--blue);background:#f2f6ff;}
+  .modal-box.lf-box{max-height:88vh;}
+  .lf-svg .lf-knoten.offen rect{fill:#fff;stroke:#94a3b8;stroke-dasharray:3 2;}
+  .lf-svg .lf-knoten.offen .lf-marke{fill:#64748b;font-weight:400;}
+  .lf-svg .lf-knoten.weg rect{fill:#fdecea;stroke:#c0392b;}
+  .lf-svg .lf-knoten.weg .lf-marke{fill:#c0392b;}
+  .lf-fortschritt{display:flex;align-items:center;gap:10px;font-size:12px;color:#555;margin-bottom:8px;}
+  .lf-balken{flex:1;height:5px;background:#eef0f3;border-radius:3px;overflow:hidden;}
+  .lf-balken div{height:5px;width:0;background:var(--blue);transition:width .15s;}
+  .lf-oben{font-size:12px;line-height:1.75;margin-bottom:8px;}
+  .lf-seite{font-size:10.5px;background:#f1f5f9;color:#475569;border-radius:4px;padding:1px 6px;}
+  .lf-typ{font-size:11px;color:#64748b;}
+  .lf-offen{color:#94a3b8;font-weight:400;}
+  .lf-rot{color:#c0392b;}
+  .lf-sammel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+  .lf-sammel button,.lf-sammel select{font-size:12px;padding:5px 10px;border-radius:4px;cursor:pointer;}
+  .lf-sammel select{border:1px solid var(--line);max-width:300px;}
+  .lf-zeile{border-top:1px solid #eef0f3;padding:9px 0;}
+  .lf-zeile.entschieden .lf-zkopf b{color:var(--green-dark);}
+  .lf-zkopf{font-size:12.5px;margin-bottom:5px;}
+  .lf-frage{font-size:11px;color:#b45309;margin-left:4px;}
+  .lf-zeile.entschieden .lf-frage{display:none;}
+  .lf-vorschlaege{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:6px;}
+  .lf-klein{font-size:11px;color:#666;margin-right:2px;}
+  .lf-chip{font-size:12px;padding:4px 9px;border-radius:4px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;}
+  .lf-chip small{color:#64748b;font-size:10.5px;margin-left:5px;}
+  .lf-chip.an{background:#e8f0ff;border-color:var(--blue);color:var(--blue-dark);}
+  .lf-chip.an small{color:var(--blue);}
+  .lf-wege{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:6px;}
+  .lf-wege select,.lf-wege input{width:100%;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:4px;font-family:inherit;}
+  .lf-suche{position:relative;}
+  .lf-treffer{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 4px 4px;z-index:5;max-height:220px;overflow:auto;}
+  .lf-treffer:empty{display:none;}
+  .lf-treffer button{display:block;width:100%;text-align:left;background:#fff;border:none;padding:5px 8px;font-size:12px;cursor:pointer;}
+  .lf-treffer button:hover{background:#f2f6ff;}
+  .lf-kein{padding:6px 8px;font-size:11.5px;color:#c0392b;}
+  .lf-aktionen{display:flex;gap:6px;}
+  .lf-zusammen{background:#fff8e6;border:1px solid #f0d9a0;border-radius:6px;padding:7px 10px;margin:8px 0 10px;font-size:12px;line-height:1.5;}
+  .lf-nachr{margin-right:auto;font-size:12px;color:#444;display:flex;gap:6px;align-items:center;}
+  .lf-fuss .lf-ja:disabled{opacity:.4;cursor:not-allowed;}
+  .tabelle-hinweis.mit-knopf{pointer-events:auto;display:flex;gap:10px;align-items:center;}
+  .tabelle-hinweis.mit-knopf button{background:#fff;color:#111;border:none;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:600;}
   .lf-fuss{display:flex;gap:10px;align-items:center;justify-content:flex-end;}
   .lf-fuss span{margin-right:auto;font-size:11px;color:#666;}
   .lf-fuss .lf-ja{background:#c0392b;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;}
@@ -1633,47 +1671,47 @@ function deleteTaskAndDescendants(uid){
 }
 
 // ==================================================================================
-// Löschen mit Folgen (26.10.2026, Marcel): „wenn ich etwas Relevantes lösche, das unfassbar viele
-// Verknüpfungen hat, löscht das System es einfach und alles andere bleibt gleich“. Vorher riss jede Kette
-// still: die Nachfolger behielten ihre Termine, aber nichts schob sie mehr (so am 26.10. „Trockenbau Wände und
-// Decken schließen“ im Hemau-Probeplan, Protokoll nur „1 gelöscht“). Jetzt rechnet loeschFolgen() vorher aus,
-// was mitgeht und wer danach lose hängt, der Dialog zeigt es, und die Kette wird geschlossen (Vorgänger → Nachfolger).
+// Löschen mit Neuverknüpfung (26.10.2026, Marcel). Vorher riss jedes Löschen die Kette still: Nachfolger behielten
+// ihre Termine, aber nichts schob sie mehr (so am 26.10. „Trockenbau Wände und Decken schließen“ im Hemau-Probeplan).
+// Jetzt wird jede Verknüpfung, die vom gelöschten Block nach außen geht, einzeln entschieden: an ein neues Ziel
+// umhängen, lösen oder — wo der Partner sonst allein stünde — mitlöschen. Gültige Ziele kommen aus zielGueltig(),
+// Vorschläge aus zielVorschlaege() (austauschbar). Derselbe Kern steht in supabase/functions/mcp/plan_kern.js.
 // ==================================================================================
 function loeschFolgen(wurzeln){
   const weg = new Set();
   wurzeln.forEach(u=>subtreeUidSet(u).forEach(x=>weg.add(x)));
   const vorgaenge = TASKS.filter(t=>weg.has(t.uid));
   const kanten = EDGES.filter(e=>weg.has(e.from) || weg.has(e.to));
-  const rein = kanten.filter(e=>!weg.has(e.from) && byUid[e.from]), raus = kanten.filter(e=>!weg.has(e.to) && byUid[e.to]);
   const bleiben = EDGES.filter(e=>!weg.has(e.from) && !weg.has(e.to));
-  const vorgaenger = [...new Set(rein.map(e=>e.from))], nachfolger = [...new Set(raus.map(e=>e.to))];
-  // ohne den gelöschten Block hat dieser Nachfolger keinen Vorgänger mehr
+  // je Verknüpfung nach außen eine Zeile: seite 'vor' = Partner ist Vorgänger (bekommt einen neuen Nachfolger),
+  // seite 'nach' = Partner ist Nachfolger (bekommt einen neuen Vorgänger)
+  const links = kanten.filter(e=>weg.has(e.from) !== weg.has(e.to) && byUid[weg.has(e.from) ? e.to : e.from]).map(e=>{
+    const vor = !weg.has(e.from);
+    return { schluessel: e.from + '>' + e.to, kante: e, seite: vor ? 'vor' : 'nach', partner: vor ? e.from : e.to, ueber: vor ? e.to : e.from, gegenueber: [] };
+  });
+  const vorgaenger = [...new Set(links.filter(l=>l.seite === 'vor').map(l=>l.partner))];
+  const nachfolger = [...new Set(links.filter(l=>l.seite === 'nach').map(l=>l.partner))];
   const lose = nachfolger.filter(u=>!bleiben.some(e=>e.to === u));
   const dahinter = new Set(), offen = [...nachfolger];
   while(offen.length){ const u = offen.pop(); bleiben.forEach(e=>{ if(e.from === u && !dahinter.has(e.to) && !nachfolger.includes(e.to)){ dahinter.add(e.to); offen.push(e.to); } }); }
-  // Brücken: welcher Vorgänger trieb über den gelöschten Block welchen Nachfolger? Im Block zählen Verknüpfungen
-  // und Sammel-/Untervorgang (eine Kante auf einen Sammelvorgang wirkt auf seine Kinder und umgekehrt).
+  // Wer trieb über den Block wen? Im Block zählen Verknüpfungen und Sammel-/Untervorgang (eine Kante auf einen
+  // Sammelvorgang wirkt auf seine Kinder und umgekehrt). Daraus kommt der Vorschlag „Kette schließen“.
   const nachbarn = (u)=>{
     const n = EDGES.filter(e=>e.from === u && weg.has(e.to)).map(e=>e.to);
     const p = findParentUid(u); if(p != null && weg.has(p)) n.push(p);
     subtreeUidSet(u).forEach(k=>{ if(k !== u) n.push(k); });
     return n;
   };
-  const kantenDanach = [...bleiben], bruecken = [];
-  const kommtHin = (von, ziel)=>{ const g = new Set([von]), o = [von]; while(o.length){ const u = o.pop(); if(u === ziel) return true; kantenDanach.forEach(e=>{ if(e.from === u && !g.has(e.to)){ g.add(e.to); o.push(e.to); } }); } return false; };
-  for(const r of rein){
-    const block = new Set([r.to]), o = [r.to];
+  for(const r of links.filter(l=>l.seite === 'vor')){
+    const block = new Set([r.ueber]), o = [r.ueber];
     while(o.length){ const u = o.pop(); nachbarn(u).forEach(v=>{ if(!block.has(v)){ block.add(v); o.push(v); } }); }
-    for(const e of raus){
-      if(!block.has(e.from)) continue;
-      const von = r.from, nach = e.to;
-      // schon (auch über andere Wege) abhängig, verwandt oder ein Kreis: keine Brücke nötig bzw. erlaubt
-      if(von === nach || verwandt(von, nach) || kommtHin(von, nach) || kommtHin(nach, von)) continue;
-      const b = { from: von, to: nach, type: (edgeAnchors(r.type).predEnd === 'finish' ? 'E' : 'A') + (edgeAnchors(e.type).succEnd === 'start' ? 'A' : 'E'),
-        hardCeiling: !!(r.hardCeiling || e.hardCeiling) };
-      bruecken.push(b); kantenDanach.push(b);
+    for(const e of links.filter(l=>l.seite === 'nach' && block.has(l.ueber))){
+      if(!r.gegenueber.includes(e.partner)) r.gegenueber.push(e.partner);
+      if(!e.gegenueber.includes(r.partner)) e.gegenueber.push(r.partner);
     }
   }
+  // Mitlöschen nur, wo der Partner sonst allein stünde: keine Verknüpfung außer zum Block, kein Sammelvorgang
+  links.forEach(l=>{ l.mitloeschbar = !byUid[l.partner].summary && EDGES.every(e=>(e.from !== l.partner && e.to !== l.partner) || weg.has(e.from) || weg.has(e.to)); });
   const namen = (f)=> vorgaenge.filter(f).map(t=>t.name);
   const hinweise = [];
   const hinweis = (liste, eins, viele)=>{ if(liste.length) hinweise.push({ satz: liste.length === 1 ? eins : liste.length + ' ' + viele, namen: liste }); };
@@ -1688,60 +1726,175 @@ function loeschFolgen(wurzeln){
   const leer = [...new Set(wurzeln.map(u=>findParentUid(u)))].filter(p=>p != null && !weg.has(p) && byUid[p]
     && !TASKS.some(t=>!weg.has(t.uid) && findParentUid(t.uid) === p));
   hinweis(leer.map(p=>byUid[p].name), 'Sammelvorgang verliert alle Untervorgänge', 'Sammelvorgänge verlieren alle Untervorgänge');
-  return { wurzeln, weg, vorgaenge, kanten, rein, raus, vorgaenger, nachfolger, lose, dahinter: [...dahinter], bruecken, hinweise,
+  return { wurzeln, weg, vorgaenge, kanten, links, vorgaenger, nachfolger, lose, dahinter: [...dahinter], hinweise,
     folgenreich: kanten.length > 0 || vorgaenge.length > 1 || hinweise.length > 0 };
 }
-// art: 'schliessen' = Vorgänger direkt an die Nachfolger hängen, der Abstand bleibt als Pause, kein Termin ändert sich;
-// 'nachruecken' = ebenso, aber nahtlos, die Nachfolger rücken an ihre Vorgänger (wie MS Project mit Autoverknüpfen);
-// 'reissen' = nur löschen, die Nachfolger behalten ihre Termine, nichts treibt sie mehr (das alte Verhalten).
-function loeschenAnwenden(folgen, art){
-  const neu = art === 'reissen' ? [] : folgen.bruecken.map(b=>{
-    const p = byUid[b.from], s = byUid[b.to], an = edgeAnchors(b.type);
-    if(art === 'nachruecken') return { ...b, ...versatzAusPause(p, b.type, 0, 'wd') };
+// Die Verknüpfung, die eine Entscheidung „an ziel umhängen“ anlegt: Art und harte Obergrenze bleiben
+function neueKante(link, ziel){
+  return link.seite === 'nach' ? { from: ziel, to: link.partner, type: link.kante.type, hardCeiling: !!link.kante.hardCeiling }
+    : { from: link.partner, to: ziel, type: link.kante.type, hardCeiling: !!link.kante.hardCeiling };
+}
+// Gültige Ziele einer Zeile: nicht im Block und nicht mitgelöscht, nicht Sammel-/Untervorgang des Partners, nicht schon
+// so verknüpft und kein Kreis — gerechnet auf dem Plan NACH dem Löschen samt den übrigen Entscheidungen.
+function zielGueltig(link, folgen, entscheidungen){
+  const raus = new Set(folgen.weg);
+  folgen.links.forEach(l=>{ if(entscheidungen[l.schluessel] === 'mitloeschen') subtreeUidSet(l.partner).forEach(u=>raus.add(u)); });
+  const kanten = EDGES.filter(e=>!raus.has(e.from) && !raus.has(e.to));
+  folgen.links.forEach(l=>{ const z = entscheidungen[l.schluessel]; if(l !== link && typeof z === 'number' && !raus.has(z)) kanten.push(neueKante(l, z)); });
+  const nach = link.seite === 'nach';
+  const erreicht = new Set([link.partner]), offen = [link.partner];
+  while(offen.length){ const u = offen.pop(); kanten.forEach(e=>{ const [a, b] = nach ? [e.from, e.to] : [e.to, e.from]; if(a === u && !erreicht.has(b)){ erreicht.add(b); offen.push(b); } }); }
+  const schon = new Set(kanten.filter(e=> nach ? e.to === link.partner : e.from === link.partner).map(e=> nach ? e.from : e.to));
+  const verw = subtreeUidSet(link.partner);
+  for(let p = findParentUid(link.partner); p != null; p = findParentUid(p)) verw.add(p);
+  return new Set(TASKS.filter(t=>!raus.has(t.uid) && !erreicht.has(t.uid) && !schon.has(t.uid) && !verw.has(t.uid)).map(t=>t.uid));
+}
+function nameAehnlich(a, b){
+  const paare = (s)=>{ s = String(s).toLowerCase().replace(/\s+/g, ' '); const m = []; for(let i = 0; i < s.length - 1; i++) m.push(s.slice(i, i + 2)); return m; };
+  const x = paare(a), y = paare(b);
+  if(!x.length || !y.length) return 0;
+  let gleich = 0; const rest = [...y];
+  x.forEach(p=>{ const i = rest.indexOf(p); if(i >= 0){ gleich++; rest.splice(i, 1); } });
+  return 2 * gleich / (x.length + y.length);
+}
+// Vorschlagslogik (austauschbar): höchstens drei Ziele je Zeile, je mit Grund, nach Relevanz.
+// 1. Kette schließen (die Gegenseite über den Block; hängt der Partner dort schon an, ist Lösen richtig),
+// 2. gleicher Abschnitt (Geschwister direkt davor bzw. danach), 3. gleiche Firma, 4. ähnlicher Name.
+function zielVorschlaege(link, folgen, gueltig, entscheidungen){
+  const ueber = byUid[link.ueber] || folgen.vorgaenge.find(t=>t.uid === link.ueber), partner = byUid[link.partner];
+  const nach = link.seite === 'nach';
+  const liste = [];
+  const dazu = (ziel, grund, punkte)=>{ if(!liste.some(v=>v.ziel === ziel)) liste.push({ ziel, grund, punkte }); };
+  // eine Gegenseite, deren eigene Zeile schon anders entschieden ist (gelöst, mitgelöscht, anderes Ziel), wird nicht
+  // zurückgeholt — sonst stellte der Vorschlag hier wieder her, was dort bewusst gelöst wurde
+  const anders = (u)=> folgen.links.some(x=>x.partner === u && x.seite !== link.seite && (entscheidungen || {})[x.schluessel] != null && entscheidungen[x.schluessel] !== link.partner);
+  const gegen = link.gegenueber.filter(u=>byUid[u] && !anders(u))
+    .sort((a, b)=> nach ? (byUid[b].finish > byUid[a].finish ? 1 : -1) : (byUid[a].start > byUid[b].start ? 1 : -1));
+  gegen.forEach((u, i)=>{ if(gueltig.has(u)) dazu(u, (nach ? 'war Vorgänger' : 'war Nachfolger') + ' von „' + ueber.name + '“', 100 - i); });
+  if(gegen.length && !gegen.some(u=>gueltig.has(u))) dazu('loesen', 'schon mit „' + byUid[gegen[0]].name + '“ verbunden', 99);
+  const eltern = new Set([findParentUid(link.ueber), findParentUid(link.partner)].filter(p=>p != null));
+  const geschwister = TASKS.filter(t=>gueltig.has(t.uid) && !t.summary && eltern.has(findParentUid(t.uid)));
+  if(nach) geschwister.filter(t=>t.finish <= partner.start).sort((a, b)=> a.finish < b.finish ? 1 : -1).slice(0, 2)
+    .forEach((t, i)=> dazu(t.uid, 'gleicher Abschnitt, endet davor', 80 - i));
+  else geschwister.filter(t=>t.start >= partner.finish).sort((a, b)=> a.start > b.start ? 1 : -1).slice(0, 2)
+    .forEach((t, i)=> dazu(t.uid, 'gleicher Abschnitt, beginnt danach', 80 - i));
+  if(ueber.firmaName) TASKS.filter(t=>gueltig.has(t.uid) && t.firmaName === ueber.firmaName).slice(0, 2).forEach(t=> dazu(t.uid, 'gleiche Firma', 60));
+  TASKS.filter(t=>gueltig.has(t.uid)).map(t=>[t, nameAehnlich(t.name, ueber.name)]).filter(([, w])=>w >= 0.4)
+    .sort((a, b)=>b[1] - a[1]).slice(0, 2).forEach(([t, w])=> dazu(t.uid, 'ähnlicher Name', 40 + w * 10));
+  return liste.sort((a, b)=>b.punkte - a.punkte).slice(0, 3);
+}
+// Bleibt der Partner auch ohne diese Verknüpfung mit der Gegenseite verbunden (schon vorhanden oder durch eine andere
+// Entscheidung)? Dann ist „lösen“ kein Riss — die Kette ist über die andere Zeile geschlossen.
+function loeschVerbunden(l, folgen, entscheidungen){
+  const nach = l.seite === 'nach';
+  const passt = (k, u)=> nach ? (k.from === u && k.to === l.partner) : (k.from === l.partner && k.to === u);
+  return l.gegenueber.find(u=> EDGES.some(e=>passt(e, u))
+    || folgen.links.some(x=>typeof entscheidungen[x.schluessel] === 'number' && passt(neueKante(x, entscheidungen[x.schluessel]), u)));
+}
+// Für jede noch offene Zeile den ersten Vorschlag (sonst lösen) — „Alle Vorschläge übernehmen“, Tony und Claude.
+// Nachfolger zuerst: sie schließen die Kette; die Vorgänger sind danach meist schon verbunden.
+function standardEntscheidungen(folgen, entscheidungen){
+  const e = { ...(entscheidungen || {}) };
+  [...folgen.links.filter(l=>l.seite === 'nach'), ...folgen.links.filter(l=>l.seite === 'vor')].forEach(l=>{
+    if(e[l.schluessel] != null) return;
+    const v = zielVorschlaege(l, folgen, zielGueltig(l, folgen, e), e)[0];
+    e[l.schluessel] = v ? v.ziel : 'loesen';
+  });
+  return e;
+}
+// Entscheidungen anwenden. nachruecken: neue Verknüpfungen nahtlos, die Ziele docken an (wie MS Project);
+// sonst bleibt der heutige Abstand als Pause stehen und kein Termin ändert sich.
+function loeschenAnwenden(folgen, entscheidungen, nachruecken){
+  const mit = folgen.links.filter(l=>entscheidungen[l.schluessel] === 'mitloeschen').map(l=>l.partner);
+  const neu = [];
+  folgen.links.forEach(l=>{
+    const z = entscheidungen[l.schluessel];
+    if(typeof z !== 'number' || !byUid[z] || mit.includes(z)) return;
+    const k = neueKante(l, z);
+    if(neu.some(e=>e.from === k.from && e.to === k.to) || EDGES.some(e=>e.from === k.from && e.to === k.to)) return;
+    const p = byUid[k.from], s = byUid[k.to], an = edgeAnchors(k.type);
+    if(nachruecken){ neu.push({ ...k, ...versatzAusPause(p, k.type, 0, 'wd') }); return; }
     const lag = daysBetween(parseISO(p[an.predEnd]), parseISO(s[an.succEnd]));
     const at = arbeitstageVersatz(p[an.predEnd], lag);
-    return lagToCalendarDays(p[an.predEnd], at, 'wd') === lag ? { ...b, lag, lagUnit: 'wd', lagValue: at } : { ...b, lag, lagUnit: 'cd', lagValue: lag };
+    neu.push(lagToCalendarDays(p[an.predEnd], at, 'wd') === lag ? { ...k, lag, lagUnit: 'wd', lagValue: at } : { ...k, lag, lagUnit: 'cd', lagValue: lag });
   });
-  folgen.wurzeln.forEach(u=>{ if(byUid[u]) deleteTaskAndDescendants(u); });
-  neu.forEach(e=>EDGES.push(e));
+  [...folgen.wurzeln, ...mit].forEach(u=>{ if(byUid[u]) deleteTaskAndDescendants(u); });
+  // letzte Sicherung gegen einen Kreis aus zwei Entscheidungen zusammen (die Auswahl prüft jede gegen die übrigen)
+  for(let i = 0; i < neu.length; i++){ if(erreichbar(neu[i].to, neu[i].from)) neu.splice(i--, 1); else EDGES.push(neu[i]); }
   sammelStatusAktualisieren();
   recomputeSummaryBars();
-  if(art === 'nachruecken') [...new Set(neu.map(e=>e.to))].forEach(u=>andocken(u));
+  if(nachruecken) [...new Set(neu.map(e=>e.to))].forEach(u=>andocken(u));
   resolveLockedConstraints();
-  return neu;
+  return { neu, mit };
 }
 // Probelauf: anwenden, messen, Stand zurück — dieselben Objekte, damit Zeilen und Klicks gültig bleiben
-function loeschVorschau(folgen, art){
+function loeschVorschau(folgen, entscheidungen, nachruecken){
   const liste = TASKS.slice(), werte = TASKS.map(t=>[t, { ...t }]), kanten = EDGES.map(e=>[e, { ...e }]);
-  const neu = loeschenAnwenden(folgen, art);
+  const { neu, mit } = loeschenAnwenden(folgen, entscheidungen, nachruecken);
   const bewegt = werte.filter(([t, alt])=>byUid[t.uid] === t && (t.start !== alt.start || t.finish !== alt.finish))
     .map(([t, alt])=>({ uid: t.uid, name: t.name, von: alt.start, nach: t.start, tage: daysBetween(parseISO(alt.start), parseISO(t.start)) }));
   TASKS.length = 0; liste.forEach(t=>TASKS.push(t));
   werte.forEach(([t, alt])=>{ Object.keys(t).forEach(k=>{ if(!(k in alt)) delete t[k]; }); Object.assign(t, alt); byUid[t.uid] = t; });
   EDGES.length = 0; kanten.forEach(([e, alt])=>{ Object.assign(e, alt); EDGES.push(e); });
-  return { neu, bewegt };
+  return { neu, mit, bewegt };
 }
-function loeschTitel(folgen, art, vorschau){
+// Was die Entscheidungen bewirken, in Worten: Titel (Knopf, Verlauf, Protokoll) und Zusammenfassung (Dialog, Tony, Claude)
+function loeschTitel(folgen, entscheidungen, vorschau){
+  const name = (u)=> '„' + (byUid[u]?.name || folgen.vorgaenge.find(t=>t.uid === u)?.name || u) + '“';
   const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
   const mitUnter = folgen.vorgaenge.length - w.length;
   let titel = w.length === 1 ? '„' + w[0].name + '“' + (mitUnter ? ' mit ' + mitUnter + ' Untervorgängen' : '') + ' gelöscht' : folgen.vorgaenge.length + ' Vorgänge gelöscht';
-  if(!folgen.raus.length) return titel;
-  if(art === 'reissen' || !vorschau.neu.length) return titel + ', Kette gerissen' + (folgen.lose.length ? ' (' + folgen.lose.length + ' hängen lose)' : '');
-  return titel + ', Kette geschlossen (' + vorschau.neu.length + ' neue Verknüpfung' + (vorschau.neu.length === 1 ? '' : 'en') + ')'
-    + (art === 'nachruecken' && vorschau.bewegt.length ? ', ' + vorschau.bewegt.length + ' Vorgänge nachgerückt' : '');
+  const geloest = folgen.links.filter(l=>entscheidungen[l.schluessel] === 'loesen' && !loeschVerbunden(l, folgen, entscheidungen)).length;
+  if(vorschau.neu.length) titel += ', ' + vorschau.neu.length + (vorschau.neu.length === 1 ? ' Verknüpfung' : ' Verknüpfungen') + ' umgehängt ('
+    + vorschau.neu.slice(0, 3).map(e=>name(e.from) + ' → ' + name(e.to)).join(', ') + (vorschau.neu.length > 3 ? ' …' : '') + ')';
+  if(geloest) titel += ', ' + geloest + ' gelöst';
+  if(vorschau.mit.length) titel += ', ' + vorschau.mit.map(name).join(', ') + ' mitgelöscht';
+  if(vorschau.bewegt.length) titel += ', ' + vorschau.bewegt.length + (vorschau.bewegt.length === 1 ? ' Vorgang' : ' Vorgänge') + ' nachgerückt';
+  return titel;
 }
-// Ein Weg für jedes Löschen von Vorgängen (Rechtsklick, Entf, Mehrfachauswahl): erst die Folgen zeigen, dann löschen.
+function loeschZusammenfassung(folgen, entscheidungen, vorschau, nachruecken){
+  const name = (u)=> '„' + (byUid[u]?.name || u) + '“';
+  const saetze = [];
+  if(!folgen.kanten.length) return ['Der Vorgang ist mit nichts verknüpft. Kein anderer Termin ändert sich.'];
+  if(vorschau.neu.length) saetze.push('Neu verknüpft: ' + vorschau.neu.map(e=>name(e.from) + ' → ' + name(e.to) + ' (' + e.type + ')').join(', ') + '.');
+  const alle = folgen.links.filter(l=>entscheidungen[l.schluessel] === 'loesen');
+  const verbunden = alle.filter(l=>loeschVerbunden(l, folgen, entscheidungen)), geloest = alle.filter(l=>!verbunden.includes(l));
+  if(verbunden.length) saetze.push('Bleibt verbunden: ' + verbunden.map(l=>name(l.partner) + ' (mit ' + name(loeschVerbunden(l, folgen, entscheidungen)) + ')').join(', ') + '.');
+  const lose = geloest.filter(l=>l.seite === 'nach' && !EDGES.some(e=>e.to === l.partner && !folgen.weg.has(e.from)) && !vorschau.neu.some(e=>e.to === l.partner));
+  if(geloest.length) saetze.push('Gelöst: ' + geloest.map(l=>name(l.partner)).join(', ') + '.'
+    + (lose.length ? ' Ohne Vorgänger hängen danach ' + lose.map(l=>name(l.partner)).join(', ') + ': Termine bleiben, aber nichts schiebt sie mehr.' : ''));
+  if(vorschau.mit.length) saetze.push('Mitgelöscht: ' + vorschau.mit.map(name).join(', ') + '.');
+  const b = vorschau.bewegt;
+  if(nachruecken && vorschau.neu.length) saetze.push(b.length ? (b.length === 1 ? 'Ein Vorgang rückt' : b.length + ' Vorgänge rücken') + ' nach: '
+      + b.slice(0, 4).map(x=>'„' + x.name + '“ ' + fmtDE(x.von) + ' → ' + fmtDE(x.nach) + ' (' + (x.tage > 0 ? '+' : '') + x.tage + ' Tage)').join(', ') + (b.length > 4 ? ' und ' + (b.length - 4) + ' weitere' : '') + '.'
+    : 'Kein Termin ändert sich — die Ziele sind fixiert oder werden von anderen Vorgängern gehalten.');
+  else if(vorschau.neu.length) saetze.push('Der Abstand bleibt als Pause stehen, kein Termin ändert sich.');
+  return saetze;
+}
+// Ein Weg für jedes Löschen von Vorgängen (Rechtsklick, Entf, Mehrfachauswahl): erst entscheiden, dann löschen.
 function loeschenMitFolgen(wurzeln, danach){
   if(SCHREIBSCHUTZ) return;
   const folgen = loeschFolgen(wurzeln);
-  openLoeschDialog(folgen, (art)=>{
-    const vorschau = loeschVorschau(folgen, art);
-    pushUndo(loeschTitel(folgen, art, vorschau));
-    loeschenAnwenden(folgen, art);
+  openLoeschDialog(folgen, (entscheidungen, nachruecken)=>{
+    const vorschau = loeschVorschau(folgen, entscheidungen, nachruecken);
+    const titel = loeschTitel(folgen, entscheidungen, vorschau);
+    pushUndo(titel);
+    loeschenAnwenden(folgen, entscheidungen, nachruecken);
     renderAll();
     if(danach) danach();
-    tabellenHinweis(loeschTitel(folgen, art, vorschau) + ' — ↶ holt es zurück');
+    rueckgaengigHinweis(titel);
   });
+}
+// Meldung unten mit „Rückgängig“ (8 s); ↶ und der Verlauf gehen danach weiter
+function rueckgaengigHinweis(text){
+  document.querySelector('.tabelle-hinweis')?.remove();
+  const el = Object.assign(document.createElement('div'), { className: 'tabelle-hinweis mit-knopf' });
+  el.append(Object.assign(document.createElement('span'), { textContent: text + ' ' }));
+  const k = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Rückgängig' });
+  k.addEventListener('click', ()=>{ el.remove(); undo(); });
+  el.append(k);
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 8000);
 }
 
 // Duplziert einen Vorgang (+ alle Unter-Vorgänge) OHNE externe Verknüpfungen - Verknüpfungen
@@ -2829,18 +2982,24 @@ function openConfirmDialog(message, onYes){
   document.body.appendChild(overlay);
 }
 
-// Löschdialog mit Folgen (26.10.2026): Kennzahlen, die Kette als Bild (Vorgänger → gelöscht → Nachfolger, neue
-// Brücken grün, lose Nachfolger orange), dieselbe Lage in Sätzen und die Wahl, was mit der Kette geschieht.
+// Löschfenster mit Neuverknüpfung (26.10.2026): oben Kennzahlen, Fortschritt, die Kette als Bild und die Liste der
+// Entscheidungen; darunter je Verknüpfung eine Zeile mit drei Eingabewegen (Vorschlag, Liste, Suche) für DASSELBE Ziel,
+// dazu Lösen und Mitlöschen. Ein Zustand E, ein zeichnen(): jede Eingabe zeichnet alles neu, oben wie unten.
 const ESC = (s)=> String(s ?? '').replace(/[&<>"]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
-function lfKetteSvg(folgen, art, vorschau){
+function lfZiel(u){ return zeilenNr(u) + '  ' + (byUid[u]?.name || u); }
+function lfKetteSvg(folgen, E){
   const MAX = 6, W = 640, BX = 175, MX = 232, MW = 176, RX = 465;
   const links = folgen.vorgaenger.slice(0, MAX), rechts = folgen.nachfolger.slice(0, MAX);
   const zeilen = Math.max(links.length + (folgen.vorgaenger.length > MAX), rechts.length + (folgen.nachfolger.length > MAX), 2);
   const H = zeilen * 30 + 8, y = (i)=> 4 + i * 30, mitte = H / 2;
-  const kurz = (u)=>{ const t = byUid[u]; const s = zeilenNr(u) + '  ' + (t?.name || u); return s.length > 27 ? s.slice(0, 26) + '…' : s; };
-  const neu = art === 'reissen' ? [] : vorschau.neu;
-  const loseDanach = new Set(folgen.lose.filter(u=>!neu.some(e=>e.to === u)));
-  const bewegt = new Map((art === 'nachruecken' ? vorschau.bewegt : []).map(b=>[b.uid, b]));
+  const kurz = (u, n)=>{ const s = zeilenNr(u) + '  ' + (byUid[u]?.name || u); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const zustand = (u, seite)=>{
+    const l = folgen.links.find(x=>x.partner === u && x.seite === seite), d = l && E[l.schluessel];
+    if(typeof d === 'number') return { klasse: 'gebunden', marke: '✓', titel: seite === 'nach' ? 'neuer Vorgänger: ' + lfZiel(d) : 'neuer Nachfolger: ' + lfZiel(d), ziel: d };
+    if(d === 'loesen') return { klasse: 'lose', marke: seite === 'nach' ? 'lose' : 'gelöst', titel: 'Verknüpfung gelöst' };
+    if(d === 'mitloeschen') return { klasse: 'weg', marke: 'mit weg', titel: 'wird mitgelöscht' };
+    return { klasse: 'offen', marke: 'offen', titel: 'noch nicht entschieden' };
+  };
   let s = `<svg class="lf-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Kette um den gelöschten Vorgang">`;
   s += `<defs><marker id="lfPfeilRot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#c0392b"/></marker>`
      + `<marker id="lfPfeilGruen" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2e7d32"/></marker></defs>`;
@@ -2849,44 +3008,38 @@ function lfKetteSvg(folgen, art, vorschau){
   const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
   const mName = w.length === 1 ? w[0].name : folgen.vorgaenge.length + ' Vorgänge';
   const mZusatz = folgen.vorgaenge.length > w.length && w.length === 1 ? '+ ' + (folgen.vorgaenge.length - 1) + ' Untervorgänge' : 'wird gelöscht';
-  s += `<g class="lf-mitte${neu.length ? ' blass' : ''}"><rect x="${MX}" y="${mitte-20}" width="${MW}" height="40" rx="5"/>`
+  const entschieden = folgen.links.some(l=>E[l.schluessel] != null);
+  s += `<g class="lf-mitte${entschieden ? ' blass' : ''}"><rect x="${MX}" y="${mitte-20}" width="${MW}" height="40" rx="5"/>`
      + `<text x="${MX+MW/2}" y="${mitte-4}" text-anchor="middle" class="lf-mname">${ESC(mName.length > 26 ? mName.slice(0, 25) + '…' : mName)}</text>`
      + `<text x="${MX+MW/2}" y="${mitte+12}" text-anchor="middle" class="lf-mzusatz">${ESC(mZusatz)}</text><title>${ESC(mName)}</title></g>`;
-  neu.forEach(e=>{
-    const i = links.indexOf(e.from), j = rechts.indexOf(e.to);
-    if(i < 0 || j < 0) return;
-    s += `<path d="M${BX},${y(i)+12} C${BX+150},${y(i)+12} ${RX-150},${y(j)+12} ${RX},${y(j)+12}" class="lf-bruecke" marker-end="url(#lfPfeilGruen)"><title>neu: ${ESC(byUid[e.from].name)} → ${ESC(byUid[e.to].name)} (${e.type})</title></path>`;
+  // neue Verknüpfung zwischen zwei gezeigten Partnern (Kette geschlossen): grüner Bogen über den gelöschten Block
+  const boegen = new Set();
+  folgen.links.forEach(l=>{
+    const d = E[l.schluessel]; if(typeof d !== 'number') return;
+    const [von, nach] = l.seite === 'nach' ? [d, l.partner] : [l.partner, d];
+    const i = links.indexOf(von), j = rechts.indexOf(nach);
+    if(i < 0 || j < 0 || boegen.has(von + '>' + nach)) return;
+    boegen.add(von + '>' + nach);
+    s += `<path d="M${BX},${y(i)+12} C${BX+150},${y(i)+12} ${RX-150},${y(j)+12} ${RX},${y(j)+12}" class="lf-bruecke" marker-end="url(#lfPfeilGruen)"><title>neu: ${ESC(byUid[von].name)} → ${ESC(byUid[nach].name)}</title></path>`;
   });
-  const knoten = (u, x, i, klasse, zusatz)=> `<g class="lf-knoten ${klasse}"><rect x="${x}" y="${y(i)}" width="${BX}" height="24" rx="4"/>`
-    + `<text x="${x+8}" y="${y(i)+16}">${ESC(kurz(u))}</text>${zusatz || ''}<title>${ESC(byUid[u]?.name)}</title></g>`;
+  const knoten = (u, x, i, seite)=>{
+    const z = zustand(u, seite);
+    return `<g class="lf-knoten ${z.klasse}"><rect x="${x}" y="${y(i)}" width="${BX}" height="24" rx="4"/>`
+      + `<text x="${x+8}" y="${y(i)+16}">${ESC(kurz(u, 22))}</text><text x="${x+BX-6}" y="${y(i)+16}" text-anchor="end" class="lf-marke">${ESC(z.marke)}</text>`
+      + `<title>${ESC(byUid[u]?.name)}: ${ESC(z.titel)}</title></g>`;
+  };
   links.forEach((u, i)=>{ s += knoten(u, 0, i, 'vor'); });
-  rechts.forEach((u, i)=>{
-    const b = bewegt.get(u);
-    const marke = loseDanach.has(u) ? `<text x="${RX+BX-6}" y="${y(i)+16}" text-anchor="end" class="lf-marke">lose</text>`
-      : b ? `<text x="${RX+BX-6}" y="${y(i)+16}" text-anchor="end" class="lf-marke">${b.tage > 0 ? '+' : ''}${b.tage} T</text>` : '';
-    s += knoten(u, RX, i, loseDanach.has(u) ? 'lose' : neu.some(e=>e.to === u) ? 'gebunden' : 'nach', marke);
-  });
+  rechts.forEach((u, i)=>{ s += knoten(u, RX, i, 'nach'); });
   if(folgen.vorgaenger.length > MAX) s += `<text x="8" y="${y(links.length)+16}" class="lf-mehr">+ ${folgen.vorgaenger.length - MAX} weitere</text>`;
   if(folgen.nachfolger.length > MAX) s += `<text x="${RX+8}" y="${y(rechts.length)+16}" class="lf-mehr">+ ${folgen.nachfolger.length - MAX} weitere</text>`;
   return s + '</svg>';
 }
-function lfSatz(folgen, art, vorschau){
-  const liste = (uids, n = 4)=> uids.slice(0, n).map(u=>'„' + ESC(byUid[u]?.name) + '“').join(', ') + (uids.length > n ? ' und ' + (uids.length - n) + ' weitere' : '');
-  const mehr = (n, eins, viele)=> n === 1 ? eins : viele;
-  const dahinter = folgen.dahinter.length ? ' Dahinter ' + mehr(folgen.dahinter.length, 'hängt ein weiterer Vorgang', 'hängen ' + folgen.dahinter.length + ' weitere Vorgänge') + ' in derselben Kette.' : '';
-  if(!folgen.kanten.length) return 'Dieser Vorgang ist mit nichts verknüpft. Kein anderer Termin ändert sich.';
-  if(!folgen.raus.length) return 'Er hat keine Nachfolger. ' + mehr(folgen.vorgaenger.length, 'Sein Vorgänger verliert', 'Seine ' + folgen.vorgaenger.length + ' Vorgänger verlieren') + ' nur diese Verknüpfung, kein Termin ändert sich.';
-  const neu = art === 'reissen' ? [] : vorschau.neu;
-  const loseDanach = folgen.lose.filter(u=>!neu.some(e=>e.to === u));
-  const loseSatz = loseDanach.length ? ' <b>' + mehr(loseDanach.length, 'Ein Nachfolger hängt', loseDanach.length + ' Nachfolger hängen') + ' danach lose</b> (' + liste(loseDanach) + '): Termine bleiben, aber nichts schiebt sie mehr, wenn sich davor etwas verschiebt.' : '';
-  if(art === 'reissen') return mehr(folgen.kanten.length, 'Eine Verknüpfung fällt', folgen.kanten.length + ' Verknüpfungen fallen') + ' weg.' + loseSatz + dahinter;
-  const kette = 'Die Kette wird geschlossen: ' + mehr(neu.length, 'eine neue Verknüpfung', neu.length + ' neue Verknüpfungen') + ' direkt vom Vorgänger zum Nachfolger.';
-  if(art === 'schliessen') return kette + ' Der Abstand bleibt als Pause stehen, <b>kein Termin ändert sich</b>. Verschiebt sich später etwas davor, schiebt es die Nachfolger weiter mit.' + loseSatz;
-  const b = vorschau.bewegt;
-  const bewegtSatz = b.length ? ' <b>' + mehr(b.length, 'Ein Vorgang rückt', b.length + ' Vorgänge rücken') + ' nach</b>: '
-      + b.slice(0, 4).map(x=>'„' + ESC(x.name) + '“ ' + fmtDE(x.von) + ' → ' + fmtDE(x.nach) + ' (' + (x.tage > 0 ? '+' : '') + x.tage + ' Tage)').join(', ') + (b.length > 4 ? ' und ' + (b.length - 4) + ' weitere' : '') + '.'
-    : ' Kein Termin ändert sich — die Nachfolger sind fixiert oder werden von anderen Vorgängern gehalten.';
-  return kette + ' Die Nachfolger rücken nahtlos an ihre Vorgänger.' + bewegtSatz + loseSatz;
+function lfEntscheidung(l, E, folgen){
+  const d = E[l.schluessel], p = '„' + ESC(byUid[l.partner]?.name) + '“';
+  if(typeof d === 'number') return l.seite === 'nach' ? '„' + ESC(byUid[d]?.name) + '“ → ' + p : p + ' → „' + ESC(byUid[d]?.name) + '“';
+  if(d === 'loesen'){ const u = loeschVerbunden(l, folgen, E); return 'Verknüpfung lösen' + (u ? ' <span class="lf-typ">— bleibt mit „' + ESC(byUid[u]?.name) + '“ verbunden</span>' : ''); }
+  if(d === 'mitloeschen') return '<span class="lf-rot">' + p + ' mitlöschen</span>';
+  return '<span class="lf-offen">offen</span>';
 }
 function openLoeschDialog(folgen, onYes){
   const overlay = document.createElement('div');
@@ -2898,13 +3051,14 @@ function openLoeschDialog(folgen, onYes){
   const box = document.createElement('div');
   box.className = 'modal-box lf-box';
   box.addEventListener('click', ev=>ev.stopPropagation());
-  const vorschau = { schliessen: loeschVorschau(folgen, 'schliessen'), nachruecken: loeschVorschau(folgen, 'nachruecken'), reissen: { neu: [], bewegt: [] } };
-  const waehlbar = folgen.raus.length > 0 && folgen.bruecken.length > 0;
-  let art = waehlbar ? 'nachruecken' : 'reissen';   // Standard wie MS Project (Marcel 26.10.2026)
+  let E = {}, nachr = true;   // Standard wie MS Project (Marcel 26.10.2026)
+  const L = folgen.links, mitLinks = L.length > 0;
   const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
   const titel = w.length === 1 ? '„' + w[0].name + '“ löschen?' : folgen.vorgaenge.length + ' Vorgänge löschen?';
   const zahl = (n, eins, viele, klasse)=> `<div class="lf-zahl ${klasse || ''}"><b>${n}</b>${n === 1 ? eins : viele}</div>`;
   const andere = folgen.vorgaenge.length - w.length;
+  const typ = (t)=> t.summary ? 'Sammelvorgang' : t.milestone ? 'Meilenstein' : 'Vorgang';
+  const zeitraum = (t)=> fmtDE(t.start) + (t.finish !== t.start ? '–' + fmtDE(t.finish) : '');
   box.innerHTML = `<div class="modal-title">${ESC(titel)}${folgen.folgenreich ? ' <span class="lf-folgenreich">folgenreich</span>' : ''}</div>
     <div class="lf-zahlen">
       ${zahl(folgen.vorgaenge.length, 'Vorgang', 'Vorgänge', 'rot')}
@@ -2914,24 +3068,96 @@ function openLoeschDialog(folgen, onYes){
       ${zahl(folgen.nachfolger.length, 'Nachfolger', 'Nachfolger')}
       ${folgen.dahinter.length ? zahl(folgen.dahinter.length, 'dahinter in der Kette', 'dahinter in der Kette') : ''}
     </div>
-    ${folgen.vorgaenger.length || folgen.nachfolger.length ? '<div class="lf-bild"></div>' : ''}
-    <p class="lf-satz"></p>
+    ${mitLinks ? `<div class="lf-fortschritt"><span><b class="lf-n">0</b> von ${L.length} Verknüpfungen entschieden</span><div class="lf-balken"><div></div></div></div>
+      <div class="lf-bild"></div><div class="lf-oben"></div>
+      <div class="lf-sammel"><button type="button" class="secondary lf-alle">Alle Vorschläge übernehmen</button>
+        ${folgen.nachfolger.length ? '<select class="lf-alle-an"></select>' : ''}</div>
+      <div class="lf-zeilen">${L.map(l=>{ const p = byUid[l.partner]; return `<div class="lf-zeile" data-k="${l.schluessel}">
+        <div class="lf-zkopf"><b>${l.seite === 'nach' ? 'Nachfolger' : 'Vorgänger'}</b> ${ESC(lfZiel(l.partner))}
+          <span class="lf-typ">${typ(p)} · ${zeitraum(p)} · ${l.kante.type}${l.seite === 'nach' ? ' von' : ' auf'} „${ESC(byUid[l.ueber]?.name)}“</span>
+          <span class="lf-frage">${l.seite === 'nach' ? 'braucht einen neuen Vorgänger' : 'braucht einen neuen Nachfolger'}</span></div>
+        <div class="lf-vorschlaege"></div>
+        <div class="lf-wege"><select class="lf-liste"></select>
+          <div class="lf-suche"><input type="text" placeholder="Name oder Zeilennummer suchen" spellcheck="false"><div class="lf-treffer"></div></div></div>
+        <div class="lf-aktionen"><button type="button" class="lf-chip" data-w="loesen">Lösen</button>${l.mitloeschbar ? '<button type="button" class="lf-chip" data-w="mitloeschen">Mitlöschen</button>' : ''}</div>
+      </div>`; }).join('')}</div>`
+    : `<p class="lf-satz">Dieser Vorgang ist mit nichts verknüpft. Kein anderer Termin ändert sich.</p>`}
     ${folgen.hinweise.length ? '<div class="lf-hinweise"><b>Geht mit verloren:</b><ul>' + folgen.hinweise.map(h=>'<li>' + ESC(h.satz) + ': ' + h.namen.slice(0, 4).map(n=>'„' + ESC(n) + '“').join(', ') + (h.namen.length > 4 ? ' und ' + (h.namen.length - 4) + ' weitere' : '') + '</li>').join('') + '</ul></div>' : ''}
-    ${waehlbar ? `<div class="lf-wahl">
-      <label><input type="radio" name="lfArt" value="nachruecken" checked><span><b>Kette schließen und nachrücken</b> — Nachfolger rücken nahtlos an (${vorschau.nachruecken.bewegt.length} Vorgänge ändern sich)</span></label>
-      <label><input type="radio" name="lfArt" value="schliessen"><span><b>Kette schließen, Termine bleiben</b> — Vorgänger direkt an die Nachfolger hängen</span></label>
-      <label><input type="radio" name="lfArt" value="reissen"><span><b>Nur löschen</b> — Kette reißt, Nachfolger hängen lose</span></label>
-    </div>` : ''}
-    <div class="lf-fuss"><span>Mit ↶ Zurück holst du es wieder, alles steht im Verlauf.</span>
+    <div class="lf-zusammen" hidden></div>
+    <div class="lf-fuss">${mitLinks ? '<label class="lf-nachr"><input type="checkbox" checked> Nachfolger rücken nach (wie MS Project)</label>' : '<span>Mit ↶ Zurück holst du es wieder, alles steht im Verlauf.</span>'}
       <button type="button" class="secondary lf-nein">Abbrechen</button><button type="button" class="lf-ja">Löschen</button></div>`;
-  const zeichnen = ()=>{
-    const bild = box.querySelector('.lf-bild');
-    if(bild) bild.innerHTML = lfKetteSvg(folgen, art, vorschau[art]);
-    box.querySelector('.lf-satz').innerHTML = lfSatz(folgen, art, vorschau[art]);
-  };
-  box.querySelectorAll('input[name="lfArt"]').forEach(r=> r.addEventListener('change', ()=>{ art = r.value; zeichnen(); }));
+  const setze = (k, wert)=>{ E[k] = wert; zeichnen(); };
+  function zeichnen(){
+    if(!mitLinks) return;
+    const gueltig = new Map(L.map(l=>[l.schluessel, zielGueltig(l, folgen, E)]));
+    const n = L.filter(l=>E[l.schluessel] != null).length;
+    box.querySelector('.lf-n').textContent = n;
+    box.querySelector('.lf-balken div').style.width = (n / L.length * 100) + '%';
+    box.querySelector('.lf-bild').innerHTML = lfKetteSvg(folgen, E);
+    box.querySelector('.lf-oben').innerHTML = L.map(l=>`<div class="lf-ent" data-k="${l.schluessel}"><span class="lf-seite">${l.seite === 'nach' ? 'Nachfolger' : 'Vorgänger'}</span> ${ESC(byUid[l.partner]?.name)} <span class="lf-typ">${l.kante.type}</span>: <b>${lfEntscheidung(l, E, folgen)}</b></div>`).join('');
+    const alleAn = box.querySelector('.lf-alle-an');
+    if(alleAn){
+      const ziele = new Set(); L.filter(l=>l.seite === 'nach').forEach(l=>gueltig.get(l.schluessel).forEach(u=>ziele.add(u)));
+      alleAn.innerHTML = '<option value="">Alle Nachfolger an … hängen</option>' + [...ziele].sort((a, b)=>zeilenNr(a) - zeilenNr(b)).map(u=>`<option value="${u}">${ESC(lfZiel(u))}</option>`).join('');
+    }
+    L.forEach(l=>{
+      const z = box.querySelector(`.lf-zeile[data-k="${l.schluessel}"]`), g = gueltig.get(l.schluessel), d = E[l.schluessel];
+      z.classList.toggle('entschieden', d != null);
+      const v = zielVorschlaege(l, folgen, g, E);
+      const vz = z.querySelector('.lf-vorschlaege');
+      vz.innerHTML = v.length ? '<span class="lf-klein">Vorschläge:</span>' + v.map(x=>`<button type="button" class="lf-chip${d === x.ziel ? ' an' : ''}" data-w="${x.ziel}">${x.ziel === 'loesen' ? 'Lösen' : ESC(lfZiel(x.ziel))}<small>${ESC(x.grund)}</small></button>`).join('')
+        : '<span class="lf-klein">Kein naheliegendes Ziel — aus der Liste wählen, suchen oder lösen.</span>';
+      vz.querySelectorAll('.lf-chip').forEach(c=> c.onclick = ()=> setze(l.schluessel, c.dataset.w === 'loesen' ? 'loesen' : Number(c.dataset.w)));
+      const sel = z.querySelector('.lf-liste'), auswahl = [...g];
+      if(typeof d === 'number' && !g.has(d) && byUid[d]) auswahl.push(d);
+      sel.innerHTML = '<option value="">Aus Liste wählen (' + g.size + ' gültige Ziele)</option>' + auswahl.sort((a, b)=>zeilenNr(a) - zeilenNr(b)).map(u=>`<option value="${u}">${ESC(lfZiel(u))}</option>`).join('');
+      sel.value = typeof d === 'number' ? String(d) : '';
+      const inp = z.querySelector('.lf-suche input');
+      if(document.activeElement !== inp){ inp.value = typeof d === 'number' ? (byUid[d]?.name || '') : ''; z.querySelector('.lf-treffer').innerHTML = ''; }
+      z.querySelectorAll('.lf-aktionen .lf-chip').forEach(c=> c.classList.toggle('an', d === c.dataset.w));
+    });
+    const fertig = n === L.length, ja = box.querySelector('.lf-ja');
+    ja.disabled = !fertig;
+    ja.title = fertig ? '' : 'Erst jede Verknüpfung entscheiden (' + (L.length - n) + ' offen)';
+    const zs = box.querySelector('.lf-zusammen');
+    zs.hidden = !fertig;
+    if(fertig){
+      const vorschau = loeschVorschau(folgen, E, nachr);
+      zs.innerHTML = '<b>Vor dem Löschen:</b> ' + loeschZusammenfassung(folgen, E, vorschau, nachr).map(ESC).join(' ');
+    }
+  }
+  if(mitLinks){
+    L.forEach(l=>{
+      const z = box.querySelector(`.lf-zeile[data-k="${l.schluessel}"]`);
+      z.querySelector('.lf-liste').addEventListener('change', (ev)=>{ if(ev.target.value) setze(l.schluessel, Number(ev.target.value)); });
+      z.querySelectorAll('.lf-aktionen .lf-chip').forEach(c=> c.addEventListener('click', ()=> setze(l.schluessel, c.dataset.w)));
+      const inp = z.querySelector('.lf-suche input'), treffer = z.querySelector('.lf-treffer');
+      const suchen = ()=>{
+        const q = inp.value.trim().toLowerCase();
+        if(!q){ treffer.innerHTML = ''; return []; }
+        const g = zielGueltig(l, folgen, E);
+        const passt = (u)=> (byUid[u]?.name || '').toLowerCase().includes(q) || String(zeilenNr(u)).startsWith(q);
+        const liste = [...g].filter(passt).sort((a, b)=>zeilenNr(a) - zeilenNr(b)).slice(0, 8);
+        const gesperrt = TASKS.filter(t=>!g.has(t.uid) && passt(t.uid)).slice(0, 2);
+        treffer.innerHTML = liste.map(u=>`<button type="button" data-u="${u}">${ESC(lfZiel(u))}</button>`).join('')
+          + (liste.length ? '' : '<div class="lf-kein">Kein gültiges Ziel' + (gesperrt.length ? ': ' + gesperrt.map(t=>'„' + ESC(t.name) + '“').join(', ') + ' geht nicht (wird gelöscht, schon verknüpft, Sammel-/Untervorgang oder ergäbe einen Kreis)' : '') + '</div>');
+        treffer.querySelectorAll('button').forEach(b=> b.addEventListener('mousedown', (ev)=>{ ev.preventDefault(); treffer.innerHTML = ''; inp.blur(); setze(l.schluessel, Number(b.dataset.u)); }));
+        return liste;
+      };
+      inp.addEventListener('input', suchen);
+      inp.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); const t = suchen(); if(t.length){ treffer.innerHTML = ''; inp.blur(); setze(l.schluessel, t[0]); } } });
+      inp.addEventListener('blur', ()=> setTimeout(()=>{ treffer.innerHTML = ''; zeichnen(); }, 150));
+    });
+    box.querySelector('.lf-alle').addEventListener('click', ()=>{ E = standardEntscheidungen(folgen, E); zeichnen(); });
+    box.querySelector('.lf-alle-an')?.addEventListener('change', (ev)=>{
+      const u = Number(ev.target.value); if(!u) return;
+      L.filter(l=>l.seite === 'nach').forEach(l=>{ if(zielGueltig(l, folgen, E).has(u)) E[l.schluessel] = u; });
+      zeichnen();
+    });
+    box.querySelector('.lf-nachr input').addEventListener('change', (ev)=>{ nachr = ev.target.checked; zeichnen(); });
+  }
   box.querySelector('.lf-nein').addEventListener('click', close);
-  box.querySelector('.lf-ja').addEventListener('click', ()=>{ close(); onYes(art); });
+  box.querySelector('.lf-ja').addEventListener('click', ()=>{ if(mitLinks && L.some(l=>E[l.schluessel] == null)) return; close(); onYes(E, nachr); });
   zeichnen();
   overlay.appendChild(box);
   document.body.appendChild(overlay);
@@ -6494,14 +6720,30 @@ window.terminplanApi = {
 
       if(tu === 'loeschen'){
         const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
-        // Wie im Löschdialog: Kette schließen und nachrücken (kette=schliessen/reissen nur ausdrücklich)
+        // Wie im Löschfenster: je Verknüpfung der erste Vorschlag, Nachfolger rücken nach. umhaengen
+        // [{verknuepfung: Partnername, ziel: Name | 'loesen' | 'mitloeschen'}] überschreibt einzelne Zeilen;
+        // kette=schliessen hält die Termine, kette=reissen löst alles.
         const folgen = loeschFolgen([f.t.uid]);
-        const art = ['schliessen', 'nachruecken', 'reissen'].includes(b.kette) ? b.kette : folgen.bruecken.length ? 'nachruecken' : 'reissen';
-        const vorschau = loeschVorschau(folgen, art);
-        pushUndo(loeschTitel(folgen, art, vorschau));
-        loeschenAnwenden(folgen, art);
+        const E = {};
+        for(const u of (Array.isArray(b.umhaengen) ? b.umhaengen : [])){
+          const p = planVorgangFinden(u.verknuepfung); if(p.fehler) return p;
+          const l = folgen.links.find(x=>x.partner === p.t.uid);
+          if(!l) return { fehler: p.t.name + ' ist nicht mit ' + f.t.name + ' verknüpft.' };
+          const ziel = String(u.ziel || '').toLowerCase();
+          if(ziel === 'loesen' || ziel === 'lösen') E[l.schluessel] = 'loesen';
+          else if(ziel === 'mitloeschen' || ziel === 'mitlöschen'){ if(!l.mitloeschbar) return { fehler: p.t.name + ' hat weitere Verknüpfungen und wird nicht mitgelöscht.' }; E[l.schluessel] = 'mitloeschen'; }
+          else { const z = planVorgangFinden(u.ziel); if(z.fehler) return z;
+            if(!zielGueltig(l, folgen, E).has(z.t.uid)) return { fehler: z.t.name + ' geht als Ziel für ' + p.t.name + ' nicht (wird gelöscht, schon verknüpft, Sammel-/Untervorgang oder ergäbe einen Kreis).' };
+            E[l.schluessel] = z.t.uid; }
+        }
+        if(b.kette === 'reissen') folgen.links.forEach(l=>{ if(E[l.schluessel] == null) E[l.schluessel] = 'loesen'; });
+        const entscheidungen = standardEntscheidungen(folgen, E), nachr = b.kette !== 'schliessen';
+        const vorschau = loeschVorschau(folgen, entscheidungen, nachr);
+        const titel = loeschTitel(folgen, entscheidungen, vorschau);
+        pushUndo(titel);
+        loeschenAnwenden(folgen, entscheidungen, nachr);
         renderAll();
-        return { ok: true, satz: loeschTitel(folgen, art, vorschau) + '. ' + lfSatz(folgen, art, vorschau).replace(/<[^>]+>/g, '') + ' Mit „rückgängig" hole ich es zurück.' };
+        return { ok: true, satz: titel + '. ' + loeschZusammenfassung(folgen, entscheidungen, vorschau, nachr).join(' ') + ' Mit „rückgängig" hole ich es zurück.' };
       }
 
       if(tu === 'verknuepfen'){
