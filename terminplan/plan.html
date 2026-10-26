@@ -1781,8 +1781,10 @@ function standardEntscheidungen(folgen, entscheidungen){
   const e = { ...(entscheidungen || {}) };
   [...folgen.links.filter(l=>l.seite === 'nach'), ...folgen.links.filter(l=>l.seite === 'vor')].forEach(l=>{
     if(e[l.schluessel] != null) return;
+    // vorbelegt wird nur „Kette schließen“ (Punkte ≥ 99) — Abschnitt, Firma, Name sind Angebote im Feld, keine
+    // Vorbelegung: sonst verknüpfte der Standard die Vorgänger untereinander (Befund Hemau, Vorgang 106)
     const v = zielVorschlaege(l, folgen, zielGueltig(l, folgen, e), e)[0];
-    e[l.schluessel] = v ? v.ziel : 'loesen';
+    e[l.schluessel] = v && v.punkte >= 99 ? v.ziel : 'loesen';
   });
   return e;
 }
@@ -2983,7 +2985,7 @@ function lfKetteSvg(folgen, E){
     if(d === 'loesen'){
       const u2 = loeschVerbunden(l, folgen, E);   // wie die Zeile im Fenster: bleibt verbunden ist kein Riss
       if(u2) return { klasse: 'verbunden', marke: 'bleibt', titel: 'bleibt mit „' + (byUid[u2]?.name || u2) + '“ verbunden' };
-      return { klasse: 'lose', marke: seite === 'nach' ? 'lose' : 'gelöst', titel: 'Verknüpfung gelöst' };
+      return seite === 'nach' ? { klasse: 'lose', marke: 'lose', titel: 'hängt danach lose' } : { klasse: 'verbunden', marke: 'gelöst', titel: 'verliert nur diesen Nachfolger' };
     }
     if(d === 'mitloeschen') return { klasse: 'weg', marke: 'mit weg', titel: 'wird mitgelöscht' };
     return { klasse: 'offen', marke: 'offen', titel: 'noch nicht entschieden' };
@@ -3023,8 +3025,9 @@ function lfKetteSvg(folgen, E){
   return s + '</svg>';
 }
 // Was nach dem Löschen mit einer Verknüpfung gilt, als ein Satz (Zeile im Fenster); art: gruen | orange | rot | grau
+function lfKurz(u, max){ const s = byUid[u]?.name || String(u); return s.length > (max || 46) ? s.slice(0, (max || 46) - 1) + '…' : s; }
 function lfZeilenSatz(l, E, folgen){
-  const d = E[l.schluessel], p = '<b>' + ESC(byUid[l.partner]?.name) + '</b>', n = (u)=> '„' + ESC(byUid[u]?.name) + '“';
+  const d = E[l.schluessel], p = '<b title="' + ESC(byUid[l.partner]?.name) + '">' + ESC(lfKurz(l.partner)) + '</b>', n = (u)=> '<span title="' + ESC(byUid[u]?.name) + '">„' + ESC(lfKurz(u, 40)) + '“</span>';
   if(typeof d === 'number') return { art: 'gruen', html: l.seite === 'nach' ? p + ' hängt künftig an ' + n(d) : p + ' bekommt ' + n(d) + ' als Nachfolger' };
   if(d === 'mitloeschen') return { art: 'rot', html: p + ' wird mitgelöscht' };
   const u = loeschVerbunden(l, folgen, E);
@@ -3050,7 +3053,7 @@ function openLoeschDialog(folgen, onYes){
   box.className = 'modal-box lf-box';
   box.addEventListener('click', ev=>ev.stopPropagation());
   const L = folgen.links, mitLinks = L.length > 0;
-  let E = standardEntscheidungen(folgen, {}), nachr = true, offen = null;   // offen = Schlüssel der Zeile, deren Feld offen ist ('alle' = alle Nachfolger)
+  let E = standardEntscheidungen(folgen, {}), nachr = true, offen = null, ruhigZeigen = false;   // offen = Schlüssel der Zeile, deren Feld offen ist ('alle' = alle Nachfolger)
   const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
   const titel = w.length === 1 ? '„' + w[0].name + '“ löschen' : folgen.vorgaenge.length + ' Vorgänge löschen';
   const unter = folgen.vorgaenge.length - w.length;
@@ -3092,7 +3095,7 @@ function openLoeschDialog(folgen, onYes){
     // der eine Satz oben: was nach dem Löschen gilt
     const s = [], neu = vorschau.neu, n = (u)=> '„' + ESC(byUid[u]?.name) + '“';
     if(!folgen.kanten.length) s.push('Mit nichts verknüpft — kein anderer Termin ändert sich.');
-    if(neu.length) s.push('Die Kette wird geschlossen: ' + neu.slice(0, 2).map(e=>n(e.from) + ' → ' + n(e.to)).join(', ') + (neu.length > 2 ? ' und ' + (neu.length - 2) + ' weitere' : '') + '.');
+    if(neu.length) s.push('Die Kette wird geschlossen' + (neu.length === 1 ? ': ' + '„' + ESC(lfKurz(neu[0].from, 34)) + '“ → „' + ESC(lfKurz(neu[0].to, 34)) + '“.' : ' — ' + neu.length + ' neue Verknüpfungen.'));
     const lose = L.filter(l=>lfZeilenSatz(l, E, folgen).art === 'orange').length;
     if(lose) s.push('<span class="lf-orange">' + (lose === 1 ? 'Ein Nachfolger hängt' : lose + ' Nachfolger hängen') + ' danach lose.</span>');
     if(vorschau.mit.length) s.push('<span class="lf-rot">' + vorschau.mit.length + ' wird mitgelöscht.</span>');
@@ -3100,12 +3103,19 @@ function openLoeschDialog(folgen, onYes){
     box.querySelector('.lf-satz').innerHTML = s.join(' ');
     if(!mitLinks) return;
     box.querySelector('.lf-bild').innerHTML = lfKetteSvg(folgen, E);
+    // Nur zeigen, was Urteil braucht: graue Zeilen (bleibt verbunden, verliert nur diesen Nachfolger) in EINER Zeile zusammen
     const zeilen = box.querySelector('.lf-zeilen');
-    zeilen.innerHTML = L.map(l=>{ const z = lfZeilenSatz(l, E, folgen); return `<div class="lf-zeile lf-${z.art}${offen === l.schluessel ? ' offen' : ''}" data-k="${l.schluessel}">
+    const zeile = (l)=>{ const z = lfZeilenSatz(l, E, folgen); return `<div class="lf-zeile lf-${z.art}${offen === l.schluessel ? ' offen' : ''}" data-k="${l.schluessel}">
       <div class="lf-zsatz"><span class="lf-punkt"></span><span class="lf-ztext">${z.html}</span><button type="button" class="lf-link lf-aendern">${offen === l.schluessel ? 'schließen' : 'ändern'}</button></div>
-      <div class="lf-feldort"></div></div>`; }).join('');
+      <div class="lf-feldort"></div></div>`; };
+    const ruhig = L.filter(l=>lfZeilenSatz(l, E, folgen).art === 'grau'), wichtig = L.filter(l=>!ruhig.includes(l));
+    const ruhigOffen = ruhigZeigen || ruhig.some(l=>l.schluessel === offen) || !wichtig.length;
+    zeilen.innerHTML = wichtig.map(zeile).join('') + (ruhig.length ? (ruhigOffen ? ruhig.map(zeile).join('')
+      : `<div class="lf-zeile lf-grau lf-ruhig"><div class="lf-zsatz"><span class="lf-punkt"></span><span class="lf-ztext">${ruhig.length === 1 ? 'Eine weitere Verknüpfung fällt' : ruhig.length + ' weitere Verknüpfungen fallen'} einfach weg, ohne dass etwas lose hängt</span><button type="button" class="lf-link lf-ruhig-auf">anzeigen</button></div></div>`) : '');
+    zeilen.querySelector('.lf-ruhig-auf')?.addEventListener('click', ()=>{ ruhigZeigen = true; zeichnen(); });
     L.forEach(l=>{
       const z = zeilen.querySelector(`.lf-zeile[data-k="${l.schluessel}"]`);
+      if(!z) return;
       z.querySelector('.lf-aendern').addEventListener('click', ()=>{ offen = offen === l.schluessel ? null : l.schluessel; zeichnen(); });
       if(offen !== l.schluessel) return;
       const g = zielGueltig(l, folgen, E);
