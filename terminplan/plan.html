@@ -336,6 +336,12 @@
   .tb-pop .pop-zeile select{font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;}
   .tb-pop .farbliste{display:grid;grid-template-columns:repeat(2,minmax(140px,auto));gap:5px 18px;}
   .tb-pop .farbliste .fehlt{opacity:.45;}
+  .tb-pop .farbwahl{position:relative;display:flex;align-items:center;gap:6px;cursor:pointer;border-radius:4px;padding:1px 4px;margin:-1px -4px;}
+  .tb-pop .farbwahl:hover:not(.gesperrt){background:#eef2f7;}
+  .tb-pop .farbwahl.gesperrt{cursor:default;}
+  .tb-pop .farbwahl .swatch{width:20px;height:14px;}
+  .tb-pop .farbwahl input[type=color]{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;}
+  .tb-pop .farbwahl .farb-zurueck{margin-left:auto;border:0;background:none;color:#4A6FA8;font-size:11px;padding:0;cursor:pointer;}
   .tb-segment{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;align-self:flex-start;}
   .tb-segment button{background:#fff;color:var(--ink);border:none;border-left:1px solid var(--line);padding:5px 12px;font-size:12px;cursor:pointer;}
   .tb-segment button:first-child{border-left:none;}
@@ -518,6 +524,7 @@
   <div class="pop-hinweis" id="farbNachHinweis"></div>
   <div class="pop-titel" id="legendeRegel"></div>
   <div class="farbliste" id="legendeFarben"></div>
+  <div class="pop-hinweis"><b>Farbe ändern:</b> auf das Farbfeld klicken. Gilt für diesen Plan, auch im Druck.</div>
   <div class="pop-hinweis">Einzelnen Balken umfärben: <b>Rechtsklick</b> auf den Balken. Am Sammelvorgang gilt die Farbe für alles darunter.</div>
   <div class="pop-titel">Weitere Zeichen</div>
   <div class="farbliste">
@@ -4477,6 +4484,35 @@ async function farbeNachSetzen(wert){
     saveStatus('Farbe nach ' + (farbGruppeJetzt() === 'gewerk' ? 'Gewerk' : 'Phase'), 'ok');
   } catch(e){ saveStatus('Einstellung nicht gespeichert: ' + e.message, 'err'); }
 }
+// Eigene Farbtöne je Plan (26.10.2026, Migr. 268 termin_plaene.farben): Klick aufs Farbfeld im Menü „Farben ▾“.
+// FARBEN wird vor jedem Zeichnen aus den Standardfarben plus den Tönen des Plans gebildet — so folgen Bildschirm und Druck.
+let FARBEN_STANDARD = null;   // Kopie von FARBEN aus farben.js, beim ersten Zeichnen gezogen
+function farbRand(hex){
+  const n = parseInt(hex.slice(1), 16), d = v=>Math.round(v * 0.62).toString(16).padStart(2, '0');
+  return '#' + d(n >> 16) + d((n >> 8) & 255) + d(n & 255);
+}
+function planFarbenAnwenden(){
+  if (!FARBEN_STANDARD) FARBEN_STANDARD = JSON.parse(JSON.stringify(FARBEN));
+  const eigene = (PLAN_LISTE.find(p=>p.id === planId) || {}).farben || {};
+  Object.keys(FARBEN_STANDARD).forEach(k=>{
+    const hex = /^#[0-9a-f]{6}$/i.test(eigene[k] || '') ? eigene[k] : null;
+    FARBEN[k] = hex ? { name: FARBEN_STANDARD[k].name, fill: hex, rand: farbRand(hex) } : { ...FARBEN_STANDARD[k] };
+  });
+}
+async function farbtonSetzen(schluessel, hex){
+  const kopf = PLAN_LISTE.find(p=>p.id === planId); if(!kopf) return;
+  const farben = { ...(kopf.farben || {}) };
+  if (hex && hex.toLowerCase() !== FARBEN_STANDARD[schluessel].fill.toLowerCase()) farben[schluessel] = hex; else delete farben[schluessel];
+  const wert = Object.keys(farben).length ? farben : null;
+  try {
+    await db('termin_plaene?id=eq.' + kopf.id, { method:'PATCH', headers:{ Prefer:'return=minimal' },
+      body: JSON.stringify({ farben: wert }) });
+    kopf.farben = wert;
+    await protokollSchreiben(kopf.id, 'Farbe ' + FARBEN_STANDARD[schluessel].name + ': ' + (farben[schluessel] || 'Standard'));
+    renderAll();
+    saveStatus('Farbe ' + FARBEN_STANDARD[schluessel].name + ' gespeichert', 'ok');
+  } catch(e){ saveStatus('Farbe nicht gespeichert: ' + e.message, 'err'); }
+}
 function farbeSetzen(el, schluessel){
   const f = FARBEN[schluessel] || FARBEN.allgemein;
   el.classList.add('fb');
@@ -4490,13 +4526,20 @@ function legendeFarbenAktualisieren(farbeJe){
   const gruppe = farbGruppeJetzt(), kopf = PLAN_LISTE.find(p=>p.id === planId) || {};
   regel.textContent = gruppe === 'gewerk' ? 'Standardfarben je Gewerk' : 'Standardfarben je Phase';
   const da = new Set(VISIBLE.map(({t})=>farbeJe.get(t.uid).schluessel));
+  const gesperrt = !!kopf.eingefroren_am || SCHREIBSCHUTZ;
+  const eigene = kopf.farben || {};
   ziel.innerHTML = FARB_GRUPPEN[gruppe].concat(['sammel', 'meilenstein']).map(k=>{
     const f = FARBEN[k];
     const form = k === 'meilenstein' ? 'border-radius:0;transform:rotate(45deg);width:9px;height:9px;' : '';
-    return '<span' + (da.has(k) ? '' : ' class="fehlt" title="kommt in diesem Plan nicht vor"') + '><i class="swatch" style="background:'
-      + f.fill + ';border:1px solid ' + f.rand + ';' + form + '"></i>' + f.name + '</span>';
+    const titel = (gesperrt ? '' : 'Klicken, um die Farbe zu ändern') + (da.has(k) ? '' : (gesperrt ? '' : ' — ') + 'kommt in diesem Plan nicht vor');
+    return '<label class="farbwahl' + (da.has(k) ? '' : ' fehlt') + (gesperrt ? ' gesperrt' : '') + '" title="' + titel + '">'
+      + '<i class="swatch" style="background:' + f.fill + ';border:1px solid ' + f.rand + ';' + form + '"></i>' + f.name
+      + '<input type="color" data-farbe="' + k + '" value="' + f.fill.toLowerCase() + '"' + (gesperrt ? ' disabled' : '') + '>'
+      + (eigene[k] && !gesperrt ? '<button type="button" class="farb-zurueck" data-farbe="' + k + '" title="Standardfarbe wiederherstellen">Standard</button>' : '')
+      + '</label>';
   }).join('');
-  const gesperrt = !!kopf.eingefroren_am || SCHREIBSCHUTZ;
+  ziel.querySelectorAll('input[type=color]').forEach(inp=> inp.addEventListener('change', ()=> farbtonSetzen(inp.dataset.farbe, inp.value)));
+  ziel.querySelectorAll('.farb-zurueck').forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); farbtonSetzen(b.dataset.farbe, null); }));
   document.querySelectorAll('#farbNachWahl button').forEach(b=>{
     b.classList.toggle('an', b.dataset.wert === (kopf.farbe_nach || ''));
     b.disabled = gesperrt;
@@ -4511,6 +4554,7 @@ function legendeFarbenAktualisieren(farbeJe){
 function renderBars(){
   // remove old row/today elements (keep svg + chipLayer)
   [...barslayer.querySelectorAll('.rowhit,.todayline,.todaylabel,.gridcol,.summary-highlight,.special-band')].forEach(el=>el.remove());
+  planFarbenAnwenden();
   const farbeJe = farbenJetzt();
 
   // Sondertermine (Ferien/Gemeinderatssitzungen/Feiertage) - farbige Spalten über die komplette
@@ -5331,7 +5375,7 @@ async function db(pfad, opt = {}){
 // ---- Planverwaltung: Liste, Auswahl, Anlegen, Einfrieren ----
 async function planListeLaden(){
   PLAN_LISTE = await db('termin_plaene?project_id=eq.' + PROJEKT_ID
-    + '&select=id,name,art,eingefroren_am,stand,basis_von,kalender_id,erstellt_am,farbe_nach&order=erstellt_am.desc');
+    + '&select=id,name,art,eingefroren_am,stand,basis_von,kalender_id,erstellt_am,farbe_nach,farben&order=erstellt_am.desc');
   const sel = document.getElementById('planWahl');
   sel.innerHTML = '';
   for(const p of PLAN_LISTE){
