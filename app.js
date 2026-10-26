@@ -522,67 +522,321 @@ function renderTerminplan() {
   root.append(f);
 }
 
-// ---------- Projekt-Kalender (Loop proaktiver Kollege, Baustein E) ----------
+// ---------- Projekt-Kalender ----------
+// Vollwertiger Kalender (Marcel 26.10.: "bitte mache einen vollwertigen Kalender"):
+// Monat, Woche und Liste; Ebenen Aufgaben, Termine & Meilensteine, Bauablauf.
+// Die Termine kommen aus der Terminebene (Migr. 221/265) -- aus den Plaenen nur die
+// juengste Fassung, sonst stuende jeder Vorgang zwei- bis dreimal im Kalender.
 let kalToken = 0; // verwirft veraltete Antworten bei Monats-/Projektwechsel
+const KAL_EBENEN = [['aufgaben', 'Aufgaben'], ['termine', 'Termine & Meilensteine'], ['bau', 'Bauablauf']];
+const KAL_WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const KAL_PLAN = ['eigener_terminplan', 'bauzeitenplan', 'terminplan'];
+function kalIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function kalDatum(iso) { const [j, m, t] = iso.split('-').map(Number); return new Date(j, m - 1, t); }
+function kalPlus(iso, tage) { const d = kalDatum(iso); d.setDate(d.getDate() + tage); return kalIso(d); }
+function kalMontag(iso) { const d = kalDatum(iso); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return kalIso(d); }
+function kalKurz(iso) { const d = kalDatum(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; }
+function kalKw(iso) {
+  const d = kalDatum(iso); d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); // Donnerstag der Woche
+  const j4 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - j4) / 864e5 - 3 + (j4.getDay() + 6) % 7) / 7);
+}
+function kalEbenen() {
+  if (!S.kalEbenen) {
+    let g = null; try { g = JSON.parse(localStorage.getItem('kal_ebenen')); } catch {}
+    S.kalEbenen = { aufgaben: true, termine: true, bau: false, ...(g || {}) };
+  }
+  return S.kalEbenen;
+}
+function kalBereich() {
+  const k = S.kal;
+  if (k.modus === 'woche') { const von = kalMontag(k.fokus); return { von, bis: kalPlus(von, 6) }; }
+  if (k.modus === 'liste') return { von: k.fokus, bis: kalPlus(k.fokus, 41) };
+  const d = kalDatum(k.fokus);
+  const von = kalMontag(kalIso(new Date(d.getFullYear(), d.getMonth(), 1)));
+  return { von, bis: kalPlus(kalMontag(kalIso(new Date(d.getFullYear(), d.getMonth() + 1, 0))), 6) };
+}
+
+// Die RPC liefert je Monat; der sichtbare Bereich beruehrt bis zu drei Monate.
+async function kalLaden(von, bis) {
+  const monate = [];
+  for (const d = kalDatum(von.slice(0, 8) + '01'); kalIso(d) <= bis; d.setMonth(d.getMonth() + 1)) monate.push([d.getFullYear(), d.getMonth() + 1]);
+  const antworten = await Promise.all(monate.map(([jahr, monat]) =>
+    lotse('kalender', { projekt: S.active.name, jahr, monat }).catch(() => ({ fehler: 'Netzwerkfehler' }))));
+  const kaputt = antworten.find((a) => a.fehler); if (kaputt) return { fehler: kaputt.fehler };
+  const heute = kalIso(new Date()); const ev = []; const gesehen = new Set(); let quelle = null;
+  for (const a of antworten) {
+    for (const k of a.karten || []) ev.push({ typ: 'aufgabe', id: k.id, titel: k.titel, von: k.faellig, bis: k.faellig,
+      status: k.status, besitzer: k.besitzer, zuarbeit: k.zuarbeit, ueber: k.faellig < heute && k.status !== 'erledigt' });
+    for (const f of a.fixtermine || []) ev.push({ typ: 'abgabe', titel: f.titel, von: f.datum, bis: f.datum });
+    for (const t of a.termine || []) {
+      const schluessel = [t.titel, t.von, t.bis, t.quelle].join('|'); // Vorgaenge ueber Monatsgrenzen kommen doppelt
+      if (gesehen.has(schluessel)) continue; gesehen.add(schluessel);
+      if (KAL_PLAN.includes(t.quelle_art) && (!quelle || (t.stand || '') > (quelle.stand || ''))) quelle = { name: t.quelle, stand: t.stand };
+      ev.push({ typ: t.art === 'vorgang' ? 'bau' : 'termin', meilenstein: t.art === 'meilenstein', titel: t.titel,
+        von: t.von, bis: t.bis, firma: t.firma, quelle: t.quelle });
+    }
+  }
+  return { ev, quelle };
+}
+
+function kalRang(e) {
+  return e.typ === 'abgabe' ? 0 : e.typ === 'termin' ? (e.meilenstein ? 1 : 2) : e.typ === 'aufgabe'
+    ? (e.ueber ? 3 : e.status === 'erledigt' ? 5 : 4) : 6;
+}
+function kalSort(a, b) { return kalRang(a) - kalRang(b) || a.von.localeCompare(b.von) || a.titel.localeCompare(b.titel); }
+function kalZeitraum(e) { return e.von === e.bis ? kalKurz(e.von) : `${kalKurz(e.von)} – ${kalKurz(e.bis)}`; }
+function kalTip(e) { return [e.titel, kalZeitraum(e), e.firma, e.besitzer ? personName(e.besitzer) : null, e.quelle].filter(Boolean).join('\n'); }
+function kalTagZeigen(iso) { S.kal.tag = iso; kalZeichnen(); }
+
+async function kalNeueAufgabe(iso) {
+  const titel = await uiEingabe(`Neue Aufgabe am ${kalDatum(iso).toLocaleDateString('de-DE')}:`);
+  if (!titel?.trim()) return;
+  const r = await mut('todo_create', { titel: titel.trim(), projekt: S.active.name, faellig: iso });
+  if (r && r.todo_id) renderKalender();
+}
+function kalBlaettern(richtung) {
+  const k = S.kal;
+  if (k.modus === 'monat') { const d = kalDatum(k.fokus); k.fokus = kalIso(new Date(d.getFullYear(), d.getMonth() + richtung, 1)); }
+  else k.fokus = kalPlus(k.fokus, richtung * (k.modus === 'woche' ? 7 : 42));
+  renderKalender();
+}
+function kalModus(m) {
+  const k = S.kal; if (k.modus === m) return;
+  if (k.tag) k.fokus = k.tag;
+  else if (m === 'liste' && k.modus === 'monat') {
+    const h = kalIso(new Date());
+    k.fokus = h.slice(0, 7) === k.fokus.slice(0, 7) ? h : k.fokus.slice(0, 8) + '01';
+  }
+  k.modus = m; renderKalender();
+}
+
+function kalPille(e, voll) {
+  const p = el('div', {
+    class: 'kp kp-' + e.typ + (e.ueber ? ' ueber' : '') + (e.status === 'erledigt' ? ' erl' : '') + (e.zuarbeit ? ' zu' : '') + (voll ? ' voll' : ''),
+    title: kalTip(e),
+  },
+    e.typ === 'termin' ? el('span', { class: 'kpz' }, e.meilenstein ? '◆' : '●') : null,
+    el('span', { class: 'kpt' }, e.titel),
+    e.typ === 'aufgabe' && e.besitzer
+      ? el('span', { class: 'kpav', style: 'background:' + avColor(e.besitzer) }, initialen(personName(e.besitzer))) : null);
+  if (e.typ === 'aufgabe') {
+    p.draggable = true;
+    p.addEventListener('dragstart', (ev) => { S.kalDrag = e.id; ev.dataTransfer.effectAllowed = 'move'; });
+    p.addEventListener('dragend', () => { S.kalDrag = null; });
+    p.addEventListener('click', (ev) => { ev.stopPropagation(); openCard(e.id); });
+  } else p.addEventListener('click', (ev) => { ev.stopPropagation(); kalTagZeigen(e.von); });
+  return p;
+}
+
+// Eine Wochenzeile fuer Monat und Woche. Mehrtaegiges liegt als Balken in Spuren
+// oben, Eintaegiges darunter je Tag. Alles in EINEM Grid, damit die Balken
+// tagesgenau ueber den Zellen sitzen.
+function kalWoche(montag, ev, opt) {
+  const tage = [...Array(7)].map((_, i) => kalPlus(montag, i));
+  const sonntag = tage[6]; const heute = kalIso(new Date());
+  const balken = ev.filter((e) => (e.typ === 'bau' || e.von !== e.bis) && e.von <= sonntag && e.bis >= montag)
+    .sort((a, b) => a.von.localeCompare(b.von) || b.bis.localeCompare(a.bis));
+  const spurEnde = []; const gelegt = [];
+  for (const b of balken) {
+    const s = b.von < montag ? montag : b.von; const e = b.bis > sonntag ? sonntag : b.bis;
+    let spur = spurEnde.findIndex((ende) => ende < s);
+    if (spur < 0) { spur = spurEnde.length; spurEnde.push(null); }
+    spurEnde[spur] = e; gelegt.push({ b, s, e, spur });
+  }
+  const maxSpuren = opt.voll ? 60 : 3;
+  // Was nicht in die Spuren passt, steht als EINE Zeile je Woche -- nicht als "+ n" an jedem Tag.
+  const verdeckt = gelegt.filter((g) => g.spur >= maxSpuren).length;
+  const sichtbar = Math.min(spurEnde.length, maxSpuren) + (verdeckt ? 1 : 0);
+  const zeile = el('div', {
+    class: 'kalwoche' + (opt.voll ? ' voll' : ''),
+    style: `grid-template-rows:34px ${sichtbar ? `repeat(${sichtbar},24px) ` : ''}minmax(${opt.voll ? 380 : 72}px,auto)`,
+  });
+  zeile.append(el('div', { class: 'kalkw', title: 'Diese Woche zeigen', style: 'grid-column:1;grid-row:1/-1',
+    onclick: () => { S.kal.modus = 'woche'; S.kal.fokus = montag; renderKalender(); } }, 'KW ' + kalKw(montag)));
+  const zellen = tage.map((iso, i) => {
+    const d = kalDatum(iso); const wt = (d.getDay() + 6) % 7;
+    const aussen = opt.monat !== undefined && d.getMonth() !== opt.monat;
+    const z = el('div', {
+      class: 'kalzelle' + (wt >= 5 ? ' we' : '') + (aussen ? ' aussen' : '') + (iso === S.kal.tag ? ' gewaehlt' : ''),
+      style: `grid-column:${i + 2};grid-row:1/-1`,
+      onclick: () => kalTagZeigen(iso),
+      ondblclick: () => kalNeueAufgabe(iso),
+    });
+    zeile.append(z, el('div', { class: 'kalkz' + (aussen ? ' aussen' : '') + (iso === heute ? ' heute' : ''), style: `grid-column:${i + 2};grid-row:1` },
+      opt.voll ? el('span', { class: 'mon' }, KAL_WT[wt]) : null,
+      el('span', { class: 'nr' }, String(d.getDate())),
+      !opt.voll && d.getDate() === 1 ? el('span', { class: 'mon' }, d.toLocaleDateString('de-DE', { month: 'short' })) : null));
+    return z;
+  });
+  for (const g of gelegt) {
+    if (g.spur >= maxSpuren) continue;
+    const zusatz = g.b.firma && !g.b.titel.includes(g.b.firma) ? ' · ' + g.b.firma : '';
+    zeile.append(el('div', {
+      class: 'kb' + (g.b.typ === 'termin' ? ' kb-termin' : '') + (g.b.von < montag ? ' links' : '') + (g.b.bis > sonntag ? ' rechts' : ''),
+      style: `grid-column:${tage.indexOf(g.s) + 2}/${tage.indexOf(g.e) + 3};grid-row:${g.spur + 2}`,
+      title: kalTip(g.b), onclick: (ev) => { ev.stopPropagation(); kalTagZeigen(g.s); },
+    }, el('span', {}, g.b.titel + zusatz)));
+  }
+  if (verdeckt) zeile.append(el('button', { class: 'kbmehr', style: `grid-column:2/9;grid-row:${maxSpuren + 2}`,
+    onclick: (e) => { e.stopPropagation(); S.kal.modus = 'woche'; S.kal.fokus = montag; renderKalender(); } },
+    `+ ${verdeckt} weitere Vorgänge in KW ${kalKw(montag)} – Woche öffnen`));
+  tage.forEach((iso, i) => {
+    const amTag = ev.filter((e) => e.typ !== 'bau' && e.von === e.bis && e.von === iso).sort(kalSort);
+    const zeigen = opt.voll ? amTag : amTag.slice(0, 4);
+    const mehr = amTag.length - zeigen.length;
+    zeile.append(el('div', { class: 'kalliste', style: `grid-column:${i + 2};grid-row:${sichtbar + 2}` },
+      ...zeigen.map((e) => kalPille(e, opt.voll)),
+      mehr > 0 ? el('button', { class: 'kalmehr', onclick: (e) => { e.stopPropagation(); kalTagZeigen(iso); } }, `+ ${mehr} weitere`) : null));
+  });
+  // Ziehen: die Spalte aus der Mausposition, damit auch ein Drop auf eine andere Karte zaehlt.
+  const spalte = (e) => { const r = zeile.getBoundingClientRect(); const i = Math.floor((e.clientX - r.left - 44) / ((r.width - 44) / 7)); return i >= 0 && i < 7 ? i : -1; };
+  zeile.addEventListener('dragover', (e) => { if (!S.kalDrag) return; e.preventDefault(); const i = spalte(e); zellen.forEach((z, j) => z.classList.toggle('dragover', j === i)); });
+  zeile.addEventListener('dragleave', (e) => { if (!zeile.contains(e.relatedTarget)) zellen.forEach((z) => z.classList.remove('dragover')); });
+  zeile.addEventListener('drop', async (e) => {
+    e.preventDefault(); zellen.forEach((z) => z.classList.remove('dragover'));
+    const i = spalte(e); const id = S.kalDrag; S.kalDrag = null;
+    if (!id || i < 0) return;
+    await mut('todo_update', { todo_id: id, faellig: tage[i] });
+    renderKalender();
+  });
+  return zeile;
+}
+
+// Zeile in Liste und Tagesdetail: Art, Titel, das Noetigste dazu.
+function kalZeile(e, wort) {
+  const art = e.typ === 'aufgabe' ? (e.ueber ? 'überfällig' : e.status === 'erledigt' ? 'erledigt' : 'Aufgabe')
+    : e.typ === 'abgabe' ? 'Abgabe' : e.typ === 'bau' ? 'Bauablauf' : e.meilenstein ? 'Meilenstein' : 'Termin';
+  const meta = [e.von !== e.bis ? kalZeitraum(e) : null, e.firma,
+    e.typ === 'aufgabe' && e.besitzer ? personName(e.besitzer) : null, e.zuarbeit ? 'Zuarbeit' : null].filter(Boolean).join(' · ');
+  return el('div', { class: 'kz', title: kalTip(e), onclick: () => (e.typ === 'aufgabe' ? openCard(e.id) : kalTagZeigen(e.von)) },
+    el('span', { class: 'kzc ' + e.typ + (e.ueber ? ' ueber' : '') }, art),
+    el('div', { style: 'min-width:0' },
+      el('div', { class: 'kzt' + (e.status === 'erledigt' ? ' erl' : '') }, wort ? `${wort}: ${e.titel}` : e.titel),
+      meta ? el('div', { class: 'kzm' }, meta) : null));
+}
+
+function kalListe(ev, von, bis) {
+  const heute = kalIso(new Date()); const tage = new Map();
+  const dazu = (iso, eintrag) => { if (iso < von || iso > bis) return; if (!tage.has(iso)) tage.set(iso, []); tage.get(iso).push(eintrag); };
+  for (const e of ev) {
+    // Ein Vorgang ueber Wochen stuende sonst an jedem Tag -- in der Liste zaehlen Beginn und Ende.
+    if (e.von !== e.bis) { dazu(e.von, { e, wort: 'Beginn' }); dazu(e.bis, { e, wort: 'Ende' }); }
+    else dazu(e.von, { e });
+  }
+  if (!tage.size) return el('div', { class: 'kalleer' }, 'In diesem Zeitraum steht nichts an.');
+  return el('div', { class: 'kalagenda' }, ...[...tage.keys()].sort().map((iso) => {
+    const d = kalDatum(iso);
+    return el('div', { class: 'kalag' + (iso === heute ? ' heute' : '') + (iso < heute ? ' vorbei' : '') },
+      el('div', { class: 'kalagd', onclick: () => kalTagZeigen(iso) },
+        el('b', {}, String(d.getDate())),
+        el('span', {}, d.toLocaleDateString('de-DE', { weekday: 'short' }) + ' · ' + d.toLocaleDateString('de-DE', { month: 'short' }) + ' · KW ' + kalKw(iso))),
+      el('div', { class: 'kalagl' }, ...tage.get(iso).sort((a, b) => kalSort(a.e, b.e)).map(({ e, wort }) => kalZeile(e, wort))));
+  }));
+}
+
+function kalPanel(tag, alle) {
+  const d = kalDatum(tag);
+  const amTag = alle.filter((e) => e.typ !== 'bau' && e.von <= tag && e.bis >= tag).sort(kalSort);
+  const termine = amTag.filter((e) => e.typ === 'termin' || e.typ === 'abgabe');
+  const aufgaben = amTag.filter((e) => e.typ === 'aufgabe');
+  const bau = alle.filter((e) => e.typ === 'bau' && e.von <= tag && e.bis >= tag).sort((a, b) => a.bis.localeCompare(b.bis));
+  const eingabe = el('input', { class: 'kalpin', placeholder: 'Neue Aufgabe für diesen Tag, Enter …' });
+  eingabe.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') { eingabe.blur(); S.kal.tag = null; kalZeichnen(); return; }
+    if (e.key !== 'Enter' || !eingabe.value.trim()) return;
+    const titel = eingabe.value.trim(); eingabe.disabled = true;
+    const r = await mut('todo_create', { titel, projekt: S.active.name, faellig: tag });
+    eingabe.disabled = false;
+    if (r && r.todo_id) { eingabe.value = ''; renderKalender(); }
+  });
+  const sek = (titel, liste, wort) => (liste.length ? [el('div', { class: 'kalpsek' }, `${titel} · ${liste.length}`), ...liste.map((e) => kalZeile(e, wort?.(e)))] : []);
+  return el('aside', { class: 'kalpanel' },
+    el('div', { class: 'kalpk' },
+      el('div', {},
+        el('div', { class: 'kalpwt' }, d.toLocaleDateString('de-DE', { weekday: 'long' }) + ' · KW ' + kalKw(tag)),
+        el('h3', {}, d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }))),
+      el('button', { class: 'kalpzu', title: 'Schließen (Esc)', onclick: () => { S.kal.tag = null; kalZeichnen(); } }, ico('weg'))),
+    eingabe,
+    ...sek('Termine', termine),
+    ...sek('Aufgaben', aufgaben),
+    ...sek('Bauablauf an diesem Tag', bau, (e) => (e.von === tag ? 'Beginn' : e.bis === tag ? 'Ende' : null)),
+    !amTag.length && !bau.length ? el('div', { class: 'kalleer' }, 'Nichts eingetragen.') : null);
+}
+
 async function renderKalender() {
   const root = document.getElementById('kal-root'); if (!root || S.active?.typ !== 'projekt') return;
   const token = ++kalToken;
-  if (!S.kal) { const h = new Date(); S.kal = { jahr: h.getFullYear(), monat: h.getMonth() + 1 }; }
-  root.innerHTML = '';
-  root.append(el('div', { class: 'kalkopf' },
-    el('button', { class: 'kalnav', onclick: () => { S.kal.monat--; if (S.kal.monat < 1) { S.kal.monat = 12; S.kal.jahr--; } renderKalender(); } }, '‹'),
-    el('span', { class: 'kaltitel' }, new Date(S.kal.jahr, S.kal.monat - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })),
-    el('button', { class: 'kalnav', onclick: () => { S.kal.monat++; if (S.kal.monat > 12) { S.kal.monat = 1; S.kal.jahr++; } renderKalender(); } }, '›'),
-    el('span', { class: 'kalhint' }, 'Karte auf einen Tag ziehen = Frist ändern · Doppelklick auf einen Tag = Aufgabe anlegen')));
-  const grid = el('div', { class: 'kalgrid' });
-  for (const w of ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']) grid.append(el('div', { class: 'kalwt' }, w));
-  root.append(grid);
-  const d = await lotse('kalender', { projekt: S.active.name, jahr: S.kal.jahr, monat: S.kal.monat }).catch(() => ({ fehler: 'Netzwerkfehler' }));
-  if (token !== kalToken || !S.kal || S.active?.typ !== 'projekt') return; // inzwischen gewechselt
-  if (d.fehler) { root.append(el('div', { class: 'empty', style: 'padding:16px' }, d.fehler)); return; }
-  const tage = new Date(S.kal.jahr, S.kal.monat, 0).getDate();
-  const offset = (new Date(S.kal.jahr, S.kal.monat - 1, 1).getDay() + 6) % 7; // Mo = 0
-  const heute = new Date();
-  const proTag = {}; for (const k of d.karten || []) (proTag[k.tag] = proTag[k.tag] || []).push(k);
-  const fixProTag = {}; for (const f of d.fixtermine || []) (fixProTag[f.tag] = fixProTag[f.tag] || []).push(f);
-  for (let i = 0; i < offset; i++) grid.append(el('div', { class: 'kaltag leer' }));
-  for (let t = 1; t <= tage; t++) {
-    const datum = `${S.kal.jahr}-${String(S.kal.monat).padStart(2, '0')}-${String(t).padStart(2, '0')}`;
-    const istHeute = heute.getFullYear() === S.kal.jahr && heute.getMonth() + 1 === S.kal.monat && heute.getDate() === t;
-    const wtag = new Date(S.kal.jahr, S.kal.monat - 1, t).getDay();
-    const zelle = el('div', {
-      class: 'kaltag' + (istHeute ? ' heute' : '') + (wtag === 0 || wtag === 6 ? ' we' : ''),
-      ondragover: (e) => { e.preventDefault(); zelle.classList.add('dragover'); },
-      ondragleave: () => zelle.classList.remove('dragover'),
-      ondrop: async (e) => {
-        e.preventDefault(); zelle.classList.remove('dragover');
-        if (!S.kalDrag) return;
-        const id = S.kalDrag; S.kalDrag = null;
-        await mut('todo_update', { todo_id: id, faellig: datum });
-        renderKalender();
-      },
-      ondblclick: async (e) => {
-        if (e.target !== zelle && !e.target.closest('b')) return; // nur auf freier Flaeche
-        const titel = await uiEingabe(`Neue Aufgabe am ${t}.${S.kal.monat}.${S.kal.jahr}:`);
-        if (!titel?.trim()) return;
-        const r = await mut('todo_create', { titel: titel.trim(), projekt: S.active.name, faellig: datum });
-        if (r && r.todo_id) renderKalender();
-      },
-    }, el('b', {}, String(t)));
-    for (const f of fixProTag[t] || []) zelle.append(el('div', { class: 'kalfix', title: f.titel }, f.titel));
-    for (const k of proTag[t] || []) {
-      const pille = el('div', {
-        class: 'kalpille' + (k.zuarbeit ? ' zu' : '') + (k.status === 'erledigt' ? ' erl' : ''),
-        draggable: 'true', title: k.titel,
-        ondragstart: () => { S.kalDrag = k.id; },
-        ondragend: () => { S.kalDrag = null; },
-        onclick: () => openCard(k.id),
-      }, k.titel);
-      zelle.append(pille);
-    }
-    grid.append(zelle);
+  if (!S.kal) {
+    S.kal = { modus: 'monat', fokus: kalIso(new Date()), tag: null }; S.kalDaten = null;
+    root.replaceChildren(el('div', { class: 'kalleer' }, 'Kalender wird geladen …'));
   }
+  const { von, bis } = kalBereich();
+  const d = await kalLaden(von, bis);
+  if (token !== kalToken || !S.kal || S.active?.typ !== 'projekt') return; // inzwischen gewechselt
+  S.kalDaten = d; kalZeichnen();
 }
+
+// Zeichnet aus S.kalDaten -- Ebenen, Tagesdetail und Wechsel ohne neue Abfrage.
+function kalZeichnen() {
+  const root = document.getElementById('kal-root'); const k = S.kal; const d = S.kalDaten;
+  if (!root || !k || !d) return;
+  if (d.fehler) { root.replaceChildren(el('div', { class: 'kalleer' }, d.fehler)); return; }
+  const rollen = root.querySelector('.kalhaupt')?.scrollTop || 0;
+  const eb = kalEbenen(); const { von, bis } = kalBereich(); const heute = kalIso(new Date());
+  const ebene = (e) => (e.typ === 'aufgabe' || e.typ === 'abgabe' ? 'aufgaben' : e.typ === 'termin' ? 'termine' : 'bau');
+  const imBereich = d.ev.filter((e) => e.von <= bis && e.bis >= von);
+  const ev = imBereich.filter((e) => eb[ebene(e)]);
+  const zahl = (s) => imBereich.filter((e) => ebene(e) === s).length;
+  const fd = kalDatum(k.fokus);
+  const titel = k.modus === 'monat' ? fd.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+    : k.modus === 'woche' ? `KW ${kalKw(von)} · ${kalKurz(von)} – ${kalKurz(bis)}${kalDatum(bis).getFullYear()}`
+    : `${kalKurz(von)} – ${kalKurz(bis)}${kalDatum(bis).getFullYear()}`;
+  const kopf = el('div', { class: 'kalkopf' },
+    el('div', { class: 'kalnavs' },
+      el('button', { class: 'kalnav', title: 'Zurück (←)', onclick: () => kalBlaettern(-1) }, '‹'),
+      el('button', { class: 'kalheute', title: 'Heute (T)', onclick: () => { k.fokus = heute; renderKalender(); } }, 'Heute'),
+      el('button', { class: 'kalnav', title: 'Weiter (→)', onclick: () => kalBlaettern(1) }, '›')),
+    el('h3', { class: 'kaltitel' }, titel),
+    el('div', { class: 'kalmodi' }, ...[['monat', 'Monat', 'M'], ['woche', 'Woche', 'W'], ['liste', 'Liste', 'L']].map(([m, l, t]) =>
+      el('button', { class: k.modus === m ? 'on' : '', title: `${l} (${t})`, onclick: () => kalModus(m) }, l))),
+    el('div', { class: 'kalebenen' }, ...KAL_EBENEN.map(([s, l]) =>
+      el('button', { class: 'kaleb kaleb-' + s + (eb[s] ? ' on' : ''), title: eb[s] ? 'ausblenden' : 'einblenden', onclick: () => {
+        eb[s] = !eb[s]; try { localStorage.setItem('kal_ebenen', JSON.stringify(eb)); } catch {} kalZeichnen();
+      } }, el('span', { class: 'kalebp' }), l, el('span', { class: 'kalebn' }, String(zahl(s)))))),
+    el('button', { class: 'kalneu', onclick: () => kalNeueAufgabe(k.tag || (heute >= von && heute <= bis ? heute : von)) }, ico('plus'), 'Aufgabe'));
+  const fuss = el('div', { class: 'kalquelle' },
+    el('span', {}, d.quelle
+      ? `Termine aus „${d.quelle.name}“${d.quelle.stand ? ' · Stand ' + kalDatum(d.quelle.stand).toLocaleDateString('de-DE') : ''} · ältere Planfassungen ausgeblendet`
+      : 'Für diesen Zeitraum liegt kein Terminplan vor.'),
+    el('span', {}, 'Karte auf einen Tag ziehen = Frist ändern · Doppelklick = Aufgabe anlegen · ← → blättern, T heute'));
+  const haupt = el('div', { class: 'kalhaupt' + (k.modus === 'monat' ? ' monat' : '') });
+  if (k.modus === 'liste') haupt.append(kalListe(ev, von, bis));
+  else {
+    haupt.append(el('div', { class: 'kalwt' }, el('div'), ...KAL_WT.map((w) => el('div', {}, w))));
+    if (k.modus === 'woche') haupt.append(kalWoche(von, ev, { voll: true }));
+    else for (let m = von; m <= bis; m = kalPlus(m, 7)) haupt.append(kalWoche(m, ev, { monat: fd.getMonth() }));
+  }
+  root.replaceChildren(el('div', { class: 'kal' }, kopf, fuss,
+    el('div', { class: 'kalkoerper' }, haupt, k.tag ? kalPanel(k.tag, d.ev) : null)));
+  haupt.scrollTop = rollen;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (S.ansicht !== 'kal' || S.active?.typ !== 'projekt' || !S.kal || S.detail) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+  if (document.querySelector('.uidlg')) return;
+  const t = e.key.toLowerCase();
+  if (e.key === 'ArrowLeft') kalBlaettern(-1);
+  else if (e.key === 'ArrowRight') kalBlaettern(1);
+  else if (t === 't') { S.kal.fokus = kalIso(new Date()); renderKalender(); }
+  else if (t === 'm') kalModus('monat');
+  else if (t === 'w') kalModus('woche');
+  else if (t === 'l') kalModus('liste');
+  else if (e.key === 'Escape' && S.kal.tag) { S.kal.tag = null; kalZeichnen(); }
+  else return;
+  e.preventDefault();
+});
 
 // ---------- Mein Dashboard (Startansicht) ----------
 // Zeigt zuerst das eigene Pensum -- "Meine Aufgaben" und "Mir zugewiesen" stehen
