@@ -637,6 +637,32 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .uidlg-b.hell:hover{background:rgba(28,28,26,.05)}
 .uidlg-b.rot{background:#B4432E;border-color:#B4432E}
 .uidlg-b.rot:hover{background:#98351f}
+/* Löschfenster mit Umhängen (26.10.2026): ein Satz, eine Liste mit einem „ändern“ je Zeile, ein Feld */
+.ulf .ulf-satz{font-size:13.5px;color:#2C2C29;line-height:1.55;margin-top:8px}
+.ulf-liste{margin-top:14px;max-height:52vh;overflow-y:auto}
+.ulf-zeile{border-top:1px solid rgba(28,28,26,.08)}
+.ulf-zeile:last-of-type{border-bottom:1px solid rgba(28,28,26,.08)}
+.ulf-zsatz{display:flex;align-items:center;gap:10px;padding:9px 2px;font-size:13px;color:#2C2C29}
+.ulf-punkt{flex:none;width:8px;height:8px;border-radius:50%;background:#A8A8A1}
+.ulf-gruen .ulf-punkt{background:#2e7d32}.ulf-rot .ulf-punkt{background:#B4432E}.ulf-orange .ulf-punkt{background:#d97706}
+.ulf-rot .ulf-text{color:#98351f}
+.ulf-text{flex:1;min-width:0}
+.ulf-link{background:none;border:none;color:#2b5fab;cursor:pointer;font-size:12.5px;padding:2px 0}
+.ulf-link:hover{text-decoration:underline}
+.ulf-feld:empty{display:none}
+.ulf-feld{padding:0 0 10px 18px}
+.ulf-suche{width:100%;font-size:13px;padding:8px 10px;border:1px solid #2b5fab;border-radius:8px 8px 0 0;outline:none;background:#fff}
+.ulf-auswahl{border:1px solid rgba(28,28,26,.15);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow:auto;background:#fff}
+.ulf-auswahl button{display:block;width:100%;text-align:left;background:#fff;border:none;padding:7px 10px;font-size:12.5px;cursor:pointer}
+.ulf-auswahl button:hover{background:#f2f5fb}
+.ulf-auswahl small{color:#8A8A83;font-size:11px;margin-left:8px}
+.ulf-gruppe{font-size:10.5px;color:#A8A8A1;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px 2px}
+.ulf-trenner{border-top:1px solid rgba(28,28,26,.08);margin-top:4px}
+.ulf-kein{padding:7px 10px;font-size:12px;color:#B4432E}
+.ulf-sammel{padding:8px 2px 0}
+.ulf-alle-feld{padding:6px 0 0}
+.ulf-toast{display:flex;gap:10px;align-items:center}
+.ulf-toast button{background:#fff;color:#1C1C1A;border:none;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer}
 .spk-liste{margin-top:10px;max-height:56vh;overflow-y:auto;border-top:1px solid rgba(28,28,26,.1)}
 .spk-jahr{position:sticky;top:0;background:#FCFCFB;font-size:11.5px;font-weight:600;color:#8A8A83;
   text-transform:uppercase;letter-spacing:.04em;padding:12px 8px 6px}
@@ -886,7 +912,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mvp0eq9q">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mvp99gei">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -960,8 +986,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mvp0eq9q"></script>
-<script src="vergabe-uebersicht.js?v=mvp0eq9q"></script>
-<script type="module" src="dashboard.js?v=mvp0eq9q"></script>
+<script src="app.js?v=mvp99gei"></script>
+<script src="vergabe-uebersicht.js?v=mvp99gei"></script>
+<script type="module" src="dashboard.js?v=mvp99gei"></script>
 </body>
 </html>
