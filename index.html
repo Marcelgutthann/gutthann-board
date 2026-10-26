@@ -718,7 +718,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kaltitel{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;min-width:170px;text-align:center}
 .kalnav{font-size:17px;color:#55554F;padding:2px 10px;border-radius:8px}
 .kalnav:hover{background:rgba(28,28,26,.07)}
-.kalgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.kalgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .kalwt{font-size:10.5px;font-weight:700;color:#8A8A83;padding:2px 8px}
 .kaltag{background:#fff;border-radius:11px;min-height:96px;padding:6px 7px;font-size:11px;box-shadow:0 1px 2px rgba(28,28,26,.05)}
 .kaltag b{font-size:11.5px}
@@ -806,7 +806,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mvozir3p">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mvozorsr">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -821,9 +821,10 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
   gap:8px;color:#8A8A83;font-size:13px;text-align:center;padding:40px}
 .terminleer b{color:#1C1C1A;font-size:15px}
 /* Umschalter Board <-> Dashboard in der Topbar */
-.viewtabs{display:flex;gap:2px;background:rgba(28,28,26,.06);border-radius:8px;padding:2px}
-.viewtabs button{font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;color:#5C5C56}
-.viewtabs button.on{background:#fff;color:#1C1C1A;box-shadow:0 1px 2px rgba(28,28,26,.10)}
+.viewtabs{display:flex;gap:4px;background:rgba(28,28,26,.08);border-radius:12px;padding:4px;margin-left:8px}
+.viewtabs button{font-size:16px;font-weight:600;padding:10px 22px;border-radius:9px;color:#4A4A44}
+.viewtabs button:hover{background:rgba(255,255,255,.6);color:#1C1C1A}
+.viewtabs button.on{background:#fff;color:#1C1C1A;font-weight:700;box-shadow:0 1px 4px rgba(28,28,26,.16)}
 </style>
 </head>
 <body>
@@ -879,8 +880,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mvozir3p"></script>
-<script src="vergabe-uebersicht.js?v=mvozir3p"></script>
-<script type="module" src="dashboard.js?v=mvozir3p"></script>
+<script src="app.js?v=mvozorsr"></script>
+<script src="vergabe-uebersicht.js?v=mvozorsr"></script>
+<script type="module" src="dashboard.js?v=mvozorsr"></script>
 </body>
 </html>
