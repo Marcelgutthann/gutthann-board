@@ -1224,14 +1224,13 @@ function renderTopbar() {
   tb.append(el('h2', {}, S.active.name));
   const scope = S.active.typ === 'radar' ? 'Dein Pensum · dazu die Bereiche, die du dir dazustellst'
     : S.active.typ === 'vergabe' ? 'Büro intern · alle Vergabeterminpläne · maßgeblich ist die Lesefassung beim Bauherrn'
-    : S.active.typ === 'projekt' ? 'Projekt-Board · für alle gleich'
     : S.board?.ist_team ? 'Team-Board · Büro intern' : 'Privates Board · nur für dich';
-  tb.append(el('div', { class: 'scope' }, scope));
+  if (S.active.typ !== 'projekt') tb.append(el('div', { class: 'scope' }, scope));
   // Im Projekt: Aufgaben und Dashboard sind zwei Ansichten derselben Ebene
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['board', 'Aufgaben'], ['kal', 'Kalender'], ['dash', 'Dashboard'], ['termin', 'Terminplanung']]) {
+    for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['kal', 'Kalender']]) {
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
     tb.append(tabs);
