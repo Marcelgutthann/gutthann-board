@@ -132,6 +132,92 @@ function uiHinweis(text, art) {
 }
 window.uiFrage = uiFrage; window.uiEingabe = uiEingabe; window.uiHinweis = uiHinweis;
 
+// Löschfenster mit Umhängen (26.10.2026, Marcel; gleicher Aufbau wie im Terminplan): oben ein Satz, was nach dem
+// Löschen gilt. Was nach Standard läuft, steht zusammen in EINER Zeile („anzeigen“); nur Geändertes als eigene Zeile
+// mit „ändern“. „ändern“ öffnet EIN Feld: Vorschläge mit Grund, alle Ziele, Tippen filtert, unten die Sonderwege.
+// opt: { titel, satz(E), zeilen: [{ k, standard, ziele: [{w, name}], vorschlaege: [{w, grund}], extras: [[w, text]],
+//        text(w) → {art: gruen|grau|rot|orange, html} }], ruhigText(n), sammel: {label, ziele}, ok } → Promise<E | null>
+function uiLoeschFenster(opt) {
+  return new Promise((fertig) => {
+    const Z = opt.zeilen || [];
+    const E = Object.fromEntries(Z.map((z) => [z.k, z.standard]));
+    let offen = null, ruhigZeigen = false;
+    const o = document.createElement('div');
+    o.className = 'uidlg';
+    o.innerHTML = '<div class="uidlg-karte breit ulf"><div class="uidlg-t">' + uiEsc(opt.titel) + '</div><div class="ulf-satz"></div>'
+      + '<div class="ulf-liste"></div><div class="uidlg-akt"><button class="uidlg-b hell" data-ui="nein">Abbrechen</button>'
+      + '<button class="uidlg-b rot" data-ui="ok">' + uiEsc(opt.ok || 'Löschen') + '</button></div></div>';
+    document.body.appendChild(o);
+    const schliessen = (ja) => { document.removeEventListener('keydown', taste, true); o.remove(); fertig(ja ? E : null); };
+    const taste = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (offen != null) { offen = null; zeichnen(); } else schliessen(false); }
+      else if (e.key === 'Enter' && !(e.target && e.target.classList?.contains('ulf-suche'))) { e.preventDefault(); e.stopPropagation(); schliessen(true); }
+    };
+    document.addEventListener('keydown', taste, true);
+    o.onclick = (e) => { if (e.target === o) schliessen(false); };
+    o.querySelector('[data-ui="ok"]').onclick = () => schliessen(true);
+    o.querySelector('[data-ui="nein"]').onclick = () => schliessen(false);
+    const feld = (ort, ziele, vorschlaege, extras, setzen) => {
+      ort.innerHTML = '<input class="ulf-suche" placeholder="Suchen" spellcheck="false"><div class="ulf-auswahl"></div>';
+      const inp = ort.querySelector('input'), aus = ort.querySelector('.ulf-auswahl');
+      const malen = () => {
+        const q = inp.value.trim().toLowerCase(), passt = (z) => !q || z.name.toLowerCase().includes(q);
+        const name = (w) => ziele.find((z) => z.w === w)?.name || w;
+        const vor = vorschlaege.filter((v) => ziele.some((z) => z.w === v.w) && passt({ name: name(v.w) }));
+        const rest = ziele.filter((z) => passt(z) && !vor.some((v) => v.w === z.w));
+        let h = '';
+        if (vor.length) h += '<div class="ulf-gruppe">Vorschlag</div>' + vor.map((v) => '<button data-w="' + uiEsc(v.w) + '">' + uiEsc(name(v.w)) + '<small>' + uiEsc(v.grund) + '</small></button>').join('');
+        if (rest.length) h += '<div class="ulf-gruppe">' + (q ? 'Treffer' : 'Alle') + '</div>' + rest.slice(0, 150).map((z) => '<button data-w="' + uiEsc(z.w) + '">' + uiEsc(z.name) + '</button>').join('');
+        if (q && !vor.length && !rest.length) h += '<div class="ulf-kein">Kein passendes Ziel</div>';
+        if (extras.length) h += '<div class="ulf-trenner"></div>' + extras.map(([w, t]) => '<button data-w="' + uiEsc(w) + '" class="ulf-extra">' + uiEsc(t) + '</button>').join('');
+        aus.innerHTML = h;
+        aus.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (ev) => { ev.preventDefault(); setzen(b.dataset.w); }));
+      };
+      inp.addEventListener('input', malen);
+      inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); const b = aus.querySelector('button'); if (b) setzen(b.dataset.w); } });
+      malen(); inp.focus();
+    };
+    const zeichnen = () => {
+      o.querySelector('.ulf-satz').innerHTML = opt.satz(E);
+      const ruhig = Z.filter((z) => E[z.k] === z.standard && offen !== z.k), wichtig = Z.filter((z) => !ruhig.includes(z));
+      const zeile = (z) => { const t = z.text(E[z.k]); return '<div class="ulf-zeile ulf-' + t.art + '" data-k="' + uiEsc(z.k) + '"><div class="ulf-zsatz"><span class="ulf-punkt"></span><span class="ulf-text">' + t.html
+        + '</span><button class="ulf-link ulf-aendern">' + (offen === z.k ? 'schließen' : 'ändern') + '</button></div><div class="ulf-feld"></div></div>'; };
+      let h = wichtig.map(zeile).join('');
+      if (ruhig.length) h += ruhigZeigen ? ruhig.map(zeile).join('')
+        : '<div class="ulf-zeile ulf-grau"><div class="ulf-zsatz"><span class="ulf-punkt"></span><span class="ulf-text">' + opt.ruhigText(ruhig.length) + '</span><button class="ulf-link ulf-auf">anzeigen</button></div></div>';
+      if (opt.sammel && Z.length > 1) h += '<div class="ulf-sammel"><button class="ulf-link ulf-alle">' + uiEsc(opt.sammel.label) + '</button><div class="ulf-feld ulf-alle-feld"></div></div>';
+      const liste = o.querySelector('.ulf-liste');
+      liste.innerHTML = h;
+      liste.querySelector('.ulf-auf')?.addEventListener('click', () => { ruhigZeigen = true; zeichnen(); });
+      liste.querySelector('.ulf-alle')?.addEventListener('click', () => { offen = offen === '*' ? null : '*'; zeichnen(); });
+      Z.forEach((z) => {
+        const el = liste.querySelector('.ulf-zeile[data-k="' + CSS.escape(z.k) + '"]');
+        if (!el) return;
+        el.querySelector('.ulf-aendern').addEventListener('click', () => { offen = offen === z.k ? null : z.k; zeichnen(); });
+        if (offen === z.k) feld(el.querySelector('.ulf-feld'), z.ziele, z.vorschlaege || [], z.extras || [], (w) => { E[z.k] = w; offen = null; ruhigZeigen = ruhigZeigen || w === z.standard; zeichnen(); });
+      });
+      if (offen === '*') feld(liste.querySelector('.ulf-alle-feld'), opt.sammel.ziele, [], [], (w) => { Z.forEach((z) => { if (z.ziele.some((x) => x.w === w)) E[z.k] = w; }); offen = null; zeichnen(); });
+    };
+    zeichnen();
+    o.querySelector('[data-ui="ok"]').focus();
+  });
+}
+// Meldung unten mit „Rückgängig“ für gelöschte Spalten und Etiketten (assistant_loeschen_rueckgaengig, Migr. 266)
+function uiRueckgaengig(text, protokollId, danach) {
+  const t = document.createElement('div');
+  t.className = 'uitoast ok ulf-toast';
+  t.innerHTML = '<span>' + uiEsc(text) + '</span>' + (protokollId ? '<button>Rückgängig</button>' : '');
+  t.querySelector('button')?.addEventListener('click', async () => {
+    t.remove();
+    const r = await restRpc('assistant_loeschen_rueckgaengig', { protokoll_id: protokollId }).catch((e) => ({ fehler: e.message }));
+    if (r?.fehler) uiHinweis(r.fehler); else uiHinweis('Zurückgeholt: „' + r.name + '“', 'ok');
+    if (danach) await danach();
+  });
+  document.body.appendChild(t);
+  setTimeout(() => { t.classList.add('weg'); setTimeout(() => t.remove(), 400); }, 9000);
+}
+window.uiLoeschFenster = uiLoeschFenster; window.uiRueckgaengig = uiRueckgaengig;
+
 // ---------- API ----------
 function saveSession(s) { S.session = s; localStorage.setItem('gb_session', JSON.stringify(s)); }
 function loadSession() { try { S.session = JSON.parse(localStorage.getItem('gb_session')); } catch { S.session = null; } }
@@ -445,14 +531,7 @@ function tagMenu(x, y, todoId, danach) {
   // Aufraeumen: der einzige Weg, einen Vertipper wieder aus dem Board zu bekommen —
   // abgenommene Tags bleiben seit Migration 156 sonst dauerhaft stehen.
   if (S.tags.liste.length) items.push({ txt: 'Tag aus dem Board löschen…', danger: true, do: () => setTimeout(() => {
-    ctxMenu(x, y, S.tags.liste.map((t) => ({ txt: t.name, danger: true, do: async () => {
-      const n = S.tags.proKarte ? Object.values(S.tags.proKarte).filter((l) => l.some((x2) => x2.id === t.id)).length : 0;
-      if (!await uiFrage(`Tag „${t.name}" ganz aus dem Board löschen?`
-        + (n ? ` Er hängt noch an ${n} Karte${n === 1 ? '' : 'n'} und verschwindet dort mit.` : ''))) return;
-      const r = await restRpc('assistant_tag_loeschen', { p_tag_id: t.id }).catch((e) => ({ fehler: e.message }));
-      if (r?.fehler) { uiHinweis(r.fehler); return; }
-      await danach();
-    } })));
+    ctxMenu(x, y, S.tags.liste.map((t) => ({ txt: t.name, danger: true, do: () => etikettLoeschenFenster(t, danach) })));
   }) });
   ctxMenu(x, y, items);
 }
@@ -2101,8 +2180,68 @@ function spaltenMenu(e, sp, nSpalten) {
   if (!sp.ist_erledigt) items.push({ txt: sp.auto_status === 'fertig' ? 'Fertig-prüfen-Rolle entfernen' : 'Als Fertig-prüfen-Spalte (Agenten-Ergebnisse landen hier)', do: () => rolle(sp.auto_status === 'fertig' ? 'keine' : 'fertig_pruefen') });
   if (!sp.ist_erledigt) items.push({ txt: 'Als Erledigt-Spalte', do: () => rolle('erledigt') });
   if (sp.ist_erledigt) items.push({ note: 'Erledigt-Spalte – Rolle über andere Spalte ändern' });
-  if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Löschen – Karten wandern in erste Spalte', danger: true, do: async () => { const r = await lotse('spalte_loeschen', { spalte_id: sp.id }); if (r.fehler) uiHinweis(r.fehler); await ladeBoard(); } });
+  if (!sp.ist_erledigt && nSpalten > 1) items.push({ txt: 'Spalte löschen…', danger: true, do: () => spalteLoeschenFenster(sp) });
   ctxMenu(e.clientX, e.clientY, items);
+}
+
+// Spalte löschen (26.10.2026): die Karten kommen in die erste Arbeitsspalte (wie bisher), einzeln oder alle umhängbar.
+async function spalteLoeschenFenster(sp) {
+  const nachPos = (a, b) => (a.position ?? 0) - (b.position ?? 0);
+  const alle = [...(S.board?.spalten || [])].sort(nachPos);
+  const ziele = alle.filter((x) => x.id !== sp.id && !x.ist_erledigt);
+  const neutral = ziele.find((x) => !x.ist_agent && !String(x.automatik?.auftrag || '').trim()) || ziele[0];
+  const karten = (S.board?.todos || []).filter((t) => t.spalte_id === sp.id);
+  const i = alle.findIndex((x) => x.id === sp.id), links = alle.slice(0, i).reverse().find((x) => ziele.includes(x)), rechts = alle.slice(i + 1).find((x) => ziele.includes(x));
+  const name = (id) => ziele.find((x) => x.id === id)?.name || '?';
+  const agent = (id) => { const x = ziele.find((y) => y.id === id); return x && (x.ist_agent || String(x.automatik?.auftrag || '').trim()) ? ' (dort arbeitet ein Agent sie ab)' : ''; };
+  const vorschlaege = [neutral && { w: neutral.id, grund: 'erste Arbeitsspalte' }, links && { w: links.id, grund: 'links daneben' }, rechts && { w: rechts.id, grund: 'rechts daneben' }]
+    .filter(Boolean).filter((v, j, l) => l.findIndex((x) => x.w === v.w) === j);
+  const E = await uiLoeschFenster({
+    titel: '„' + sp.name + '“ löschen',
+    satz: (E) => {
+      if (!karten.length) return 'Die Spalte ist leer.';
+      const n = {}; Object.values(E).forEach((w) => { n[w] = (n[w] || 0) + 1; });
+      return Object.entries(n).map(([w, c], j) => (c === 1 ? (j ? 'eine Karte kommt' : 'Eine Karte kommt') : (j ? 'die ' : 'Die ') + c + ' Karten kommen') + ' nach „' + uiEsc(name(w)) + '“' + agent(w)).join(', ') + '.';
+    },
+    zeilen: karten.map((t) => ({ k: t.id, standard: neutral?.id, ziele: ziele.map((x) => ({ w: x.id, name: x.name })), vorschlaege,
+      text: (w) => ({ art: w === neutral?.id ? 'grau' : 'gruen', html: '<b>' + uiEsc(t.titel) + '</b> kommt nach „' + uiEsc(name(w)) + '“' }) })),
+    ruhigText: (n) => (n === 1 ? 'Eine Karte kommt' : n + ' Karten kommen') + ' in die erste Arbeitsspalte „' + uiEsc(neutral?.name || '') + '“',
+    sammel: { label: 'Alle Karten in eine andere Spalte', ziele: ziele.map((x) => ({ w: x.id, name: x.name })) },
+  });
+  if (!E) return;
+  const r = await lotse('spalte_loeschen', { spalte_id: sp.id, zuordnung: karten.length ? E : null });
+  await ladeBoard();
+  if (r.fehler) { uiHinweis(r.fehler); return; }
+  uiRueckgaengig('Spalte „' + sp.name + '“ gelöscht' + (r.karten_verschoben ? ', ' + r.karten_verschoben + ' Karten umgehängt' : ''), r.protokoll_id, ladeBoard);
+}
+
+// Etikett löschen (26.10.2026): es verschwindet von den Karten; einzeln oder alle auf ein anderes Etikett umstellbar.
+async function etikettLoeschenFenster(t, danach) {
+  const karten = Object.entries(S.tags.proKarte || {}).filter(([, l]) => l.some((x) => x.id === t.id)).map(([id]) => id);
+  const titel = (id) => (S.board?.todos || []).find((x) => String(x.id) === String(id))?.titel || 'Karte';
+  const andere = S.tags.liste.filter((x) => x.id !== t.id).map((x) => ({ w: x.id, name: x.name }));
+  const name = (w) => andere.find((x) => x.w === w)?.name || '';
+  const kurz = (s) => String(s).toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+  const vorschlaege = andere.filter((x) => kurz(x.name).includes(kurz(t.name).slice(0, 4)) || kurz(t.name).includes(kurz(x.name).slice(0, 4)))
+    .slice(0, 3).map((x) => ({ w: x.w, grund: 'ähnlicher Name' }));
+  const E = await uiLoeschFenster({
+    titel: 'Etikett „' + t.name + '“ löschen',
+    satz: (E) => {
+      if (!karten.length) return 'Das Etikett hängt an keiner Karte.';
+      const um = Object.values(E).filter((w) => w !== 'loesen').length, weg = karten.length - um;
+      return [weg && (weg === 1 ? 'Eine Karte verliert' : weg + ' Karten verlieren') + ' das Etikett', um && (um === 1 ? 'eine Karte bekommt' : um + ' Karten bekommen') + ' stattdessen ein anderes'].filter(Boolean).join(', ') + '.';
+    },
+    zeilen: karten.map((id) => ({ k: id, standard: 'loesen', ziele: andere, vorschlaege, extras: [['loesen', 'Nur das Etikett entfernen']],
+      text: (w) => (w === 'loesen' ? { art: 'grau', html: '<b>' + uiEsc(titel(id)) + '</b> verliert das Etikett' }
+        : { art: 'gruen', html: '<b>' + uiEsc(titel(id)) + '</b> bekommt stattdessen „' + uiEsc(name(w)) + '“' }) })),
+    ruhigText: (n) => (n === 1 ? 'Eine Karte verliert' : n + ' Karten verlieren') + ' nur das Etikett',
+    sammel: andere.length ? { label: 'Alle auf ein anderes Etikett umstellen', ziele: andere } : null,
+  });
+  if (!E) return;
+  const r = await restRpc('assistant_tag_loeschen', { p_tag_id: t.id, zuordnung: karten.length ? E : null }).catch((e) => ({ fehler: e.message }));
+  if (r?.fehler) { uiHinweis(r.fehler); return; }
+  await danach();
+  uiRueckgaengig('Etikett „' + t.name + '“ gelöscht', r.protokoll_id, danach);
 }
 
 // ---------- Aussortieren mit Gedaechtnis (Marcels Auftrag 26.08., Migration 120) ----------
