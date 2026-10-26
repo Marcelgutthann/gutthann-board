@@ -176,20 +176,20 @@
   .modal-grid{display:grid;grid-template-columns:80px 1fr;gap:8px 10px;align-items:center;margin-bottom:8px;}
   .modal-label{color:#666;font-size:11px;}
   .modal-input{font-size:12px;font-family:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;width:100%;}
-  /* Löschdialog mit Folgen (26.10.2026) */
-  .modal-box.lf-box{max-width:min(700px,94vw);width:700px;}
-  .lf-folgenreich{font-size:10px;font-weight:600;background:#fdecea;color:#c0392b;padding:2px 7px;border-radius:10px;vertical-align:2px;margin-left:6px;}
-  .lf-zahlen{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
-  .lf-zahl{border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:11px;color:#555;background:#fafbfc;}
-  .lf-zahl b{display:block;font-size:17px;color:var(--ink);line-height:1.15;}
-  .lf-zahl.rot b{color:#c0392b;}
-  .lf-bild{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:10px;background:#fff;}
+  /* Löschfenster (26.10.2026, umgebaut: ein Satz, ein Bild, je Verknüpfung ein Satz + „ändern“) */
+  .modal-box.lf-box{max-width:min(680px,94vw);width:680px;max-height:88vh;padding:20px 22px 16px;}
+  .lf-box .modal-title{font-size:15px;margin-bottom:6px;}
+  .lf-leise{font-weight:400;color:#64748b;font-size:12px;}
+  .lf-satz{font-size:13px;line-height:1.55;margin:0 0 12px;color:#1f2937;}
+  .lf-orange{color:#b45309;} .lf-rot{color:#c0392b;}
+  .lf-bild{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:14px;background:#fafbfc;}
   .lf-svg text{font-size:11px;font-family:"Segoe UI",Arial,sans-serif;fill:#1f2937;}
-  .lf-svg .lf-knoten rect{fill:#f1f5f9;stroke:#94a3b8;}
+  .lf-svg .lf-knoten rect{fill:#fff;stroke:#94a3b8;}
   .lf-svg .lf-knoten.lose rect{fill:#fff4e5;stroke:#d97706;stroke-width:1.5;}
   .lf-svg .lf-knoten.gebunden rect{fill:#edf7ee;stroke:#2e7d32;}
+  .lf-svg .lf-knoten.weg rect{fill:#fdecea;stroke:#c0392b;}
   .lf-svg .lf-marke{font-size:10px;font-weight:700;fill:#b45309;}
-  .lf-svg .lf-knoten.gebunden .lf-marke{fill:#2e7d32;}
+  .lf-svg .lf-knoten.gebunden .lf-marke{fill:#2e7d32;} .lf-svg .lf-knoten.weg .lf-marke{fill:#c0392b;} .lf-svg .lf-knoten.verbunden .lf-marke{fill:#64748b;font-weight:400;}
   .lf-svg .lf-mitte rect{fill:#fdecea;stroke:#c0392b;stroke-width:1.5;stroke-dasharray:5 3;}
   .lf-svg .lf-mitte .lf-mname{font-weight:700;fill:#c0392b;text-decoration:line-through;}
   .lf-svg .lf-mitte .lf-mzusatz{font-size:10px;fill:#c0392b;}
@@ -197,48 +197,32 @@
   .lf-svg .lf-weg-kante{fill:none;stroke:#c0392b;stroke-width:1.3;stroke-dasharray:4 3;opacity:.7;}
   .lf-svg .lf-bruecke{fill:none;stroke:#2e7d32;stroke-width:2;}
   .lf-svg .lf-mehr{font-size:10px;fill:#64748b;}
-  .lf-satz{font-size:12.5px;line-height:1.5;margin:0 0 10px;}
-  .lf-hinweise{background:#fff8e6;border:1px solid #f0d9a0;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:11.5px;}
-  .lf-hinweise ul{margin:4px 0 0;padding-left:18px;}
-  .modal-box.lf-box{max-height:88vh;}
-  .lf-svg .lf-knoten.offen rect{fill:#fff;stroke:#94a3b8;stroke-dasharray:3 2;}
-  .lf-svg .lf-knoten.offen .lf-marke{fill:#64748b;font-weight:400;}
-  .lf-svg .lf-knoten.weg rect{fill:#fdecea;stroke:#c0392b;}
-  .lf-svg .lf-knoten.weg .lf-marke{fill:#c0392b;}
-  .lf-fortschritt{display:flex;align-items:center;gap:10px;font-size:12px;color:#555;margin-bottom:8px;}
-  .lf-balken{flex:1;height:5px;background:#eef0f3;border-radius:3px;overflow:hidden;}
-  .lf-balken div{height:5px;width:0;background:var(--blue);transition:width .15s;}
-  .lf-oben{font-size:12px;line-height:1.75;margin-bottom:8px;}
-  .lf-seite{font-size:10.5px;background:#f1f5f9;color:#475569;border-radius:4px;padding:1px 6px;}
-  .lf-typ{font-size:11px;color:#64748b;}
-  .lf-offen{color:#94a3b8;font-weight:400;}
-  .lf-rot{color:#c0392b;}
-  .lf-sammel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
-  .lf-sammel button,.lf-sammel select{font-size:12px;padding:5px 10px;border-radius:4px;cursor:pointer;}
-  .lf-sammel select{border:1px solid var(--line);max-width:300px;}
-  .lf-zeile{border-top:1px solid #eef0f3;padding:9px 0;}
-  .lf-zeile.entschieden .lf-zkopf b{color:var(--green-dark);}
-  .lf-zkopf{font-size:12.5px;margin-bottom:5px;}
-  .lf-frage{font-size:11px;color:#b45309;margin-left:4px;}
-  .lf-zeile.entschieden .lf-frage{display:none;}
-  .lf-vorschlaege{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:6px;}
-  .lf-klein{font-size:11px;color:#666;margin-right:2px;}
-  .lf-chip{font-size:12px;padding:4px 9px;border-radius:4px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;}
-  .lf-chip small{color:#64748b;font-size:10.5px;margin-left:5px;}
-  .lf-chip.an{background:#e8f0ff;border-color:var(--blue);color:var(--blue-dark);}
-  .lf-chip.an small{color:var(--blue);}
-  .lf-wege{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:6px;}
-  .lf-wege select,.lf-wege input{width:100%;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:4px;font-family:inherit;}
-  .lf-suche{position:relative;}
-  .lf-treffer{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 4px 4px;z-index:5;max-height:220px;overflow:auto;}
-  .lf-treffer:empty{display:none;}
-  .lf-treffer button{display:block;width:100%;text-align:left;background:#fff;border:none;padding:5px 8px;font-size:12px;cursor:pointer;}
-  .lf-treffer button:hover{background:#f2f6ff;}
-  .lf-kein{padding:6px 8px;font-size:11.5px;color:#c0392b;}
-  .lf-aktionen{display:flex;gap:6px;}
-  .lf-zusammen{background:#fff8e6;border:1px solid #f0d9a0;border-radius:6px;padding:7px 10px;margin:8px 0 10px;font-size:12px;line-height:1.5;}
-  .lf-nachr{margin-right:auto;font-size:12px;color:#444;display:flex;gap:6px;align-items:center;}
-  .lf-fuss .lf-ja:disabled{opacity:.4;cursor:not-allowed;}
+  .lf-liste-kopf{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}
+  .lf-zeile{border-top:1px solid #eef0f3;}
+  .lf-zeile:last-child{border-bottom:1px solid #eef0f3;}
+  .lf-zsatz{display:flex;align-items:center;gap:10px;padding:9px 2px;font-size:13px;}
+  .lf-punkt{flex:none;width:8px;height:8px;border-radius:50%;background:#94a3b8;}
+  .lf-gruen .lf-punkt{background:#2e7d32;} .lf-orange .lf-punkt{background:#d97706;} .lf-rot .lf-punkt{background:#c0392b;}
+  .lf-zeile.lf-orange .lf-ztext{color:#b45309;} .lf-zeile.lf-rot .lf-ztext{color:#c0392b;}
+  .lf-ztext{flex:1;min-width:0;}
+  .lf-link{background:none;border:none;color:var(--blue);cursor:pointer;font-size:12px;padding:2px 0;text-transform:none;letter-spacing:0;}
+  .lf-link:hover{text-decoration:underline;}
+  .lf-feldort:empty,.lf-alle-feld:empty{display:none;}
+  .lf-feldort,.lf-alle-feld{padding:0 0 10px 18px;}
+  .lf-feld input{width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--blue);border-radius:4px 4px 0 0;font-family:inherit;outline:none;}
+  .lf-auswahl{border:1px solid var(--line);border-top:none;border-radius:0 0 4px 4px;max-height:230px;overflow:auto;background:#fff;}
+  .lf-auswahl button{display:block;width:100%;text-align:left;background:#fff;border:none;padding:6px 10px;font-size:12.5px;cursor:pointer;}
+  .lf-auswahl button:hover{background:#f2f6ff;}
+  .lf-auswahl small{color:#64748b;font-size:11px;margin-left:8px;}
+  .lf-auswahl .lf-extra{color:#475569;}
+  .lf-gruppe{font-size:10.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px 2px;}
+  .lf-gruppe-trenner{border-top:1px solid #eef0f3;margin-top:4px;}
+  .lf-kein{padding:7px 10px;font-size:12px;color:#c0392b;}
+  .lf-verloren{font-size:12px;color:#92400e;margin:12px 0 0;}
+  .lf-fuss{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:16px;}
+  .lf-nachr{margin-right:auto;font-size:12.5px;color:#444;display:flex;gap:6px;align-items:center;}
+  .lf-fuss .lf-ja{background:#c0392b;color:#fff;border:none;padding:7px 18px;border-radius:4px;cursor:pointer;font-size:13px;}
+  .lf-fuss .lf-nein{padding:7px 14px;border-radius:4px;cursor:pointer;font-size:13px;}
   .tabelle-hinweis.mit-knopf{pointer-events:auto;display:flex;gap:10px;align-items:center;}
   .tabelle-hinweis.mit-knopf button{background:#fff;color:#111;border:none;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:600;}
   .lf-fuss{display:flex;gap:10px;align-items:center;justify-content:flex-end;}
@@ -2996,7 +2980,11 @@ function lfKetteSvg(folgen, E){
   const zustand = (u, seite)=>{
     const l = folgen.links.find(x=>x.partner === u && x.seite === seite), d = l && E[l.schluessel];
     if(typeof d === 'number') return { klasse: 'gebunden', marke: '✓', titel: seite === 'nach' ? 'neuer Vorgänger: ' + lfZiel(d) : 'neuer Nachfolger: ' + lfZiel(d), ziel: d };
-    if(d === 'loesen') return { klasse: 'lose', marke: seite === 'nach' ? 'lose' : 'gelöst', titel: 'Verknüpfung gelöst' };
+    if(d === 'loesen'){
+      const u2 = loeschVerbunden(l, folgen, E);   // wie die Zeile im Fenster: bleibt verbunden ist kein Riss
+      if(u2) return { klasse: 'verbunden', marke: 'bleibt', titel: 'bleibt mit „' + (byUid[u2]?.name || u2) + '“ verbunden' };
+      return { klasse: 'lose', marke: seite === 'nach' ? 'lose' : 'gelöst', titel: 'Verknüpfung gelöst' };
+    }
     if(d === 'mitloeschen') return { klasse: 'weg', marke: 'mit weg', titel: 'wird mitgelöscht' };
     return { klasse: 'offen', marke: 'offen', titel: 'noch nicht entschieden' };
   };
@@ -3034,134 +3022,115 @@ function lfKetteSvg(folgen, E){
   if(folgen.nachfolger.length > MAX) s += `<text x="${RX+8}" y="${y(rechts.length)+16}" class="lf-mehr">+ ${folgen.nachfolger.length - MAX} weitere</text>`;
   return s + '</svg>';
 }
-function lfEntscheidung(l, E, folgen){
-  const d = E[l.schluessel], p = '„' + ESC(byUid[l.partner]?.name) + '“';
-  if(typeof d === 'number') return l.seite === 'nach' ? '„' + ESC(byUid[d]?.name) + '“ → ' + p : p + ' → „' + ESC(byUid[d]?.name) + '“';
-  if(d === 'loesen'){ const u = loeschVerbunden(l, folgen, E); return 'Verknüpfung lösen' + (u ? ' <span class="lf-typ">— bleibt mit „' + ESC(byUid[u]?.name) + '“ verbunden</span>' : ''); }
-  if(d === 'mitloeschen') return '<span class="lf-rot">' + p + ' mitlöschen</span>';
-  return '<span class="lf-offen">offen</span>';
+// Was nach dem Löschen mit einer Verknüpfung gilt, als ein Satz (Zeile im Fenster); art: gruen | orange | rot | grau
+function lfZeilenSatz(l, E, folgen){
+  const d = E[l.schluessel], p = '<b>' + ESC(byUid[l.partner]?.name) + '</b>', n = (u)=> '„' + ESC(byUid[u]?.name) + '“';
+  if(typeof d === 'number') return { art: 'gruen', html: l.seite === 'nach' ? p + ' hängt künftig an ' + n(d) : p + ' bekommt ' + n(d) + ' als Nachfolger' };
+  if(d === 'mitloeschen') return { art: 'rot', html: p + ' wird mitgelöscht' };
+  const u = loeschVerbunden(l, folgen, E);
+  if(u) return { art: 'grau', html: p + ' bleibt mit ' + n(u) + ' verbunden' };
+  return l.seite === 'nach' ? { art: 'orange', html: p + ' hängt danach lose — nichts schiebt es mehr' } : { art: 'grau', html: p + ' verliert diesen Nachfolger' };
 }
+// Löschfenster (26.10.2026, umgebaut nach Marcels Befund „keine Struktur, viel zu viele Möglichkeiten“):
+// Der Normalfall ist „Vorschlag passt“ — jede Verknüpfung ist vorbelegt, Löschen geht sofort. Oben ein Satz und das Bild,
+// darunter je Verknüpfung EIN Satz mit EINEM „ändern“. „ändern“ öffnet EIN Feld: Vorschläge mit Grund zuerst, dann alle
+// gültigen Ziele, Tippen filtert (Name oder Zeilennummer), unten Lösen/Mitlöschen. Ein Zustand E, ein zeichnen().
 function openLoeschDialog(folgen, onYes){
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   function close(){ overlay.remove(); document.removeEventListener('keydown', onKey); }
-  function onKey(ev){ if(ev.key==='Escape') close(); }
+  function onKey(ev){
+    if(ev.key !== 'Escape') return;
+    if(offen){ offen = null; zeichnen(); return; }   // erst das offene Feld schließen, dann das Fenster
+    close();
+  }
   overlay.addEventListener('click', (ev)=>{ if(ev.target===overlay) close(); });
   document.addEventListener('keydown', onKey);
   const box = document.createElement('div');
   box.className = 'modal-box lf-box';
   box.addEventListener('click', ev=>ev.stopPropagation());
-  let E = {}, nachr = true;   // Standard wie MS Project (Marcel 26.10.2026)
   const L = folgen.links, mitLinks = L.length > 0;
+  let E = standardEntscheidungen(folgen, {}), nachr = true, offen = null;   // offen = Schlüssel der Zeile, deren Feld offen ist ('alle' = alle Nachfolger)
   const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
-  const titel = w.length === 1 ? '„' + w[0].name + '“ löschen?' : folgen.vorgaenge.length + ' Vorgänge löschen?';
-  const zahl = (n, eins, viele, klasse)=> `<div class="lf-zahl ${klasse || ''}"><b>${n}</b>${n === 1 ? eins : viele}</div>`;
-  const andere = folgen.vorgaenge.length - w.length;
-  const typ = (t)=> t.summary ? 'Sammelvorgang' : t.milestone ? 'Meilenstein' : 'Vorgang';
-  const zeitraum = (t)=> fmtDE(t.start) + (t.finish !== t.start ? '–' + fmtDE(t.finish) : '');
-  box.innerHTML = `<div class="modal-title">${ESC(titel)}${folgen.folgenreich ? ' <span class="lf-folgenreich">folgenreich</span>' : ''}</div>
-    <div class="lf-zahlen">
-      ${zahl(folgen.vorgaenge.length, 'Vorgang', 'Vorgänge', 'rot')}
-      ${andere ? zahl(andere, 'Untervorgang', 'Untervorgänge') : ''}
-      ${zahl(folgen.kanten.length, 'Verknüpfung', 'Verknüpfungen', folgen.kanten.length ? 'rot' : '')}
-      ${zahl(folgen.vorgaenger.length, 'Vorgänger', 'Vorgänger')}
-      ${zahl(folgen.nachfolger.length, 'Nachfolger', 'Nachfolger')}
-      ${folgen.dahinter.length ? zahl(folgen.dahinter.length, 'dahinter in der Kette', 'dahinter in der Kette') : ''}
-    </div>
-    ${mitLinks ? `<div class="lf-fortschritt"><span><b class="lf-n">0</b> von ${L.length} Verknüpfungen entschieden</span><div class="lf-balken"><div></div></div></div>
-      <div class="lf-bild"></div><div class="lf-oben"></div>
-      <div class="lf-sammel"><button type="button" class="secondary lf-alle">Alle Vorschläge übernehmen</button>
-        ${folgen.nachfolger.length ? '<select class="lf-alle-an"></select>' : ''}</div>
-      <div class="lf-zeilen">${L.map(l=>{ const p = byUid[l.partner]; return `<div class="lf-zeile" data-k="${l.schluessel}">
-        <div class="lf-zkopf"><b>${l.seite === 'nach' ? 'Nachfolger' : 'Vorgänger'}</b> ${ESC(lfZiel(l.partner))}
-          <span class="lf-typ">${typ(p)} · ${zeitraum(p)} · ${l.kante.type}${l.seite === 'nach' ? ' von' : ' auf'} „${ESC(byUid[l.ueber]?.name)}“</span>
-          <span class="lf-frage">${l.seite === 'nach' ? 'braucht einen neuen Vorgänger' : 'braucht einen neuen Nachfolger'}</span></div>
-        <div class="lf-vorschlaege"></div>
-        <div class="lf-wege"><select class="lf-liste"></select>
-          <div class="lf-suche"><input type="text" placeholder="Name oder Zeilennummer suchen" spellcheck="false"><div class="lf-treffer"></div></div></div>
-        <div class="lf-aktionen"><button type="button" class="lf-chip" data-w="loesen">Lösen</button>${l.mitloeschbar ? '<button type="button" class="lf-chip" data-w="mitloeschen">Mitlöschen</button>' : ''}</div>
-      </div>`; }).join('')}</div>`
-    : `<p class="lf-satz">Dieser Vorgang ist mit nichts verknüpft. Kein anderer Termin ändert sich.</p>`}
-    ${folgen.hinweise.length ? '<div class="lf-hinweise"><b>Geht mit verloren:</b><ul>' + folgen.hinweise.map(h=>'<li>' + ESC(h.satz) + ': ' + h.namen.slice(0, 4).map(n=>'„' + ESC(n) + '“').join(', ') + (h.namen.length > 4 ? ' und ' + (h.namen.length - 4) + ' weitere' : '') + '</li>').join('') + '</ul></div>' : ''}
-    <div class="lf-zusammen" hidden></div>
-    <div class="lf-fuss">${mitLinks ? '<label class="lf-nachr"><input type="checkbox" checked> Nachfolger rücken nach (wie MS Project)</label>' : '<span>Mit ↶ Zurück holst du es wieder, alles steht im Verlauf.</span>'}
+  const titel = w.length === 1 ? '„' + w[0].name + '“ löschen' : folgen.vorgaenge.length + ' Vorgänge löschen';
+  const unter = folgen.vorgaenge.length - w.length;
+  const nachLinks = L.filter(l=>l.seite === 'nach');
+  box.innerHTML = `<div class="modal-title">${ESC(titel)}${unter && w.length === 1 ? ' <span class="lf-leise">mit ' + unter + ' Untervorgängen</span>' : ''}</div>
+    <p class="lf-satz"></p>
+    ${mitLinks ? '<div class="lf-bild"></div>' : ''}
+    ${mitLinks ? `<div class="lf-liste-kopf"><span>${L.length === 1 ? 'Die Verknüpfung' : 'Die ' + L.length + ' Verknüpfungen'}</span>${nachLinks.length >= 3 ? '<button type="button" class="lf-link lf-alle-an">Alle Nachfolger an einen Vorgang hängen</button>' : ''}</div><div class="lf-alle-feld"></div><div class="lf-zeilen"></div>` : ''}
+    ${folgen.hinweise.length ? '<p class="lf-verloren">Geht mit verloren: ' + folgen.hinweise.map(h=>ESC(h.satz) + ' ' + h.namen.slice(0, 3).map(n=>'„' + ESC(n) + '“').join(', ') + (h.namen.length > 3 ? ' …' : '')).join(' · ') + '</p>' : ''}
+    <div class="lf-fuss">${mitLinks ? '<label class="lf-nachr"><input type="checkbox" checked> Nachfolger rücken nach</label>' : '<span></span>'}
       <button type="button" class="secondary lf-nein">Abbrechen</button><button type="button" class="lf-ja">Löschen</button></div>`;
-  const setze = (k, wert)=>{ E[k] = wert; zeichnen(); };
+  // Das eine Feld: Vorschläge, dann alle gültigen Ziele, gefiltert durch die Eingabe; unten Lösen/Mitlöschen
+  function feld(ort, ziele, vorschlaege, extras, setzen){
+    ort.innerHTML = `<div class="lf-feld"><input type="text" placeholder="Vorgang suchen (Name oder Zeilennummer)" spellcheck="false"><div class="lf-auswahl"></div></div>`;
+    const inp = ort.querySelector('input'), aus = ort.querySelector('.lf-auswahl');
+    const malen = ()=>{
+      const q = inp.value.trim().toLowerCase();
+      const passt = (u)=> !q || (byUid[u]?.name || '').toLowerCase().includes(q) || String(zeilenNr(u)).startsWith(q);
+      const vor = vorschlaege.filter(v=>typeof v.ziel === 'number' && passt(v.ziel));
+      const rest = [...ziele].filter(u=>passt(u) && !vor.some(v=>v.ziel === u)).sort((a, b)=>zeilenNr(a) - zeilenNr(b));
+      let h = '';
+      if(vor.length) h += '<div class="lf-gruppe">Vorschlag</div>' + vor.map(v=>`<button type="button" data-w="${v.ziel}">${ESC(lfZiel(v.ziel))}<small>${ESC(v.grund)}</small></button>`).join('');
+      if(rest.length) h += '<div class="lf-gruppe">' + (q ? 'Treffer' : 'Alle Vorgänge') + '</div>' + rest.slice(0, q ? 30 : 200).map(u=>`<button type="button" data-w="${u}">${ESC(lfZiel(u))}</button>`).join('');
+      if(q && !vor.length && !rest.length){
+        const gesperrt = TASKS.filter(t=>passt(t.uid)).slice(0, 2);
+        h += '<div class="lf-kein">Kein gültiges Ziel' + (gesperrt.length ? ': ' + gesperrt.map(t=>'„' + ESC(t.name) + '“').join(', ') + ' geht nicht (wird gelöscht, schon verknüpft, Sammel-/Untervorgang oder ergäbe einen Kreis)' : '') + '</div>';
+      }
+      if(extras.length) h += '<div class="lf-gruppe-trenner"></div>' + extras.map(([w2, t])=>`<button type="button" data-w="${w2}" class="lf-extra">${t}</button>`).join('');
+      aus.innerHTML = h;
+      aus.querySelectorAll('button').forEach(b=> b.addEventListener('mousedown', (ev)=>{ ev.preventDefault(); setzen(/^\d+$/.test(b.dataset.w) ? Number(b.dataset.w) : b.dataset.w); }));
+    };
+    inp.addEventListener('input', malen);
+    inp.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); const b = aus.querySelector('button'); if(b) setzen(/^\d+$/.test(b.dataset.w) ? Number(b.dataset.w) : b.dataset.w); } });
+    malen();
+    inp.focus();
+  }
   function zeichnen(){
+    const vorschau = loeschVorschau(folgen, E, nachr);
+    // der eine Satz oben: was nach dem Löschen gilt
+    const s = [], neu = vorschau.neu, n = (u)=> '„' + ESC(byUid[u]?.name) + '“';
+    if(!folgen.kanten.length) s.push('Mit nichts verknüpft — kein anderer Termin ändert sich.');
+    if(neu.length) s.push('Die Kette wird geschlossen: ' + neu.slice(0, 2).map(e=>n(e.from) + ' → ' + n(e.to)).join(', ') + (neu.length > 2 ? ' und ' + (neu.length - 2) + ' weitere' : '') + '.');
+    const lose = L.filter(l=>lfZeilenSatz(l, E, folgen).art === 'orange').length;
+    if(lose) s.push('<span class="lf-orange">' + (lose === 1 ? 'Ein Nachfolger hängt' : lose + ' Nachfolger hängen') + ' danach lose.</span>');
+    if(vorschau.mit.length) s.push('<span class="lf-rot">' + vorschau.mit.length + ' wird mitgelöscht.</span>');
+    if(neu.length) s.push(nachr && vorschau.bewegt.length ? (vorschau.bewegt.length === 1 ? 'Ein Vorgang rückt' : vorschau.bewegt.length + ' Vorgänge rücken') + ' nach.' : 'Kein Termin ändert sich.');
+    box.querySelector('.lf-satz').innerHTML = s.join(' ');
     if(!mitLinks) return;
-    const gueltig = new Map(L.map(l=>[l.schluessel, zielGueltig(l, folgen, E)]));
-    const n = L.filter(l=>E[l.schluessel] != null).length;
-    box.querySelector('.lf-n').textContent = n;
-    box.querySelector('.lf-balken div').style.width = (n / L.length * 100) + '%';
     box.querySelector('.lf-bild').innerHTML = lfKetteSvg(folgen, E);
-    box.querySelector('.lf-oben').innerHTML = L.map(l=>`<div class="lf-ent" data-k="${l.schluessel}"><span class="lf-seite">${l.seite === 'nach' ? 'Nachfolger' : 'Vorgänger'}</span> ${ESC(byUid[l.partner]?.name)} <span class="lf-typ">${l.kante.type}</span>: <b>${lfEntscheidung(l, E, folgen)}</b></div>`).join('');
-    const alleAn = box.querySelector('.lf-alle-an');
-    if(alleAn){
-      const ziele = new Set(); L.filter(l=>l.seite === 'nach').forEach(l=>gueltig.get(l.schluessel).forEach(u=>ziele.add(u)));
-      alleAn.innerHTML = '<option value="">Alle Nachfolger an … hängen</option>' + [...ziele].sort((a, b)=>zeilenNr(a) - zeilenNr(b)).map(u=>`<option value="${u}">${ESC(lfZiel(u))}</option>`).join('');
-    }
+    const zeilen = box.querySelector('.lf-zeilen');
+    zeilen.innerHTML = L.map(l=>{ const z = lfZeilenSatz(l, E, folgen); return `<div class="lf-zeile lf-${z.art}${offen === l.schluessel ? ' offen' : ''}" data-k="${l.schluessel}">
+      <div class="lf-zsatz"><span class="lf-punkt"></span><span class="lf-ztext">${z.html}</span><button type="button" class="lf-link lf-aendern">${offen === l.schluessel ? 'schließen' : 'ändern'}</button></div>
+      <div class="lf-feldort"></div></div>`; }).join('');
     L.forEach(l=>{
-      const z = box.querySelector(`.lf-zeile[data-k="${l.schluessel}"]`), g = gueltig.get(l.schluessel), d = E[l.schluessel];
-      z.classList.toggle('entschieden', d != null);
-      const v = zielVorschlaege(l, folgen, g, E);
-      const vz = z.querySelector('.lf-vorschlaege');
-      vz.innerHTML = v.length ? '<span class="lf-klein">Vorschläge:</span>' + v.map(x=>`<button type="button" class="lf-chip${d === x.ziel ? ' an' : ''}" data-w="${x.ziel}">${x.ziel === 'loesen' ? 'Lösen' : ESC(lfZiel(x.ziel))}<small>${ESC(x.grund)}</small></button>`).join('')
-        : '<span class="lf-klein">Kein naheliegendes Ziel — aus der Liste wählen, suchen oder lösen.</span>';
-      vz.querySelectorAll('.lf-chip').forEach(c=> c.onclick = ()=> setze(l.schluessel, c.dataset.w === 'loesen' ? 'loesen' : Number(c.dataset.w)));
-      const sel = z.querySelector('.lf-liste'), auswahl = [...g];
-      if(typeof d === 'number' && !g.has(d) && byUid[d]) auswahl.push(d);
-      sel.innerHTML = '<option value="">Aus Liste wählen (' + g.size + ' gültige Ziele)</option>' + auswahl.sort((a, b)=>zeilenNr(a) - zeilenNr(b)).map(u=>`<option value="${u}">${ESC(lfZiel(u))}</option>`).join('');
-      sel.value = typeof d === 'number' ? String(d) : '';
-      const inp = z.querySelector('.lf-suche input');
-      if(document.activeElement !== inp){ inp.value = typeof d === 'number' ? (byUid[d]?.name || '') : ''; z.querySelector('.lf-treffer').innerHTML = ''; }
-      z.querySelectorAll('.lf-aktionen .lf-chip').forEach(c=> c.classList.toggle('an', d === c.dataset.w));
+      const z = zeilen.querySelector(`.lf-zeile[data-k="${l.schluessel}"]`);
+      z.querySelector('.lf-aendern').addEventListener('click', ()=>{ offen = offen === l.schluessel ? null : l.schluessel; zeichnen(); });
+      if(offen !== l.schluessel) return;
+      const g = zielGueltig(l, folgen, E);
+      const extras = [['loesen', 'Verknüpfung lösen'], ...(l.mitloeschbar ? [['mitloeschen', '„' + ESC(byUid[l.partner]?.name) + '“ mitlöschen']] : [])];
+      feld(z.querySelector('.lf-feldort'), g, zielVorschlaege(l, folgen, g, E), extras, (wert)=>{ E[l.schluessel] = wert; offen = null; zeichnen(); });
     });
-    const fertig = n === L.length, ja = box.querySelector('.lf-ja');
-    ja.disabled = !fertig;
-    ja.title = fertig ? '' : 'Erst jede Verknüpfung entscheiden (' + (L.length - n) + ' offen)';
-    const zs = box.querySelector('.lf-zusammen');
-    zs.hidden = !fertig;
-    if(fertig){
-      const vorschau = loeschVorschau(folgen, E, nachr);
-      zs.innerHTML = '<b>Vor dem Löschen:</b> ' + loeschZusammenfassung(folgen, E, vorschau, nachr).map(ESC).join(' ');
+    const alleFeld = box.querySelector('.lf-alle-feld');
+    if(alleFeld){
+      alleFeld.innerHTML = '';
+      if(offen === 'alle'){
+        const ziele = new Set(); nachLinks.forEach(l=>zielGueltig(l, folgen, E).forEach(u=>ziele.add(u)));
+        feld(alleFeld, ziele, [], [], (u)=>{ if(typeof u === 'number') nachLinks.forEach(l=>{ if(zielGueltig(l, folgen, E).has(u)) E[l.schluessel] = u; }); offen = null; zeichnen(); });
+      }
     }
   }
   if(mitLinks){
-    L.forEach(l=>{
-      const z = box.querySelector(`.lf-zeile[data-k="${l.schluessel}"]`);
-      z.querySelector('.lf-liste').addEventListener('change', (ev)=>{ if(ev.target.value) setze(l.schluessel, Number(ev.target.value)); });
-      z.querySelectorAll('.lf-aktionen .lf-chip').forEach(c=> c.addEventListener('click', ()=> setze(l.schluessel, c.dataset.w)));
-      const inp = z.querySelector('.lf-suche input'), treffer = z.querySelector('.lf-treffer');
-      const suchen = ()=>{
-        const q = inp.value.trim().toLowerCase();
-        if(!q){ treffer.innerHTML = ''; return []; }
-        const g = zielGueltig(l, folgen, E);
-        const passt = (u)=> (byUid[u]?.name || '').toLowerCase().includes(q) || String(zeilenNr(u)).startsWith(q);
-        const liste = [...g].filter(passt).sort((a, b)=>zeilenNr(a) - zeilenNr(b)).slice(0, 8);
-        const gesperrt = TASKS.filter(t=>!g.has(t.uid) && passt(t.uid)).slice(0, 2);
-        treffer.innerHTML = liste.map(u=>`<button type="button" data-u="${u}">${ESC(lfZiel(u))}</button>`).join('')
-          + (liste.length ? '' : '<div class="lf-kein">Kein gültiges Ziel' + (gesperrt.length ? ': ' + gesperrt.map(t=>'„' + ESC(t.name) + '“').join(', ') + ' geht nicht (wird gelöscht, schon verknüpft, Sammel-/Untervorgang oder ergäbe einen Kreis)' : '') + '</div>');
-        treffer.querySelectorAll('button').forEach(b=> b.addEventListener('mousedown', (ev)=>{ ev.preventDefault(); treffer.innerHTML = ''; inp.blur(); setze(l.schluessel, Number(b.dataset.u)); }));
-        return liste;
-      };
-      inp.addEventListener('input', suchen);
-      inp.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); const t = suchen(); if(t.length){ treffer.innerHTML = ''; inp.blur(); setze(l.schluessel, t[0]); } } });
-      inp.addEventListener('blur', ()=> setTimeout(()=>{ treffer.innerHTML = ''; zeichnen(); }, 150));
-    });
-    box.querySelector('.lf-alle').addEventListener('click', ()=>{ E = standardEntscheidungen(folgen, E); zeichnen(); });
-    box.querySelector('.lf-alle-an')?.addEventListener('change', (ev)=>{
-      const u = Number(ev.target.value); if(!u) return;
-      L.filter(l=>l.seite === 'nach').forEach(l=>{ if(zielGueltig(l, folgen, E).has(u)) E[l.schluessel] = u; });
-      zeichnen();
-    });
+    box.querySelector('.lf-alle-an')?.addEventListener('click', ()=>{ offen = offen === 'alle' ? null : 'alle'; zeichnen(); });
     box.querySelector('.lf-nachr input').addEventListener('change', (ev)=>{ nachr = ev.target.checked; zeichnen(); });
   }
   box.querySelector('.lf-nein').addEventListener('click', close);
-  box.querySelector('.lf-ja').addEventListener('click', ()=>{ if(mitLinks && L.some(l=>E[l.schluessel] == null)) return; close(); onYes(E, nachr); });
+  box.querySelector('.lf-ja').addEventListener('click', ()=>{ close(); onYes(E, nachr); });
   zeichnen();
   overlay.appendChild(box);
   document.body.appendChild(overlay);
-  (folgen.folgenreich ? box.querySelector('.lf-nein') : box.querySelector('.lf-ja')).focus();
+  box.querySelector('.lf-ja').focus();
 }
 
 // ---- Rechtsklick-Kontextmenü auf einer Tabellenzeile ODER einem Balken/Meilenstein im Diagramm:
