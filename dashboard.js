@@ -228,16 +228,44 @@ async function renderSystemPanel(){
 // Löscht ein Projekt samt allem, was per Fremdschlüssel daran hängt (Dokumente,
 // Aufgaben, Agentenläufe, Berichte ...). Die Kaskade macht die Datenbank; hier
 // steht nur die Sicherheitsfrage mit den echten Zahlen davor.
+// Seit 26.10.2026 (Migr. 266) über assistant_projekt_loeschen: vorher löschte der Knopf direkt, die Projektspalten
+// fielen per Kaskade weg und die Karten des Projekts verloren Projekt UND Spalte — unsichtbar, aber noch da. Jetzt
+// wird je Karte entschieden (mitlöschen ist Standard, umhängen in ein anderes Projekt geht), alles in einer Transaktion.
 async function projektLoeschen(id,name,btn){
-  const zaehl=async t=>{const{count}=await sb.from(t).select('*',{count:'exact',head:true}).eq('project_id',id);return count||0;};
-  const[dok,auf,laeufe,ber]=await Promise.all([zaehl('documents'),zaehl('tasks'),zaehl('agent_runs'),zaehl('berichte')]);
-  const ok=await uiFrage(name+' endgültig löschen? Damit verschwinden '+dok+' Dokumente, '+auf+' Aufgaben, '+laeufe+' Agentenläufe und '+ber+' Berichte aus der Datenbank. Die Dateien auf dem Netzlaufwerk bleiben unberührt.',{titel:'Projekt löschen',ok:'Endgültig löschen',gefahr:true});
-  if(!ok)return;
+  const vorschau=await sb.rpc('assistant_projekt_loeschen',{projekt:id,bestaetigt:false});
+  const v=vorschau.data||{};
+  if(vorschau.error||v.fehler){uiHinweis('Löschen geht nicht: '+(v.fehler||vorschau.error.message));return;}
+  const z=v.wuerde_loeschen||{},karten=v.karten||[];
+  const{data:alle}=await sb.from('projects').select('id,name').neq('id',id).order('name');
+  const ziele=(alle||[]).map(p=>({w:p.id,name:p.name}));
+  const nr=(s)=>(String(s).match(/\d{4}/)||[''])[0];
+  const vorschlaege=ziele.filter(p=>nr(p.name)&&nr(p.name)===nr(name)).slice(0,3).map(p=>({w:p.w,grund:'gleiche Projektnummer'}));
+  const pName=(w)=>ziele.find(p=>p.w===w)?.name||'';
+  const esc=(s)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const mehr=(n,eins,viele)=>n===1?eins:n+' '+viele;
+  const E=await window.uiLoeschFenster({
+    titel:'Projekt „'+name+'“ löschen',
+    ok:'Endgültig löschen',
+    satz:(E)=>{
+      const mit=Object.values(E).filter(w=>w==='mitloeschen').length,um=Object.values(E).filter(w=>w!=='mitloeschen'&&w!=='ohne').length;
+      const teile=[[z.dokumente,'1 Dokument','Dokumente'],[z.aufgaben,'1 Aufgabe','Aufgaben'],[z.agentenlaeufe,'1 Agentenlauf','Agentenläufe'],[z.berichte,'1 Bericht','Berichte'],[z.terminplaene,'1 Terminplan','Terminpläne'],[mit,'1 Karte','Karten']]
+        .filter(([n])=>n>0).map(([n,e,v])=>mehr(n,e,v));   // nur, was es gibt — „0 Berichte“ ist Rauschen
+      return '<b>Endgültig, ohne Rückgängig:</b> '+(teile.length?teile.join(', ')+' '+(teile.length===1&&/^1 /.test(teile[0])?'verschwindet':'verschwinden')+'. ':'das Projekt verschwindet. ')
+        +(um?mehr(um,'Eine Karte kommt','Karten kommen')+' in ein anderes Projekt. ':'')+'Die Dateien auf dem Netzlaufwerk bleiben.';
+    },
+    zeilen:karten.map(k=>({k:k.id,standard:'mitloeschen',ziele,vorschlaege,
+      extras:[['mitloeschen','Mit dem Projekt löschen'],...(k.in_projektspalte?[]:[['ohne','Ohne Projekt behalten']])],
+      text:(w)=>w==='mitloeschen'?{art:'rot',html:'<b>'+esc(k.titel)+'</b> wird mitgelöscht'}
+        :w==='ohne'?{art:'grau',html:'<b>'+esc(k.titel)+'</b> bleibt ohne Projekt in „'+esc(k.spalte||'')+'“'}
+        :{art:'gruen',html:'<b>'+esc(k.titel)+'</b> kommt ins Projekt „'+esc(pName(w))+'“'}})),
+    ruhigText:(n)=>mehr(n,'Eine Karte des Projekts wird','Karten des Projekts werden')+' mitgelöscht',
+    sammel:{label:'Alle Karten in ein anderes Projekt',ziele},
+  });
+  if(!E)return;
   btn.disabled=true;btn.textContent='…';
-  // Das Logbuch hängt bewusst an keinem Fremdschlüssel, sonst bliebe es liegen.
-  await sb.from('task_events').delete().eq('project_id',id);
-  const{error}=await sb.from('projects').delete().eq('id',id);
-  if(error){btn.disabled=false;btn.textContent='Löschen';uiHinweis('Löschen fehlgeschlagen: '+error.message);return;}
+  const{data,error}=await sb.rpc('assistant_projekt_loeschen',{projekt:id,bestaetigt:true,zuordnung:E});
+  if(error||data?.fehler){btn.disabled=false;btn.textContent='Löschen';uiHinweis('Löschen fehlgeschlagen: '+(data?.fehler||error.message));return;}
+  uiHinweis('Projekt „'+name+'“ gelöscht'+(data.karten_umgehaengt?', '+data.karten_umgehaengt+' Karten umgehängt':''),'ok');
   if(current===id){go('cockpit');return;}
   render();
 }
