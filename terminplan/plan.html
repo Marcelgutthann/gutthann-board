@@ -336,15 +336,21 @@
   .tb-pop .pop-zeile select{font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;}
   .tb-pop .farbliste{display:grid;grid-template-columns:repeat(2,minmax(140px,auto));gap:5px 18px;}
   .tb-pop .farbliste .fehlt{opacity:.45;}
-  .tb-pop .farbwahl{position:relative;display:flex;align-items:center;gap:6px;cursor:pointer;border-radius:4px;padding:1px 4px;margin:-1px -4px;}
-  .tb-pop .farbwahl:hover:not(.gesperrt){background:#eef2f7;}
-  .tb-pop .farbwahl.gesperrt{cursor:default;}
-  .tb-pop .farbwahl input[type=color]{-webkit-appearance:none;appearance:none;width:22px;height:16px;padding:0;margin:0;border:1px solid;border-radius:3px;background:none;cursor:pointer;flex:none;}
-  .tb-pop .farbwahl input[type=color]::-webkit-color-swatch-wrapper{padding:0;}
-  .tb-pop .farbwahl input[type=color]::-webkit-color-swatch{border:0;border-radius:2px;}
-  .tb-pop .farbwahl input[type=color]::-moz-color-swatch{border:0;border-radius:2px;}
-  .tb-pop .farbwahl input[type=color]:disabled{cursor:default;}
-  .tb-pop .farbwahl .farb-zurueck{margin-left:auto;border:0;background:none;color:#4A6FA8;font-size:11px;padding:0;cursor:pointer;}
+  .tb-pop button.farbwahl{display:flex;align-items:center;gap:6px;font:inherit;color:inherit;text-align:left;background:none;border:1px solid transparent;border-radius:4px;padding:1px 4px;margin:-2px -5px;cursor:pointer;}
+  .tb-pop button.farbwahl:hover:not(:disabled){background:#eef2f7;}
+  .tb-pop button.farbwahl.offen{background:#eef2f7;border-color:#4A6FA8;}
+  .tb-pop button.farbwahl:disabled{cursor:default;}
+  .tb-pop button.farbwahl .swatch{width:20px;height:14px;}
+  .tb-pop button.farbwahl small{color:#6b7280;}
+  .tb-pop .farbpalette{margin-top:8px;padding:8px;border:1px solid #d6dae1;border-radius:6px;background:#f8fafc;}
+  .tb-pop .farbpalette .fp-titel{font-size:12px;margin-bottom:6px;}
+  .tb-pop .farbpalette .fp-felder{display:grid;grid-template-columns:repeat(8,24px);gap:5px;}
+  .tb-pop .farbpalette .fp-feld{width:24px;height:18px;border:1px solid rgba(0,0,0,.25);border-radius:3px;padding:0;cursor:pointer;}
+  .tb-pop .farbpalette .fp-feld.an{outline:2px solid #1f2937;outline-offset:1px;}
+  .tb-pop .farbpalette .fp-fuss{display:flex;align-items:center;gap:12px;margin-top:8px;font-size:12px;}
+  .tb-pop .farbpalette .fp-eigen{display:flex;align-items:center;gap:6px;cursor:pointer;}
+  .tb-pop .farbpalette .fp-eigen input{width:28px;height:20px;padding:0;border:1px solid #c9ccd4;border-radius:3px;cursor:pointer;}
+  .tb-pop .farbpalette .fp-standard{border:0;background:none;color:#4A6FA8;font:inherit;padding:0;cursor:pointer;margin-left:auto;}
   .tb-segment{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;align-self:flex-start;}
   .tb-segment button{background:#fff;color:var(--ink);border:none;border-left:1px solid var(--line);padding:5px 12px;font-size:12px;cursor:pointer;}
   .tb-segment button:first-child{border-left:none;}
@@ -522,7 +528,8 @@
   <div class="pop-hinweis" id="farbNachHinweis"></div>
   <div class="pop-titel" id="legendeRegel"></div>
   <div class="farbliste" id="legendeFarben"></div>
-  <div class="pop-hinweis"><b>Farbe ändern:</b> auf das Farbfeld klicken. Gilt für diesen Plan, auch im Druck.</div>
+  <div class="farbpalette" id="farbPalette" hidden></div>
+  <div class="pop-hinweis"><b>Farbe ändern:</b> auf die Farbe klicken. Gilt für diesen Plan, auch im Druck.</div>
   <div class="pop-hinweis">Einzelnen Balken umfärben: <b>Rechtsklick</b> auf den Balken. Am Sammelvorgang gilt die Farbe für alles darunter.</div>
   <div class="pop-titel">Weitere Zeichen</div>
   <div class="farbliste">
@@ -4485,6 +4492,10 @@ async function farbeNachSetzen(wert){
 // Eigene Farbtöne je Plan (26.10.2026, Migr. 268 termin_plaene.farben): Klick aufs Farbfeld im Menü „Farben ▾“.
 // FARBEN wird vor jedem Zeichnen aus den Standardfarben plus den Tönen des Plans gebildet — so folgen Bildschirm und Druck.
 let FARBEN_STANDARD = null;   // Kopie von FARBEN aus farben.js, beim ersten Zeichnen gezogen
+let FARB_OFFEN = null;        // Farbschlüssel, dessen Palette im Menü gerade offen ist
+// ruhige Töne in der Art der Standardfarben, dazu kräftigere zum Hervorheben
+const FARB_PALETTE = ['#CDBDA9', '#C9A27E', '#EDC48C', '#F0A868', '#F2D88F', '#B7DBA0', '#8FB89A', '#9FD4D0',
+  '#A9C0E6', '#7FA7D9', '#D3C1EA', '#B39DDB', '#F2B8C6', '#E8A39A', '#D6DAE1', '#5B6472'];
 function farbRand(hex){
   const n = parseInt(hex.slice(1), 16), d = v=>Math.round(v * 0.62).toString(16).padStart(2, '0');
   return '#' + d(n >> 16) + d((n >> 8) & 255) + d(n & 255);
@@ -4526,25 +4537,33 @@ function legendeFarbenAktualisieren(farbeJe){
   const da = new Set(VISIBLE.map(({t})=>farbeJe.get(t.uid).schluessel));
   const gesperrt = !!kopf.eingefroren_am || SCHREIBSCHUTZ;
   const eigene = kopf.farben || {};
+  // 26.10. (Marcel: „geht nicht“): der versteckte Browser-Farbwähler ging nicht zuverlässig auf — darum eine eigene
+  // Palette direkt unter der Zeile, wie die Farbzeile beim Rechtsklick. „Eigene Farbe …“ bleibt als sichtbarer Wähler.
   ziel.innerHTML = FARB_GRUPPEN[gruppe].concat(['sammel', 'meilenstein']).map(k=>{
     const f = FARBEN[k];
     const form = k === 'meilenstein' ? 'border-radius:0;transform:rotate(45deg);width:9px;height:9px;' : '';
     const titel = (gesperrt ? '' : 'Klicken, um die Farbe zu ändern') + (da.has(k) ? '' : (gesperrt ? '' : ' — ') + 'kommt in diesem Plan nicht vor');
-    return '<label class="farbwahl' + (da.has(k) ? '' : ' fehlt') + (gesperrt ? ' gesperrt' : '') + '" title="' + titel + '">'
-      + '<input type="color" class="swatch" data-farbe="' + k + '" value="' + f.fill.toLowerCase() + '" style="border-color:' + f.rand + ';' + form + '"'
-      + (gesperrt ? ' disabled' : '') + '>' + f.name
-      + (eigene[k] && !gesperrt ? '<button type="button" class="farb-zurueck" data-farbe="' + k + '" title="Standardfarbe wiederherstellen">Standard</button>' : '')
-      + '</label>';
+    return '<button type="button" class="farbwahl' + (da.has(k) ? '' : ' fehlt') + (k === FARB_OFFEN ? ' offen' : '') + '" data-farbe="' + k + '" title="' + titel + '"'
+      + (gesperrt ? ' disabled' : '') + '><i class="swatch" style="background:' + f.fill + ';border:1px solid ' + f.rand + ';' + form + '"></i>' + f.name
+      + (eigene[k] ? ' <small>(eigene)</small>' : '') + '</button>';
   }).join('');
-  ziel.querySelectorAll('input[type=color]').forEach(inp=> inp.addEventListener('change', ()=> farbtonSetzen(inp.dataset.farbe, inp.value)));
-  // Klick auf den Namen öffnet denselben Farbwähler (showPicker, wo vorhanden)
-  ziel.querySelectorAll('label.farbwahl:not(.gesperrt)').forEach(l=> l.addEventListener('click', e=>{
-    const inp = l.querySelector('input[type=color]');
-    if (e.target === inp || e.target.closest('.farb-zurueck')) return;
-    e.preventDefault();
-    try { inp.showPicker(); } catch(_) { inp.click(); }
+  if (gesperrt) FARB_OFFEN = null;
+  const pal = document.getElementById('farbPalette');
+  pal.hidden = !FARB_OFFEN;
+  if (FARB_OFFEN) {
+    const k = FARB_OFFEN, jetzt = FARBEN[k].fill.toLowerCase();
+    pal.innerHTML = '<div class="fp-titel">Farbe für <b>' + FARBEN[k].name + '</b></div><div class="fp-felder">'
+      + FARB_PALETTE.map(h=>'<button type="button" class="fp-feld' + (h.toLowerCase() === jetzt ? ' an' : '') + '" data-hex="' + h + '" title="' + h + '" style="background:' + h + '"></button>').join('')
+      + '</div><div class="fp-fuss"><label class="fp-eigen">Eigene Farbe … <input type="color" value="' + jetzt + '"></label>'
+      + (eigene[k] ? '<button type="button" class="fp-standard">Standard</button>' : '') + '</div>';
+    pal.querySelectorAll('.fp-feld').forEach(b=> b.addEventListener('click', ()=>{ FARB_OFFEN = null; farbtonSetzen(k, b.dataset.hex); }));
+    pal.querySelector('input[type=color]').addEventListener('change', e=>{ FARB_OFFEN = null; farbtonSetzen(k, e.target.value); });
+    pal.querySelector('.fp-standard')?.addEventListener('click', ()=>{ FARB_OFFEN = null; farbtonSetzen(k, null); });
+  }
+  ziel.querySelectorAll('button.farbwahl').forEach(b=> b.addEventListener('click', ()=>{
+    FARB_OFFEN = FARB_OFFEN === b.dataset.farbe ? null : b.dataset.farbe;
+    legendeFarbenAktualisieren(farbeJe);
   }));
-  ziel.querySelectorAll('.farb-zurueck').forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); farbtonSetzen(b.dataset.farbe, null); }));
   document.querySelectorAll('#farbNachWahl button').forEach(b=>{
     b.classList.toggle('an', b.dataset.wert === (kopf.farbe_nach || ''));
     b.disabled = gesperrt;
