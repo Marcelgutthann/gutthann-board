@@ -176,6 +176,52 @@
   .modal-grid{display:grid;grid-template-columns:80px 1fr;gap:8px 10px;align-items:center;margin-bottom:8px;}
   .modal-label{color:#666;font-size:11px;}
   .modal-input{font-size:12px;font-family:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;width:100%;}
+  /* Löschdialog mit Folgen (26.10.2026) */
+  .modal-box.lf-box{max-width:min(700px,94vw);width:700px;}
+  .lf-folgenreich{font-size:10px;font-weight:600;background:#fdecea;color:#c0392b;padding:2px 7px;border-radius:10px;vertical-align:2px;margin-left:6px;}
+  .lf-zahlen{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+  .lf-zahl{border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:11px;color:#555;background:#fafbfc;}
+  .lf-zahl b{display:block;font-size:17px;color:var(--ink);line-height:1.15;}
+  .lf-zahl.rot b{color:#c0392b;}
+  .lf-bild{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:10px;background:#fff;}
+  .lf-svg text{font-size:11px;font-family:"Segoe UI",Arial,sans-serif;fill:#1f2937;}
+  .lf-svg .lf-knoten rect{fill:#f1f5f9;stroke:#94a3b8;}
+  .lf-svg .lf-knoten.lose rect{fill:#fff4e5;stroke:#d97706;stroke-width:1.5;}
+  .lf-svg .lf-knoten.gebunden rect{fill:#edf7ee;stroke:#2e7d32;}
+  .lf-svg .lf-marke{font-size:10px;font-weight:700;fill:#b45309;}
+  .lf-svg .lf-knoten.gebunden .lf-marke{fill:#2e7d32;}
+  .lf-svg .lf-mitte rect{fill:#fdecea;stroke:#c0392b;stroke-width:1.5;stroke-dasharray:5 3;}
+  .lf-svg .lf-mitte .lf-mname{font-weight:700;fill:#c0392b;text-decoration:line-through;}
+  .lf-svg .lf-mitte .lf-mzusatz{font-size:10px;fill:#c0392b;}
+  .lf-svg .lf-mitte.blass{opacity:.45;}
+  .lf-svg .lf-weg-kante{fill:none;stroke:#c0392b;stroke-width:1.3;stroke-dasharray:4 3;opacity:.7;}
+  .lf-svg .lf-bruecke{fill:none;stroke:#2e7d32;stroke-width:2;}
+  .lf-svg .lf-mehr{font-size:10px;fill:#64748b;}
+  .lf-satz{font-size:12.5px;line-height:1.5;margin:0 0 10px;}
+  .lf-hinweise{background:#fff8e6;border:1px solid #f0d9a0;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:11.5px;}
+  .lf-hinweise ul{margin:4px 0 0;padding-left:18px;}
+  .lf-wahl{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+  .lf-wahl label{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:7px 9px;cursor:pointer;font-size:12px;}
+  .lf-wahl label:has(input:checked){border-color:var(--blue);background:#f2f6ff;}
+  .lf-fuss{display:flex;gap:10px;align-items:center;justify-content:flex-end;}
+  .lf-fuss span{margin-right:auto;font-size:11px;color:#666;}
+  .lf-fuss .lf-ja{background:#c0392b;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;}
+  .lf-fuss .lf-nein{padding:6px 14px;border-radius:4px;cursor:pointer;}
+  /* Verlauf (26.10.2026) */
+  .modal-box.vl-box{max-width:min(720px,94vw);width:720px;max-height:84vh;}
+  .vl-reiter{display:flex;gap:6px;margin-bottom:10px;}
+  .vl-reiter button{background:#fff;color:var(--blue);border:1px solid var(--line);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;}
+  .vl-reiter button.an{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .vl-eintrag{display:flex;gap:10px;align-items:flex-start;padding:6px 4px;border-bottom:1px solid #eef0f3;}
+  .vl-eintrag.zurueckgenommen{opacity:.6;}
+  .vl-eintrag.zurueckgenommen .vl-text{text-decoration:line-through;}
+  .vl-zeit{flex:none;width:92px;color:#666;font-size:11px;font-variant-numeric:tabular-nums;}
+  .vl-text{flex:1;min-width:0;font-size:12px;line-height:1.45;}
+  .vl-text summary{cursor:pointer;}
+  .vl-text ul{margin:4px 0 2px;padding-left:18px;color:#444;font-size:11.5px;}
+  .vl-knopf{flex:none;font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;background:#fff;color:var(--blue);border:1px solid var(--blue);}
+  .vl-jetzt{font-weight:700;color:var(--green-dark);padding:6px 4px;border-bottom:2px solid var(--green-dark);font-size:12px;}
+  .vl-leer{color:#666;font-size:12px;}
   .modal-input:disabled{background:#f2f3f5;color:#999;}
   .modal-datewrap{display:flex;gap:6px;align-items:center;}
   .modal-datewrap .modal-input{flex:1;min-width:0;}
@@ -237,6 +283,9 @@
   .tb-zoom #zoomLabel{font-size:11px;color:#555;min-width:62px;text-align:center;}
   .tb-gr{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#555;cursor:pointer;}
   .tb-gr input{margin:0;vertical-align:middle;}
+  .tb-verlauf{display:inline-flex;gap:4px;align-items:center;}
+  .tb-verlauf .tb-ic{font-size:15px;line-height:1;padding:4px 9px;}
+  .toolbar button:disabled{opacity:.35;cursor:default;filter:none;}
   .tb-save{margin-left:auto;font-size:11px;color:#666;white-space:nowrap;}
   .tb-save.ok{color:var(--green-dark);}
   .tb-save.warn{color:#b45309;}
@@ -391,6 +440,11 @@
   <button id="btnAnsicht" class="secondary" title="Dauer in Kalender- oder Arbeitstagen, Daten an den Balken, Gemeinderatssitzungen">Ansicht ▾</button>
   <span class="tb-trenner"></span>
   <button id="btnFarben" class="secondary" title="Wonach gefärbt wird, die Standardfarben und was jedes Zeichen bedeutet"><span class="tb-farbstreifen" id="farbStreifen"></span>Farben ▾</button>
+  <span class="tb-verlauf">
+    <button id="btnZurueck" class="tb-ic" title="Zurück (Strg+Z)" disabled>↶</button>
+    <button id="btnVor" class="tb-ic" title="Vor (Strg+Y)" disabled>↷</button>
+    <button id="btnVerlauf" class="secondary" title="Alle Änderungen an diesem Plan: zurück und vor in dieser Sitzung, gespeichert von allen Bearbeitern">Verlauf</button>
+  </span>
   <span id="saveState" class="tb-save" title="Speicherstand">·</span>
   <button id="btnVerbindung" class="secondary tb-warn" hidden title="Vergabe-Konflikte mit dem verbundenen Plan">Konflikte</button>
   <div class="toolbar-dropdown-wrap">
@@ -549,27 +603,125 @@ function snapshotState(){
     specialPeriods: SPECIAL_PERIODS.map(p=>({id:p.id, kind:p.kind, label:p.label, start:p.start, finish:p.finish}))
   };
 }
-function pushUndo(){
-  undoStack.push(snapshotState());
-  if(undoStack.length > 60) undoStack.shift();
+// Zurück UND Vor (26.10.2026, Marcel): undoStack-Eintrag = { vor: Stand vor der Aktion, zeit, titel },
+// redoStack-Eintrag = { vor, nach, zeit, titel }. Was ein Schritt getan hat, wird aus dem Vergleich der
+// Stände beschrieben (schrittBeschreiben) — so hat jede der vielen pushUndo-Stellen ohne eigenen Text einen Logeintrag.
+let redoStack = [];
+let redoVerworfen = null;   // für undoVerwerfen(): eine abgebrochene Aktion darf das Vor nicht kosten
+const VERLAUF_SEIT_SPEICHERN = [];   // Titel der Schritte seit dem letzten Speichern -> termin_aenderungen
+function gleicherStand(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+function pushUndo(titel){
+  const jetzt = snapshotState();
+  const oben = undoStack[undoStack.length - 1];
+  if(oben && gleicherStand(oben.vor, jetzt)) undoStack.pop();   // voriger Schritt hat nichts bewirkt
+  else if(oben) schrittAbschliessen(oben, jetzt);
+  undoStack.push({ vor: jetzt, zeit: new Date(), titel: titel || null });
+  if(undoStack.length > 100) undoStack.shift();
+  redoVerworfen = redoStack;
+  redoStack = [];
   // Universeller Aktions-Einstieg: hier den Arbeitskalender auffrischen, damit
   // Sondertermin-Aenderungen sofort rechenwirksam sind (billig, laeuft je Nutzeraktion).
   kalenderAktualisieren();
 }
-function undo(){
-  if(!undoStack.length) return;
-  const snap = undoStack.pop();
+// Aktion doch nicht ausgeführt (nichts zu tun): ihren Schritt zurücknehmen, das Vor bleibt
+function undoVerwerfen(){
+  undoStack.pop();
+  if(redoVerworfen){ redoStack = redoVerworfen; redoVerworfen = null; }
+}
+function schrittAbschliessen(e, nach){
+  if(e.fertig) return;
+  e.fertig = true;
+  const b = schrittBeschreiben(e.vor, nach);
+  e.titel = e.titel || b.titel;
+  e.zeilen = b.zeilen;
+  VERLAUF_SEIT_SPEICHERN.push(e.titel);
+}
+function zustandSetzen(snap){
   TASKS = snap.tasks.map(s=>({...s}));
   Object.keys(byUid).forEach(k=>delete byUid[k]);
   TASKS.forEach(t=>{ byUid[t.uid]=t; });
   EDGES.length = 0;
-  snap.edges.forEach(e=>EDGES.push(e));
+  snap.edges.forEach(e=>EDGES.push({...e}));
   SPECIAL_PERIODS = (snap.specialPeriods || []).map(p=>({...p}));
+}
+function nachSprung(){
   kalenderAktualisieren();
   closeTaskDetail();
   closeAnyDropdown();
   clearPendingLink();
   renderAll();
+}
+function undo(){
+  const jetzt = snapshotState();
+  while(undoStack.length && gleicherStand(undoStack[undoStack.length - 1].vor, jetzt)) undoStack.pop();   // wirkungslose Schritte
+  if(!undoStack.length){ verlaufKnoepfe(); return false; }
+  const e = undoStack.pop();
+  schrittAbschliessen(e, jetzt);
+  redoStack.push({ vor: e.vor, nach: jetzt, zeit: e.zeit, titel: e.titel, zeilen: e.zeilen });
+  zustandSetzen(e.vor);
+  VERLAUF_SEIT_SPEICHERN.push('Zurückgenommen: ' + e.titel);
+  nachSprung();
+  return true;
+}
+function redo(){
+  if(!redoStack.length) return false;
+  const e = redoStack.pop();
+  undoStack.push({ vor: snapshotState(), zeit: e.zeit, titel: e.titel, zeilen: e.zeilen, fertig: true });
+  zustandSetzen(e.nach);
+  VERLAUF_SEIT_SPEICHERN.push('Wiederholt: ' + e.titel);
+  nachSprung();
+  return true;
+}
+// Was zwischen zwei Schnappschüssen passiert ist, in Sätzen: Titel für Knopf und Verlauf, Zeilen für die Einzelheiten
+const SCHRITT_FELDER = [['lockStart','Start fixiert'],['lockFinish','Ende fixiert'],['milestone','Meilenstein'],['isGewerk','Gewerk'],
+  ['category','Schicht'],['hidden','ausgeblendet'],['collapsed','zugeklappt'],['firmaName','Firma'],['istStart','Ist-Beginn'],
+  ['istEnde','Ist-Ende'],['fortschritt','Fortschritt'],['notiz','Notiz'],['farbe','Farbe'],['grAnchor','GR-Anker'],['level','Ebene']];
+function schrittBeschreiben(vor, nach){
+  const a = new Map(vor.tasks.map(t=>[t.uid, t])), b = new Map(nach.tasks.map(t=>[t.uid, t]));
+  const name = (u)=> '„' + ((b.get(u) || a.get(u))?.name || u) + '“';
+  const neu = nach.tasks.filter(t=>!a.has(t.uid)), weg = vor.tasks.filter(t=>!b.has(t.uid));
+  const ek = (e)=> e.from + '>' + e.to;
+  const kA = new Map(vor.edges.map(e=>[ek(e), e])), kB = new Map(nach.edges.map(e=>[ek(e), e]));
+  const kNeu = nach.edges.filter(e=>!kA.has(ek(e))), kWeg = vor.edges.filter(e=>!kB.has(ek(e)));
+  const kAnders = nach.edges.filter(e=>kA.has(ek(e)) && !gleicherStand(kA.get(ek(e)), e));
+  const verschoben = [], umbenannt = [], felder = [];
+  for(const t of nach.tasks){
+    const o = a.get(t.uid);
+    if(!o) continue;
+    if(o.start !== t.start || o.finish !== t.finish) verschoben.push([o, t]);
+    if(o.name !== t.name) umbenannt.push([o, t]);
+    const f = SCHRITT_FELDER.filter(([k])=>!gleicherStand(o[k] ?? null, t[k] ?? null)).map(([, n])=>n);
+    if(f.length) felder.push(name(t.uid) + ': ' + f.join(', '));
+  }
+  const reihe = (l)=> l.filter(t=>a.has(t.uid) && b.has(t.uid)).map(t=>t.uid).join();
+  const umsortiert = reihe(vor.tasks) !== reihe(nach.tasks);
+  const sonder = !gleicherStand(vor.specialPeriods, nach.specialPeriods);
+  const zeit = (t)=> fmtDE(t.start) + (t.finish !== t.start ? '–' + fmtDE(t.finish) : '');
+  const zeilen = [
+    ...weg.map(t=>'Gelöscht: „' + t.name + '“'),
+    ...neu.map(t=>'Neu: „' + t.name + '“'),
+    ...umbenannt.map(([o, t])=>'Umbenannt: „' + o.name + '“ → „' + t.name + '“'),
+    ...verschoben.map(([o, t])=>'Verschoben: ' + name(t.uid) + ' ' + zeit(o) + ' → ' + zeit(t)),
+    ...kWeg.map(e=>'Verknüpfung gelöst: ' + name(e.from) + ' → ' + name(e.to) + ' (' + e.type + ')'),
+    ...kNeu.map(e=>'Verknüpfung neu: ' + name(e.from) + ' → ' + name(e.to) + ' (' + e.type + ')'),
+    ...kAnders.map(e=>'Verknüpfung geändert: ' + name(e.from) + ' → ' + name(e.to)),
+    ...felder,
+    ...(umsortiert ? ['Reihenfolge in der Liste geändert'] : []),
+    ...(sonder ? ['Sondertermine geändert'] : []),
+  ];
+  const mehr = (n, eins, viele)=> n === 1 ? eins : n + ' ' + viele;
+  let titel;
+  if(weg.length) titel = mehr(weg.length, '„' + weg[0].name + '“ gelöscht', 'Vorgänge gelöscht') + (kWeg.length ? ' samt ' + mehr(kWeg.length, '1 Verknüpfung', 'Verknüpfungen') : '');
+  else if(neu.length) titel = mehr(neu.length, '„' + neu[0].name + '“ angelegt', 'Vorgänge angelegt');
+  else if(umbenannt.length) titel = mehr(umbenannt.length, '„' + umbenannt[0][0].name + '“ umbenannt', 'Vorgänge umbenannt');
+  else if(kNeu.length || kWeg.length || kAnders.length) titel = (kNeu.length ? mehr(kNeu.length, 'Verknüpfung', 'Verknüpfungen') + ' angelegt' : kWeg.length ? mehr(kWeg.length, 'Verknüpfung', 'Verknüpfungen') + ' gelöst' : 'Verknüpfung geändert') + (verschoben.length ? ', ' + mehr(verschoben.length, '1 Vorgang', 'Vorgänge') + ' verschoben' : '');
+  else if(verschoben.length) titel = mehr(verschoben.length, name(verschoben[0][1].uid) + ' verschoben', 'Vorgänge verschoben');
+  else if(felder.length) titel = felder[0] + (felder.length > 1 ? ' und ' + (felder.length - 1) + ' weitere' : '');
+  else if(umsortiert) titel = 'Reihenfolge geändert';
+  else if(sonder) titel = 'Sondertermine geändert';
+  else titel = 'Keine Änderung';
+  if(weg.length && verschoben.length) titel += ', ' + mehr(verschoben.length, '1 Vorgang', 'Vorgänge') + ' verschoben';
+  return { titel, zeilen };
 }
 
 // ZOOM (24.08.): DAY_W ist die Breite EINES Tages in Pixeln und war fest auf 8.
@@ -1480,6 +1632,118 @@ function deleteTaskAndDescendants(uid){
   recomputeSummaryBars();
 }
 
+// ==================================================================================
+// Löschen mit Folgen (26.10.2026, Marcel): „wenn ich etwas Relevantes lösche, das unfassbar viele
+// Verknüpfungen hat, löscht das System es einfach und alles andere bleibt gleich“. Vorher riss jede Kette
+// still: die Nachfolger behielten ihre Termine, aber nichts schob sie mehr (so am 26.10. „Trockenbau Wände und
+// Decken schließen“ im Hemau-Probeplan, Protokoll nur „1 gelöscht“). Jetzt rechnet loeschFolgen() vorher aus,
+// was mitgeht und wer danach lose hängt, der Dialog zeigt es, und die Kette wird geschlossen (Vorgänger → Nachfolger).
+// ==================================================================================
+function loeschFolgen(wurzeln){
+  const weg = new Set();
+  wurzeln.forEach(u=>subtreeUidSet(u).forEach(x=>weg.add(x)));
+  const vorgaenge = TASKS.filter(t=>weg.has(t.uid));
+  const kanten = EDGES.filter(e=>weg.has(e.from) || weg.has(e.to));
+  const rein = kanten.filter(e=>!weg.has(e.from) && byUid[e.from]), raus = kanten.filter(e=>!weg.has(e.to) && byUid[e.to]);
+  const bleiben = EDGES.filter(e=>!weg.has(e.from) && !weg.has(e.to));
+  const vorgaenger = [...new Set(rein.map(e=>e.from))], nachfolger = [...new Set(raus.map(e=>e.to))];
+  // ohne den gelöschten Block hat dieser Nachfolger keinen Vorgänger mehr
+  const lose = nachfolger.filter(u=>!bleiben.some(e=>e.to === u));
+  const dahinter = new Set(), offen = [...nachfolger];
+  while(offen.length){ const u = offen.pop(); bleiben.forEach(e=>{ if(e.from === u && !dahinter.has(e.to) && !nachfolger.includes(e.to)){ dahinter.add(e.to); offen.push(e.to); } }); }
+  // Brücken: welcher Vorgänger trieb über den gelöschten Block welchen Nachfolger? Im Block zählen Verknüpfungen
+  // und Sammel-/Untervorgang (eine Kante auf einen Sammelvorgang wirkt auf seine Kinder und umgekehrt).
+  const nachbarn = (u)=>{
+    const n = EDGES.filter(e=>e.from === u && weg.has(e.to)).map(e=>e.to);
+    const p = findParentUid(u); if(p != null && weg.has(p)) n.push(p);
+    subtreeUidSet(u).forEach(k=>{ if(k !== u) n.push(k); });
+    return n;
+  };
+  const kantenDanach = [...bleiben], bruecken = [];
+  const kommtHin = (von, ziel)=>{ const g = new Set([von]), o = [von]; while(o.length){ const u = o.pop(); if(u === ziel) return true; kantenDanach.forEach(e=>{ if(e.from === u && !g.has(e.to)){ g.add(e.to); o.push(e.to); } }); } return false; };
+  for(const r of rein){
+    const block = new Set([r.to]), o = [r.to];
+    while(o.length){ const u = o.pop(); nachbarn(u).forEach(v=>{ if(!block.has(v)){ block.add(v); o.push(v); } }); }
+    for(const e of raus){
+      if(!block.has(e.from)) continue;
+      const von = r.from, nach = e.to;
+      // schon (auch über andere Wege) abhängig, verwandt oder ein Kreis: keine Brücke nötig bzw. erlaubt
+      if(von === nach || verwandt(von, nach) || kommtHin(von, nach) || kommtHin(nach, von)) continue;
+      const b = { from: von, to: nach, type: (edgeAnchors(r.type).predEnd === 'finish' ? 'E' : 'A') + (edgeAnchors(e.type).succEnd === 'start' ? 'A' : 'E'),
+        hardCeiling: !!(r.hardCeiling || e.hardCeiling) };
+      bruecken.push(b); kantenDanach.push(b);
+    }
+  }
+  const namen = (f)=> vorgaenge.filter(f).map(t=>t.name);
+  const hinweise = [];
+  const hinweis = (liste, eins, viele)=>{ if(liste.length) hinweise.push({ satz: liste.length === 1 ? eins : liste.length + ' ' + viele, namen: liste }); };
+  hinweis(namen(t=>t.milestone), 'Meilenstein', 'Meilensteine');
+  hinweis(vorgaenge.filter(t=>t.firmaName).map(t=>t.name + ' (' + t.firmaName + ')'), 'mit beauftragter Firma', 'mit beauftragter Firma');
+  hinweis(namen(t=>t.istStart || t.istEnde || t.fortschritt), 'mit Ist-Terminen oder Fortschritt', 'mit Ist-Terminen oder Fortschritt');
+  hinweis(namen(t=>t.lockStart || t.lockFinish), 'mit fixiertem Termin', 'mit fixiertem Termin');
+  hinweis(namen(t=>t.isGewerk), 'als Ausführungsgewerk gekennzeichnet', 'als Ausführungsgewerk gekennzeichnet');
+  hinweis(namen(t=>t.notiz), 'mit Notiz', 'mit Notiz');
+  hinweis(vorgaenge.filter(t=>ANKER[t.uid]).map(t=>t.name + ' (in „' + ANKER[t.uid].partnerPlanName + '“)'), 'in einem anderen Plan gespiegelt', 'in anderen Plänen gespiegelt');
+  hinweis([...new Set(kanten.filter(e=>e.hardCeiling).map(e=>byUid[e.to]?.name).filter(Boolean))], 'Vergabekette mit harter Obergrenze', 'Vergabeketten mit harter Obergrenze');
+  const leer = [...new Set(wurzeln.map(u=>findParentUid(u)))].filter(p=>p != null && !weg.has(p) && byUid[p]
+    && !TASKS.some(t=>!weg.has(t.uid) && findParentUid(t.uid) === p));
+  hinweis(leer.map(p=>byUid[p].name), 'Sammelvorgang verliert alle Untervorgänge', 'Sammelvorgänge verlieren alle Untervorgänge');
+  return { wurzeln, weg, vorgaenge, kanten, rein, raus, vorgaenger, nachfolger, lose, dahinter: [...dahinter], bruecken, hinweise,
+    folgenreich: kanten.length > 0 || vorgaenge.length > 1 || hinweise.length > 0 };
+}
+// art: 'schliessen' = Vorgänger direkt an die Nachfolger hängen, der Abstand bleibt als Pause, kein Termin ändert sich;
+// 'nachruecken' = ebenso, aber nahtlos, die Nachfolger rücken an ihre Vorgänger (wie MS Project mit Autoverknüpfen);
+// 'reissen' = nur löschen, die Nachfolger behalten ihre Termine, nichts treibt sie mehr (das alte Verhalten).
+function loeschenAnwenden(folgen, art){
+  const neu = art === 'reissen' ? [] : folgen.bruecken.map(b=>{
+    const p = byUid[b.from], s = byUid[b.to], an = edgeAnchors(b.type);
+    if(art === 'nachruecken') return { ...b, ...versatzAusPause(p, b.type, 0, 'wd') };
+    const lag = daysBetween(parseISO(p[an.predEnd]), parseISO(s[an.succEnd]));
+    const at = arbeitstageVersatz(p[an.predEnd], lag);
+    return lagToCalendarDays(p[an.predEnd], at, 'wd') === lag ? { ...b, lag, lagUnit: 'wd', lagValue: at } : { ...b, lag, lagUnit: 'cd', lagValue: lag };
+  });
+  folgen.wurzeln.forEach(u=>{ if(byUid[u]) deleteTaskAndDescendants(u); });
+  neu.forEach(e=>EDGES.push(e));
+  sammelStatusAktualisieren();
+  recomputeSummaryBars();
+  if(art === 'nachruecken') [...new Set(neu.map(e=>e.to))].forEach(u=>andocken(u));
+  resolveLockedConstraints();
+  return neu;
+}
+// Probelauf: anwenden, messen, Stand zurück — dieselben Objekte, damit Zeilen und Klicks gültig bleiben
+function loeschVorschau(folgen, art){
+  const liste = TASKS.slice(), werte = TASKS.map(t=>[t, { ...t }]), kanten = EDGES.map(e=>[e, { ...e }]);
+  const neu = loeschenAnwenden(folgen, art);
+  const bewegt = werte.filter(([t, alt])=>byUid[t.uid] === t && (t.start !== alt.start || t.finish !== alt.finish))
+    .map(([t, alt])=>({ uid: t.uid, name: t.name, von: alt.start, nach: t.start, tage: daysBetween(parseISO(alt.start), parseISO(t.start)) }));
+  TASKS.length = 0; liste.forEach(t=>TASKS.push(t));
+  werte.forEach(([t, alt])=>{ Object.keys(t).forEach(k=>{ if(!(k in alt)) delete t[k]; }); Object.assign(t, alt); byUid[t.uid] = t; });
+  EDGES.length = 0; kanten.forEach(([e, alt])=>{ Object.assign(e, alt); EDGES.push(e); });
+  return { neu, bewegt };
+}
+function loeschTitel(folgen, art, vorschau){
+  const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
+  const mitUnter = folgen.vorgaenge.length - w.length;
+  let titel = w.length === 1 ? '„' + w[0].name + '“' + (mitUnter ? ' mit ' + mitUnter + ' Untervorgängen' : '') + ' gelöscht' : folgen.vorgaenge.length + ' Vorgänge gelöscht';
+  if(!folgen.raus.length) return titel;
+  if(art === 'reissen' || !vorschau.neu.length) return titel + ', Kette gerissen' + (folgen.lose.length ? ' (' + folgen.lose.length + ' hängen lose)' : '');
+  return titel + ', Kette geschlossen (' + vorschau.neu.length + ' neue Verknüpfung' + (vorschau.neu.length === 1 ? '' : 'en') + ')'
+    + (art === 'nachruecken' && vorschau.bewegt.length ? ', ' + vorschau.bewegt.length + ' Vorgänge nachgerückt' : '');
+}
+// Ein Weg für jedes Löschen von Vorgängen (Rechtsklick, Entf, Mehrfachauswahl): erst die Folgen zeigen, dann löschen.
+function loeschenMitFolgen(wurzeln, danach){
+  if(SCHREIBSCHUTZ) return;
+  const folgen = loeschFolgen(wurzeln);
+  openLoeschDialog(folgen, (art)=>{
+    const vorschau = loeschVorschau(folgen, art);
+    pushUndo(loeschTitel(folgen, art, vorschau));
+    loeschenAnwenden(folgen, art);
+    renderAll();
+    if(danach) danach();
+    tabellenHinweis(loeschTitel(folgen, art, vorschau) + ' — ↶ holt es zurück');
+  });
+}
+
 // Duplziert einen Vorgang (+ alle Unter-Vorgänge) OHNE externe Verknüpfungen - Verknüpfungen
 // INNERHALB des duplizierten Blocks (z.B. zwischen zwei Kindern desselben Sammelvorgangs) bleiben
 // erhalten, jede Verknüpfung zu einem Vorgang AUSSERHALB des Blocks wird nicht mit übernommen.
@@ -1817,7 +2081,7 @@ function einruecken(richtung){
     for(let j = r.start; j <= r.end; j++) TASKS[j].level += richtung;
     n++;
   }
-  if(!n){ undoStack.pop(); tabellenHinweis(richtung > 0 ? 'Einrücken geht nur unter einen Vorgang darüber' : 'Liegt schon auf der obersten Ebene'); return; }
+  if(!n){ undoVerwerfen(); tabellenHinweis(richtung > 0 ? 'Einrücken geht nur unter einen Vorgang darüber' : 'Liegt schon auf der obersten Ebene'); return; }
   sammelStatusAktualisieren();
   resolveLockedConstraints();
   renderAll();
@@ -1850,15 +2114,11 @@ function auswahlLoeschen(){
   const weg = bloecke.reduce((s, t)=>s + subtreeUidSet(t.uid).size, 0);
   if(weg >= TASKS.length) return tabellenHinweis('Ein Plan braucht mindestens einen Vorgang');
   const ersterSichtbar = Math.min(...bloecke.map(t=>visIndexByUid[t.uid] ?? 0));
-  pushUndo();
-  bloecke.forEach(t=>{ if(byUid[t.uid]) deleteTaskAndDescendants(t.uid); });
-  sammelStatusAktualisieren();
-  resolveLockedConstraints();
-  AUSWAHL = new Set();
-  renderAll();
-  const naechste = VISIBLE[Math.min(ersterSichtbar, VISIBLE.length - 1)];
-  if(naechste) auswahlSetzen(naechste.t.uid, 'einzeln');
-  tabellenHinweis(weg === 1 ? '1 Vorgang gelöscht — Strg+Z holt ihn zurück' : weg + ' Vorgänge gelöscht — Strg+Z holt sie zurück');
+  loeschenMitFolgen(bloecke.map(t=>t.uid), ()=>{
+    AUSWAHL = new Set();
+    const naechste = VISIBLE[Math.min(ersterSichtbar, VISIBLE.length - 1)];
+    if(naechste) auswahlSetzen(naechste.t.uid, 'einzeln');
+  });
 }
 function auswahlVerketten(loesen){
   if(SCHREIBSCHUTZ) return;
@@ -1878,7 +2138,7 @@ function auswahlVerketten(loesen){
       n++;
     }
   }
-  if(!n){ undoStack.pop(); return tabellenHinweis(loesen ? 'Zwischen den markierten Zeilen gibt es keine Verknüpfung' : 'Die markierten Zeilen sind schon verkettet'); }
+  if(!n){ undoVerwerfen(); return tabellenHinweis(loesen ? 'Zwischen den markierten Zeilen gibt es keine Verknüpfung' : 'Die markierten Zeilen sind schon verkettet'); }
   resolveLockedConstraints();
   renderAll();
   tabellenHinweis(loesen ? n + ' Verknüpfung(en) gelöst' : n + ' Verknüpfung(en) Ende–Anfang angelegt');
@@ -1908,7 +2168,7 @@ function nameBearbeiten(uid, vorgabe){
         // Wie MS Project: erst das Tippen legt einen Vorgang an. Leer verlassen = Zeile wieder weg (samt ihrem Undo-Schritt).
         const i = visIndexByUid[uid];
         deleteTaskAndDescendants(uid);
-        undoStack.pop();
+        undoVerwerfen();
         AUSWAHL.delete(uid);
         sammelStatusAktualisieren();
         renderAll();
@@ -2307,6 +2567,12 @@ document.addEventListener('keydown', (ev)=>{
     ev.preventDefault();
     undo();
   }
+  if((ev.ctrlKey || ev.metaKey) && (ev.key==='y' || ev.key==='Y' || (ev.shiftKey && (ev.key==='z' || ev.key==='Z')))){
+    const tag = (ev.target && ev.target.tagName) || '';
+    if(tag==='INPUT' || tag==='TEXTAREA') return;
+    ev.preventDefault();
+    redo();
+  }
 });
 
 function barCenterY(idx){ return idx*ROW_H + ROW_H/2; }
@@ -2563,6 +2829,115 @@ function openConfirmDialog(message, onYes){
   document.body.appendChild(overlay);
 }
 
+// Löschdialog mit Folgen (26.10.2026): Kennzahlen, die Kette als Bild (Vorgänger → gelöscht → Nachfolger, neue
+// Brücken grün, lose Nachfolger orange), dieselbe Lage in Sätzen und die Wahl, was mit der Kette geschieht.
+const ESC = (s)=> String(s ?? '').replace(/[&<>"]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+function lfKetteSvg(folgen, art, vorschau){
+  const MAX = 6, W = 640, BX = 175, MX = 232, MW = 176, RX = 465;
+  const links = folgen.vorgaenger.slice(0, MAX), rechts = folgen.nachfolger.slice(0, MAX);
+  const zeilen = Math.max(links.length + (folgen.vorgaenger.length > MAX), rechts.length + (folgen.nachfolger.length > MAX), 2);
+  const H = zeilen * 30 + 8, y = (i)=> 4 + i * 30, mitte = H / 2;
+  const kurz = (u)=>{ const t = byUid[u]; const s = zeilenNr(u) + '  ' + (t?.name || u); return s.length > 27 ? s.slice(0, 26) + '…' : s; };
+  const neu = art === 'reissen' ? [] : vorschau.neu;
+  const loseDanach = new Set(folgen.lose.filter(u=>!neu.some(e=>e.to === u)));
+  const bewegt = new Map((art === 'nachruecken' ? vorschau.bewegt : []).map(b=>[b.uid, b]));
+  let s = `<svg class="lf-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Kette um den gelöschten Vorgang">`;
+  s += `<defs><marker id="lfPfeilRot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#c0392b"/></marker>`
+     + `<marker id="lfPfeilGruen" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2e7d32"/></marker></defs>`;
+  links.forEach((u, i)=>{ s += `<path d="M${BX},${y(i)+12} C${BX+30},${y(i)+12} ${MX-30},${mitte} ${MX},${mitte}" class="lf-weg-kante" marker-end="url(#lfPfeilRot)"/>`; });
+  rechts.forEach((u, i)=>{ s += `<path d="M${MX+MW},${mitte} C${MX+MW+30},${mitte} ${RX-30},${y(i)+12} ${RX},${y(i)+12}" class="lf-weg-kante" marker-end="url(#lfPfeilRot)"/>`; });
+  const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
+  const mName = w.length === 1 ? w[0].name : folgen.vorgaenge.length + ' Vorgänge';
+  const mZusatz = folgen.vorgaenge.length > w.length && w.length === 1 ? '+ ' + (folgen.vorgaenge.length - 1) + ' Untervorgänge' : 'wird gelöscht';
+  s += `<g class="lf-mitte${neu.length ? ' blass' : ''}"><rect x="${MX}" y="${mitte-20}" width="${MW}" height="40" rx="5"/>`
+     + `<text x="${MX+MW/2}" y="${mitte-4}" text-anchor="middle" class="lf-mname">${ESC(mName.length > 26 ? mName.slice(0, 25) + '…' : mName)}</text>`
+     + `<text x="${MX+MW/2}" y="${mitte+12}" text-anchor="middle" class="lf-mzusatz">${ESC(mZusatz)}</text><title>${ESC(mName)}</title></g>`;
+  neu.forEach(e=>{
+    const i = links.indexOf(e.from), j = rechts.indexOf(e.to);
+    if(i < 0 || j < 0) return;
+    s += `<path d="M${BX},${y(i)+12} C${BX+150},${y(i)+12} ${RX-150},${y(j)+12} ${RX},${y(j)+12}" class="lf-bruecke" marker-end="url(#lfPfeilGruen)"><title>neu: ${ESC(byUid[e.from].name)} → ${ESC(byUid[e.to].name)} (${e.type})</title></path>`;
+  });
+  const knoten = (u, x, i, klasse, zusatz)=> `<g class="lf-knoten ${klasse}"><rect x="${x}" y="${y(i)}" width="${BX}" height="24" rx="4"/>`
+    + `<text x="${x+8}" y="${y(i)+16}">${ESC(kurz(u))}</text>${zusatz || ''}<title>${ESC(byUid[u]?.name)}</title></g>`;
+  links.forEach((u, i)=>{ s += knoten(u, 0, i, 'vor'); });
+  rechts.forEach((u, i)=>{
+    const b = bewegt.get(u);
+    const marke = loseDanach.has(u) ? `<text x="${RX+BX-6}" y="${y(i)+16}" text-anchor="end" class="lf-marke">lose</text>`
+      : b ? `<text x="${RX+BX-6}" y="${y(i)+16}" text-anchor="end" class="lf-marke">${b.tage > 0 ? '+' : ''}${b.tage} T</text>` : '';
+    s += knoten(u, RX, i, loseDanach.has(u) ? 'lose' : neu.some(e=>e.to === u) ? 'gebunden' : 'nach', marke);
+  });
+  if(folgen.vorgaenger.length > MAX) s += `<text x="8" y="${y(links.length)+16}" class="lf-mehr">+ ${folgen.vorgaenger.length - MAX} weitere</text>`;
+  if(folgen.nachfolger.length > MAX) s += `<text x="${RX+8}" y="${y(rechts.length)+16}" class="lf-mehr">+ ${folgen.nachfolger.length - MAX} weitere</text>`;
+  return s + '</svg>';
+}
+function lfSatz(folgen, art, vorschau){
+  const liste = (uids, n = 4)=> uids.slice(0, n).map(u=>'„' + ESC(byUid[u]?.name) + '“').join(', ') + (uids.length > n ? ' und ' + (uids.length - n) + ' weitere' : '');
+  const mehr = (n, eins, viele)=> n === 1 ? eins : viele;
+  const dahinter = folgen.dahinter.length ? ' Dahinter ' + mehr(folgen.dahinter.length, 'hängt ein weiterer Vorgang', 'hängen ' + folgen.dahinter.length + ' weitere Vorgänge') + ' in derselben Kette.' : '';
+  if(!folgen.kanten.length) return 'Dieser Vorgang ist mit nichts verknüpft. Kein anderer Termin ändert sich.';
+  if(!folgen.raus.length) return 'Er hat keine Nachfolger. ' + mehr(folgen.vorgaenger.length, 'Sein Vorgänger verliert', 'Seine ' + folgen.vorgaenger.length + ' Vorgänger verlieren') + ' nur diese Verknüpfung, kein Termin ändert sich.';
+  const neu = art === 'reissen' ? [] : vorschau.neu;
+  const loseDanach = folgen.lose.filter(u=>!neu.some(e=>e.to === u));
+  const loseSatz = loseDanach.length ? ' <b>' + mehr(loseDanach.length, 'Ein Nachfolger hängt', loseDanach.length + ' Nachfolger hängen') + ' danach lose</b> (' + liste(loseDanach) + '): Termine bleiben, aber nichts schiebt sie mehr, wenn sich davor etwas verschiebt.' : '';
+  if(art === 'reissen') return mehr(folgen.kanten.length, 'Eine Verknüpfung fällt', folgen.kanten.length + ' Verknüpfungen fallen') + ' weg.' + loseSatz + dahinter;
+  const kette = 'Die Kette wird geschlossen: ' + mehr(neu.length, 'eine neue Verknüpfung', neu.length + ' neue Verknüpfungen') + ' direkt vom Vorgänger zum Nachfolger.';
+  if(art === 'schliessen') return kette + ' Der Abstand bleibt als Pause stehen, <b>kein Termin ändert sich</b>. Verschiebt sich später etwas davor, schiebt es die Nachfolger weiter mit.' + loseSatz;
+  const b = vorschau.bewegt;
+  const bewegtSatz = b.length ? ' <b>' + mehr(b.length, 'Ein Vorgang rückt', b.length + ' Vorgänge rücken') + ' nach</b>: '
+      + b.slice(0, 4).map(x=>'„' + ESC(x.name) + '“ ' + fmtDE(x.von) + ' → ' + fmtDE(x.nach) + ' (' + (x.tage > 0 ? '+' : '') + x.tage + ' Tage)').join(', ') + (b.length > 4 ? ' und ' + (b.length - 4) + ' weitere' : '') + '.'
+    : ' Kein Termin ändert sich — die Nachfolger sind fixiert oder werden von anderen Vorgängern gehalten.';
+  return kette + ' Die Nachfolger rücken nahtlos an ihre Vorgänger.' + bewegtSatz + loseSatz;
+}
+function openLoeschDialog(folgen, onYes){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  function close(){ overlay.remove(); document.removeEventListener('keydown', onKey); }
+  function onKey(ev){ if(ev.key==='Escape') close(); }
+  overlay.addEventListener('click', (ev)=>{ if(ev.target===overlay) close(); });
+  document.addEventListener('keydown', onKey);
+  const box = document.createElement('div');
+  box.className = 'modal-box lf-box';
+  box.addEventListener('click', ev=>ev.stopPropagation());
+  const vorschau = { schliessen: loeschVorschau(folgen, 'schliessen'), nachruecken: loeschVorschau(folgen, 'nachruecken'), reissen: { neu: [], bewegt: [] } };
+  const waehlbar = folgen.raus.length > 0 && folgen.bruecken.length > 0;
+  let art = waehlbar ? 'schliessen' : 'reissen';
+  const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
+  const titel = w.length === 1 ? '„' + w[0].name + '“ löschen?' : folgen.vorgaenge.length + ' Vorgänge löschen?';
+  const zahl = (n, eins, viele, klasse)=> `<div class="lf-zahl ${klasse || ''}"><b>${n}</b>${n === 1 ? eins : viele}</div>`;
+  const andere = folgen.vorgaenge.length - w.length;
+  box.innerHTML = `<div class="modal-title">${ESC(titel)}${folgen.folgenreich ? ' <span class="lf-folgenreich">folgenreich</span>' : ''}</div>
+    <div class="lf-zahlen">
+      ${zahl(folgen.vorgaenge.length, 'Vorgang', 'Vorgänge', 'rot')}
+      ${andere ? zahl(andere, 'Untervorgang', 'Untervorgänge') : ''}
+      ${zahl(folgen.kanten.length, 'Verknüpfung', 'Verknüpfungen', folgen.kanten.length ? 'rot' : '')}
+      ${zahl(folgen.vorgaenger.length, 'Vorgänger', 'Vorgänger')}
+      ${zahl(folgen.nachfolger.length, 'Nachfolger', 'Nachfolger')}
+      ${folgen.dahinter.length ? zahl(folgen.dahinter.length, 'dahinter in der Kette', 'dahinter in der Kette') : ''}
+    </div>
+    ${folgen.vorgaenger.length || folgen.nachfolger.length ? '<div class="lf-bild"></div>' : ''}
+    <p class="lf-satz"></p>
+    ${folgen.hinweise.length ? '<div class="lf-hinweise"><b>Geht mit verloren:</b><ul>' + folgen.hinweise.map(h=>'<li>' + ESC(h.satz) + ': ' + h.namen.slice(0, 4).map(n=>'„' + ESC(n) + '“').join(', ') + (h.namen.length > 4 ? ' und ' + (h.namen.length - 4) + ' weitere' : '') + '</li>').join('') + '</ul></div>' : ''}
+    ${waehlbar ? `<div class="lf-wahl">
+      <label><input type="radio" name="lfArt" value="schliessen" checked><span><b>Kette schließen, Termine bleiben</b> — Vorgänger direkt an die Nachfolger hängen</span></label>
+      <label><input type="radio" name="lfArt" value="nachruecken"><span><b>Kette schließen und nachrücken</b> — Nachfolger rücken nahtlos an (${vorschau.nachruecken.bewegt.length} Vorgänge ändern sich)</span></label>
+      <label><input type="radio" name="lfArt" value="reissen"><span><b>Nur löschen</b> — Kette reißt, Nachfolger hängen lose</span></label>
+    </div>` : ''}
+    <div class="lf-fuss"><span>Mit ↶ Zurück holst du es wieder, alles steht im Verlauf.</span>
+      <button type="button" class="secondary lf-nein">Abbrechen</button><button type="button" class="lf-ja">Löschen</button></div>`;
+  const zeichnen = ()=>{
+    const bild = box.querySelector('.lf-bild');
+    if(bild) bild.innerHTML = lfKetteSvg(folgen, art, vorschau[art]);
+    box.querySelector('.lf-satz').innerHTML = lfSatz(folgen, art, vorschau[art]);
+  };
+  box.querySelectorAll('input[name="lfArt"]').forEach(r=> r.addEventListener('change', ()=>{ art = r.value; zeichnen(); }));
+  box.querySelector('.lf-nein').addEventListener('click', close);
+  box.querySelector('.lf-ja').addEventListener('click', ()=>{ close(); onYes(art); });
+  zeichnen();
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  (folgen.folgenreich ? box.querySelector('.lf-nein') : box.querySelector('.lf-ja')).focus();
+}
+
 // ---- Rechtsklick-Kontextmenü auf einer Tabellenzeile ODER einem Balken/Meilenstein im Diagramm:
 // Vorgang löschen (mit Verknüpfungen) / ein-/ausblenden / duplizieren (ohne externe Verknüpfungen). ----
 function closeTaskContextMenu(){
@@ -2652,15 +3027,7 @@ function openTaskContextMenu(uid, clientX, clientY){
   }
   menu.appendChild(Object.assign(document.createElement('div'), { className:'context-menu-sep' }));
 
-  addItem('🗑 Vorgang löschen', ()=>{
-    const msg = `Vorgang „${t.name}“${hasChildren?' (einschließlich aller Untervorgänge)':''} einschließlich aller Verknüpfungen löschen?`;
-    openConfirmDialog(msg, ()=>{
-      pushUndo();
-      deleteTaskAndDescendants(uid);
-      resolveLockedConstraints();
-      renderAll();
-    });
-  });
+  addItem('🗑 Vorgang löschen', ()=> loeschenMitFolgen([uid]));
   addItem(t.hidden ? '👁 Vorgang einblenden' : '🚫 Vorgang ausblenden', ()=>{
     pushUndo();
     t.hidden = !t.hidden;
@@ -4190,7 +4557,7 @@ function kritischenPfadAktualisieren(){
   try { PUFFER = berechnePuffer(TASKS, EDGES).puffer; }
   catch(e){ PUFFER = null; console.warn('Kritischer Pfad:', e.message); }
 }
-function renderAll(){ achseNachziehen(); kritischenPfadAktualisieren(); recomputeVisible(); updateChartHeight(); renderLeftRows(); renderBars(); drawLinks(); markEdited(); }
+function renderAll(){ achseNachziehen(); kritischenPfadAktualisieren(); recomputeVisible(); updateChartHeight(); renderLeftRows(); renderBars(); drawLinks(); markEdited(); verlaufKnoepfe(); }
 // Die Zeitachse wurde nur beim Laden bemessen. Wer leer beginnt und Vorgang um Vorgang anhaengt
 // (23.10., Probe Hemau BA2), landete jenseits des Achsenendes. Jetzt waechst sie mit, die Ansicht
 // bleibt dabei auf demselben Datum stehen.
@@ -4322,6 +4689,77 @@ async function gespeichertenStandLaden(){
   clearTimeout(speicherTimer);
   closeTaskDetail(); closeAnyDropdown(); clearPendingLink();
   await planWechseln(planId);
+}
+
+// ---- Zurück / Vor / Verlauf (26.10.2026, Marcel: „ich brauche einen Zurück- und Vor-Button für Änderungen,
+//      mit einem Log dahinter, das man auch erreichen kann") ----
+function schrittTitel(e){ return e.fertig ? e.titel : (e.titel || schrittBeschreiben(e.vor, snapshotState()).titel); }
+function verlaufKnoepfe(){
+  const z = document.getElementById('btnZurueck'), v = document.getElementById('btnVor');
+  if(!z) return;
+  z.disabled = SCHREIBSCHUTZ || !undoStack.length;
+  v.disabled = SCHREIBSCHUTZ || !redoStack.length;
+}
+document.getElementById('btnZurueck').addEventListener('click', ()=> undo());
+document.getElementById('btnVor').addEventListener('click', ()=> redo());
+document.getElementById('btnZurueck').addEventListener('mouseenter', (ev)=>{
+  ev.currentTarget.title = undoStack.length ? 'Zurück: ' + schrittTitel(undoStack[undoStack.length - 1]) + ' (Strg+Z)' : 'Zurück (Strg+Z)';
+});
+document.getElementById('btnVor').addEventListener('mouseenter', (ev)=>{
+  ev.currentTarget.title = redoStack.length ? 'Vor: ' + redoStack[redoStack.length - 1].titel + ' (Strg+Y)' : 'Vor (Strg+Y)';
+});
+document.getElementById('btnVerlauf').addEventListener('click', ()=> verlaufZeigen());
+function verlaufZeigen(reiter){
+  document.querySelector('.vl-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay vl-overlay';
+  const close = ()=>{ overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (ev)=>{ if(ev.key === 'Escape') close(); };
+  overlay.addEventListener('click', (ev)=>{ if(ev.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
+  const box = document.createElement('div');
+  box.className = 'modal-box vl-box';
+  const planName = PLAN_LISTE.find(p=>p.id === planId)?.name || 'Terminplan';
+  box.innerHTML = `<button type="button" class="modal-close" title="Schließen">✕</button><div class="modal-title">Verlauf · ${ESC(planName)}</div>
+    <div class="vl-reiter"><button type="button" data-r="sitzung">Zurück und Vor (diese Sitzung)</button><button type="button" data-r="gespeichert">Gespeichert (alle Bearbeiter)</button></div>
+    <div class="vl-inhalt"></div>`;
+  box.querySelector('.modal-close').onclick = close;
+  const inhalt = box.querySelector('.vl-inhalt');
+  const uhr = (d)=> d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const eintrag = (zeit, titel, zeilen, knopf, klasse)=> `<div class="vl-eintrag ${klasse || ''}"><span class="vl-zeit">${zeit}</span>
+    <div class="vl-text">${zeilen && zeilen.length ? '<details><summary>' + ESC(titel) + '</summary><ul>' + zeilen.slice(0, 40).map(z=>'<li>' + ESC(z) + '</li>').join('') + (zeilen.length > 40 ? '<li>… und ' + (zeilen.length - 40) + ' weitere</li>' : '') + '</ul></details>' : ESC(titel)}</div>${knopf || ''}</div>`;
+  function sitzungZeigen(){
+    const jetzt = snapshotState();
+    const zurueck = undoStack.map((e, i)=>({ e, schritte: undoStack.length - i, b: e.fertig ? e : (({ titel, zeilen })=>({ titel: e.titel || titel, zeilen }))(schrittBeschreiben(e.vor, jetzt)) }))
+      .filter(x=>x.b.titel !== 'Keine Änderung').reverse();
+    const vor = redoStack.map((e, i)=>({ e, schritte: redoStack.length - i }));
+    if(!zurueck.length && !vor.length){ inhalt.innerHTML = '<p class="vl-leer">Seit dem Öffnen des Plans noch keine Änderung.</p>'; return; }
+    inhalt.innerHTML = vor.map(x=>eintrag(uhr(x.e.zeit), x.e.titel, x.e.zeilen, `<button type="button" class="secondary vl-knopf" data-vor="${x.schritte}">↷ bis hier wiederholen</button>`, 'zurueckgenommen')).join('')
+      + '<div class="vl-jetzt">● Aktueller Stand</div>'
+      + zurueck.map(x=>eintrag(uhr(x.e.zeit), x.b.titel, x.b.zeilen, `<button type="button" class="secondary vl-knopf" data-zurueck="${x.schritte}">↶ bis hierher zurück</button>`)).join('');
+    inhalt.querySelectorAll('[data-zurueck]').forEach(b=> b.onclick = ()=>{ for(let n = +b.dataset.zurueck; n > 0 && undo(); n--); sitzungZeigen(); });
+    inhalt.querySelectorAll('[data-vor]').forEach(b=> b.onclick = ()=>{ for(let n = +b.dataset.vor; n > 0 && redo(); n--); sitzungZeigen(); });
+    if(SCHREIBSCHUTZ) inhalt.querySelectorAll('.vl-knopf').forEach(b=> b.disabled = true);
+  }
+  async function gespeichertZeigen(){
+    inhalt.innerHTML = '<p class="vl-leer">lädt …</p>';
+    let zeilen;
+    try { zeilen = await db('termin_aenderungen?plan_id=eq.' + planId + '&select=geaendert_am,geaendert_von,zusammenfassung,details&order=geaendert_am.desc&limit=300'); }
+    catch(e){ inhalt.innerHTML = '<p class="vl-leer">Verlauf nicht lesbar: ' + ESC(e.message) + '</p>'; return; }
+    if(!zeilen.length){ inhalt.innerHTML = '<p class="vl-leer">Für diesen Plan ist noch nichts gespeichert.</p>'; return; }
+    inhalt.innerHTML = zeilen.map(z=>{
+      const d = new Date(z.geaendert_am), wer = String(z.geaendert_von || 'unbekannt').split('@')[0];
+      const det = z.details || {};
+      const mehr = [...(det.geloescht || []).map(n=>'Gelöscht: „' + n + '“'), ...(det.neu || []).map(n=>'Neu: „' + n + '“'),
+        ...(det.verschoben || []).map(n=>'Verschoben: ' + n), ...(det.kanten_weg || []).map(n=>'Verknüpfung gelöst: ' + n), ...(det.kanten_neu || []).map(n=>'Verknüpfung neu: ' + n)];
+      return eintrag(d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + '<br><b>' + ESC(wer) + '</b>', z.zusammenfassung, mehr);
+    }).join('');
+  }
+  const zeigen = (r)=>{ box.querySelectorAll('.vl-reiter button').forEach(b=> b.classList.toggle('an', b.dataset.r === r)); r === 'gespeichert' ? gespeichertZeigen() : sitzungZeigen(); };
+  box.querySelectorAll('.vl-reiter button').forEach(b=> b.onclick = ()=> zeigen(b.dataset.r));
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  zeigen(reiter || 'sitzung');
 }
 
 // Dauer-Spalte links: Umschalten zwischen Kalender- und Arbeitstagen (wirkt nur auf die
@@ -4763,9 +5201,11 @@ async function planLaden(gewuenschtePlanId){
 }
 
 // Vergleichsbasis fuer das Aenderungsprotokoll festhalten (nach Laden und nach Speichern).
+let LETZTER_VOLL = null;          // ganzer Schnappschuss: Kanten und gelöschte Zeilen fürs Protokoll (26.10.2026)
 function standMerken(){
   LETZTER_STAND = {};
   TASKS.forEach(t=> LETZTER_STAND[t.uid] = { name:t.name, start:t.start, finish:t.finish });
+  LETZTER_VOLL = snapshotState();
 }
 // Menschenlesbare Zusammenfassung der Aenderungen seit dem letzten Stand.
 function standDiff(){
@@ -4780,13 +5220,26 @@ function standDiff(){
   }
   for(const uid of Object.keys(LETZTER_STAND))
     if(!jetzt.has(Number(uid))) weg.push(LETZTER_STAND[uid].name);
-  if(!neu.length && !weg.length && !verschoben.length) return null;
+  // Verknüpfungen zählen mit (vorher stand eine gerissene Kette gar nicht im Protokoll), und was gelöscht ist,
+  // geht mit allen Feldern und Kanten ins Protokoll, damit es sich auch später noch zurückholen lässt.
+  const ek = (e)=> e.from + '>' + e.to;
+  const altK = new Map((LETZTER_VOLL?.edges || []).map(e=>[ek(e), e])), neuK = new Set(EDGES.map(ek));
+  const nameVon = (u)=> byUid[u]?.name || LETZTER_STAND[u]?.name || String(u);
+  const kWeg = [...altK.values()].filter(e=>!neuK.has(ek(e)));
+  const kNeu = EDGES.filter(e=>!altK.has(ek(e)));
+  const kText = (e)=> nameVon(e.from) + ' → ' + nameVon(e.to) + ' (' + e.type + ')';
+  const wegUids = new Set(Object.keys(LETZTER_STAND).map(Number).filter(u=>!jetzt.has(u)));
+  if(!neu.length && !weg.length && !verschoben.length && !kWeg.length && !kNeu.length) return null;
   const teile = [];
   if(verschoben.length) teile.push(verschoben.length + ' verschoben (' + verschoben.slice(0,3).join(' · ') + (verschoben.length>3?' …':'') + ')');
   if(neu.length) teile.push(neu.length + ' neu (' + neu.slice(0,3).join(' · ') + (neu.length>3?' …':'') + ')');
   if(weg.length) teile.push(weg.length + ' gelöscht (' + weg.slice(0,3).join(' · ') + (weg.length>3?' …':'') + ')');
+  if(kWeg.length) teile.push(kWeg.length + (kWeg.length === 1 ? ' Verknüpfung' : ' Verknüpfungen') + ' gelöst');
+  if(kNeu.length) teile.push(kNeu.length + (kNeu.length === 1 ? ' Verknüpfung' : ' Verknüpfungen') + ' neu');
   return { zusammenfassung: teile.join(' · '),
-    details: { neu, geloescht: weg, verschoben } };
+    details: { neu, geloescht: weg, verschoben, kanten_weg: kWeg.map(kText), kanten_neu: kNeu.map(kText),
+      ...(wegUids.size && LETZTER_VOLL ? { geloescht_daten: { vorgaenge: LETZTER_VOLL.tasks.filter(t=>wegUids.has(t.uid)),
+        kanten: kWeg.filter(e=>wegUids.has(e.from) || wegUids.has(e.to)) } } : {}) } };
 }
 
 function schreibschutzAnzeigen(){
@@ -4818,7 +5271,7 @@ async function planWechseln(zielId){
     // Ausgangsstand des neuen Plans — sonst faerben die uids des vorigen Plans Zeilen als „geaendert“ (gelb)
     Object.keys(ORIG_STATE).forEach(k=>delete ORIG_STATE[k]);
     TASKS.forEach(t=> ORIG_STATE[t.uid] = {start:t.start, finish:t.finish});
-    undoStack.length = 0; zeichnenNachLaden(); saveStatus(SCHREIBSCHUTZ ? 'eingefrorener Stand' : 'geladen', 'ok');
+    undoStack.length = 0; redoStack = []; redoVerworfen = null; VERLAUF_SEIT_SPEICHERN.length = 0; zeichnenNachLaden(); saveStatus(SCHREIBSCHUTZ ? 'eingefrorener Stand' : 'geladen', 'ok');
   }
   ladeVorgang = SCHREIBSCHUTZ;   // eingefrorene Staende speichern nie
 }
@@ -5112,6 +5565,9 @@ async function planSpeichern(){
   saveStatus('speichert …');
   // Aenderungsprotokoll VOR dem Schreiben ermitteln (danach ist der Vergleichsstand weg).
   const diff = standDiff();
+  // Die Schritte seit dem letzten Speichern in Worten (Zurück/Vor-Verlauf): „„Trockenbau“ gelöscht, Kette geschlossen …"
+  if(undoStack.length) schrittAbschliessen(undoStack[undoStack.length - 1], snapshotState());
+  const aktionen = VERLAUF_SEIT_SPEICHERN.splice(0);
   try {
     const vorgaenge = TASKS.map((t,i)=>({
       uid: t.uid, pos: i, name: t.name, wbs: t.wbs || null,
@@ -5153,10 +5609,14 @@ async function planSpeichern(){
         p_kanten: kanten, p_sonder: sonder, p_von: s?.email || null, p_stand: PLAN_STAND }) });
     if(typeof neuerStand === 'string') PLAN_STAND = neuerStand;
     UNGESPEICHERT = false;
-    if(diff) await protokollSchreiben(planId, diff.zusammenfassung, diff.details);
+    if(diff || aktionen.length){
+      const z = aktionen.length ? aktionen.join(' · ') : diff.zusammenfassung;
+      await protokollSchreiben(planId, z.length > 900 ? z.slice(0, 897) + '…' : z, { ...(diff?.details || {}), ...(aktionen.length ? { aktionen } : {}) });
+    }
     standMerken();
     saveStatus('gespeichert ' + new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}), 'ok');
   } catch(e){
+    VERLAUF_SEIT_SPEICHERN.unshift(...aktionen);   // nicht gespeichert: beim nächsten Speichern mitschreiben
     if(String(e.message).includes('termin_plan_veraltet')){ nochmalSpeichern = false; await konfliktZeigen(); }
     else saveStatus('nicht gespeichert: ' + e.message, 'err');
     console.error('speichern:', e);
@@ -6034,10 +6494,14 @@ window.terminplanApi = {
 
       if(tu === 'loeschen'){
         const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
-        pushUndo();
-        deleteTaskAndDescendants(f.t.uid);
+        // Wie im Löschdialog: Kette schließen, Termine bleiben (kette=nachruecken/reissen nur ausdrücklich)
+        const folgen = loeschFolgen([f.t.uid]);
+        const art = ['schliessen', 'nachruecken', 'reissen'].includes(b.kette) ? b.kette : folgen.bruecken.length ? 'schliessen' : 'reissen';
+        const vorschau = loeschVorschau(folgen, art);
+        pushUndo(loeschTitel(folgen, art, vorschau));
+        loeschenAnwenden(folgen, art);
         renderAll();
-        return { ok: true, satz: f.t.name + ' ist aus dem Plan entfernt. Mit „rückgängig" hole ich es zurück.' };
+        return { ok: true, satz: loeschTitel(folgen, art, vorschau) + '. ' + lfSatz(folgen, art, vorschau).replace(/<[^>]+>/g, '') + ' Mit „rückgängig" hole ich es zurück.' };
       }
 
       if(tu === 'verknuepfen'){
