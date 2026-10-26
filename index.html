@@ -713,25 +713,105 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .card .wofuer{font-size:11.5px;background:#FBF6E9;border-radius:8px;padding:6px 10px;margin-top:7px;color:#4A4438;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card .wofuer b{color:#1C1C1A}
 .zielbild{background:#FBF6E9;border:1px solid #E5D9B4;border-radius:12px;padding:12px 16px;font-size:13.5px;line-height:1.5}
-#kal-root{flex:1;min-height:0;overflow:auto;padding:6px 28px 24px}
-.kalkopf{display:flex;align-items:center;gap:12px;padding:6px 2px 12px}
-.kaltitel{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;min-width:170px;text-align:center}
-.kalnav{font-size:17px;color:#55554F;padding:2px 10px;border-radius:8px}
-.kalnav:hover{background:rgba(28,28,26,.07)}
-.kalgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-.kalwt{font-size:10.5px;font-weight:700;color:#8A8A83;padding:2px 8px}
-.kaltag{background:#fff;border-radius:11px;min-height:96px;padding:6px 7px;font-size:11px;box-shadow:0 1px 2px rgba(28,28,26,.05)}
-.kaltag b{font-size:11.5px}
-.kaltag.we{background:#F7F7F4;color:#8A8A83}
-.kaltag.heute{outline:2px solid #1C1C1A;outline-offset:-2px}
-.kaltag.leer{background:none;box-shadow:none}
-.kaltag.dragover{outline:2px solid #A3D542;outline-offset:-2px}
-.kalfix{background:#F7DDD6;border-radius:6px;padding:3px 7px;margin-top:5px;font-size:10px;font-weight:700;color:#8C2F1D;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kalpille{background:rgba(28,28,26,.06);border-radius:6px;padding:3px 7px;margin-top:5px;font-size:10.5px;line-height:1.3;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.kalpille:hover{background:rgba(28,28,26,.11)}
-.kalpille.zu{background:#FBF3E2;border-radius:6px}
-.kalpille.erl{opacity:.5;text-decoration:line-through}
-.kalhint{font-size:11.5px;color:#8A8A83;padding:10px 2px}
+#kal-root{flex:1;min-height:0;overflow:hidden;padding:2px 28px 20px;display:flex;flex-direction:column}
+#kal-root[hidden]{display:none}
+.kal{flex:1;min-height:0;display:flex;flex-direction:column}
+.kalkopf{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 8px}
+.kalnavs{display:flex;align-items:center;gap:2px;background:#fff;border-radius:11px;padding:3px;box-shadow:0 1px 2px rgba(28,28,26,.07)}
+.kalnav{font-size:22px;line-height:1;width:36px;height:34px;border-radius:8px;color:#3C3C38}
+.kalheute{font-size:13.5px;font-weight:600;padding:0 14px;height:34px;border-radius:8px}
+.kalnav:hover,.kalheute:hover{background:rgba(28,28,26,.07)}
+.kaltitel{font-size:24px;font-weight:700;letter-spacing:-.015em;min-width:230px}
+.kalmodi{display:flex;gap:2px;background:rgba(28,28,26,.08);border-radius:11px;padding:3px}
+.kalmodi button{font-size:13.5px;font-weight:600;padding:7px 16px;border-radius:8px;color:#5C5C56}
+.kalmodi button:hover{color:#1C1C1A}
+.kalmodi button.on{background:#fff;color:#1C1C1A;box-shadow:0 1px 3px rgba(28,28,26,.14)}
+.kalebenen{display:flex;gap:6px;flex-wrap:wrap}
+.kaleb{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:99px;border:1px solid #DDDCD6;color:#8A8A83}
+.kaleb.on{background:#fff;border-color:#fff;color:#1C1C1A;box-shadow:0 1px 2px rgba(28,28,26,.08)}
+.kalebp{width:9px;height:9px;border-radius:50%;background:#C9C8C1}
+.kaleb.on.kaleb-aufgaben .kalebp{background:#1C1C1A}
+.kaleb.on.kaleb-termine .kalebp{background:#3A5FAB}
+.kaleb.on.kaleb-bau .kalebp{background:#C49A4E}
+.kalebn{font-size:11.5px;color:#8A8A83}
+.kalneu{margin-left:auto;display:flex;align-items:center;background:#1C1C1A;color:#fff;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:10px}
+.kalneu:hover{background:#3A3A36}
+.kalquelle{font-size:11.5px;color:#8A8A83;padding:2px 2px 12px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.kalkoerper{flex:1;min-height:0;display:flex;gap:16px}
+.kalhaupt{flex:1;min-width:0;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(28,28,26,.08)}
+.kalhaupt.monat{display:flex;flex-direction:column}
+.kalhaupt.monat .kalwoche{flex:1 0 auto}
+.kalwt{display:grid;grid-template-columns:44px repeat(7,minmax(0,1fr));position:sticky;top:0;z-index:3;background:#fff;box-shadow:inset 0 -1px #ECEBE6}
+.kalwt div{font-size:11.5px;font-weight:700;color:#8A8A83;padding:10px;letter-spacing:.04em;text-transform:uppercase}
+.kalwoche{display:grid;grid-template-columns:44px repeat(7,minmax(0,1fr));box-shadow:inset 0 -1px #ECEBE6}
+.kalkw{font-size:10.5px;font-weight:600;color:#A8A8A1;text-align:center;padding-top:12px;cursor:pointer}
+.kalkw:hover{color:#1C1C1A}
+.kalzelle{box-shadow:inset 1px 0 #ECEBE6}
+.kalzelle:hover{background:#FBFBF9}
+.kalzelle.we{background:#FAFAF7}
+.kalzelle.aussen{background:#F5F5F2}
+.kalzelle.gewaehlt{background:#F2F8E4}
+.kalzelle.dragover{background:#E8F4CF;box-shadow:inset 0 0 0 2px #A3D542}
+.kalkz{z-index:1;pointer-events:none;display:flex;align-items:center;gap:6px;padding:6px 8px 0;font-size:13px;font-weight:600;color:#3C3C38}
+.kalkz.aussen{color:#B3B3AC}
+.kalkz .nr{min-width:26px;height:26px;padding:0 4px;border-radius:13px;display:inline-flex;align-items:center;justify-content:center}
+.kalkz.heute .nr{background:#1C1C1A;color:#fff}
+.kalkz .mon{font-size:11.5px;color:#8A8A83;font-weight:600}
+.kalwoche.voll .kalkz{font-size:15px}
+.kb{z-index:1;min-width:0;margin:2px 4px;padding:0 9px;border-radius:6px;background:#F2E9D7;color:#5E4A22;font-size:11.5px;font-weight:600;display:flex;align-items:center;white-space:nowrap;overflow:hidden;cursor:pointer}
+.kb span{overflow:hidden;text-overflow:ellipsis}
+.kb:hover{background:#E9DCC0}
+.kb.kb-termin{background:#E3EAF7;color:#2C4A86}
+.kb.links{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0}
+.kb.rechts{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.kalliste{z-index:1;pointer-events:none;min-width:0;display:flex;flex-direction:column;gap:3px;padding:3px 4px 8px}
+.kalliste>*{pointer-events:auto}
+.kp{display:flex;align-items:center;gap:6px;min-width:0;padding:3px 7px;border-radius:6px;background:#F1F1EE;font-size:12px;line-height:1.35;cursor:pointer}
+.kp:hover{background:#E6E6E1}
+.kpt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kp.voll{align-items:flex-start;padding:6px 8px}
+.kp.voll .kpt{white-space:normal}
+.kp.ueber{background:#FBE6E1;color:#8C2F1D}
+.kp.zu{background:#FBF3E2}
+.kp.erl{opacity:.5}
+.kp.erl .kpt{text-decoration:line-through}
+.kp-termin{background:#E3EAF7;color:#2C4A86;font-weight:600}
+.kp-termin:hover{background:#D6E0F2}
+.kp-abgabe{background:#F7DDD6;color:#8C2F1D;font-weight:700}
+.kpz{font-size:9px;flex:none}
+.kpav{flex:none;width:18px;height:18px;border-radius:50%;color:#fff;font-size:8.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.kalmehr{align-self:flex-start;font-size:11.5px;font-weight:600;color:#5C5C56;padding:2px 7px;border-radius:6px}
+.kalmehr:hover{background:#ECECE8}
+.kalleer{padding:40px 20px;text-align:center;color:#8A8A83;font-size:13px}
+.kalagenda{padding:4px 0}
+.kalag{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;padding:12px 22px;box-shadow:inset 0 -1px #F0EFEA}
+.kalag.vorbei{opacity:.55}
+.kalagd{display:flex;align-items:baseline;gap:10px;cursor:pointer;padding-top:4px}
+.kalagd b{font-size:24px;font-weight:700;letter-spacing:-.02em;min-width:34px;text-align:center;border-radius:9px}
+.kalagd span{font-size:12px;font-weight:600;color:#8A8A83}
+.kalag.heute .kalagd b{background:#1C1C1A;color:#fff;padding:2px 6px}
+.kbmehr{z-index:1;justify-self:start;margin:2px 4px;padding:0 9px;height:20px;font-size:11.5px;font-weight:600;color:#7A6638;border-radius:6px}
+.kbmehr:hover{background:#F2E9D7}
+.kalagl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kz{display:flex;align-items:flex-start;gap:10px;padding:7px 10px;border-radius:9px;cursor:pointer}
+.kz:hover{background:#F5F5F2}
+.kzc{flex:none;margin-top:1px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px;background:#EFEFEB;color:#5C5C56}
+.kzc.termin{background:#E3EAF7;color:#2C4A86}
+.kzc.bau{background:#F2E9D7;color:#5E4A22}
+.kzc.abgabe,.kzc.ueber{background:#F7DDD6;color:#8C2F1D}
+.kzt{font-size:13.5px;font-weight:600;line-height:1.35}
+.kzt.erl{text-decoration:line-through;color:#8A8A83}
+.kzm{font-size:12px;color:#8A8A83;margin-top:2px}
+.kalpanel{flex:none;width:370px;overflow:auto;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(28,28,26,.08);padding:18px 12px}
+.kalpk{display:flex;align-items:flex-start;justify-content:space-between;padding:0 8px 12px}
+.kalpwt{font-size:12px;font-weight:600;color:#8A8A83;text-transform:capitalize}
+.kalpk h3{font-size:21px;font-weight:700;margin-top:2px}
+.kalpzu{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#5C5C56}
+.kalpzu .ico{margin:0}
+.kalpzu:hover{background:#F1F1EE}
+.kalpin{display:block;width:calc(100% - 16px);margin:0 8px 6px;border:1px solid #E2E1DB;border-radius:9px;padding:10px 12px;font-size:13px}
+.kalpin:focus{outline:none;border-color:#1C1C1A}
+.kalpsek{font-size:11px;font-weight:700;color:#8A8A83;letter-spacing:.05em;text-transform:uppercase;padding:14px 10px 4px}
 
 /* ---- Mein Radar (Startansicht): alles Offene einer Person, nach Bereich ---- */
 #radar-root{flex:1;min-height:0;overflow:auto;padding:2px 28px 28px}
@@ -806,7 +886,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mvozuhdw">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mvp0eq9q">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -880,8 +960,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mvozuhdw"></script>
-<script src="vergabe-uebersicht.js?v=mvozuhdw"></script>
-<script type="module" src="dashboard.js?v=mvozuhdw"></script>
+<script src="app.js?v=mvp0eq9q"></script>
+<script src="vergabe-uebersicht.js?v=mvp0eq9q"></script>
+<script type="module" src="dashboard.js?v=mvp0eq9q"></script>
 </body>
 </html>
