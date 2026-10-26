@@ -464,7 +464,7 @@ async function wechsle(typ, id, name) {
   // Halboffene Neue-Karte-Zeile gehoert zum alten Board — sonst blockiert ihr
   // Poll-Guard den Auto-Refresh dauerhaft.
   S.newCardCol = null; S.newCardText = '';
-  zeigeAnsicht('board'); // beim Wechsel immer zuerst die Aufgaben zeigen
+  zeigeAnsicht(typ === 'projekt' ? 'dash' : 'board'); // Projekt oeffnet mit dem Dashboard (Marcel 26.10.)
   renderSidebar(); renderTopbar();
   if (typ === 'vergabe') return; // Vergabeuebersicht hat kein Board zu laden
   renderBoard(); await ladeBoard();
