@@ -2900,7 +2900,7 @@ function openLoeschDialog(folgen, onYes){
   box.addEventListener('click', ev=>ev.stopPropagation());
   const vorschau = { schliessen: loeschVorschau(folgen, 'schliessen'), nachruecken: loeschVorschau(folgen, 'nachruecken'), reissen: { neu: [], bewegt: [] } };
   const waehlbar = folgen.raus.length > 0 && folgen.bruecken.length > 0;
-  let art = waehlbar ? 'schliessen' : 'reissen';
+  let art = waehlbar ? 'nachruecken' : 'reissen';   // Standard wie MS Project (Marcel 26.10.2026)
   const w = folgen.wurzeln.map(u=>byUid[u]).filter(Boolean);
   const titel = w.length === 1 ? '„' + w[0].name + '“ löschen?' : folgen.vorgaenge.length + ' Vorgänge löschen?';
   const zahl = (n, eins, viele, klasse)=> `<div class="lf-zahl ${klasse || ''}"><b>${n}</b>${n === 1 ? eins : viele}</div>`;
@@ -2918,8 +2918,8 @@ function openLoeschDialog(folgen, onYes){
     <p class="lf-satz"></p>
     ${folgen.hinweise.length ? '<div class="lf-hinweise"><b>Geht mit verloren:</b><ul>' + folgen.hinweise.map(h=>'<li>' + ESC(h.satz) + ': ' + h.namen.slice(0, 4).map(n=>'„' + ESC(n) + '“').join(', ') + (h.namen.length > 4 ? ' und ' + (h.namen.length - 4) + ' weitere' : '') + '</li>').join('') + '</ul></div>' : ''}
     ${waehlbar ? `<div class="lf-wahl">
-      <label><input type="radio" name="lfArt" value="schliessen" checked><span><b>Kette schließen, Termine bleiben</b> — Vorgänger direkt an die Nachfolger hängen</span></label>
-      <label><input type="radio" name="lfArt" value="nachruecken"><span><b>Kette schließen und nachrücken</b> — Nachfolger rücken nahtlos an (${vorschau.nachruecken.bewegt.length} Vorgänge ändern sich)</span></label>
+      <label><input type="radio" name="lfArt" value="nachruecken" checked><span><b>Kette schließen und nachrücken</b> — Nachfolger rücken nahtlos an (${vorschau.nachruecken.bewegt.length} Vorgänge ändern sich)</span></label>
+      <label><input type="radio" name="lfArt" value="schliessen"><span><b>Kette schließen, Termine bleiben</b> — Vorgänger direkt an die Nachfolger hängen</span></label>
       <label><input type="radio" name="lfArt" value="reissen"><span><b>Nur löschen</b> — Kette reißt, Nachfolger hängen lose</span></label>
     </div>` : ''}
     <div class="lf-fuss"><span>Mit ↶ Zurück holst du es wieder, alles steht im Verlauf.</span>
@@ -6494,9 +6494,9 @@ window.terminplanApi = {
 
       if(tu === 'loeschen'){
         const f = planVorgangFinden(b.vorgang); if(f.fehler) return f;
-        // Wie im Löschdialog: Kette schließen, Termine bleiben (kette=nachruecken/reissen nur ausdrücklich)
+        // Wie im Löschdialog: Kette schließen und nachrücken (kette=schliessen/reissen nur ausdrücklich)
         const folgen = loeschFolgen([f.t.uid]);
-        const art = ['schliessen', 'nachruecken', 'reissen'].includes(b.kette) ? b.kette : folgen.bruecken.length ? 'schliessen' : 'reissen';
+        const art = ['schliessen', 'nachruecken', 'reissen'].includes(b.kette) ? b.kette : folgen.bruecken.length ? 'nachruecken' : 'reissen';
         const vorschau = loeschVorschau(folgen, art);
         pushUndo(loeschTitel(folgen, art, vorschau));
         loeschenAnwenden(folgen, art);
