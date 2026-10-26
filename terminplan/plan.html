@@ -429,6 +429,22 @@
   .dl-leg i.s{background:#9AA4B4;height:1mm;}
   .dl-leg i.m{width:1.8mm;height:1.8mm;background:#7C879A;transform:rotate(45deg);}
   .dl-leg i.h{width:.4mm;height:3mm;background:#dc2626;}
+  /* Druckvorschau (26.10., Marcel: „wenn ein User auf Export drückt, will er erst mal in eine Vorschau“):
+     zeigt genau die Blätter aus druck.js, die danach gedruckt werden; Papier und Daten am Balken hier wählbar. */
+  .dv{position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;background:#5f646c;}
+  .dv-leiste{flex:none;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--line);padding:8px 16px;}
+  .dv-titel{font-size:14px;font-weight:600;color:var(--blue-dark);margin-right:8px;}
+  .dv-leiste label{display:flex;align-items:center;gap:6px;}
+  .dv-leiste select{font-size:12px;font-family:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;}
+  .dv-info{flex:1 1 260px;color:#4b5563;}
+  .dv-info b{color:var(--ink);font-weight:600;}
+  .dv-warn{color:#b45309;}
+  .dv-los{background:var(--blue);color:#fff;border:none;padding:7px 16px;border-radius:4px;cursor:pointer;font-size:12.5px;font-weight:600;}
+  .dv-zu{background:#fff;color:var(--ink);border:1px solid var(--line);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;}
+  .dv-flaeche{flex:1;overflow:auto;padding:24px;}
+  .dv-blaetter{margin:0 auto;width:max-content;}
+  .dv-blaetter .druck-seite{margin:0 auto 10mm;box-shadow:0 2px 14px rgba(0,0,0,.45);}
+  .dv-hinweis{flex:none;background:#fff;border-top:1px solid var(--line);padding:6px 16px;color:#6b7280;font-size:11px;}
 </style>
 </head>
 <body>
@@ -5179,49 +5195,61 @@ function druckVorbereiten(opt){
 window.addEventListener('beforeprint', ()=>{ if(!document.getElementById('druckBereich').innerHTML) druckVorbereiten(); });
 window.addEventListener('afterprint', ()=>{ document.getElementById('druckBereich').innerHTML = ''; });
 
+// Export → PDF öffnet zuerst die Druckvorschau: dieselben Blätter wie im Druck, verkleinert auf den Bildschirm.
+// Papier und „Daten am Balken“ werden hier gewählt; erst „Drucken …“ öffnet das Druckfenster des Browsers.
 function exportPdf(){
   const e = druckEinstellungen();
   closeTaskDetail();
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal-box" style="min-width:420px">
-    <button class="modal-close" title="Schließen">✕</button>
-    <div class="modal-title">Als PDF drucken</div>
-    <div class="modal-grid">
-      <div class="modal-label">Papier</div>
-      <select class="modal-input" id="druckPapier">
+  overlay.className = 'dv';
+  overlay.innerHTML = `<div class="dv-leiste">
+      <span class="dv-titel">Druckvorschau</span>
+      <label>Papier <select id="druckPapier">
         <optgroup label="Drucker"><option value="A4">A4 quer</option><option value="A3">A3 quer</option></optgroup>
-        <optgroup label="Plotter"><option value="A2">A2 quer</option><option value="A1">A1 quer</option><option value="A0">A0 quer</option>
+        <optgroup label="Plotter"><option value="A2">A2 quer</option><option value="A1">A1 quer</option><option value="A1H">A1 hoch, durchlaufend (Länge nach Plan)</option><option value="A0">A0 quer</option>
           <option value="R610">Rolle 610 mm (Länge nach Plan)</option><option value="R914">Rolle 914 mm (Länge nach Plan)</option></optgroup>
-      </select>
-      <div class="modal-label">Balken</div>
-      <label class="modal-checkbox-row"><input type="checkbox" id="druckDaten"> Anfang und Ende als Datum am Balken</label>
+      </select></label>
+      <label><input type="checkbox" id="druckDaten"> Datum am Balken</label>
+      <label>Ansicht <select id="druckZoom"><option value="fit">Einpassen</option><option value="0.5">50 %</option><option value="1">100 %</option></select></label>
+      <span class="dv-info" id="druckInfo"></span>
+      <button class="dv-zu" id="druckZu">Schließen</button>
+      <button class="dv-los" id="druckLos">Drucken …</button>
     </div>
-    <div class="newtaskdialog-hint" id="druckInfo"></div>
-    <div class="anlage-hint">Im Druckfenster „Als PDF speichern“ wählen. Gedruckt wird, was der Plan gerade zeigt: gewählte Schicht, zugeklappte Gewerke bleiben zu. Plotformate: PDF in Originalgröße (100 %, nicht „an Seite anpassen“) an den Plotter geben; ab A2 mit Faltmarken auf A4.</div>
-    <button class="modal-primary-btn" id="druckLos">Drucken …</button>
-  </div>`;
+    <div class="dv-flaeche"><div class="dv-blaetter" id="druckBlaetter"></div></div>
+    <div class="dv-hinweis">Im Druckfenster „Als PDF speichern“ wählen. Gedruckt wird, was der Plan gerade zeigt: gewählte Schicht, zugeklappte Gewerke bleiben zu. Plotformate in Originalgröße (100 %, nicht „an Seite anpassen“) an den Plotter geben; ab A2 mit Faltmarken auf A4.</div>`;
   document.body.appendChild(overlay);
   window.__openModal = overlay;
-  const papier = overlay.querySelector('#druckPapier'), daten = overlay.querySelector('#druckDaten');
-  papier.value = e.papier; daten.checked = !!e.datenAmBalken;
-  const info = ()=>{
-    const r = druckVorbereiten({ papier: papier.value, datenAmBalken: daten.checked });
-    const m = r.massstab;
-    overlay.querySelector('#druckInfo').textContent = 'Blatt ' + r.papier.b + ' × ' + r.papier.h + ' mm'
-      + (m.skala !== 1 ? ' (Schrift × ' + String(Math.round(m.skala * 100) / 100).replace('.', ',') + ')' : '') + ' · '
-      + r.seiten.length + (r.seiten.length === 1 ? ' Seite' : ' Seiten')
-      + ' · ' + m.proSeite + ' Zeilen je Seite · Zeitraum ' + fmtDE(m.von) + ' – ' + fmtDE(m.bis)
-      + ' · Zeitachse in ' + (m.achse === 'kw' ? 'Kalenderwochen' : 'Monaten');
+  const papier = overlay.querySelector('#druckPapier'), daten = overlay.querySelector('#druckDaten'), zoom = overlay.querySelector('#druckZoom');
+  const flaeche = overlay.querySelector('.dv-flaeche'), blaetter = overlay.querySelector('#druckBlaetter');
+  papier.value = DRUCK_PAPIER[e.papier] ? e.papier : 'A3'; daten.checked = !!e.datenAmBalken;
+  let breiteMm = 420;
+  const einpassen = ()=>{
+    const pxProMm = 96 / 25.4;
+    const f = zoom.value === 'fit' ? Math.min(1, (flaeche.clientWidth - 48) / (breiteMm * pxProMm)) : +zoom.value;
+    blaetter.style.zoom = f;
   };
-  papier.addEventListener('change', info); daten.addEventListener('change', info);
-  info();
-  overlay.querySelector('.modal-close').addEventListener('click', closeTaskDetail);
-  overlay.addEventListener('mousedown', (ev)=>{ if(ev.target === overlay) closeTaskDetail(); });
+  const zeigen = ()=>{
+    const r = druckVorbereiten({ papier: papier.value, datenAmBalken: daten.checked });
+    const m = r.massstab, n = r.seiten.length;
+    breiteMm = r.papier.b;
+    blaetter.innerHTML = r.html;
+    overlay.querySelector('#druckInfo').innerHTML = '<b>' + n + (n === 1 ? ' Blatt' : ' Blätter') + '</b> · '
+      + r.papier.b + ' × ' + r.papier.h + ' mm'
+      + (m.skala !== 1 ? ' · Schrift × ' + String(Math.round(m.skala * 100) / 100).replace('.', ',') : '')
+      + ' · ' + fmtDE(m.von) + ' – ' + fmtDE(m.bis)
+      + (m.kwEng ? ' · <span class="dv-warn">KW-Zahlen sehr eng (' + String(m.kwPt).replace('.', ',') + ' pt) – größeres Format wählen</span>' : '');
+    einpassen();
+  };
+  papier.addEventListener('change', zeigen); daten.addEventListener('change', zeigen); zoom.addEventListener('change', einpassen);
+  const taste = (ev)=>{ if(ev.key === 'Escape' && overlay.isConnected) zu(); };
+  const zu = ()=>{ window.removeEventListener('resize', einpassen); document.removeEventListener('keydown', taste); closeTaskDetail(); document.getElementById('druckBereich').innerHTML = ''; };
+  window.addEventListener('resize', einpassen);
+  document.addEventListener('keydown', taste);
+  zeigen();
+  overlay.querySelector('#druckZu').addEventListener('click', zu);
   overlay.querySelector('#druckLos').addEventListener('click', ()=>{
     const wahl = { papier: papier.value, datenAmBalken: daten.checked };
     try { localStorage.setItem('terminplan_druck', JSON.stringify(wahl)); } catch(err){}
-    closeTaskDetail();
     druckVorbereiten(wahl);
     window.print();
   });
@@ -8436,7 +8464,10 @@ var FERIEN_BY = [
 // Faltmarken ab A2 (vereinfacht nach DIN 824 auf A4: Felder 190 mm von rechts, 210 mm links, 297 mm hoch).
 var DRUCK_PAPIER = { A4: { b: 297, h: 210, skala: 1 }, A3: { b: 420, h: 297, skala: 1 }, A2: { b: 594, h: 420, skala: 1.2 },
   A1: { b: 841, h: 594, skala: 1.4 }, A0: { b: 1189, h: 841, skala: 1.7 },
-  R610: { h: 610, skala: 1.3, rolle: true }, R914: { h: 914, skala: 1.5, rolle: true } };
+  R610: { h: 610, skala: 1.3, rolle: true }, R914: { h: 914, skala: 1.5, rolle: true },
+  // A1 hoch (26.10., Marcel: „der ganze Plan durchlaufend plottbar“): 594 mm breit, Länge nach Zeilen (mind. 841 mm),
+  // volle Plot-Schrift — ein Blatt statt mehrerer zum Zusammenlegen.
+  A1H: { b: 594, h: 841, skala: 1.4, laenge: true } };
 var DRUCK_ROLLE_MAX = 5000;
 var DRUCK_MASS = { rand: 8, kopf: 14, fuss: 7, achse: 8, zeile: 4.4, pt: 0.3528 };
 // Pastell (22.10., Marcel: „etwas pastelliger, aktuell schwarz und dunkelblau“) — Schrift im Balken darum dunkel (.dl-in)
@@ -8514,11 +8545,12 @@ function druckAufbau(e) {
   // Rolle: Höhe = Rollenbreite; Länge so, dass ein Tag im Grundmaß 0,6 mm hat (Kalenderwochen lesbar), mindestens
   // quer im A-Verhältnis (Höhe × 1,414).
   var sk = wahl.skala, pap;
-  if (sk > 1) {
-    var fest = 2 * M.rand + M.kopf + M.fuss + M.achse + 1;
+  var fest = 2 * M.rand + M.kopf + M.fuss + M.achse + 1;
+  if (sk > 1 && !wahl.laenge) {
     sk = Math.max(1, Math.min(wahl.skala, wahl.h / (fest + Math.max(1, zeilen.length) * M.zeile)));
   }
-  if (wahl.rolle) pap = { b: Math.round(Math.min(DRUCK_ROLLE_MAX, Math.max(wahl.h * 1.414, sk * (2 * M.rand + tabB + tage * 0.6)))), h: wahl.h };
+  if (wahl.laenge) pap = { b: wahl.b, h: Math.round(Math.min(DRUCK_ROLLE_MAX, Math.max(wahl.h, sk * (fest + Math.max(1, zeilen.length) * M.zeile)))) };
+  else if (wahl.rolle) pap = { b: Math.round(Math.min(DRUCK_ROLLE_MAX, Math.max(wahl.h * 1.414, sk * (2 * M.rand + tabB + tage * 0.6)))), h: wahl.h };
   else pap = { b: wahl.b, h: wahl.h };
   var B = pap.b / sk, H = pap.h / sk;
   var innenB = B - 2 * M.rand, innenH = H - 2 * M.rand;
@@ -8527,7 +8559,8 @@ function druckAufbau(e) {
   var diaB = innenB - tabB;
   var mm = diaB / tage;
   var x = function (iso) { return (druckTag(iso) - von) * mm; };
-  var achse = 7 * mm >= 3.4 ? 'kw' : 'monat';
+  // Zeitachse immer mit Kalenderwochen (26.10., Marcel: „egal wo, auch bei A3 müssen immer die KWs da stehen“)
+  var achse = 'kw';
   var seiten = druckSeitenTeilen(zeilen, proSeite);
 
   // Zeitachse und Raster (für jede Seite gleich)
@@ -8547,16 +8580,24 @@ function druckAufbau(e) {
       var w = mo.x2 - mo.x1, s = DRUCK_MONAT[mo.m] + ' ' + mo.y;
       if (druckBreite(s, fsKlein) > w - 1) s = DRUCK_MONAT[mo.m] + ' ' + String(mo.y).slice(2);
       if (druckBreite(s, fsKlein) > w - 1) s = DRUCK_MONAT[mo.m];
+      // Monat nur noch als Kürzel: der Januar trägt dann das Jahr, damit der Jahreswechsel lesbar bleibt
+      if (mo.m === 0 && druckBreite(String(mo.y), fsKlein) <= w - 1) s = String(mo.y);
+      else if (druckBreite(s, fsKlein) > w - 1) s = DRUCK_MONAT[mo.m][0];
       oben.push({ x1: mo.x1, x2: mo.x2, s: s });
     });
+    // Jede KW trägt ihre Nummer. Passt „53“ nicht waagerecht in die Woche, steht die Zahl senkrecht und wird
+    // notfalls kleiner (bis 4,5 pt), statt Wochen auszulassen.
     var erster = von + ((8 - new Date(von * 86400000).getUTCDay()) % 7);   // erster Montag
-    var kwB = 7 * mm, jede = kwB >= 4.2 ? 1 : 2;
-    for (var t = erster, i = 0; t < bis; t += 7, i++) {
-      var xx = (t - von) * mm;
+    var kwB = 7 * mm, kwQuer = druckBreite('53', fsKlein) <= kwB - 0.6;
+    var fsKw = kwQuer ? fsKlein : Math.min(fsKlein, Math.max(4.5 * M.pt, (kwB - 0.3) / 0.72));
+    for (var t = erster; t < bis; t += 7) {
+      var xx = (t - von) * mm, kwMitte = (xx + Math.min(xx + kwB, diaB)) / 2;
       raster += '<line x1="' + xx.toFixed(2) + '" y1="' + M.achse + '" x2="' + xx.toFixed(2) + '" y2="__H__" class="r-kw"/>';
-      if (i % jede === 0 && xx + kwB <= diaB + 0.01) {
-        var kw = String(druckKW(t)), lab = kwB >= 7.5 ? 'KW' + kw : kw;
-        kopfAchse += text(xx + kwB / 2, M.achse - 1.1, lab, fsKlein, ' text-anchor="middle"');
+      var kw = String(druckKW(t)), lab = kwB >= 7.5 ? 'KW' + kw : kw;
+      if (kwQuer) kopfAchse += text(kwMitte, M.achse - 1.1, lab, fsKlein, ' text-anchor="middle" class="kw"');
+      else {
+        var kx = kwMitte + fsKw * 0.36, ky = (h2 + M.achse) / 2;
+        kopfAchse += text(kx, ky, kw, fsKw, ' text-anchor="middle" transform="rotate(-90 ' + kx.toFixed(2) + ' ' + ky.toFixed(2) + ')" class="kw"');
       }
     }
   } else {
@@ -8686,7 +8727,8 @@ function druckAufbau(e) {
       + '<span>Seite ' + (si + 1) + ' von ' + seiten.length + '</span></div></div></section>';
   });
   return { html: html, seiten: seiten, papier: pap,
-    massstab: { von: druckIso(von), bis: druckIso(bis - 1), tage: tage, mmProTag: mm, achse: achse, nameB: nameB, proSeite: proSeite, skala: sk } };
+    massstab: { von: druckIso(von), bis: druckIso(bis - 1), tage: tage, mmProTag: mm, achse: achse, nameB: nameB, proSeite: proSeite, skala: sk,
+      kwPt: Math.round(fsKw * sk / M.pt * 10) / 10, kwSenkrecht: !kwQuer, kwEng: !kwQuer && kwB < fsKw * 0.72 + 0.3 - 1e-6 } };
 }
 
 // ---------- Baustein: bzp_pdf.js (geprueft, Tests unter _bausteine/) ----------
