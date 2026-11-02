@@ -5561,6 +5561,7 @@ async function vergabeLaden(eintrag){
   VERGABE = { zeilen: v.map(z=>({ v: z, a: nachUid[z.uid] || { uid: z.uid } })), fristen: kopf[0]?.vergabe_fristen || null, bauherr: kopf[0]?.vergabe_bauherr || null,
     partner: null, feiertage: vgFeiertage(), partnerWahl: VERGABE?.partnerWahl || null, offen: VERGABE?.offen ?? null };
   await vgPartnerLaden();
+  await vgMitBauzeitenplanAbgleichen();
   vergabeZeichnen();
 }
 // Bauzeitenplan, aus dem „Beginn Gewerk“ kommt: gewählt, sonst der neueste nicht eingefrorene
@@ -5775,6 +5776,13 @@ function vergabeZeichnen(){
     w.title = 'Öffnet das erste Gewerk mit Hinweis'; w.onclick = ()=>{ VERGABE.offen = mitProblem[0].z.v.uid; vergabeZeichnen(); };
     lage.appendChild(w);
   }
+  const lose = VERGABE.partner ? echte.filter(e=> !VERGABE.partner.zu[e.z.v.uid]?.gewaehlt) : [];
+  if(lose.length){
+    const w = document.createElement('span'); w.className = 'vg-warnzahl'; w.style.color = 'var(--blue-dark)'; w.id = 'vgLose';
+    w.textContent = '⛓ ' + lose.length + ' Gewerke noch nicht mit dem Bauzeitenplan verbunden';
+    w.title = 'Öffnet das erste: im Blatt den Vorschlag bestätigen oder den richtigen Vorgang wählen'; w.onclick = ()=>{ VERGABE.offen = lose[0].z.v.uid; vergabeZeichnen(); };
+    lage.appendChild(w);
+  }
   const leg = document.createElement('div'); leg.className = 'vg-legende';
   leg.innerHTML = '<span><i style="background:#d9e3f2"></i>LV bis Veröffentlichung</span><span><i style="background:#7a9bd1"></i>Angebotsphase</span>'
     + '<span><i style="background:#3f8f6b"></i>Prüfung bis Beginn</span><span>◆ Beginn Gewerk · <span style="color:#3f8f6b">◆</span> Sitzung</span>';
@@ -5888,7 +5896,9 @@ function vgBlatt(e){
   };
   const t = e.t;
   b.append(Object.assign(document.createElement('h4'), { textContent: 'Termine' }));
-  const beginn = document.createElement('input'); beginn.type = 'date'; beginn.value = z.v.end_datum || ''; beginn.disabled = nurLesen; beginn.dataset.feld = 'beginn';
+  const folgt = VERGABE.partner?.zu[z.v.uid]?.gewaehlt;
+  const beginn = document.createElement('input'); beginn.type = 'date'; beginn.value = z.v.end_datum || ''; beginn.disabled = nurLesen || !!folgt; beginn.dataset.feld = 'beginn';
+  if(folgt) beginn.title = 'Folgt dem Bauzeitenplan — zum Setzen von Hand die Zuordnung darunter lösen (– Vorgang wählen –)';
   beginn.onchange = ()=> vgBeginnSetzen(z, beginn.value || null);
   b.append(feld('Beginn Gewerk', beginn));
   if(VERGABE.partner){
@@ -5899,13 +5909,15 @@ function vgBlatt(e){
     wahl.value = p ? String(p.bzpUid) : '';
     wahl.title = p && !p.gewaehlt ? 'Vorschlag über Stichworte — bitte prüfen' : '';
     wahl.onchange = async ()=>{ const uid = wahl.value ? Number(wahl.value) : null;
-      await vgAngabeSetzen(z, 'bzp_uid', uid, { bzp_plan_id: uid != null ? VERGABE.partner.id : null }); await vgPartnerLaden(); vergabeZeichnen(); };
+      await vgAngabeSetzen(z, 'bzp_uid', uid, { bzp_plan_id: uid != null ? VERGABE.partner.id : null }); await vgPartnerLaden(); await vgMitBauzeitenplanAbgleichen(); vergabeZeichnen(); };
     b.append(feld('im Bauzeitenplan' + (p && !p.gewaehlt ? ' (Vorschlag)' : ''), wahl));
-    if(p && p.bzpStart !== z.v.end_datum && !nurLesen){
-      const ue = document.createElement('button'); ue.textContent = 'Beginn auf ' + fmtDE(p.bzpStart) + ' setzen'; ue.dataset.feld = 'uebernehmen';
-      ue.onclick = ()=> vgBeginnSetzen(z, p.bzpStart);
-      b.append(feld('', ue));
-    }
+    if(p?.gewaehlt) b.append(feld('', wert('Beginn folgt „' + p.bzpName + '“ — verschiebt sich der Vorgang dort, rechnet die Kette mit.')));
+    else if(p && !nurLesen){
+      const ok = document.createElement('button'); ok.dataset.feld = 'bestaetigen';
+      ok.textContent = 'Vorschlag bestätigen' + (p.bzpStart !== z.v.end_datum ? ' (Beginn dann ' + fmtDE(p.bzpStart) + ')' : '');
+      ok.onclick = async ()=>{ await vgAngabeSetzen(z, 'bzp_uid', p.bzpUid, { bzp_plan_id: VERGABE.partner.id }); await vgPartnerLaden(); await vgMitBauzeitenplanAbgleichen(); vergabeZeichnen(); };
+      b.append(feld('', ok));
+    } else if(!p) b.append(feld('', wert('Kein Vorgang zugeordnet — Beginn steht von Hand.')));
   }
   b.append(feld('Angebotszeit (KT)', eingabe('angebotszeit', 'zahl')), feld('Sitzung', eingabe('sitzung', 'date')));
   if(e.sitzungAusKalender) b.append(feld('', wert('Sitzung aus dem Kalender des Bauherrn: ' + e.r.stelle + ' ' + fmtDE(e.r.termine.sitzung))));
@@ -5948,7 +5960,17 @@ async function vgAngabeSetzen(z, feld, wert, dazu){
   } catch(e){ saveStatus('nicht gespeichert: ' + e.message, 'err'); }
   vergabeZeichnen();
 }
-async function vgBeginnSetzen(z, beginn){
+// Marcel 02.11.: „Beginn Gewerk“ folgt dem Bauzeitenplan, sobald die Zuordnung bestätigt ist. Läuft nach jedem
+// Laden und jeder Zuordnung; schreibt nur, wo der Bauzeitenplan inzwischen anders liegt, und sagt es im Verlauf.
+async function vgMitBauzeitenplanAbgleichen(){
+  if(SCHREIBSCHUTZ || !VERGABE?.partner) return;
+  for(const z of VERGABE.zeilen){
+    const p = VERGABE.partner.zu[z.v.uid];
+    if(p?.gewaehlt && p.bzpStart && p.bzpStart !== z.v.end_datum)
+      await vgBeginnSetzen(z, p.bzpStart, 'folgt „' + p.bzpName + '“ im Bauzeitenplan', true);
+  }
+}
+async function vgBeginnSetzen(z, beginn, grund, still){
   if(SCHREIBSCHUTZ || beginn === z.v.end_datum) return;
   const k = vergabeKette({ beginn, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung: z.a.sitzung }, VERGABE.fristen, VERGABE.feiertage);
   const alt = z.v.end_datum;
@@ -5957,10 +5979,10 @@ async function vgBeginnSetzen(z, beginn){
     await db('termin_vorgaenge?plan_id=eq.' + planId + '&uid=eq.' + z.v.uid, { method:'PATCH', headers:{ Prefer:'return=minimal' },
       body: JSON.stringify({ start_datum: k.termine?.lesefassung || null, end_datum: beginn }) });
     z.v.end_datum = beginn; z.v.start_datum = k.termine?.lesefassung || null;
-    await vgStandWeiter(z.v.name + ': Beginn Gewerk ' + (alt ? fmtDE(alt) : '–') + ' → ' + (beginn ? fmtDE(beginn) : '–'));
+    await vgStandWeiter(z.v.name + ': Beginn Gewerk ' + (alt ? fmtDE(alt) : '–') + ' → ' + (beginn ? fmtDE(beginn) : '–') + (grund ? ' (' + grund + ')' : ''));
     saveStatus('gespeichert', 'ok');
   } catch(e){ saveStatus('nicht gespeichert: ' + e.message, 'err'); }
-  vergabeZeichnen();
+  if(!still) vergabeZeichnen();
 }
 
 // ---- Lesen: einen bestimmten Plan in die Oberflaeche ----
