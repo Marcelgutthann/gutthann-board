@@ -460,6 +460,40 @@
   .dv-blaetter{margin:0 auto;width:max-content;}
   .dv-blaetter .druck-seite{margin:0 auto 10mm;box-shadow:0 2px 14px rgba(0,0,0,.45);}
   .dv-hinweis{flex:none;background:#fff;border-top:1px solid var(--line);padding:6px 16px;color:#6b7280;font-size:11px;}
+  /* Vergabeterminplan (02.11.2026): eine Zeile je Vergabeeinheit wie in der Büro-Excel, Zellen direkt bearbeiten */
+  #vergabeAnsicht{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;}
+  #vergabeAnsicht[hidden], #wrap[hidden]{display:none;}
+  .vg-kopf{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:6px 16px;border-bottom:1px solid var(--line);font-size:12px;color:#555;}
+  .vg-kopf select{font:inherit;}
+  .vg-kopf .vg-warn{color:#b42318;font-weight:600;}
+  .vg-scroll{flex:1;min-height:0;overflow:auto;}
+  table.vg{border-collapse:separate;border-spacing:0;font-size:12px;}
+  table.vg th, table.vg td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;height:24px;white-space:nowrap;background:#fff;}
+  table.vg th{position:sticky;top:0;z-index:3;background:#f1f4f9;color:var(--blue-dark);font-weight:600;padding:4px 6px;white-space:normal;line-height:1.2;vertical-align:bottom;text-align:left;font-size:11px;}
+  table.vg th.vg-gruppe{top:0;text-align:center;border-bottom:1px solid var(--line);}
+  table.vg tr.vg-kopf2 th{top:22px;}
+  table.vg .vg-fix1{position:sticky;left:0;z-index:2;width:28px;text-align:right;padding:0 4px;color:#888;}
+  table.vg .vg-fix2{position:sticky;left:28px;z-index:2;min-width:220px;max-width:260px;overflow:hidden;text-overflow:ellipsis;padding:0 6px;border-right:2px solid var(--line);}
+  table.vg th.vg-fix1, table.vg th.vg-fix2{z-index:4;}
+  table.vg td.vg-calc{padding:0 6px;color:#333;text-align:right;}
+  table.vg td.vg-rot{background:#fdecea;color:#b42318;}
+  table.vg td.vg-gelb{background:#fff7e0;}
+  table.vg tr.vg-sammel td{background:#eef2f8;font-weight:600;color:var(--blue-dark);}
+  table.vg input, table.vg select{border:0;background:transparent;font:inherit;height:23px;padding:0 6px;width:100%;box-sizing:border-box;color:var(--ink);}
+  table.vg input:focus, table.vg select:focus{outline:2px solid var(--blue-light);background:#fff;}
+  table.vg input.vg-zahl{text-align:right;width:96px;}
+  table.vg input.vg-kurz{width:60px;}
+  table.vg input.vg-text{width:130px;}
+  table.vg input[type=date]{width:118px;}
+  table.vg button.vg-uebern{border:0;background:none;color:var(--blue);cursor:pointer;font:inherit;padding:0 4px;}
+  .vg-leiste{position:relative;width:560px;height:23px;}
+  .vg-leiste .vg-balken{position:absolute;top:8px;height:8px;background:#d7e3f6;border:1px solid #9fb6dd;border-radius:2px;}
+  .vg-leiste .vg-marke{position:absolute;top:5px;width:8px;height:8px;margin-left:-4px;transform:rotate(45deg);border:1px solid #333;background:#fff;}
+  .vg-leiste .vg-marke.sub{background:#3a5fab;border-color:#3a5fab;}
+  .vg-leiste .vg-marke.sitz{background:#2e8b57;border-color:#2e8b57;}
+  .vg-leiste .vg-marke.beginn{background:#111;}
+  .vg-leiste .vg-marke.rot{background:#d92d20;border-color:#d92d20;}
+  .vg-leiste .vg-heute{position:absolute;top:0;bottom:0;width:1px;background:#d92d20;}
 </style>
 </head>
 <body>
@@ -589,6 +623,7 @@
     </div>
   </div>
 </div>
+<div id="vergabeAnsicht" hidden></div>
 
 
 
@@ -5450,6 +5485,248 @@ function kalenderAktualisieren(basisZeitraeume){
   KALENDER = erstelleKalender(zr);
 }
 
+// ==================================================================================
+// VERGABETERMINPLAN (02.11.2026, Marcel: „genau wie die Excel … die Leute sollen da drinnen direkt arbeiten“)
+// Plan der Art vergabeterminplan: eine Zeile je Vergabeeinheit mit den Spalten der Büro-Excel. Eingaben
+// (Vergabeart, Kosten, Verantwortlich, Anmerkung, Paket/KG/CPV, Angebotszeit, Sitzung) liegen in
+// termin_vergabe_angaben (Migr. 283/284) und werden Zelle für Zelle geschrieben; Beginn Gewerk ist das Ende
+// des Vorgangs, sein Beginn die Lesefassung. Die Kette rechnet vergabe_excel.js. planSpeichern schreibt in
+// dieser Ansicht nie (TASKS ist leer — ein Speichern würde sonst alle Einheiten löschen).
+// ==================================================================================
+let VERGABE = null;   // { zeilen: [{v, a}], partner: {id, name, tasks}, feiertage: [] } solange ein Vergabeterminplan offen ist
+const VG_ANGABEN = 'vergabeart,paket,kostengruppe,cpv,verantwortlich,anmerkung,kb_netto,kb_brutto,lv_netto,lv_brutto,submission_brutto,angebotszeit,sitzung,bzp_plan_id,bzp_uid';
+
+function vergabeModus(an){
+  document.getElementById('wrap').hidden = an;
+  document.getElementById('vergabeAnsicht').hidden = !an;
+  if(!an) VERGABE = null;
+}
+function vgFeiertage(){
+  const tage = [];
+  for(const z of KALENDER_BASIS.concat(SPECIAL_PERIODS.filter(p=>p.kind==='feiertag'||p.kind==='weihnachtsferien').map(p=>({von:p.start,bis:p.finish})))){
+    for(let d = z.von; d && d <= z.bis; d = fmtISO(addDays(parseISO(d), 1))) tage.push(d);
+  }
+  return tage;
+}
+async function vergabeLaden(eintrag){
+  const [v, a, kopf] = await Promise.all([
+    db('termin_vorgaenge?plan_id=eq.' + eintrag.id + '&select=uid,pos,name,ebene,start_datum,end_datum,ist_sammelvorgang,quelle_text&order=pos.asc'),
+    db('termin_vergabe_angaben?plan_id=eq.' + eintrag.id + '&select=uid,' + VG_ANGABEN),
+    db('termin_plaene?id=eq.' + eintrag.id + '&select=stand,vergabe_fristen'),
+  ]);
+  PLAN_STAND = kopf[0]?.stand || null; UNGESPEICHERT = false; konfliktSchliessen();
+  const nachUid = {}; a.forEach(x=> nachUid[x.uid] = x);
+  VERGABE = { zeilen: v.map(z=>({ v: z, a: nachUid[z.uid] || { uid: z.uid } })), fristen: kopf[0]?.vergabe_fristen || null,
+    partner: null, feiertage: vgFeiertage(), partnerWahl: VERGABE?.partnerWahl || null };
+  await vgPartnerLaden();
+  vergabeZeichnen();
+}
+// Bauzeitenplan, aus dem „Beginn Gewerk“ kommt: gewählt, sonst der neueste nicht eingefrorene
+async function vgPartnerLaden(){
+  const kandidaten = PLAN_LISTE.filter(p=>p.art==='bauzeitenplan' && !p.eingefroren_am);
+  const p = kandidaten.find(x=>x.id===VERGABE.partnerWahl) || kandidaten[0];
+  if(!p) return;
+  const zeilen = await db('termin_vorgaenge?plan_id=eq.' + p.id + '&select=uid,name,start_datum,ist_sammelvorgang&order=pos.asc');
+  const bzp = zeilen.filter(z=>z.start_datum).map(z=>({ uid:z.uid, name:z.name, start:z.start_datum, summary:!!z.ist_sammelvorgang }));
+  const einheiten = VERGABE.zeilen.filter(z=>!z.v.ist_sammelvorgang).map(z=>({ uid:z.v.uid, name:z.v.name, start:z.v.end_datum, isGewerk:true, summary:false }));
+  const vorschlag = {};
+  if(typeof planVerbindungen === 'function') planVerbindungen(einheiten, bzp, 14).verbindungen.forEach(x=> vorschlag[x.rahmenUid] = x.bzpUid);
+  const nachUid = {}; bzp.forEach(t=> nachUid[t.uid] = t);
+  // je Einheit: gespeicherte Wahl (Migr. 285) vor dem Stichwort-Vorschlag
+  const zu = {};
+  VERGABE.zeilen.forEach(z=>{
+    const gewaehlt = z.a.bzp_plan_id === p.id && nachUid[z.a.bzp_uid] ? z.a.bzp_uid : null;
+    const uid = gewaehlt ?? vorschlag[z.v.uid];
+    if(uid != null && nachUid[uid]) zu[z.v.uid] = { bzpUid: uid, bzpName: nachUid[uid].name, bzpStart: nachUid[uid].start, gewaehlt: gewaehlt != null };
+  });
+  VERGABE.partner = { id: p.id, name: p.name, zu, vorgaenge: bzp };
+}
+
+const VG_EUR = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+function vgZahlText(n){ return n == null ? '' : VG_EUR.format(n); }
+function vgZahlLesen(s){ const t = String(s).replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.'); return t === '' ? null : Number(t); }
+function vgDE(s){ return s ? fmtDE(s) : ''; }
+
+function vergabeZeichnen(){
+  const box = document.getElementById('vergabeAnsicht');
+  const nurLesen = SCHREIBSCHUTZ;
+  const ketten = VERGABE.zeilen.map(z=> z.v.ist_sammelvorgang ? null
+    : vergabeKette({ beginn: z.v.end_datum, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung: z.a.sitzung }, VERGABE.fristen, VERGABE.feiertage));
+  // Zeitachse der Leiste: früheste Lesefassung bis spätester Beginn
+  const tage = [];
+  ketten.forEach(k=>{ if(k?.termine){ tage.push(k.termine.lesefassung, k.termine.beginn); if(k.termine.sitzung) tage.push(k.termine.sitzung); } });
+  tage.sort();
+  const von = tage[0] ? parseISO(tage[0]) : null, bis = tage.length ? parseISO(tage[tage.length-1]) : null;
+  const spanne = von ? Math.max(1, daysBetween(von, bis)) : 1;
+  const x = (iso)=> von ? Math.max(0, Math.min(100, daysBetween(von, parseISO(iso)) / spanne * 100)) : 0;
+  const offen = ketten.reduce((n,k)=> n + (k ? k.hinweise.length : 0), 0);
+
+  const kandidaten = PLAN_LISTE.filter(p=>p.art==='bauzeitenplan' && !p.eingefroren_am);
+  box.innerHTML = '';
+  const kopf = document.createElement('div');
+  kopf.className = 'vg-kopf';
+  kopf.innerHTML = '<span>Beginn Gewerk abgleichen mit</span>';
+  const sel = document.createElement('select');
+  kandidaten.forEach(p=>{ const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; sel.appendChild(o); });
+  if(!kandidaten.length){ const o = document.createElement('option'); o.textContent = 'kein Bauzeitenplan im Projekt'; sel.appendChild(o); sel.disabled = true; }
+  if(VERGABE.partner) sel.value = VERGABE.partner.id;
+  sel.onchange = async ()=>{ VERGABE.partnerWahl = sel.value; await vgPartnerLaden(); vergabeZeichnen(); };
+  kopf.appendChild(sel);
+  const info = document.createElement('span');
+  info.innerHTML = 'Kette nach Büro-Excel: Lesefassung = Beginn − 120 KT · Annahmeschluss + 7 KT · Veröffentlichung + 3 AT (EU) / 2 AT (national) · Submission + Angebotszeit · Vorschlag + 14 KT · Zuschlag = Sitzung + 11 KT · Arbeitsbeginn + 2 KT'
+    + (offen ? ' · <span class="vg-warn">' + offen + ' Hinweise (rot markiert, Zeiger auf die Zelle)</span>' : '');
+  kopf.appendChild(info);
+  box.appendChild(kopf);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'vg-scroll';
+  const tab = document.createElement('table');
+  tab.className = 'vg';
+  const gruppen = [['', 2], ['Einheit', 6], ['Kosten (€)', 6], ['Termine', 10], ['Bauzeitenplan', 1], ['Zeitleiste', 1]];
+  const spalten = ['#', 'Leistungsbereich', 'Vergabeart', 'Verantwortlich', 'Anmerkung', 'Paket', 'KG', 'CPV',
+    'KB netto', 'KB brutto', 'LV netto (bepreist)', 'LV brutto (bepreist)', 'Submission brutto', 'Überhang KB − Subm.',
+    'Lesefassung an Bauherr', 'Annahmeschluss Staatsanzeiger', 'Veröffentlichung', 'Angebotszeit KT', 'Submission',
+    'Vergabevorschlag', 'Sitzung', 'Zuschlag', 'frühester Arbeitsbeginn', 'Beginn Gewerk',
+    VERGABE.partner ? 'Beginn laut „' + VERGABE.partner.name + '“' : 'kein Bauzeitenplan', ''];
+  const thead = document.createElement('thead');
+  const r1 = document.createElement('tr');
+  gruppen.forEach(([t, n], i)=>{ const th = document.createElement('th'); th.className = 'vg-gruppe' + (i===0 ? ' vg-fix1' : ''); th.colSpan = n; th.textContent = t; r1.appendChild(th); });
+  const r2 = document.createElement('tr'); r2.className = 'vg-kopf2';
+  spalten.forEach((t,i)=>{ const th = document.createElement('th'); th.textContent = t; if(i===0) th.className='vg-fix1'; if(i===1) th.className='vg-fix2'; r2.appendChild(th); });
+  thead.append(r1, r2);
+  tab.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  let nr = 0;
+  VERGABE.zeilen.forEach((z, i)=>{
+    const tr = document.createElement('tr');
+    const td = (inhalt, cls)=>{ const c = document.createElement('td'); if(cls) c.className = cls; if(inhalt instanceof Node) c.appendChild(inhalt); else c.textContent = inhalt ?? ''; tr.appendChild(c); return c; };
+    if(z.v.ist_sammelvorgang){
+      tr.className = 'vg-sammel';
+      td('', 'vg-fix1'); td(z.v.name, 'vg-fix2'); const rest = td(''); rest.colSpan = spalten.length - 2;
+      tbody.appendChild(tr); return;
+    }
+    nr++;
+    const k = ketten[i], t = k?.termine || {}, h = k?.hinweise || [];
+    const eingabe = (feld, art, cls)=>{
+      const el = document.createElement(art === 'select' ? 'select' : 'input');
+      if(art === 'select'){ ['', 'EU', 'NatÖ', 'NatB'].forEach(o=>{ const op = document.createElement('option'); op.value = o; op.textContent = o || '–'; el.appendChild(op); }); el.value = z.a[feld] || ''; }
+      else if(art === 'date'){ el.type = 'date'; el.value = z.a[feld] || ''; }
+      else if(art === 'zahl'){ el.type = 'text'; el.inputMode = 'decimal'; el.value = feld === 'angebotszeit' ? (z.a[feld] ?? '') : vgZahlText(z.a[feld]); }
+      else { el.type = 'text'; el.value = z.a[feld] || ''; el.title = z.a[feld] || ''; }
+      if(cls) el.className = cls;
+      el.disabled = nurLesen;
+      el.onchange = ()=> vgAngabeSetzen(z, feld, art === 'zahl' ? vgZahlLesen(el.value) : (el.value || null));
+      return el;
+    };
+    td(nr, 'vg-fix1');
+    const name = td(z.v.name, 'vg-fix2'); name.title = z.v.name + (z.v.quelle_text ? ' (' + z.v.quelle_text + ')' : '');
+    td(eingabe('vergabeart', 'select'));
+    td(eingabe('verantwortlich', 'text', 'vg-text'));
+    td(eingabe('anmerkung', 'text', 'vg-text'));
+    td(eingabe('paket', 'text', 'vg-kurz'));
+    td(eingabe('kostengruppe', 'text', 'vg-kurz'));
+    td(eingabe('cpv', 'text', 'vg-kurz'));
+    ['kb_netto', 'kb_brutto', 'lv_netto', 'lv_brutto', 'submission_brutto'].forEach(f=> td(eingabe(f, 'zahl', 'vg-zahl')));
+    td(z.a.kb_brutto != null && z.a.submission_brutto != null ? vgZahlText(z.a.kb_brutto - z.a.submission_brutto) : '', 'vg-calc'
+      + (z.a.kb_brutto != null && z.a.submission_brutto != null && z.a.submission_brutto > z.a.kb_brutto ? ' vg-rot' : ''));
+    td(vgDE(t.lesefassung), 'vg-calc'); td(vgDE(t.annahmeschluss), 'vg-calc'); td(vgDE(t.veroeffentlichung), 'vg-calc');
+    const az = td(eingabe('angebotszeit', 'zahl', 'vg-kurz'));
+    const azH = h.filter(s=>s.startsWith('Angebotszeit')); if(azH.length){ az.classList.add('vg-rot'); az.title = azH.join('\n'); }
+    else if(z.a.angebotszeit == null && k?.angebotszeit != null){ az.querySelector('input').placeholder = k.angebotszeit + ' (min.)'; }
+    td(vgDE(t.submission), 'vg-calc'); td(vgDE(t.vergabevorschlag), 'vg-calc');
+    const sitz = td(eingabe('sitzung', 'date'));
+    const sitzH = h.filter(s=>s.startsWith('Sitzung')); if(sitzH.length){ sitz.classList.add(z.a.sitzung ? 'vg-rot' : 'vg-gelb'); sitz.title = sitzH.join('\n'); }
+    td(vgDE(t.zuschlag), 'vg-calc');
+    const ab = td(vgDE(t.arbeitsbeginn), 'vg-calc'); const abH = h.filter(s=>s.startsWith('frühester')); if(abH.length){ ab.classList.add('vg-rot'); ab.title = abH.join('\n'); }
+    const beginn = document.createElement('input'); beginn.type = 'date'; beginn.value = z.v.end_datum || ''; beginn.disabled = nurLesen;
+    beginn.onchange = ()=> vgBeginnSetzen(z, beginn.value || null);
+    const bc = td(beginn); if(!z.v.end_datum){ bc.classList.add('vg-gelb'); bc.title = 'Beginn Gewerk fehlt — ohne Anker keine Kette'; }
+    const p = VERGABE.partner?.zu[z.v.uid];
+    if(VERGABE.partner){
+      // Auswahl des Vorgangs im Bauzeitenplan: gespeicherte Wahl, sonst Vorschlag über Stichworte (kursiv)
+      const c = td('', p && p.bzpStart !== z.v.end_datum ? 'vg-gelb' : '');
+      const wahl = document.createElement('select'); wahl.disabled = nurLesen; wahl.style.width = '250px';
+      wahl.title = p ? (p.gewaehlt ? 'gewählt: ' : 'Vorschlag über Stichworte, bitte prüfen: ') + p.bzpName : 'Vorgang im Bauzeitenplan wählen';
+      if(p && !p.gewaehlt) wahl.style.fontStyle = 'italic';
+      const leer = document.createElement('option'); leer.value = ''; leer.textContent = '– Vorgang wählen –'; wahl.appendChild(leer);
+      VERGABE.partner.vorgaenge.forEach(t=>{ const o = document.createElement('option'); o.value = t.uid; o.textContent = fmtDE(t.start) + ' · ' + t.name; wahl.appendChild(o); });
+      wahl.value = p ? String(p.bzpUid) : '';
+      wahl.onchange = async ()=>{
+        const uid = wahl.value ? Number(wahl.value) : null;
+        await vgAngabeSetzen(z, 'bzp_uid', uid, { bzp_plan_id: uid != null ? VERGABE.partner.id : null });
+        await vgPartnerLaden(); vergabeZeichnen();
+      };
+      c.appendChild(wahl);
+      if(p && p.bzpStart !== z.v.end_datum && !nurLesen){
+        const b = document.createElement('button'); b.className = 'vg-uebern'; b.textContent = '← übernehmen';
+        b.title = 'Beginn Gewerk auf ' + fmtDE(p.bzpStart) + ' setzen (' + p.bzpName + ')';
+        b.onclick = ()=> vgBeginnSetzen(z, p.bzpStart);
+        c.appendChild(b);
+      }
+    } else td('', 'vg-calc');
+    const leiste = document.createElement('div'); leiste.className = 'vg-leiste';
+    if(t.lesefassung){
+      const bal = document.createElement('div'); bal.className = 'vg-balken';
+      bal.style.left = x(t.lesefassung) + '%'; bal.style.width = Math.max(0.5, x(t.beginn) - x(t.lesefassung)) + '%';
+      bal.title = 'Lesefassung ' + fmtDE(t.lesefassung) + ' bis Beginn ' + fmtDE(t.beginn);
+      leiste.appendChild(bal);
+      const marke = (iso, cls, text)=>{ if(!iso) return; const m = document.createElement('div'); m.className = 'vg-marke ' + cls; m.style.left = x(iso) + '%'; m.title = text + ' ' + fmtDE(iso); leiste.appendChild(m); };
+      marke(t.veroeffentlichung, '', 'Veröffentlichung');
+      marke(t.submission, 'sub', 'Submission');
+      marke(t.sitzung, 'sitz' + (sitzH.length ? ' rot' : ''), 'Sitzung');
+      marke(t.beginn, 'beginn', 'Beginn Gewerk');
+    }
+    const heute = fmtISO(new Date());
+    if(von && heute >= tage[0] && heute <= tage[tage.length-1]){ const hl = document.createElement('div'); hl.className = 'vg-heute'; hl.style.left = x(heute) + '%'; leiste.appendChild(hl); }
+    td(leiste);
+    tbody.appendChild(tr);
+  });
+  tab.appendChild(tbody);
+  scroll.appendChild(tab);
+  box.appendChild(scroll);
+}
+
+// Jede Änderung: schreiben, Stand des Plans weiterzählen (andere offene Seiten laden nach), ins Protokoll.
+async function vgStandWeiter(text){
+  const s = sitzung();
+  const k = await db('termin_plaene?id=eq.' + planId, { method:'PATCH', headers:{ Prefer:'return=representation' },
+    body: JSON.stringify({ stand: new Date().toISOString(), geaendert_von: s?.email || null, geaendert_am: new Date().toISOString() }) });
+  PLAN_STAND = k?.[0]?.stand || PLAN_STAND;
+  await protokollSchreiben(planId, text);
+}
+async function vgAngabeSetzen(z, feld, wert, dazu){
+  if(SCHREIBSCHUTZ) return;
+  const alt = z.a[feld] ?? null;
+  if(alt === wert && !dazu) return;
+  saveStatus('speichert …');
+  try {
+    await db('termin_vergabe_angaben?on_conflict=plan_id,uid', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{ plan_id: planId, uid: z.v.uid, [feld]: wert, ...(dazu || {}), geaendert_von: sitzung()?.email || null, geaendert_am: new Date().toISOString() }]) });
+    z.a[feld] = wert; Object.assign(z.a, dazu || {});
+    const VG_NAMEN = { vergabeart:'Vergabeart', paket:'Paket', kostengruppe:'KG', cpv:'CPV', verantwortlich:'Verantwortlich', anmerkung:'Anmerkung',
+      kb_netto:'KB netto', kb_brutto:'KB brutto', lv_netto:'LV netto', lv_brutto:'LV brutto', submission_brutto:'Submission brutto',
+      angebotszeit:'Angebotszeit', sitzung:'Sitzung', bzp_uid:'Vorgang im Bauzeitenplan' };
+    const zeig = (w)=> w == null ? '–' : feld === 'sitzung' ? fmtDE(w) : feld === 'bzp_uid' ? (VERGABE.partner?.vorgaenge.find(t=>t.uid===w)?.name || w) : w;
+    await vgStandWeiter(z.v.name.slice(0, 60) + ': ' + (VG_NAMEN[feld] || feld) + ' ' + zeig(alt) + ' → ' + zeig(wert));
+    saveStatus('gespeichert', 'ok');
+  } catch(e){ saveStatus('nicht gespeichert: ' + e.message, 'err'); }
+  vergabeZeichnen();
+}
+async function vgBeginnSetzen(z, beginn){
+  if(SCHREIBSCHUTZ || beginn === z.v.end_datum) return;
+  const k = vergabeKette({ beginn, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung: z.a.sitzung }, VERGABE.fristen, VERGABE.feiertage);
+  const alt = z.v.end_datum;
+  saveStatus('speichert …');
+  try {
+    await db('termin_vorgaenge?plan_id=eq.' + planId + '&uid=eq.' + z.v.uid, { method:'PATCH', headers:{ Prefer:'return=minimal' },
+      body: JSON.stringify({ start_datum: k.termine?.lesefassung || null, end_datum: beginn }) });
+    z.v.end_datum = beginn; z.v.start_datum = k.termine?.lesefassung || null;
+    await vgStandWeiter(z.v.name + ': Beginn Gewerk ' + (alt ? fmtDE(alt) : '–') + ' → ' + (beginn ? fmtDE(beginn) : '–'));
+    saveStatus('gespeichert', 'ok');
+  } catch(e){ saveStatus('nicht gespeichert: ' + e.message, 'err'); }
+  vergabeZeichnen();
+}
+
 // ---- Lesen: einen bestimmten Plan in die Oberflaeche ----
 async function planLaden(gewuenschtePlanId){
   if(!PLAN_LISTE.length) await planListeLaden();
@@ -5460,6 +5737,16 @@ async function planLaden(gewuenschtePlanId){
   planId = eintrag.id;
   SCHREIBSCHUTZ = !!eintrag.eingefroren_am;
   document.getElementById('planWahl').value = planId;
+  vergabeModus(eintrag.art === 'vergabeterminplan');
+  if(eintrag.art === 'vergabeterminplan'){
+    // Gantt bleibt leer und unsichtbar; planSpeichern schreibt in diesem Modus nie
+    TASKS = []; Object.keys(byUid).forEach(x=>delete byUid[x]); EDGES.length = 0; SPECIAL_PERIODS = [];
+    await kalenderLaden(eintrag.kalender_id);
+    await vergabeLaden(eintrag);
+    standMerken();
+    schreibschutzAnzeigen();
+    return true;
+  }
   const [v, k, sp, kopf] = await Promise.all([
     db('termin_vorgaenge?plan_id=eq.' + planId + '&select=*&order=pos.asc'),
     db('termin_verknuepfungen?plan_id=eq.' + planId + '&select=*'),
@@ -5858,7 +6145,7 @@ document.getElementById('btnVerbindung').onclick = ()=>{
 
 // ---- Schreiben ----
 async function planSpeichern(){
-  if(ladeVorgang || SCHREIBSCHUTZ || !planId || KONFLIKT) return;
+  if(ladeVorgang || SCHREIBSCHUTZ || !planId || KONFLIKT || VERGABE) return;   // Vergabeterminplan schreibt zellweise (vgAngabeSetzen)
   if(speichernLaeuft){ nochmalSpeichern = true; return; }
   speichernLaeuft = true;
   saveStatus('speichert …');
@@ -5953,6 +6240,7 @@ function speichernAnstossen(){
 //      Hat der Mensch inzwischen geklickt, lehnt die Datenbank das Speichern ab und die Leiste fragt, welcher gilt.
 async function fremdeAenderungPruefen(){
   if(ladeVorgang || SCHREIBSCHUTZ || !planId || UNGESPEICHERT || speichernLaeuft || KONFLIKT || document.hidden) return;
+  if(VERGABE && document.getElementById('vergabeAnsicht').contains(document.activeElement)) return;   // nicht unter der tippenden Hand neu zeichnen
   let kopf;
   try { kopf = await db('termin_plaene?id=eq.' + planId + '&select=stand,geaendert_von'); } catch(e){ return; }
   const neu = kopf?.[0]?.stand;
@@ -7905,6 +8193,77 @@ function erzeugeRahmenplan(param) {
   }
 
   return { tasks: tasks, edges: edges, warnungen: warnungen };
+}
+
+// ---------- Baustein: vergabe_excel.js (geprueft, Tests unter _bausteine/) ----------
+// vergabe_excel.js — Baustein: die Vergabekette genau wie der Excel-Vergabeterminplan des Büros
+// (Marcel 02.11.2026: „ja genau wie die excel“; Vorlage: 3959 Maxhütte, Vergabeterminplan.xlsx).
+// Die Excel rechnet je Vergabeeinheit (Spalten P–Y):
+//   Y Beginn Gewerk nach Bauzeitenplan          — Anker, kommt aus dem Bauzeitenplan
+//   P Lesefassung an Bauherr                    = Y − 120 KT
+//   Q Annahmeschluss Staatsanzeiger             = P + 7 KT
+//   R Versendung und Veröffentlichung LV        = WORKDAY(Q, 3 AT bei EU, 2 AT national)
+//   T Ende Angebotsabgabe / Submission          = R + S (S = Angebotszeit der Einheit, mind. 30 KT EU, 10 KT national)
+//   U Angebotsprüfung und Vergabevorschlag      = T + 14 KT (mind. 7 KT vor der Sitzung beim AG)
+//   V Sitzung (Stadtrat/Bauausschuss/Bürgermeister) — von Hand
+//   W Zuschlag (Einspruchsfrist 10 KT, am nächsten Tag) = V + 11 KT
+//   X frühester Arbeitsbeginn                   = W + 2 KT
+// Abweichung von der Datei: Spalte R greift dort je Zeile mal auf Q16, Q17 oder Q18 zu, unabhängig von der
+// Vergabeart (Kopierfehler, z. B. Trockenbau EU mit Q18). Die Ursprungsformel der Vorlage (Zeile 63 ff.:
+// WENN(G="NatB"; ARBEITSTAG(…; R18; Feiertage); ARBEITSTAG(…; R16; Feiertage))) zeigt die Absicht: Frist
+// nach Vergabeart, Feiertage frei. So rechnet dieser Baustein.
+// Kein DOM — reine Funktionen, prüfbar in vergabe_excel.test.mjs.
+
+var VERGABE_FRISTEN_STANDARD = {
+  EU:   { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 3, angebotszeit_min: 30, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2 },
+  'NatÖ': { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 2, angebotszeit_min: 10, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2 },
+  NatB: { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 2, angebotszeit_min: 10, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2 }
+};
+
+function veDatum(s) { var p = String(s).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
+function veIso(d) { return d.toISOString().slice(0, 10); }
+function vePlus(s, kt) { var d = veDatum(s); d.setUTCDate(d.getUTCDate() + kt); return veIso(d); }
+// wie Excel ARBEITSTAG(start; n; Feiertage): n Arbeitstage weiter, Sa/So und Feiertage (Liste JJJJ-MM-TT) zählen nicht
+function veArbeitstage(s, n, feiertage) {
+  var d = veDatum(s), schritt = n < 0 ? -1 : 1, rest = Math.abs(n), frei = {};
+  (feiertage || []).forEach(function (f) { frei[f] = true; });
+  while (rest > 0) { d.setUTCDate(d.getUTCDate() + schritt); var w = d.getUTCDay(); if (w !== 0 && w !== 6 && !frei[veIso(d)]) rest--; }
+  return veIso(d);
+}
+function veFristen(vergabeart, planFristen) {
+  var art = VERGABE_FRISTEN_STANDARD[vergabeart] ? vergabeart : 'EU';
+  var f = {}, std = VERGABE_FRISTEN_STANDARD[art], eigen = (planFristen && planFristen[art]) || {};
+  Object.keys(std).forEach(function (k) { f[k] = eigen[k] != null ? eigen[k] : std[k]; });
+  f.art = art;
+  return f;
+}
+
+// einheit: { beginn: 'JJJJ-MM-TT' (Y), vergabeart, angebotszeit (S, KT), sitzung (V, optional) }
+// feiertage: arbeitsfreie Tage (JJJJ-MM-TT) aus dem Kalender des Plans
+// liefert die Termine P–X und die Hinweise, an denen die Excel nur still falsch wäre.
+function vergabeKette(einheit, planFristen, feiertage) {
+  var f = veFristen(einheit.vergabeart, planFristen), hinweise = [];
+  if (!einheit.beginn) return { termine: null, fristen: f, hinweise: ['Beginn Gewerk fehlt — ohne Anker keine Kette'] };
+  var angebotszeit = einheit.angebotszeit != null ? einheit.angebotszeit : f.angebotszeit_min;
+  if (angebotszeit < f.angebotszeit_min) hinweise.push('Angebotszeit ' + angebotszeit + ' KT unter der Mindestfrist ' + f.angebotszeit_min + ' KT (' + f.art + ')');
+  var t = {};
+  t.beginn = einheit.beginn;
+  t.lesefassung = vePlus(t.beginn, -f.lesefassung_vor_beginn);
+  t.annahmeschluss = vePlus(t.lesefassung, f.annahme_nach_lesefassung);
+  t.veroeffentlichung = veArbeitstage(t.annahmeschluss, f.veroeffentlichung_at, feiertage);
+  t.submission = vePlus(t.veroeffentlichung, angebotszeit);
+  t.vergabevorschlag = vePlus(t.submission, f.pruefung);
+  t.sitzung = einheit.sitzung || null;
+  if (t.sitzung) {
+    t.zuschlag = vePlus(t.sitzung, f.zuschlag_nach_sitzung);
+    t.arbeitsbeginn = vePlus(t.zuschlag, f.beginn_nach_zuschlag);
+    if (t.sitzung < vePlus(t.vergabevorschlag, f.vorschlag_vor_sitzung)) hinweise.push('Sitzung ' + t.sitzung + ' liegt vor Vergabevorschlag + ' + f.vorschlag_vor_sitzung + ' KT (' + vePlus(t.vergabevorschlag, f.vorschlag_vor_sitzung) + ')');
+    if (t.arbeitsbeginn > t.beginn) hinweise.push('frühester Arbeitsbeginn ' + t.arbeitsbeginn + ' liegt nach dem Beginn laut Bauzeitenplan ' + t.beginn);
+  } else {
+    t.zuschlag = null; t.arbeitsbeginn = null;
+    hinweise.push('Sitzung fehlt — spätester Termin: ' + vePlus(t.beginn, -(f.beginn_nach_zuschlag + f.zuschlag_nach_sitzung)));
+  }
+  return { termine: t, fristen: f, angebotszeit: angebotszeit, hinweise: hinweise };
 }
 
 // ---------- Baustein: farben.js (geprueft, Tests unter _bausteine/) ----------
