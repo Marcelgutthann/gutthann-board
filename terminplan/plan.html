@@ -460,40 +460,53 @@
   .dv-blaetter{margin:0 auto;width:max-content;}
   .dv-blaetter .druck-seite{margin:0 auto 10mm;box-shadow:0 2px 14px rgba(0,0,0,.45);}
   .dv-hinweis{flex:none;background:#fff;border-top:1px solid var(--line);padding:6px 16px;color:#6b7280;font-size:11px;}
-  /* Vergabeterminplan (02.11.2026): eine Zeile je Vergabeeinheit wie in der Büro-Excel, Zellen direkt bearbeiten */
-  #vergabeAnsicht{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;}
+  /* Vergabeterminplan (02.11.2026, überarbeitet nach Marcel: „zu viel … ich sehe das Diagramm nicht“):
+     links nur Gewerk + nächster Schritt, rechts das Diagramm über die volle Breite; alles andere im Blatt nach Klick */
+  #vergabeAnsicht{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;position:relative;}
   #vergabeAnsicht[hidden], #wrap[hidden]{display:none;}
-  .vg-kopf{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:6px 16px;border-bottom:1px solid var(--line);font-size:12px;color:#555;}
-  .vg-kopf select{font:inherit;}
-  .vg-kopf .vg-warn{color:#b42318;font-weight:600;}
+  body.vergabe-modus #blickWahl, body.vergabe-modus .tb-zoom, body.vergabe-modus #btnHeute, body.vergabe-modus #btnAnsicht,
+  body.vergabe-modus #btnFarben, body.vergabe-modus #btnZurueck, body.vergabe-modus #btnVor, body.vergabe-modus #btnExport,
+  body.vergabe-modus .tb-trenner{display:none;}
+  .vg-lage{padding:10px 16px;font-size:14px;color:var(--ink);border-bottom:1px solid var(--line);}
+  .vg-lage b{color:var(--blue-dark);}
+  .vg-lage .vg-warnzahl{color:#b42318;cursor:pointer;margin-left:10px;font-size:13px;}
+  .vg-legende{display:flex;gap:14px;font-size:11px;color:#666;margin-top:4px;}
+  .vg-legende i{display:inline-block;width:14px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;}
   .vg-scroll{flex:1;min-height:0;overflow:auto;}
-  table.vg{border-collapse:separate;border-spacing:0;font-size:12px;}
-  table.vg th, table.vg td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;height:24px;white-space:nowrap;background:#fff;}
-  table.vg th{position:sticky;top:0;z-index:3;background:#f1f4f9;color:var(--blue-dark);font-weight:600;padding:4px 6px;white-space:normal;line-height:1.2;vertical-align:bottom;text-align:left;font-size:11px;}
-  table.vg th.vg-gruppe{top:0;text-align:center;border-bottom:1px solid var(--line);}
-  table.vg tr.vg-kopf2 th{top:22px;}
-  table.vg .vg-fix1{position:sticky;left:0;z-index:2;width:28px;text-align:right;padding:0 4px;color:#888;}
-  table.vg .vg-fix2{position:sticky;left:28px;z-index:2;min-width:220px;max-width:260px;overflow:hidden;text-overflow:ellipsis;padding:0 6px;border-right:2px solid var(--line);}
-  table.vg th.vg-fix1, table.vg th.vg-fix2{z-index:4;}
-  table.vg td.vg-calc{padding:0 6px;color:#333;text-align:right;}
-  table.vg td.vg-rot{background:#fdecea;color:#b42318;}
-  table.vg td.vg-gelb{background:#fff7e0;}
-  table.vg tr.vg-sammel td{background:#eef2f8;font-weight:600;color:var(--blue-dark);}
-  table.vg input, table.vg select{border:0;background:transparent;font:inherit;height:23px;padding:0 6px;width:100%;box-sizing:border-box;color:var(--ink);}
-  table.vg input:focus, table.vg select:focus{outline:2px solid var(--blue-light);background:#fff;}
-  table.vg input.vg-zahl{text-align:right;width:96px;}
-  table.vg input.vg-kurz{width:60px;}
-  table.vg input.vg-text{width:130px;}
-  table.vg input[type=date]{width:118px;}
-  table.vg button.vg-uebern{border:0;background:none;color:var(--blue);cursor:pointer;font:inherit;padding:0 4px;}
-  .vg-leiste{position:relative;width:560px;height:23px;}
-  .vg-leiste .vg-balken{position:absolute;top:8px;height:8px;background:#d7e3f6;border:1px solid #9fb6dd;border-radius:2px;}
-  .vg-leiste .vg-marke{position:absolute;top:5px;width:8px;height:8px;margin-left:-4px;transform:rotate(45deg);border:1px solid #333;background:#fff;}
-  .vg-leiste .vg-marke.sub{background:#3a5fab;border-color:#3a5fab;}
-  .vg-leiste .vg-marke.sitz{background:#2e8b57;border-color:#2e8b57;}
-  .vg-leiste .vg-marke.beginn{background:#111;}
-  .vg-leiste .vg-marke.rot{background:#d92d20;border-color:#d92d20;}
-  .vg-leiste .vg-heute{position:absolute;top:0;bottom:0;width:1px;background:#d92d20;}
+  .vg-raster{display:grid;grid-template-columns:var(--vg-links) 1fr;min-width:900px;}
+  .vg-kopfzeile{position:sticky;top:0;z-index:3;background:#f7f8fa;border-bottom:1px solid var(--line);height:30px;}
+  .vg-kopfzeile.links{left:0;z-index:4;font-size:11px;color:#666;padding:8px 12px;box-sizing:border-box;}
+  .vg-monate{position:relative;height:30px;font-size:11px;color:#555;}
+  .vg-monate span{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);padding:8px 4px;box-sizing:border-box;white-space:nowrap;}
+  .vg-monate span.jahr{border-left:1px solid #9aa4b2;font-weight:600;color:var(--blue-dark);}
+  .vg-name{position:sticky;left:0;z-index:2;background:#fff;border-bottom:1px solid #eef0f4;height:30px;padding:0 12px;display:flex;flex-direction:column;justify-content:center;cursor:pointer;overflow:hidden;box-sizing:border-box;border-right:1px solid var(--line);}
+  .vg-name .n{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .vg-name .s{font-size:11px;color:#667085;white-space:nowrap;}
+  .vg-name .s.bald{color:var(--blue-dark);font-weight:600;}
+  .vg-name .warn{color:#b42318;margin-left:4px;}
+  .vg-zeit{position:relative;border-bottom:1px solid #eef0f4;height:30px;cursor:pointer;}
+  .vg-zeile.aktiv .vg-name, .vg-zeile.aktiv .vg-zeit{background:#eef4ff;}
+  .vg-zeile:hover .vg-name, .vg-zeile:hover .vg-zeit{background:#f5f8ff;}
+  .vg-gruppe{grid-column:1 / -1;font-size:11px;font-weight:600;color:var(--blue-dark);background:#f7f8fa;padding:6px 12px;border-bottom:1px solid var(--line);position:sticky;left:0;}
+  .vg-ph{position:absolute;top:10px;height:10px;}
+  .vg-ph.vorb{background:#d9e3f2;border-radius:3px 0 0 3px;}
+  .vg-ph.ang{background:#7a9bd1;}
+  .vg-ph.verg{background:#3f8f6b;border-radius:0 3px 3px 0;}
+  .vg-ms{position:absolute;top:9px;width:10px;height:10px;margin-left:-5px;transform:rotate(45deg);background:#111;}
+  .vg-ms.sitz{background:#3f8f6b;border:1px solid #fff;}
+  .vg-ms.rot{background:#d92d20;}
+  .vg-heute{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#d92d20;opacity:.55;pointer-events:none;z-index:1;}
+  .vg-blatt{position:absolute;top:0;right:0;bottom:0;width:380px;background:#fff;border-left:1px solid var(--line);box-shadow:-6px 0 18px rgba(0,0,0,.08);z-index:6;overflow:auto;padding:16px 18px;box-sizing:border-box;}
+  .vg-blatt h3{margin:0 28px 2px 0;font-size:15px;color:var(--blue-dark);}
+  .vg-blatt .zu{position:absolute;top:10px;right:12px;border:0;background:none;font-size:20px;cursor:pointer;color:#666;}
+  .vg-blatt .satz{font-size:12.5px;color:#444;margin:0 0 12px;}
+  .vg-blatt .hinw{background:#fdecea;color:#912018;font-size:12px;padding:6px 8px;margin:0 0 10px;}
+  .vg-blatt h4{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#667085;margin:14px 0 4px;}
+  .vg-feld{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:6px;font-size:12.5px;padding:2px 0;}
+  .vg-feld label{color:#555;}
+  .vg-feld input, .vg-feld select{font:inherit;border:1px solid var(--line);padding:4px 6px;width:100%;box-sizing:border-box;}
+  .vg-feld .wert{padding:4px 0;}
+  .vg-feld button{font:inherit;border:0;background:none;color:var(--blue);cursor:pointer;padding:0;text-align:left;}
 </style>
 </head>
 <body>
@@ -5499,6 +5512,8 @@ const VG_ANGABEN = 'vergabeart,paket,kostengruppe,cpv,verantwortlich,anmerkung,k
 function vergabeModus(an){
   document.getElementById('wrap').hidden = an;
   document.getElementById('vergabeAnsicht').hidden = !an;
+  document.getElementById('vergabeAnsicht').innerHTML = '';   // keine alten Zeilen ohne Daten dahinter
+  document.body.classList.toggle('vergabe-modus', an);
   if(!an) VERGABE = null;
 }
 function vgFeiertage(){
@@ -5517,7 +5532,7 @@ async function vergabeLaden(eintrag){
   PLAN_STAND = kopf[0]?.stand || null; UNGESPEICHERT = false; konfliktSchliessen();
   const nachUid = {}; a.forEach(x=> nachUid[x.uid] = x);
   VERGABE = { zeilen: v.map(z=>({ v: z, a: nachUid[z.uid] || { uid: z.uid } })), fristen: kopf[0]?.vergabe_fristen || null,
-    partner: null, feiertage: vgFeiertage(), partnerWahl: VERGABE?.partnerWahl || null };
+    partner: null, feiertage: vgFeiertage(), partnerWahl: VERGABE?.partnerWahl || null, offen: VERGABE?.offen ?? null };
   await vgPartnerLaden();
   vergabeZeichnen();
 }
@@ -5534,9 +5549,18 @@ async function vgPartnerLaden(){
   const nachUid = {}; bzp.forEach(t=> nachUid[t.uid] = t);
   // je Einheit: gespeicherte Wahl (Migr. 285) vor dem Stichwort-Vorschlag
   const zu = {};
+  // Vorschlag 1: Vorgang, der am selben Tag beginnt wie „Beginn Gewerk“ und ein Wort mit dem Gewerk teilt
+  // (die Excel-Spalte Y wird aus dem Bauzeitenplan abgeschrieben — 27 von 37 Maxhütte-Zeilen tagesgleich)
+  const woerter = (t)=> String(t).toLowerCase().split(/[^a-zäöüß]+/).filter(w=>w.length >= 4).map(w=>w.slice(0, 5));
+  const gleicherTag = (z)=>{
+    if(!z.v.end_datum) return null;
+    const eigen = woerter(z.v.name);
+    const t = bzp.find(b=> b.start === z.v.end_datum && woerter(b.name).some(w=>eigen.includes(w)));
+    return t ? t.uid : null;
+  };
   VERGABE.zeilen.forEach(z=>{
     const gewaehlt = z.a.bzp_plan_id === p.id && nachUid[z.a.bzp_uid] ? z.a.bzp_uid : null;
-    const uid = gewaehlt ?? vorschlag[z.v.uid];
+    const uid = gewaehlt ?? gleicherTag(z) ?? vorschlag[z.v.uid];
     if(uid != null && nachUid[uid]) zu[z.v.uid] = { bzpUid: uid, bzpName: nachUid[uid].name, bzpStart: nachUid[uid].start, gewaehlt: gewaehlt != null };
   });
   VERGABE.partner = { id: p.id, name: p.name, zu, vorgaenge: bzp };
@@ -5547,143 +5571,165 @@ function vgZahlText(n){ return n == null ? '' : VG_EUR.format(n); }
 function vgZahlLesen(s){ const t = String(s).replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.'); return t === '' ? null : Number(t); }
 function vgDE(s){ return s ? fmtDE(s) : ''; }
 
+// Schritte der Kette in Reihenfolge, für „nächster Schritt“ und das Blatt
+const VG_SCHRITTE = [['lesefassung', 'Lesefassung an Bauherr'], ['annahmeschluss', 'Annahmeschluss Staatsanzeiger'], ['veroeffentlichung', 'Veröffentlichung'],
+  ['submission', 'Submission'], ['vergabevorschlag', 'Vergabevorschlag'], ['sitzung', 'Sitzung'], ['zuschlag', 'Zuschlag'], ['beginn', 'Beginn Gewerk']];
+function vgNaechster(t, heute){
+  for(const [k, name] of VG_SCHRITTE) if(t[k] && t[k] >= heute) return { k, name, datum: t[k], tage: daysBetween(parseISO(heute), parseISO(t[k])) };
+  return null;
+}
+function vgInTagen(n){ return n === 0 ? 'heute' : n === 1 ? 'morgen' : n < 14 ? 'in ' + n + ' Tagen' : n < 60 ? 'in ' + Math.round(n / 7) + ' Wochen' : 'in ' + Math.round(n / 30) + ' Monaten'; }
+function vgEsc(s){ return String(s).replace(/[&<>"]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c]); }
+
 function vergabeZeichnen(){
   const box = document.getElementById('vergabeAnsicht');
-  const nurLesen = SCHREIBSCHUTZ;
-  const ketten = VERGABE.zeilen.map(z=> z.v.ist_sammelvorgang ? null
-    : vergabeKette({ beginn: z.v.end_datum, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung: z.a.sitzung }, VERGABE.fristen, VERGABE.feiertage));
-  // Zeitachse der Leiste: früheste Lesefassung bis spätester Beginn
-  const tage = [];
-  ketten.forEach(k=>{ if(k?.termine){ tage.push(k.termine.lesefassung, k.termine.beginn); if(k.termine.sitzung) tage.push(k.termine.sitzung); } });
-  tage.sort();
-  const von = tage[0] ? parseISO(tage[0]) : null, bis = tage.length ? parseISO(tage[tage.length-1]) : null;
-  const spanne = von ? Math.max(1, daysBetween(von, bis)) : 1;
-  const x = (iso)=> von ? Math.max(0, Math.min(100, daysBetween(von, parseISO(iso)) / spanne * 100)) : 0;
-  const offen = ketten.reduce((n,k)=> n + (k ? k.hinweise.length : 0), 0);
-
-  const kandidaten = PLAN_LISTE.filter(p=>p.art==='bauzeitenplan' && !p.eingefroren_am);
-  box.innerHTML = '';
-  const kopf = document.createElement('div');
-  kopf.className = 'vg-kopf';
-  kopf.innerHTML = '<span>Beginn Gewerk abgleichen mit</span>';
-  const sel = document.createElement('select');
-  kandidaten.forEach(p=>{ const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; sel.appendChild(o); });
-  if(!kandidaten.length){ const o = document.createElement('option'); o.textContent = 'kein Bauzeitenplan im Projekt'; sel.appendChild(o); sel.disabled = true; }
-  if(VERGABE.partner) sel.value = VERGABE.partner.id;
-  sel.onchange = async ()=>{ VERGABE.partnerWahl = sel.value; await vgPartnerLaden(); vergabeZeichnen(); };
-  kopf.appendChild(sel);
-  const info = document.createElement('span');
-  info.innerHTML = 'Kette nach Büro-Excel: Lesefassung = Beginn − 120 KT · Annahmeschluss + 7 KT · Veröffentlichung + 3 AT (EU) / 2 AT (national) · Submission + Angebotszeit · Vorschlag + 14 KT · Zuschlag = Sitzung + 11 KT · Arbeitsbeginn + 2 KT'
-    + (offen ? ' · <span class="vg-warn">' + offen + ' Hinweise (rot markiert, Zeiger auf die Zelle)</span>' : '');
-  kopf.appendChild(info);
-  box.appendChild(kopf);
-
-  const scroll = document.createElement('div');
-  scroll.className = 'vg-scroll';
-  const tab = document.createElement('table');
-  tab.className = 'vg';
-  const gruppen = [['', 2], ['Einheit', 6], ['Kosten (€)', 6], ['Termine', 10], ['Bauzeitenplan', 1], ['Zeitleiste', 1]];
-  const spalten = ['#', 'Leistungsbereich', 'Vergabeart', 'Verantwortlich', 'Anmerkung', 'Paket', 'KG', 'CPV',
-    'KB netto', 'KB brutto', 'LV netto (bepreist)', 'LV brutto (bepreist)', 'Submission brutto', 'Überhang KB − Subm.',
-    'Lesefassung an Bauherr', 'Annahmeschluss Staatsanzeiger', 'Veröffentlichung', 'Angebotszeit KT', 'Submission',
-    'Vergabevorschlag', 'Sitzung', 'Zuschlag', 'frühester Arbeitsbeginn', 'Beginn Gewerk',
-    VERGABE.partner ? 'Beginn laut „' + VERGABE.partner.name + '“' : 'kein Bauzeitenplan', ''];
-  const thead = document.createElement('thead');
-  const r1 = document.createElement('tr');
-  gruppen.forEach(([t, n], i)=>{ const th = document.createElement('th'); th.className = 'vg-gruppe' + (i===0 ? ' vg-fix1' : ''); th.colSpan = n; th.textContent = t; r1.appendChild(th); });
-  const r2 = document.createElement('tr'); r2.className = 'vg-kopf2';
-  spalten.forEach((t,i)=>{ const th = document.createElement('th'); th.textContent = t; if(i===0) th.className='vg-fix1'; if(i===1) th.className='vg-fix2'; r2.appendChild(th); });
-  thead.append(r1, r2);
-  tab.appendChild(thead);
-  const tbody = document.createElement('tbody');
-  let nr = 0;
-  VERGABE.zeilen.forEach((z, i)=>{
-    const tr = document.createElement('tr');
-    const td = (inhalt, cls)=>{ const c = document.createElement('td'); if(cls) c.className = cls; if(inhalt instanceof Node) c.appendChild(inhalt); else c.textContent = inhalt ?? ''; tr.appendChild(c); return c; };
-    if(z.v.ist_sammelvorgang){
-      tr.className = 'vg-sammel';
-      td('', 'vg-fix1'); td(z.v.name, 'vg-fix2'); const rest = td(''); rest.colSpan = spalten.length - 2;
-      tbody.appendChild(tr); return;
-    }
-    nr++;
-    const k = ketten[i], t = k?.termine || {}, h = k?.hinweise || [];
-    const eingabe = (feld, art, cls)=>{
-      const el = document.createElement(art === 'select' ? 'select' : 'input');
-      if(art === 'select'){ ['', 'EU', 'NatÖ', 'NatB'].forEach(o=>{ const op = document.createElement('option'); op.value = o; op.textContent = o || '–'; el.appendChild(op); }); el.value = z.a[feld] || ''; }
-      else if(art === 'date'){ el.type = 'date'; el.value = z.a[feld] || ''; }
-      else if(art === 'zahl'){ el.type = 'text'; el.inputMode = 'decimal'; el.value = feld === 'angebotszeit' ? (z.a[feld] ?? '') : vgZahlText(z.a[feld]); }
-      else { el.type = 'text'; el.value = z.a[feld] || ''; el.title = z.a[feld] || ''; }
-      if(cls) el.className = cls;
-      el.disabled = nurLesen;
-      el.onchange = ()=> vgAngabeSetzen(z, feld, art === 'zahl' ? vgZahlLesen(el.value) : (el.value || null));
-      return el;
-    };
-    td(nr, 'vg-fix1');
-    const name = td(z.v.name, 'vg-fix2'); name.title = z.v.name + (z.v.quelle_text ? ' (' + z.v.quelle_text + ')' : '');
-    td(eingabe('vergabeart', 'select'));
-    td(eingabe('verantwortlich', 'text', 'vg-text'));
-    td(eingabe('anmerkung', 'text', 'vg-text'));
-    td(eingabe('paket', 'text', 'vg-kurz'));
-    td(eingabe('kostengruppe', 'text', 'vg-kurz'));
-    td(eingabe('cpv', 'text', 'vg-kurz'));
-    ['kb_netto', 'kb_brutto', 'lv_netto', 'lv_brutto', 'submission_brutto'].forEach(f=> td(eingabe(f, 'zahl', 'vg-zahl')));
-    td(z.a.kb_brutto != null && z.a.submission_brutto != null ? vgZahlText(z.a.kb_brutto - z.a.submission_brutto) : '', 'vg-calc'
-      + (z.a.kb_brutto != null && z.a.submission_brutto != null && z.a.submission_brutto > z.a.kb_brutto ? ' vg-rot' : ''));
-    td(vgDE(t.lesefassung), 'vg-calc'); td(vgDE(t.annahmeschluss), 'vg-calc'); td(vgDE(t.veroeffentlichung), 'vg-calc');
-    const az = td(eingabe('angebotszeit', 'zahl', 'vg-kurz'));
-    const azH = h.filter(s=>s.startsWith('Angebotszeit')); if(azH.length){ az.classList.add('vg-rot'); az.title = azH.join('\n'); }
-    else if(z.a.angebotszeit == null && k?.angebotszeit != null){ az.querySelector('input').placeholder = k.angebotszeit + ' (min.)'; }
-    td(vgDE(t.submission), 'vg-calc'); td(vgDE(t.vergabevorschlag), 'vg-calc');
-    const sitz = td(eingabe('sitzung', 'date'));
-    const sitzH = h.filter(s=>s.startsWith('Sitzung')); if(sitzH.length){ sitz.classList.add(z.a.sitzung ? 'vg-rot' : 'vg-gelb'); sitz.title = sitzH.join('\n'); }
-    td(vgDE(t.zuschlag), 'vg-calc');
-    const ab = td(vgDE(t.arbeitsbeginn), 'vg-calc'); const abH = h.filter(s=>s.startsWith('frühester')); if(abH.length){ ab.classList.add('vg-rot'); ab.title = abH.join('\n'); }
-    const beginn = document.createElement('input'); beginn.type = 'date'; beginn.value = z.v.end_datum || ''; beginn.disabled = nurLesen;
-    beginn.onchange = ()=> vgBeginnSetzen(z, beginn.value || null);
-    const bc = td(beginn); if(!z.v.end_datum){ bc.classList.add('vg-gelb'); bc.title = 'Beginn Gewerk fehlt — ohne Anker keine Kette'; }
+  const heute = fmtISO(new Date());
+  const einheiten = VERGABE.zeilen.map(z=>{
+    if(z.v.ist_sammelvorgang) return { z, gruppe: true };
+    const k = vergabeKette({ beginn: z.v.end_datum, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung: z.a.sitzung }, VERGABE.fristen, VERGABE.feiertage);
     const p = VERGABE.partner?.zu[z.v.uid];
-    if(VERGABE.partner){
-      // Auswahl des Vorgangs im Bauzeitenplan: gespeicherte Wahl, sonst Vorschlag über Stichworte (kursiv)
-      const c = td('', p && p.bzpStart !== z.v.end_datum ? 'vg-gelb' : '');
-      const wahl = document.createElement('select'); wahl.disabled = nurLesen; wahl.style.width = '250px';
-      wahl.title = p ? (p.gewaehlt ? 'gewählt: ' : 'Vorschlag über Stichworte, bitte prüfen: ') + p.bzpName : 'Vorgang im Bauzeitenplan wählen';
-      if(p && !p.gewaehlt) wahl.style.fontStyle = 'italic';
-      const leer = document.createElement('option'); leer.value = ''; leer.textContent = '– Vorgang wählen –'; wahl.appendChild(leer);
-      VERGABE.partner.vorgaenge.forEach(t=>{ const o = document.createElement('option'); o.value = t.uid; o.textContent = fmtDE(t.start) + ' · ' + t.name; wahl.appendChild(o); });
-      wahl.value = p ? String(p.bzpUid) : '';
-      wahl.onchange = async ()=>{
-        const uid = wahl.value ? Number(wahl.value) : null;
-        await vgAngabeSetzen(z, 'bzp_uid', uid, { bzp_plan_id: uid != null ? VERGABE.partner.id : null });
-        await vgPartnerLaden(); vergabeZeichnen();
-      };
-      c.appendChild(wahl);
-      if(p && p.bzpStart !== z.v.end_datum && !nurLesen){
-        const b = document.createElement('button'); b.className = 'vg-uebern'; b.textContent = '← übernehmen';
-        b.title = 'Beginn Gewerk auf ' + fmtDE(p.bzpStart) + ' setzen (' + p.bzpName + ')';
-        b.onclick = ()=> vgBeginnSetzen(z, p.bzpStart);
-        c.appendChild(b);
-      }
-    } else td('', 'vg-calc');
-    const leiste = document.createElement('div'); leiste.className = 'vg-leiste';
-    if(t.lesefassung){
-      const bal = document.createElement('div'); bal.className = 'vg-balken';
-      bal.style.left = x(t.lesefassung) + '%'; bal.style.width = Math.max(0.5, x(t.beginn) - x(t.lesefassung)) + '%';
-      bal.title = 'Lesefassung ' + fmtDE(t.lesefassung) + ' bis Beginn ' + fmtDE(t.beginn);
-      leiste.appendChild(bal);
-      const marke = (iso, cls, text)=>{ if(!iso) return; const m = document.createElement('div'); m.className = 'vg-marke ' + cls; m.style.left = x(iso) + '%'; m.title = text + ' ' + fmtDE(iso); leiste.appendChild(m); };
-      marke(t.veroeffentlichung, '', 'Veröffentlichung');
-      marke(t.submission, 'sub', 'Submission');
-      marke(t.sitzung, 'sitz' + (sitzH.length ? ' rot' : ''), 'Sitzung');
-      marke(t.beginn, 'beginn', 'Beginn Gewerk');
-    }
-    const heute = fmtISO(new Date());
-    if(von && heute >= tage[0] && heute <= tage[tage.length-1]){ const hl = document.createElement('div'); hl.className = 'vg-heute'; hl.style.left = x(heute) + '%'; leiste.appendChild(hl); }
-    td(leiste);
-    tbody.appendChild(tr);
+    const hinweise = k.hinweise.filter(h=> !h.startsWith('Sitzung fehlt'));
+    // Abweichung nur warnen, wenn die Zuordnung bestätigt ist — eine Vermutung erzeugt sonst Fehlalarme
+    if(p && p.gewaehlt && p.bzpStart !== z.v.end_datum) hinweise.push('Beginn weicht vom Bauzeitenplan ab: dort ' + fmtDE(p.bzpStart) + ' („' + p.bzpName + '“)');
+    return { z, k, t: k.termine || {}, hinweise, naechster: k.termine ? vgNaechster(k.termine, heute) : null };
   });
-  tab.appendChild(tbody);
-  scroll.appendChild(tab);
+  const echte = einheiten.filter(e=>!e.gruppe);
+  const mitProblem = echte.filter(e=>e.hinweise.length);
+  const anstehend = echte.filter(e=>e.naechster).sort((a,b)=> a.naechster.datum < b.naechster.datum ? -1 : 1);
+  const lv = anstehend.filter(e=>e.naechster.k === 'lesefassung' && e.naechster.tage <= 60);
+
+  // Zeitachse: von heute − 1 Monat (oder früher, wenn eine Kette früher beginnt) bis zum letzten Beginn
+  const daten = echte.flatMap(e=> e.k?.termine ? [e.t.lesefassung, e.t.beginn] : []).sort();
+  const vonIso = daten.length && daten[0] < heute ? daten[0] : fmtISO(addDays(parseISO(heute), -30));
+  const von = parseISO(vonIso);
+  const bis = parseISO(daten.length ? daten[daten.length-1] : heute);
+  const spanne = Math.max(30, daysBetween(von, bis) + 20);
+  const x = (iso)=> (daysBetween(von, parseISO(iso)) / spanne * 100).toFixed(3) + '%';
+
+  box.innerHTML = '';
+  // Lage in einem Satz
+  const lage = document.createElement('div'); lage.className = 'vg-lage';
+  const erst = anstehend[0];
+  lage.innerHTML = erst
+    ? 'Als Nächstes: <b>' + vgEsc(erst.z.v.name.split(/[,(]/)[0]) + '</b> – ' + erst.naechster.name + ' ' + vgInTagen(erst.naechster.tage) + ' (' + fmtDE(erst.naechster.datum) + ')'
+      + (lv.length > 1 ? ' · ' + lv.length + ' Lesefassungen in den nächsten 2 Monaten' : '')
+    : 'Keine anstehenden Vergaben.';
+  if(mitProblem.length){
+    const w = document.createElement('span'); w.className = 'vg-warnzahl'; w.textContent = '⚠ ' + mitProblem.length + ' Gewerke prüfen';
+    w.title = 'Öffnet das erste Gewerk mit Hinweis'; w.onclick = ()=>{ VERGABE.offen = mitProblem[0].z.v.uid; vergabeZeichnen(); };
+    lage.appendChild(w);
+  }
+  const leg = document.createElement('div'); leg.className = 'vg-legende';
+  leg.innerHTML = '<span><i style="background:#d9e3f2"></i>LV bis Veröffentlichung</span><span><i style="background:#7a9bd1"></i>Angebotsphase</span>'
+    + '<span><i style="background:#3f8f6b"></i>Prüfung bis Beginn</span><span>◆ Beginn Gewerk · <span style="color:#3f8f6b">◆</span> Sitzung</span>';
+  lage.appendChild(leg);
+  box.appendChild(lage);
+
+  const scroll = document.createElement('div'); scroll.className = 'vg-scroll';
+  const raster = document.createElement('div'); raster.className = 'vg-raster';
+  raster.style.setProperty('--vg-links', '280px');
+  // Kopf: Monate, Jahreswechsel hervorgehoben
+  const kl = document.createElement('div'); kl.className = 'vg-kopfzeile links'; kl.textContent = 'Gewerk · nächster Schritt';
+  const km = document.createElement('div'); km.className = 'vg-kopfzeile vg-monate';
+  for(let d = new Date(Date.UTC(von.getUTCFullYear(), von.getUTCMonth() + 1, 1)); d <= addDays(von, spanne); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))){
+    const s = document.createElement('span'); const jan = d.getUTCMonth() === 0;
+    s.className = jan ? 'jahr' : ''; s.style.left = x(fmtISO(d));
+    s.textContent = jan ? d.getUTCFullYear() : d.toLocaleDateString('de-DE', { month: 'short', timeZone: 'UTC' }).replace('.', '');
+    km.appendChild(s);
+  }
+  raster.append(kl, km);
+
+  einheiten.forEach(e=>{
+    if(e.gruppe){ const g = document.createElement('div'); g.className = 'vg-gruppe'; g.textContent = e.z.v.name; raster.appendChild(g); return; }
+    const zeile = document.createElement('div'); zeile.className = 'vg-zeile' + (VERGABE.offen === e.z.v.uid ? ' aktiv' : ''); zeile.style.display = 'contents';
+    const name = document.createElement('div'); name.className = 'vg-name';
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = e.z.v.name; n.title = e.z.v.name;
+    if(e.hinweise.length){ const w = document.createElement('span'); w.className = 'warn'; w.textContent = '⚠'; w.title = e.hinweise.join('\n'); n.prepend(w, ' '); }
+    const s = document.createElement('div'); s.className = 's';
+    if(!e.k?.termine) s.textContent = 'Beginn fehlt';
+    else if(e.naechster){ s.textContent = e.naechster.name + ' ' + fmtDE(e.naechster.datum); if(e.naechster.tage <= 30) s.classList.add('bald'); }
+    else s.textContent = 'begonnen ' + fmtDE(e.t.beginn);
+    name.append(n, s);
+    const zeit = document.createElement('div'); zeit.className = 'vg-zeit';
+    if(e.k?.termine){
+      const t = e.t;
+      const ph = (a, b, cls, titel)=>{ if(!a || !b || b < a) return; const d = document.createElement('div'); d.className = 'vg-ph ' + cls;
+        d.style.left = x(a); d.style.width = 'calc(' + x(b) + ' - ' + x(a) + ')'; d.title = titel + ': ' + fmtDE(a) + ' – ' + fmtDE(b); zeit.appendChild(d); };
+      ph(t.lesefassung, t.veroeffentlichung, 'vorb', 'Lesefassung bis Veröffentlichung');
+      ph(t.veroeffentlichung, t.submission, 'ang', 'Angebotsphase');
+      ph(t.submission, t.beginn, 'verg', 'Prüfung, Sitzung, Zuschlag bis Beginn');
+      const ms = (iso, cls, titel)=>{ if(!iso) return; const m = document.createElement('div'); m.className = 'vg-ms ' + cls; m.style.left = x(iso); m.title = titel + ' ' + fmtDE(iso); zeit.appendChild(m); };
+      if(t.sitzung && t.sitzung >= t.lesefassung) ms(t.sitzung, 'sitz' + (e.hinweise.some(h=>h.startsWith('Sitzung')) ? ' rot' : ''), 'Sitzung');
+      ms(t.beginn, '', 'Beginn Gewerk');
+    }
+    const hl = document.createElement('div'); hl.className = 'vg-heute'; hl.style.left = x(heute); zeit.appendChild(hl);
+    const oeffnen = ()=>{ VERGABE.offen = VERGABE.offen === e.z.v.uid ? null : e.z.v.uid; vergabeZeichnen(); };
+    name.onclick = oeffnen; zeit.onclick = oeffnen;
+    zeile.append(name, zeit);
+    raster.appendChild(zeile);
+  });
+  scroll.appendChild(raster);
   box.appendChild(scroll);
+  const offen = einheiten.find(e=> !e.gruppe && e.z.v.uid === VERGABE.offen);
+  if(offen) box.appendChild(vgBlatt(offen));
+}
+
+// Blatt mit allem, was nicht ins Diagramm gehört — erst nach Klick auf ein Gewerk
+function vgBlatt(e){
+  const z = e.z, nurLesen = SCHREIBSCHUTZ;
+  const b = document.createElement('div'); b.className = 'vg-blatt';
+  const zu = document.createElement('button'); zu.className = 'zu'; zu.textContent = '×'; zu.title = 'Schließen';
+  zu.onclick = ()=>{ VERGABE.offen = null; vergabeZeichnen(); };
+  const h = document.createElement('h3'); h.textContent = z.v.name;
+  const satz = document.createElement('p'); satz.className = 'satz';
+  satz.textContent = (z.a.vergabeart || 'Vergabeart offen') + ' · ' + (z.a.verantwortlich || 'ohne Verantwortlichen')
+    + (z.a.kb_brutto != null ? ' · KB brutto ' + vgZahlText(z.a.kb_brutto) + ' €' : '');
+  b.append(zu, h, satz);
+  e.hinweise.forEach(t=>{ const d = document.createElement('div'); d.className = 'hinw'; d.textContent = t; b.appendChild(d); });
+  const feld = (label, inhalt)=>{ const r = document.createElement('div'); r.className = 'vg-feld'; const l = document.createElement('label'); l.textContent = label; r.append(l, inhalt); return r; };
+  const wert = (text)=>{ const s = document.createElement('div'); s.className = 'wert'; s.textContent = text; return s; };
+  const eingabe = (f, art)=>{
+    const el = document.createElement(art === 'select' ? 'select' : 'input');
+    if(art === 'select'){ ['', 'EU', 'NatÖ', 'NatB'].forEach(o=>{ const op = document.createElement('option'); op.value = o; op.textContent = o || '–'; el.appendChild(op); }); el.value = z.a[f] || ''; }
+    else if(art === 'date'){ el.type = 'date'; el.value = z.a[f] || ''; }
+    else if(art === 'zahl'){ el.inputMode = 'decimal'; el.value = f === 'angebotszeit' ? (z.a[f] ?? '') : vgZahlText(z.a[f]); }
+    else el.value = z.a[f] || '';
+    el.disabled = nurLesen; el.dataset.feld = f;
+    el.onchange = ()=> vgAngabeSetzen(z, f, art === 'zahl' ? vgZahlLesen(el.value) : (el.value || null));
+    return el;
+  };
+  const t = e.t;
+  b.append(Object.assign(document.createElement('h4'), { textContent: 'Termine' }));
+  const beginn = document.createElement('input'); beginn.type = 'date'; beginn.value = z.v.end_datum || ''; beginn.disabled = nurLesen; beginn.dataset.feld = 'beginn';
+  beginn.onchange = ()=> vgBeginnSetzen(z, beginn.value || null);
+  b.append(feld('Beginn Gewerk', beginn));
+  if(VERGABE.partner){
+    const p = VERGABE.partner.zu[z.v.uid];
+    const wahl = document.createElement('select'); wahl.disabled = nurLesen; wahl.dataset.feld = 'bzp_uid';
+    const leer = document.createElement('option'); leer.value = ''; leer.textContent = '– Vorgang wählen –'; wahl.appendChild(leer);
+    VERGABE.partner.vorgaenge.forEach(v=>{ const o = document.createElement('option'); o.value = v.uid; o.textContent = fmtDE(v.start) + ' · ' + v.name; wahl.appendChild(o); });
+    wahl.value = p ? String(p.bzpUid) : '';
+    wahl.title = p && !p.gewaehlt ? 'Vorschlag über Stichworte — bitte prüfen' : '';
+    wahl.onchange = async ()=>{ const uid = wahl.value ? Number(wahl.value) : null;
+      await vgAngabeSetzen(z, 'bzp_uid', uid, { bzp_plan_id: uid != null ? VERGABE.partner.id : null }); await vgPartnerLaden(); vergabeZeichnen(); };
+    b.append(feld('im Bauzeitenplan' + (p && !p.gewaehlt ? ' (Vorschlag)' : ''), wahl));
+    if(p && p.bzpStart !== z.v.end_datum && !nurLesen){
+      const ue = document.createElement('button'); ue.textContent = 'Beginn auf ' + fmtDE(p.bzpStart) + ' setzen'; ue.dataset.feld = 'uebernehmen';
+      ue.onclick = ()=> vgBeginnSetzen(z, p.bzpStart);
+      b.append(feld('', ue));
+    }
+  }
+  b.append(feld('Angebotszeit (KT)', eingabe('angebotszeit', 'zahl')), feld('Sitzung', eingabe('sitzung', 'date')));
+  if(e.k?.termine) VG_SCHRITTE.filter(([k])=> k !== 'beginn' && k !== 'sitzung').forEach(([k, name])=> b.append(feld(name, wert(t[k] ? fmtDE(t[k]) : '–'))));
+  b.append(Object.assign(document.createElement('h4'), { textContent: 'Vergabe' }));
+  b.append(feld('Vergabeart', eingabe('vergabeart', 'select')), feld('Verantwortlich', eingabe('verantwortlich')), feld('Anmerkung', eingabe('anmerkung')));
+  b.append(Object.assign(document.createElement('h4'), { textContent: 'Kosten (€)' }));
+  [['kb_netto', 'KB netto'], ['kb_brutto', 'KB brutto'], ['lv_netto', 'LV netto (bepreist)'], ['lv_brutto', 'LV brutto (bepreist)'], ['submission_brutto', 'Submission brutto']]
+    .forEach(([f, l])=> b.append(feld(l, eingabe(f, 'zahl'))));
+  if(z.a.kb_brutto != null && z.a.submission_brutto != null) b.append(feld('Überhang KB − Subm.', wert(vgZahlText(z.a.kb_brutto - z.a.submission_brutto))));
+  b.append(Object.assign(document.createElement('h4'), { textContent: 'Einordnung' }));
+  b.append(feld('Paket', eingabe('paket')), feld('Kostengruppe', eingabe('kostengruppe')), feld('CPV', eingabe('cpv')));
+  return b;
 }
 
 // Jede Änderung: schreiben, Stand des Plans weiterzählen (andere offene Seiten laden nach), ins Protokoll.
@@ -6219,7 +6265,7 @@ async function planSpeichern(){
 // den dann sauberen Stand; kalenderDurchsetzen ist idempotent, das konvergiert).
 let speicherTimer = null;
 function speichernAnstossen(){
-  if(ladeVorgang || SCHREIBSCHUTZ) return;
+  if(ladeVorgang || SCHREIBSCHUTZ || VERGABE) return;   // Vergabeterminplan speichert zellweise
   UNGESPEICHERT = true;
   if(KONFLIKT) return;   // erst entscheiden, welcher Stand gilt (Leiste oben)
   saveStatus('geändert …', 'warn');
