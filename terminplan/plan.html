@@ -494,6 +494,16 @@
   .vg-spaltenknopf{float:right;font:inherit;font-size:12.5px;border:1px solid var(--line);background:#fff;padding:5px 12px;cursor:pointer;margin-left:12px;}
   .vg-spaltenknopf:hover{border-color:var(--blue);}
   .vg-pop{position:fixed;z-index:8;background:#fff;border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px 14px;display:grid;grid-template-columns:repeat(2, max-content);gap:4px 22px;font-size:12.5px;}
+  .vg-sitzlinie{position:absolute;top:0;bottom:0;width:0;border-left:2px dotted #3f8f6b;opacity:.55;pointer-events:none;}
+  .vg-bauherr{display:block !important;width:640px;padding:14px 16px;}
+  .vg-bauherr .kopf{font-weight:600;color:var(--blue-dark);margin-bottom:8px;}
+  .vg-bauherr .stelle{display:grid;grid-template-columns:150px 150px 60px 1fr 24px;gap:6px;align-items:center;margin-bottom:6px;}
+  .vg-bauherr input:not([type=checkbox]), .vg-bauherr select{font:inherit;border:1px solid var(--line);padding:4px 6px;box-sizing:border-box;width:100%;}
+  .vg-bauherr .zeile{display:flex !important;justify-content:space-between;align-items:center;margin-top:8px;}
+  .vg-bauherr .zeile input:not([type=checkbox]), .vg-bauherr .zeile select{width:80px;}
+  .vg-bauherr .weg{border:0;background:none;cursor:pointer;color:#888;font-size:16px;}
+  .vg-bauherr .fuss{margin-top:12px;text-align:right;}
+  .vg-bauherr .speichern{font:inherit;background:var(--blue-dark);color:#fff;border:0;padding:6px 16px;cursor:pointer;}
   .vg-pop label{display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;}
   .vg-pop .std{grid-column:1 / -1;justify-self:start;margin-top:6px;border:0;background:none;color:var(--blue);cursor:pointer;font:inherit;padding:0;}
   .vg-name .n{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -5529,7 +5539,7 @@ function vergabeModus(an){
   document.getElementById('wrap').hidden = an;
   document.getElementById('vergabeAnsicht').hidden = !an;
   document.getElementById('vergabeAnsicht').innerHTML = '';   // keine alten Zeilen ohne Daten dahinter
-  document.getElementById('vgSpaltenPop')?.remove();
+  document.getElementById('vgSpaltenPop')?.remove(); document.getElementById('vgBauherrPop')?.remove();
   document.body.classList.toggle('vergabe-modus', an);
   if(!an) VERGABE = null;
 }
@@ -5544,11 +5554,11 @@ async function vergabeLaden(eintrag){
   const [v, a, kopf] = await Promise.all([
     db('termin_vorgaenge?plan_id=eq.' + eintrag.id + '&select=uid,pos,name,ebene,start_datum,end_datum,ist_sammelvorgang,quelle_text&order=pos.asc'),
     db('termin_vergabe_angaben?plan_id=eq.' + eintrag.id + '&select=uid,' + VG_ANGABEN),
-    db('termin_plaene?id=eq.' + eintrag.id + '&select=stand,vergabe_fristen'),
+    db('termin_plaene?id=eq.' + eintrag.id + '&select=stand,vergabe_fristen,vergabe_bauherr'),
   ]);
   PLAN_STAND = kopf[0]?.stand || null; UNGESPEICHERT = false; konfliktSchliessen();
   const nachUid = {}; a.forEach(x=> nachUid[x.uid] = x);
-  VERGABE = { zeilen: v.map(z=>({ v: z, a: nachUid[z.uid] || { uid: z.uid } })), fristen: kopf[0]?.vergabe_fristen || null,
+  VERGABE = { zeilen: v.map(z=>({ v: z, a: nachUid[z.uid] || { uid: z.uid } })), fristen: kopf[0]?.vergabe_fristen || null, bauherr: kopf[0]?.vergabe_bauherr || null,
     partner: null, feiertage: vgFeiertage(), partnerWahl: VERGABE?.partnerWahl || null, offen: VERGABE?.offen ?? null };
   await vgPartnerLaden();
   vergabeZeichnen();
@@ -5612,6 +5622,9 @@ const VG_SPALTEN = [
   { k:'sitzung',           name:'Sitzung',           kurz:'Sitzung',    breite:66, art:'datum' },
   { k:'zuschlag',          name:'Zuschlag',          kurz:'Zuschlag',   breite:66, art:'datum' },
   { k:'beginn',            name:'Beginn Gewerk',     kurz:'Beginn',     breite:66, art:'datum' },
+  { k:'stelle',            name:'Entscheidet (Bauherr)', kurz:'Entscheidet', breite:84, art:'text', wert:(e)=> e.r?.stelle },
+  { k:'spaetestens',       name:'Lese-LV spätestens', kurz:'LV spätest.', breite:70, art:'datum', wert:(e)=> e.r?.termine.lesefassung },
+  { k:'puffer',            name:'Puffer bis spätestes Lese-LV (Tage)', kurz:'Puffer', breite:52, art:'zahl', wert:(e)=> e.puffer },
   { k:'kb_netto',          name:'KB netto',          kurz:'KB netto',   breite:82, art:'geld', wert:(e)=> e.z.a.kb_netto },
   { k:'kb_brutto',         name:'KB brutto',         kurz:'KB brutto',  breite:82, art:'geld', wert:(e)=> e.z.a.kb_brutto },
   { k:'lv_brutto',         name:'LV brutto (bepreist)', kurz:'LV brutto', breite:82, art:'geld', wert:(e)=> e.z.a.lv_brutto },
@@ -5653,19 +5666,90 @@ function vgSpaltenMenue(knopf){
   setTimeout(()=>{ document.addEventListener('mousedown', zu); document.addEventListener('keydown', zu); }, 0);
 }
 
+// Kasten „Bauherr ▾“ (Migr. 286): die Regeln, aus denen rückwärts gerechnet wird. Schreibt das ganze Objekt.
+function vgBauherrMenue(knopf){
+  document.getElementById('vgBauherrPop')?.remove();
+  const b = JSON.parse(JSON.stringify(VERGABE.bauherr || { stellen: [
+    { name: 'Bürgermeister', bis_brutto: null, sitzungen: false }, { name: 'Stadtrat / Gemeinderat', bis_brutto: null, sitzungen: [] } ] }));
+  const pop = document.createElement('div'); pop.id = 'vgBauherrPop'; pop.className = 'vg-pop vg-bauherr';
+  const de = (iso)=> fmtDE(iso), iso = (t)=>{ const m = t.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/); if(!m) return null;
+    const j = m[3].length === 2 ? '20' + m[3] : m[3]; return j + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); };
+  const titel = document.createElement('div'); titel.className = 'kopf'; titel.textContent = 'Wer entscheidet bis zu welcher Summe (brutto)?'; pop.appendChild(titel);
+  const liste = document.createElement('div'); liste.className = 'stellen'; pop.appendChild(liste);
+  const zeichneStellen = ()=>{
+    liste.innerHTML = '';
+    b.stellen.forEach((st, i)=>{
+      const z = document.createElement('div'); z.className = 'stelle';
+      const n = document.createElement('input'); n.value = st.name || ''; n.placeholder = 'Stelle'; n.dataset.feld = 'name'; n.oninput = ()=> st.name = n.value;
+      const g = document.createElement('input'); g.value = st.bis_brutto != null ? vgZahlText(st.bis_brutto) : ''; g.placeholder = 'bis € (leer = ohne Grenze)'; g.dataset.feld = 'bis';
+      g.oninput = ()=> st.bis_brutto = vgZahlLesen(g.value);
+      const s = document.createElement('input'); s.dataset.feld = 'sitzungen';
+      s.value = Array.isArray(st.sitzungen) ? st.sitzungen.map(de).join(', ') : ''; s.placeholder = Array.isArray(st.sitzungen) ? 'Sitzungen: 12.01.2027, 09.02.2027 …' : 'entscheidet ohne Sitzung';
+      s.disabled = !Array.isArray(st.sitzungen);
+      s.onchange = ()=> st.sitzungen = s.value.split(/[,;\s]+/).map(iso).filter(Boolean).sort();
+      const mit = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = Array.isArray(st.sitzungen);
+      c.onchange = ()=>{ st.sitzungen = c.checked ? [] : false; zeichneStellen(); }; mit.append(c, ' tagt');
+      const weg = document.createElement('button'); weg.textContent = '×'; weg.title = 'Stelle entfernen'; weg.className = 'weg'; weg.onclick = ()=>{ b.stellen.splice(i, 1); zeichneStellen(); };
+      z.append(n, g, mit, s, weg); liste.appendChild(z);
+    });
+  };
+  zeichneStellen();
+  const neu = document.createElement('button'); neu.className = 'std'; neu.textContent = '+ Stelle'; neu.onclick = ()=>{ b.stellen.push({ name: '', bis_brutto: null, sitzungen: [] }); zeichneStellen(); };
+  pop.appendChild(neu);
+  const zeile = (label, el)=>{ const r = document.createElement('label'); r.className = 'zeile'; r.append(label, el); pop.appendChild(r); return el; };
+  const vor = zeile('Vergabevorschlag vor der Sitzung (KT) ', Object.assign(document.createElement('input'), { value: b.vorlauf_vorschlag ?? 7 }));
+  const tage = ['–', 'Mo', 'Di', 'Mi', 'Do', 'Fr'];
+  const wt = (k)=>{ const sel = document.createElement('select'); tage.forEach((t, i)=>{ const o = document.createElement('option'); o.value = i || ''; o.textContent = t; sel.appendChild(o); }); sel.value = b[k] || ''; return sel; };
+  const ve = zeile('Veröffentlichung immer am ', wt('veroeffentlichung_wochentag'));
+  const su = zeile('Submission immer am ', wt('submission_wochentag'));
+  const el = zeile('Angebote elektronisch (EU 30 statt 35 KT) ', Object.assign(document.createElement('input'), { type: 'checkbox', checked: b.elektronisch !== false }));
+  const fuss = document.createElement('div'); fuss.className = 'fuss';
+  const ok = document.createElement('button'); ok.className = 'speichern'; ok.textContent = 'Übernehmen';
+  ok.onclick = async ()=>{
+    b.stellen = b.stellen.filter(st=> (st.name || '').trim());
+    b.vorlauf_vorschlag = Number(vor.value) || 7;
+    b.veroeffentlichung_wochentag = Number(ve.value) || null; b.submission_wochentag = Number(su.value) || null;
+    b.elektronisch = el.checked; b.bestaetigt_von = sitzung()?.email || null; b.bestaetigt_am = fmtISO(new Date());
+    saveStatus('speichert …');
+    try {
+      await db('termin_plaene?id=eq.' + planId, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body: JSON.stringify({ vergabe_bauherr: b }) });
+      VERGABE.bauherr = b;
+      await vgStandWeiter('Regeln des Bauherrn: ' + b.stellen.map(st=> st.name + (st.bis_brutto != null ? ' bis ' + vgZahlText(st.bis_brutto) + ' €' : '')
+        + (Array.isArray(st.sitzungen) ? ' (' + st.sitzungen.length + ' Sitzungen)' : ' (ohne Sitzung)')).join(' · '));
+      saveStatus('gespeichert', 'ok'); pop.remove(); vergabeZeichnen();
+    } catch(e){ saveStatus('nicht gespeichert: ' + e.message, 'err'); }
+  };
+  if(SCHREIBSCHUTZ) ok.disabled = true;
+  fuss.appendChild(ok); pop.appendChild(fuss);
+  const r = knopf.getBoundingClientRect();
+  pop.style.right = (window.innerWidth - r.right) + 'px'; pop.style.top = (r.bottom + 4) + 'px';
+  document.body.appendChild(pop);
+  const zu = (ev)=>{ const raus = ev.type === 'keydown' ? ev.key === 'Escape' : (!pop.contains(ev.target) && ev.target.id !== 'vgBauherrKnopf');
+    if(!raus) return; pop.remove(); document.removeEventListener('mousedown', zu); document.removeEventListener('keydown', zu); };
+  setTimeout(()=>{ document.addEventListener('mousedown', zu); document.addEventListener('keydown', zu); }, 0);
+}
+
 function vergabeZeichnen(){
   const box = document.getElementById('vergabeAnsicht');
   const heute = fmtISO(new Date());
   const einheiten = VERGABE.zeilen.map(z=>{
     if(z.v.ist_sammelvorgang) return { z, gruppe: true };
-    const k = vergabeKette({ beginn: z.v.end_datum, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung: z.a.sitzung }, VERGABE.fristen, VERGABE.feiertage);
+    // Rückwärts über die Regeln des Bauherrn (Migr. 286): zuständige Stelle, Sitzung aus dem Kalender, spätestes Lese-LV
+    const r = VERGABE.bauherr ? vergabeRueckwaerts({ beginn: z.v.end_datum, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit,
+      kb_brutto: z.a.kb_brutto }, VERGABE.fristen, VERGABE.bauherr, VERGABE.feiertage) : null;
+    const sitzung = z.a.sitzung || r?.termine.sitzung || null;
+    const k = vergabeKette({ beginn: z.v.end_datum, vergabeart: z.a.vergabeart, angebotszeit: z.a.angebotszeit, sitzung }, VERGABE.fristen, VERGABE.feiertage);
     const p = VERGABE.partner?.zu[z.v.uid];
-    const hinweise = k.hinweise.filter(h=> !h.startsWith('Sitzung fehlt'));
+    const hinweise = k.hinweise.filter(h=> !h.startsWith('Sitzung fehlt')).concat(r ? r.hinweise : []);
+    const puffer = r && k.termine ? daysBetween(parseISO(k.termine.lesefassung), parseISO(r.termine.lesefassung)) : null;
+    if(puffer != null && puffer < 0) hinweise.push('Lese-LV ' + fmtDE(k.termine.lesefassung) + ' ist ' + (-puffer) + ' Tage zu spät — spätestens ' + fmtDE(r.termine.lesefassung)
+      + ' für ' + (r.termine.sitzung ? 'die Sitzung ' + r.stelle + ' am ' + fmtDE(r.termine.sitzung) : r.stelle));
     // Abweichung nur warnen, wenn die Zuordnung bestätigt ist — eine Vermutung erzeugt sonst Fehlalarme
     if(p && p.gewaehlt && p.bzpStart !== z.v.end_datum) hinweise.push('Beginn weicht vom Bauzeitenplan ab: dort ' + fmtDE(p.bzpStart) + ' („' + p.bzpName + '“)');
-    return { z, k, t: k.termine || {}, hinweise, naechster: k.termine ? vgNaechster(k.termine, heute) : null };
+    return { z, k, r, puffer, sitzungAusKalender: !z.a.sitzung && !!r?.termine.sitzung, t: k.termine || {}, hinweise, naechster: k.termine ? vgNaechster(k.termine, heute) : null };
   });
   const echte = einheiten.filter(e=>!e.gruppe);
+  const vgSitzungen = ((VERGABE.bauherr && VERGABE.bauherr.stellen) || []).flatMap(st=> Array.isArray(st.sitzungen) ? st.sitzungen.map(d=>({ stelle: st.name, datum: d })) : []);
   const mitProblem = echte.filter(e=>e.hinweise.length);
   const anstehend = echte.filter(e=>e.naechster).sort((a,b)=> a.naechster.datum < b.naechster.datum ? -1 : 1);
   const lv = anstehend.filter(e=>e.naechster.k === 'lesefassung' && e.naechster.tage <= 60);
@@ -5699,6 +5783,11 @@ function vergabeZeichnen(){
   spKnopf.textContent = 'Spalten ▾'; spKnopf.title = 'Welche Spalten links stehen — im Blatt rechts steht immer alles';
   spKnopf.onclick = ()=> document.getElementById('vgSpaltenPop') ? document.getElementById('vgSpaltenPop').remove() : vgSpaltenMenue(spKnopf);
   lage.prepend(spKnopf);
+  const bhKnopf = document.createElement('button'); bhKnopf.id = 'vgBauherrKnopf'; bhKnopf.className = 'vg-spaltenknopf';
+  bhKnopf.textContent = VERGABE.bauherr ? 'Bauherr ▾' : 'Bauherr ▾ (fehlt)';
+  bhKnopf.title = 'Wer bis zu welcher Summe entscheidet, Sitzungstermine, Wochentage — daraus rechnet der Plan rückwärts';
+  bhKnopf.onclick = ()=> document.getElementById('vgBauherrPop') ? document.getElementById('vgBauherrPop').remove() : vgBauherrMenue(bhKnopf);
+  lage.prepend(bhKnopf);
   box.appendChild(lage);
 
   const scroll = document.createElement('div'); scroll.className = 'vg-scroll';
@@ -5732,7 +5821,7 @@ function vergabeZeichnen(){
     spalten.forEach(sp=>{
       const d = document.createElement('div'); d.dataset.spalte = sp.k;
       if(sp.art === 'datum'){
-        const iso = e.t[sp.k];
+        const iso = sp.wert ? sp.wert(e) : e.t[sp.k];
         d.className = 'd'; d.textContent = kurz(iso);
         if(iso){
           d.title = sp.name + ' ' + fmtDE(iso);
@@ -5744,7 +5833,7 @@ function vergabeZeichnen(){
         d.className = sp.art === 'text' ? 'art' : 'd';
         d.textContent = w == null || w === '' ? (sp.art === 'text' ? '' : '–') : sp.art === 'geld' ? vgZahlText(w) : String(w);
         if(sp.art === 'text') d.title = w || '';
-        if(sp.k === 'ueberhang' && w != null && w < 0) d.classList.add('minus');
+        if((sp.k === 'ueberhang' || sp.k === 'puffer') && w != null && w < 0) d.classList.add('minus');
       }
       name.appendChild(d);
     });
@@ -5760,6 +5849,7 @@ function vergabeZeichnen(){
       if(t.sitzung && t.sitzung >= t.lesefassung) ms(t.sitzung, 'sitz' + (e.hinweise.some(h=>h.startsWith('Sitzung')) ? ' rot' : ''), 'Sitzung');
       ms(t.beginn, '', 'Beginn Gewerk');
     }
+    vgSitzungen.forEach(s=>{ const l = document.createElement('div'); l.className = 'vg-sitzlinie'; l.style.left = x(s.datum); l.title = s.stelle + ' ' + fmtDE(s.datum); zeit.appendChild(l); });
     const hl = document.createElement('div'); hl.className = 'vg-heute'; hl.style.left = x(heute); zeit.appendChild(hl);
     const oeffnen = ()=>{ VERGABE.offen = VERGABE.offen === e.z.v.uid ? null : e.z.v.uid; vergabeZeichnen(); };
     name.onclick = oeffnen; zeit.onclick = oeffnen;
@@ -5818,6 +5908,8 @@ function vgBlatt(e){
     }
   }
   b.append(feld('Angebotszeit (KT)', eingabe('angebotszeit', 'zahl')), feld('Sitzung', eingabe('sitzung', 'date')));
+  if(e.sitzungAusKalender) b.append(feld('', wert('Sitzung aus dem Kalender des Bauherrn: ' + e.r.stelle + ' ' + fmtDE(e.r.termine.sitzung))));
+  if(e.r) b.append(feld('Entscheidet', wert(e.r.stelle)), feld('Lese-LV spätestens', wert(fmtDE(e.r.termine.lesefassung) + (e.puffer != null ? ' (Puffer ' + e.puffer + ' Tage)' : ''))));
   if(e.k?.termine) VG_SCHRITTE.filter(([k])=> k !== 'beginn' && k !== 'sitzung').forEach(([k, name])=> b.append(feld(name, wert(t[k] ? fmtDE(t[k]) : '–'))));
   b.append(Object.assign(document.createElement('h4'), { textContent: 'Vergabe' }));
   b.append(feld('Vergabeart', eingabe('vergabeart', 'select')), feld('Verantwortlich', eingabe('verantwortlich')), feld('Anmerkung', eingabe('anmerkung')));
@@ -8417,6 +8509,66 @@ function vergabeKette(einheit, planFristen, feiertage) {
     hinweise.push('Sitzung fehlt — spätester Termin: ' + vePlus(t.beginn, -(f.beginn_nach_zuschlag + f.zuschlag_nach_sitzung)));
   }
   return { termine: t, fristen: f, angebotszeit: angebotszeit, hinweise: hinweise };
+}
+
+// ---- Rückwärtsrechnung über die Regeln des Bauherrn (Migr. 286, Marcels Skizze 02.11.2026) ----
+// Vom Beginn Baustelle zurück: zuständige Stelle nach KB brutto (Bürgermeister, Ausschuss mit Vollmacht,
+// Stadtrat …) → deren letzte Sitzung, nach der Zuschlag + Wartefrist noch vor dem Beginn liegen → Vergabe-
+// vorschlag (Vorlauf des Bauherrn) → Prüfung → Submission (Wochentag des Bauherrn) → Angebotszeit →
+// Veröffentlichung (Wochentag) → Annahmeschluss → spätestes Lese-LV. Eine Stelle ohne Sitzungen (Bürgermeister)
+// entscheidet ohne Gremium: Zuschlag direkt nach dem Vorschlag (EU zuzüglich Wartefrist).
+function veWochentag(iso) { var w = veDatum(iso).getUTCDay(); return w === 0 ? 7 : w; }
+// spätester Tag am oder vor iso mit dem Wochentag wt (1 = Mo … 7 = So), der kein Feiertag ist
+function veVorWochentag(iso, wt, feiertage) {
+  if (!wt) return iso;
+  var frei = {}; (feiertage || []).forEach(function (f) { frei[f] = true; });
+  for (var d = iso, i = 0; i < 400; i++, d = vePlus(d, -1)) if (veWochentag(d) === wt && !frei[d]) return d;
+  return iso;
+}
+// zuständige Stelle: erste, deren Wertgrenze die Kosten trägt; ohne Kosten die höchste (vorsichtig)
+function veStelle(bauherr, brutto) {
+  var stellen = (bauherr && bauherr.stellen) || [];
+  if (!stellen.length) return null;
+  if (brutto == null) return stellen[stellen.length - 1];
+  for (var i = 0; i < stellen.length; i++) if (stellen[i].bis_brutto == null || brutto <= stellen[i].bis_brutto) return stellen[i];
+  return stellen[stellen.length - 1];
+}
+// einheit: { beginn, vergabeart, angebotszeit, kb_brutto }
+function vergabeRueckwaerts(einheit, planFristen, bauherr, feiertage) {
+  var f = veFristen(einheit.vergabeart, planFristen), b = bauherr || {}, hinweise = [];
+  if (!einheit.beginn) return null;
+  var stelle = veStelle(b, einheit.kb_brutto);
+  if (!stelle) return null;
+  var mindest = f.art === 'EU' && b.elektronisch === false ? 35 : f.angebotszeit_min;   // § 10a EU Abs. 1/4
+  var angebotszeit = einheit.angebotszeit != null ? Math.max(einheit.angebotszeit, mindest) : mindest;
+  var vorlauf = b.vorlauf_vorschlag != null ? b.vorlauf_vorschlag : f.vorschlag_vor_sitzung;
+  var t = { beginn: einheit.beginn, sitzung: null };
+  var zuschlagSpaet = vePlus(einheit.beginn, -f.beginn_nach_zuschlag);
+  if (Array.isArray(stelle.sitzungen)) {
+    var sitzungSpaet = vePlus(zuschlagSpaet, -f.zuschlag_nach_sitzung);
+    var alle = stelle.sitzungen.slice().sort();
+    var passend = alle.filter(function (s) { return s <= sitzungSpaet; });
+    // Reicht der bekannte Kalender nicht bis an den Termin heran (letzte Sitzung > 35 KT davor und keine spätere
+    // bekannt), wäre die letzte bekannte Sitzung eine falsche Annahme — dann gilt der späteste Termin, mit Hinweis.
+    var kalenderEnde = alle.length ? alle[alle.length - 1] : null;
+    var luecke = !passend.length || (kalenderEnde <= sitzungSpaet && vePlus(passend[passend.length - 1], 35) < sitzungSpaet);
+    if (!luecke) t.sitzung = passend[passend.length - 1];
+    else {
+      t.sitzung = sitzungSpaet;
+      hinweise.push('Sitzungskalender ' + stelle.name + (kalenderEnde ? ' reicht nur bis ' + kalenderEnde : ' fehlt') + ' — Sitzung spätestens ' + sitzungSpaet + ' angenommen');
+    }
+    t.vergabevorschlag = vePlus(t.sitzung, -vorlauf);
+    t.zuschlag = vePlus(t.sitzung, f.zuschlag_nach_sitzung);
+  } else {
+    t.zuschlag = zuschlagSpaet;
+    t.vergabevorschlag = vePlus(t.zuschlag, f.art === 'EU' ? -f.zuschlag_nach_sitzung : -1);
+  }
+  t.submission = veVorWochentag(vePlus(t.vergabevorschlag, -f.pruefung), b.submission_wochentag, feiertage);
+  t.veroeffentlichung = veVorWochentag(vePlus(t.submission, -angebotszeit), b.veroeffentlichung_wochentag, feiertage);
+  t.annahmeschluss = veArbeitstage(t.veroeffentlichung, -f.veroeffentlichung_at, feiertage);
+  t.lesefassung = vePlus(t.annahmeschluss, -f.annahme_nach_lesefassung);
+  if (t.zuschlag > vePlus(t.submission, f.bindefrist)) hinweise.push('Zuschlag ' + t.zuschlag + ' liegt nach Ende der Bindefrist (' + f.bindefrist + ' KT ab Submission)');
+  return { stelle: stelle.name, termine: t, angebotszeit: angebotszeit, hinweise: hinweise };
 }
 
 // ---------- Baustein: farben.js (geprueft, Tests unter _bausteine/) ----------
