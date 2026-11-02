@@ -488,7 +488,14 @@
   .vg-name .d.vorbei{color:#98a2b3;}
   .vg-name .d.naechst{color:var(--blue-dark);font-weight:700;}
   .vg-name .d.bald{color:#fff;background:var(--blue-dark);border-radius:3px;padding:1px 4px;}
-  .vg-name .art{font-size:11px;color:#667085;}
+  .vg-name .art{font-size:11px;color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .vg-name .d.minus{color:#b42318;}
+  .vg-lage{position:relative;}
+  .vg-spaltenknopf{float:right;font:inherit;font-size:12.5px;border:1px solid var(--line);background:#fff;padding:5px 12px;cursor:pointer;margin-left:12px;}
+  .vg-spaltenknopf:hover{border-color:var(--blue);}
+  .vg-pop{position:fixed;z-index:8;background:#fff;border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px 14px;display:grid;grid-template-columns:repeat(2, max-content);gap:4px 22px;font-size:12.5px;}
+  .vg-pop label{display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;}
+  .vg-pop .std{grid-column:1 / -1;justify-self:start;margin-top:6px;border:0;background:none;color:var(--blue);cursor:pointer;font:inherit;padding:0;}
   .vg-name .n{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .vg-name .s{font-size:11px;color:#667085;white-space:nowrap;}
   .vg-name .s.bald{color:var(--blue-dark);font-weight:600;}
@@ -5522,6 +5529,7 @@ function vergabeModus(an){
   document.getElementById('wrap').hidden = an;
   document.getElementById('vergabeAnsicht').hidden = !an;
   document.getElementById('vergabeAnsicht').innerHTML = '';   // keine alten Zeilen ohne Daten dahinter
+  document.getElementById('vgSpaltenPop')?.remove();
   document.body.classList.toggle('vergabe-modus', an);
   if(!an) VERGABE = null;
 }
@@ -5590,6 +5598,61 @@ function vgNaechster(t, heute){
 function vgInTagen(n){ return n === 0 ? 'heute' : n === 1 ? 'morgen' : n < 14 ? 'in ' + n + ' Tagen' : n < 60 ? 'in ' + Math.round(n / 7) + ' Wochen' : 'in ' + Math.round(n / 30) + ' Monaten'; }
 function vgEsc(s){ return String(s).replace(/[&<>"]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c]); }
 
+// Spalten der Übersicht (Marcel 02.11.: „mein Vergabetool zusammenstecken“). Wählbar über „Spalten ▾“, gemerkt je
+// Person im Browser; im Blatt rechts steht immer alles. art: datum (vorbei grau, nächster fett), geld (rechtsbündig), text.
+const VG_SPALTEN = [
+  { k:'vergabeart',        name:'Vergabeart',        kurz:'Art',        breite:40, art:'text', wert:(e)=> e.z.a.vergabeart },
+  { k:'verantwortlich',    name:'Verantwortlich',    kurz:'Verantw.',   breite:90, art:'text', wert:(e)=> e.z.a.verantwortlich },
+  { k:'lesefassung',       name:'Lese-LV an Bauherr', kurz:'Lese-LV',   breite:66, art:'datum' },
+  { k:'annahmeschluss',    name:'Annahmeschluss',    kurz:'Annahme',    breite:66, art:'datum' },
+  { k:'veroeffentlichung', name:'Veröffentlichung',  kurz:'Veröff.',    breite:66, art:'datum' },
+  { k:'angebotszeit',      name:'Angebotszeit (KT)', kurz:'Angebot KT', breite:62, art:'zahl', wert:(e)=> e.k?.angebotszeit },
+  { k:'submission',        name:'Submission',        kurz:'Submission', breite:72, art:'datum' },
+  { k:'vergabevorschlag',  name:'Vergabevorschlag',  kurz:'Vorschlag',  breite:66, art:'datum' },
+  { k:'sitzung',           name:'Sitzung',           kurz:'Sitzung',    breite:66, art:'datum' },
+  { k:'zuschlag',          name:'Zuschlag',          kurz:'Zuschlag',   breite:66, art:'datum' },
+  { k:'beginn',            name:'Beginn Gewerk',     kurz:'Beginn',     breite:66, art:'datum' },
+  { k:'kb_netto',          name:'KB netto',          kurz:'KB netto',   breite:82, art:'geld', wert:(e)=> e.z.a.kb_netto },
+  { k:'kb_brutto',         name:'KB brutto',         kurz:'KB brutto',  breite:82, art:'geld', wert:(e)=> e.z.a.kb_brutto },
+  { k:'lv_brutto',         name:'LV brutto (bepreist)', kurz:'LV brutto', breite:82, art:'geld', wert:(e)=> e.z.a.lv_brutto },
+  { k:'submission_brutto', name:'Submission brutto', kurz:'Subm. brutto', breite:86, art:'geld', wert:(e)=> e.z.a.submission_brutto },
+  { k:'ueberhang',         name:'Überhang KB − Submission', kurz:'Überhang', breite:80, art:'geld',
+    wert:(e)=> e.z.a.kb_brutto != null && e.z.a.submission_brutto != null ? e.z.a.kb_brutto - e.z.a.submission_brutto : null },
+  { k:'paket',             name:'Paket',             kurz:'Paket',      breite:40, art:'text', wert:(e)=> e.z.a.paket },
+  { k:'anmerkung',         name:'Anmerkung',         kurz:'Anmerkung',  breite:110, art:'text', wert:(e)=> e.z.a.anmerkung },
+];
+const VG_SPALTEN_STANDARD = ['vergabeart', 'lesefassung', 'veroeffentlichung', 'submission', 'beginn', 'kb_brutto'];
+function vgSpaltenWahl(){
+  try { const w = JSON.parse(localStorage.getItem('vg_spalten') || 'null'); if(Array.isArray(w)) return w.filter(k=>VG_SPALTEN.some(s=>s.k===k)); } catch(e){}
+  return VG_SPALTEN_STANDARD.slice();
+}
+function vgSpaltenSetzen(w){ try { localStorage.setItem('vg_spalten', JSON.stringify(w)); } catch(e){} }
+// Kasten „Spalten ▾“: Haken je Spalte, wirkt sofort; „Standard“ setzt zurück
+function vgSpaltenMenue(knopf){
+  // Liegt am body, damit das Neuzeichnen der Ansicht den offenen Kasten nicht wegwirft
+  document.getElementById('vgSpaltenPop')?.remove();
+  const pop = document.createElement('div'); pop.id = 'vgSpaltenPop'; pop.className = 'vg-pop';
+  const haken = {};
+  VG_SPALTEN.forEach(sp=>{
+    const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.dataset.spalte = sp.k;
+    c.checked = vgSpaltenWahl().includes(sp.k); haken[sp.k] = c;
+    c.onchange = ()=>{ vgSpaltenSetzen(VG_SPALTEN.map(x=>x.k).filter(k=> haken[k].checked)); vergabeZeichnen(); };
+    l.append(c, ' ' + sp.name); pop.appendChild(l);
+  });
+  const std = document.createElement('button'); std.textContent = 'Standard'; std.className = 'std';
+  std.onclick = ()=>{ vgSpaltenSetzen(VG_SPALTEN_STANDARD.slice()); VG_SPALTEN.forEach(sp=> haken[sp.k].checked = VG_SPALTEN_STANDARD.includes(sp.k)); vergabeZeichnen(); };
+  pop.appendChild(std);
+  const r = knopf.getBoundingClientRect();
+  pop.style.right = (window.innerWidth - r.right) + 'px'; pop.style.top = (r.bottom + 4) + 'px';
+  document.body.appendChild(pop);
+  const zu = (ev)=>{
+    const schliessen = ev.type === 'keydown' ? ev.key === 'Escape' : (!pop.contains(ev.target) && ev.target.id !== 'vgSpaltenKnopf');
+    if(!schliessen) return;
+    pop.remove(); document.removeEventListener('mousedown', zu); document.removeEventListener('keydown', zu);
+  };
+  setTimeout(()=>{ document.addEventListener('mousedown', zu); document.addEventListener('keydown', zu); }, 0);
+}
+
 function vergabeZeichnen(){
   const box = document.getElementById('vergabeAnsicht');
   const heute = fmtISO(new Date());
@@ -5632,15 +5695,22 @@ function vergabeZeichnen(){
   leg.innerHTML = '<span><i style="background:#d9e3f2"></i>LV bis Veröffentlichung</span><span><i style="background:#7a9bd1"></i>Angebotsphase</span>'
     + '<span><i style="background:#3f8f6b"></i>Prüfung bis Beginn</span><span>◆ Beginn Gewerk · <span style="color:#3f8f6b">◆</span> Sitzung</span>';
   lage.appendChild(leg);
+  const spKnopf = document.createElement('button'); spKnopf.id = 'vgSpaltenKnopf'; spKnopf.className = 'vg-spaltenknopf';
+  spKnopf.textContent = 'Spalten ▾'; spKnopf.title = 'Welche Spalten links stehen — im Blatt rechts steht immer alles';
+  spKnopf.onclick = ()=> document.getElementById('vgSpaltenPop') ? document.getElementById('vgSpaltenPop').remove() : vgSpaltenMenue(spKnopf);
+  lage.prepend(spKnopf);
   box.appendChild(lage);
 
   const scroll = document.createElement('div'); scroll.className = 'vg-scroll';
   const raster = document.createElement('div'); raster.className = 'vg-raster';
-  raster.style.setProperty('--vg-links', '590px'); raster.style.setProperty('--vg-spalten', 'minmax(0,1fr) 36px 66px 66px 74px 66px');
+  const spalten = vgSpaltenWahl().map(k=>VG_SPALTEN.find(s=>s.k===k));
+  const links = 230 + spalten.reduce((n, sp)=> n + sp.breite + 8, 0) + 24;
+  raster.style.setProperty('--vg-links', links + 'px');
+  raster.style.setProperty('--vg-spalten', 'minmax(0,1fr) ' + spalten.map(sp=>sp.breite + 'px').join(' '));
   // Kopf: Monate, Jahreswechsel hervorgehoben
   const kl = document.createElement('div'); kl.className = 'vg-kopfzeile links';
-  [['Gewerk', ''], ['Art', ''], ['Lese-LV', 'd'], ['Veröff.', 'd'], ['Submission', 'd'], ['Beginn', 'd']]
-    .forEach(([t, c])=>{ const sp = document.createElement('span'); sp.textContent = t; sp.className = c; kl.appendChild(sp); });
+  [['Gewerk', '', 'Gewerk']].concat(spalten.map(sp=>[sp.kurz, sp.art === 'text' ? '' : 'd', sp.name]))
+    .forEach(([t, c, titel])=>{ const sp = document.createElement('span'); sp.textContent = t; sp.className = c; sp.title = titel; kl.appendChild(sp); });
   const km = document.createElement('div'); km.className = 'vg-kopfzeile vg-monate';
   for(let d = new Date(Date.UTC(von.getUTCFullYear(), von.getUTCMonth() + 1, 1)); d <= addDays(von, spanne); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))){
     const s = document.createElement('span'); const jan = d.getUTCMonth() === 0;
@@ -5656,17 +5726,26 @@ function vergabeZeichnen(){
     const name = document.createElement('div'); name.className = 'vg-name';
     const n = document.createElement('div'); n.className = 'n'; n.textContent = e.z.v.name; n.title = e.z.v.name;
     if(e.hinweise.length){ const w = document.createElement('span'); w.className = 'warn'; w.textContent = '⚠'; w.title = e.hinweise.join('\n'); n.prepend(w, ' '); }
-    const art = document.createElement('div'); art.className = 'art'; art.textContent = e.z.a.vergabeart || '';
-    name.append(n, art);
-    // Termine: vorbei grau, der nächste fett, in den nächsten 14 Tagen hinterlegt
+    name.appendChild(n);
+    // Termine: vorbei grau, der nächste fett, in den nächsten 14 Tagen hinterlegt; Geld rechtsbündig, Überhang negativ rot
     const kurz = (iso)=> iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(2, 4) : '–';
-    ['lesefassung', 'veroeffentlichung', 'submission', 'beginn'].forEach(k=>{
-      const d = document.createElement('div'); d.className = 'd'; d.textContent = kurz(e.t[k]);
-      if(e.t[k]){
-        d.title = VG_SCHRITTE.find(x=>x[0]===k)[1] + ' ' + fmtDE(e.t[k]);
-        if(e.t[k] < heute) d.classList.add('vorbei');
-        else if(e.naechster && e.naechster.datum === e.t[k]) d.classList.add(e.naechster.tage <= 14 ? 'bald' : 'naechst');
-      } else if(k === 'beginn') d.title = 'Beginn fehlt';
+    spalten.forEach(sp=>{
+      const d = document.createElement('div'); d.dataset.spalte = sp.k;
+      if(sp.art === 'datum'){
+        const iso = e.t[sp.k];
+        d.className = 'd'; d.textContent = kurz(iso);
+        if(iso){
+          d.title = sp.name + ' ' + fmtDE(iso);
+          if(iso < heute) d.classList.add('vorbei');
+          else if(e.naechster && e.naechster.datum === iso) d.classList.add(e.naechster.tage <= 14 ? 'bald' : 'naechst');
+        } else if(sp.k === 'beginn') d.title = 'Beginn fehlt';
+      } else {
+        const w = sp.wert(e);
+        d.className = sp.art === 'text' ? 'art' : 'd';
+        d.textContent = w == null || w === '' ? (sp.art === 'text' ? '' : '–') : sp.art === 'geld' ? vgZahlText(w) : String(w);
+        if(sp.art === 'text') d.title = w || '';
+        if(sp.k === 'ueberhang' && w != null && w < 0) d.classList.add('minus');
+      }
       name.appendChild(d);
     });
     const zeit = document.createElement('div'); zeit.className = 'vg-zeit';
