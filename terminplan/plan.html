@@ -480,6 +480,15 @@
   .vg-monate span{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);padding:8px 4px;box-sizing:border-box;white-space:nowrap;}
   .vg-monate span.jahr{border-left:1px solid #9aa4b2;font-weight:600;color:var(--blue-dark);}
   .vg-name{position:sticky;left:0;z-index:2;background:#fff;border-bottom:1px solid #eef0f4;height:30px;padding:0 12px;display:flex;flex-direction:column;justify-content:center;cursor:pointer;overflow:hidden;box-sizing:border-box;border-right:1px solid var(--line);}
+  .vg-name{display:grid !important;grid-template-columns:var(--vg-spalten);align-items:center;column-gap:8px;flex-direction:unset;}
+  .vg-kopfzeile.links{display:grid;grid-template-columns:var(--vg-spalten);column-gap:8px;align-items:center;padding:0 12px !important;}
+  .vg-kopfzeile.links span{white-space:nowrap;}
+  .vg-kopfzeile.links .d, .vg-name .d{text-align:right;font-variant-numeric:tabular-nums;}
+  .vg-name .d{font-size:12px;color:#344054;}
+  .vg-name .d.vorbei{color:#98a2b3;}
+  .vg-name .d.naechst{color:var(--blue-dark);font-weight:700;}
+  .vg-name .d.bald{color:#fff;background:var(--blue-dark);border-radius:3px;padding:1px 4px;}
+  .vg-name .art{font-size:11px;color:#667085;}
   .vg-name .n{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .vg-name .s{font-size:11px;color:#667085;white-space:nowrap;}
   .vg-name .s.bald{color:var(--blue-dark);font-weight:600;}
@@ -5627,9 +5636,11 @@ function vergabeZeichnen(){
 
   const scroll = document.createElement('div'); scroll.className = 'vg-scroll';
   const raster = document.createElement('div'); raster.className = 'vg-raster';
-  raster.style.setProperty('--vg-links', '280px');
+  raster.style.setProperty('--vg-links', '590px'); raster.style.setProperty('--vg-spalten', 'minmax(0,1fr) 36px 66px 66px 74px 66px');
   // Kopf: Monate, Jahreswechsel hervorgehoben
-  const kl = document.createElement('div'); kl.className = 'vg-kopfzeile links'; kl.textContent = 'Gewerk · nächster Schritt';
+  const kl = document.createElement('div'); kl.className = 'vg-kopfzeile links';
+  [['Gewerk', ''], ['Art', ''], ['Lese-LV', 'd'], ['Veröff.', 'd'], ['Submission', 'd'], ['Beginn', 'd']]
+    .forEach(([t, c])=>{ const sp = document.createElement('span'); sp.textContent = t; sp.className = c; kl.appendChild(sp); });
   const km = document.createElement('div'); km.className = 'vg-kopfzeile vg-monate';
   for(let d = new Date(Date.UTC(von.getUTCFullYear(), von.getUTCMonth() + 1, 1)); d <= addDays(von, spanne); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))){
     const s = document.createElement('span'); const jan = d.getUTCMonth() === 0;
@@ -5645,11 +5656,19 @@ function vergabeZeichnen(){
     const name = document.createElement('div'); name.className = 'vg-name';
     const n = document.createElement('div'); n.className = 'n'; n.textContent = e.z.v.name; n.title = e.z.v.name;
     if(e.hinweise.length){ const w = document.createElement('span'); w.className = 'warn'; w.textContent = '⚠'; w.title = e.hinweise.join('\n'); n.prepend(w, ' '); }
-    const s = document.createElement('div'); s.className = 's';
-    if(!e.k?.termine) s.textContent = 'Beginn fehlt';
-    else if(e.naechster){ s.textContent = e.naechster.name + ' ' + fmtDE(e.naechster.datum); if(e.naechster.tage <= 30) s.classList.add('bald'); }
-    else s.textContent = 'begonnen ' + fmtDE(e.t.beginn);
-    name.append(n, s);
+    const art = document.createElement('div'); art.className = 'art'; art.textContent = e.z.a.vergabeart || '';
+    name.append(n, art);
+    // Termine: vorbei grau, der nächste fett, in den nächsten 14 Tagen hinterlegt
+    const kurz = (iso)=> iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(2, 4) : '–';
+    ['lesefassung', 'veroeffentlichung', 'submission', 'beginn'].forEach(k=>{
+      const d = document.createElement('div'); d.className = 'd'; d.textContent = kurz(e.t[k]);
+      if(e.t[k]){
+        d.title = VG_SCHRITTE.find(x=>x[0]===k)[1] + ' ' + fmtDE(e.t[k]);
+        if(e.t[k] < heute) d.classList.add('vorbei');
+        else if(e.naechster && e.naechster.datum === e.t[k]) d.classList.add(e.naechster.tage <= 14 ? 'bald' : 'naechst');
+      } else if(k === 'beginn') d.title = 'Beginn fehlt';
+      name.appendChild(d);
+    });
     const zeit = document.createElement('div'); zeit.className = 'vg-zeit';
     if(e.k?.termine){
       const t = e.t;
