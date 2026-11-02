@@ -8358,10 +8358,18 @@ function erzeugeRahmenplan(param) {
 // nach Vergabeart, Feiertage frei. So rechnet dieser Baustein.
 // Kein DOM — reine Funktionen, prüfbar in vergabe_excel.test.mjs.
 
+// Rechtsfristen (geprüft 02.11.2026 am Wortlaut VOB/A 2019 und GWB):
+//   angebotszeit_min  EU: § 10a EU Abs. 1 VOB/A 35 KT, Abs. 4 minus 5 KT bei elektronischer Angebotsabgabe → 30
+//                     (Vorinformation ≥ 35 KT vorher → 15 KT, Abs. 2; Dringlichkeit ≥ 15 KT, Abs. 3 — nur von Hand)
+//                     national: § 10 Abs. 1 VOB/A „auch bei Dringlichkeit nicht unter zehn Kalendertagen“
+//   bindefrist        EU: § 10a EU Abs. 8 „regelmäßig 60 Kalendertage“; national: § 10 Abs. 4 länger als 30 KT
+//                     „nur in begründeten Fällen“. Beginn jeweils mit Ablauf der Angebotsfrist (= Submission).
+//   zuschlag_nach_sitzung 11 = Wartefrist § 134 GWB 10 KT bei elektronischer Information, ab dem Tag nach Absendung
+//                     (per Post 15 KT). Gilt nur EU-weit; national bleibt der Bürowert der Excel stehen.
 var VERGABE_FRISTEN_STANDARD = {
-  EU:   { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 3, angebotszeit_min: 30, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2 },
-  'NatÖ': { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 2, angebotszeit_min: 10, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2 },
-  NatB: { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 2, angebotszeit_min: 10, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2 }
+  EU:   { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 3, angebotszeit_min: 30, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2, bindefrist: 60 },
+  'NatÖ': { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 2, angebotszeit_min: 10, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2, bindefrist: 30 },
+  NatB: { lesefassung_vor_beginn: 120, annahme_nach_lesefassung: 7, veroeffentlichung_at: 2, angebotszeit_min: 10, pruefung: 14, vorschlag_vor_sitzung: 7, zuschlag_nach_sitzung: 11, beginn_nach_zuschlag: 2, bindefrist: 30 }
 };
 
 function veDatum(s) { var p = String(s).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
@@ -8403,6 +8411,7 @@ function vergabeKette(einheit, planFristen, feiertage) {
     t.arbeitsbeginn = vePlus(t.zuschlag, f.beginn_nach_zuschlag);
     if (t.sitzung < vePlus(t.vergabevorschlag, f.vorschlag_vor_sitzung)) hinweise.push('Sitzung ' + t.sitzung + ' liegt vor Vergabevorschlag + ' + f.vorschlag_vor_sitzung + ' KT (' + vePlus(t.vergabevorschlag, f.vorschlag_vor_sitzung) + ')');
     if (t.arbeitsbeginn > t.beginn) hinweise.push('frühester Arbeitsbeginn ' + t.arbeitsbeginn + ' liegt nach dem Beginn laut Bauzeitenplan ' + t.beginn);
+    if (t.zuschlag > vePlus(t.submission, f.bindefrist)) hinweise.push('Zuschlag ' + t.zuschlag + ' liegt nach Ende der Bindefrist (' + f.bindefrist + ' KT ab Submission: ' + vePlus(t.submission, f.bindefrist) + ')');
   } else {
     t.zuschlag = null; t.arbeitsbeginn = null;
     hinweise.push('Sitzung fehlt — spätester Termin: ' + vePlus(t.beginn, -(f.beginn_nach_zuschlag + f.zuschlag_nach_sitzung)));
