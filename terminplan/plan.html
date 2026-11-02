@@ -6073,7 +6073,8 @@ function anlageZeigen(){
   o.id = 'anlageOverlay'; o.className = 'anlage-overlay';
   o.innerHTML = `
     <div class="anlage-box">
-      <h2>Neuen Terminplan anlegen</h2>
+      <h2 style="display:flex;align-items:center;">Neuen Terminplan anlegen
+        <button id="anZu" type="button" title="Schließen ohne Anlegen (Esc)" style="margin-left:auto;background:none;border:0;color:#75756E;font-size:18px;cursor:pointer;padding:2px 8px;">✕</button></h2>
       <div class="anlage-zeile"><label>Name</label><input id="anName" value="Terminplan"></div>
       <div class="anlage-zeile"><label>Planart</label>
         <select id="anArt">
@@ -6126,13 +6127,19 @@ function anlageZeigen(){
   document.getElementById('anStart').value = fmtISO(new Date(Date.UTC(heute.getFullYear(), heute.getMonth(), heute.getDate())));
   // Vorlagen aus der Bibliothek
   db('termin_vorlagen?select=id,name,daten&order=name.asc').then(vs=>{
-    const sel = document.getElementById('anVorlage'); sel.innerHTML = '';
+    const sel = document.getElementById('anVorlage'); if(!sel) return;   // Dialog schon geschlossen
+    sel.innerHTML = '';
     if(!vs.length){ sel.innerHTML = '<option value="">keine Vorlage vorhanden</option>'; return; }
     for(const v of vs){ const op = document.createElement('option'); op.value = v.id; op.textContent = v.name; sel.appendChild(op); }
     sel.dataset.geladen = JSON.stringify(vs);
-  }).catch(()=>{ document.getElementById('anVorlage').innerHTML = '<option value="">Vorlagen nicht ladbar</option>'; });
+  }).catch(()=>{ const sel = document.getElementById('anVorlage'); if(sel) sel.innerHTML = '<option value="">Vorlagen nicht ladbar</option>'; });
 
   const fehler = (m)=>{ document.getElementById('anFehler').textContent = m; };
+  // Schließen ohne Anlegen (02.11.2026, Mitarbeiter: „man kommt nicht mehr raus")
+  const zu = ()=>{ o.remove(); document.removeEventListener('keydown', taste); };
+  const taste = (ev)=>{ if(ev.key === 'Escape' && o.isConnected) zu(); };
+  document.addEventListener('keydown', taste);
+  document.getElementById('anZu').onclick = zu;
   document.getElementById('anLosLeer').onclick = ()=> anlegen('leer');
   document.getElementById('anLosVorlage').onclick = ()=> anlegen('vorlage');
   document.getElementById('anLosXml').onclick = ()=> anlegen('xml');
