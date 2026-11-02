@@ -577,7 +577,38 @@ function zeigeAnsicht(welche) {
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
   renderTopbar();
+  verlaufMerken();
 }
+
+// ---------- Browser-Zurück (02.11.2026, Mitarbeiter-Befund: „Zurück springt immer ganz raus") ----------
+// Jeder Wechsel von Board, Projekt oder Reiter wird ein Eintrag im Browser-Verlauf.
+// Zurück bei offener Karte schließt erst die Karte und bleibt in der Ansicht.
+let verlaufLaeuft = false; // waehrend Zurueck/Vor nichts neu eintragen
+function verlaufZustand() {
+  return { typ: S.active?.typ, id: S.active?.id ?? null, name: S.active?.name, ansicht: S.ansicht };
+}
+function verlaufMerken() {
+  if (verlaufLaeuft || !S.active) return;
+  const z = verlaufZustand(), alt = history.state;
+  if (!alt || !alt.typ) { history.replaceState(z, ''); return; }
+  if (alt.typ === z.typ && String(alt.id) === String(z.id) && alt.ansicht === z.ansicht) return;
+  history.pushState(z, '');
+}
+window.addEventListener('popstate', async (e) => {
+  const drawer = document.getElementById('drawer-root');
+  if (drawer?.childElementCount) {
+    closeDrawer();
+    history.pushState(verlaufZustand(), ''); // Ansicht bleibt, nur die Karte geht zu
+    return;
+  }
+  const z = e.state;
+  if (!z || !z.typ) return;
+  verlaufLaeuft = true;
+  try {
+    if (z.typ !== S.active?.typ || String(z.id) !== String(S.active?.id)) await wechsle(z.typ, z.id, z.name);
+    if (z.ansicht && z.ansicht !== S.ansicht) zeigeAnsicht(z.ansicht);
+  } finally { verlaufLaeuft = false; }
+});
 
 // ---------- Terminplanung (Vollausbau 24.08. abends) ----------
 // EINE generische Datei fuer ALLE Projekte: terminplan/plan.html bekommt das Projekt
