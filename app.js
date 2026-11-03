@@ -4899,6 +4899,9 @@ async function start() {
       throw e2;
     }
   }
+  // ?karte=<id> oeffnet die Karte direkt (Knopf "Im Board öffnen" im Teams-Ping, Migr. 292).
+  const karte = new URLSearchParams(location.search).get('karte');
+  if (karte) { history.replaceState(null, '', location.pathname); await openCard(karte); }
   clearInterval(S.poll);
   // Auto-Aktualisierung pausiert, solange jemand schreibt (Karte anlegen, Drawer offen,
   // Cursor in einem Eingabefeld) — sonst raeumt der Neu-Aufbau die Eingabe weg.
