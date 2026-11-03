@@ -452,19 +452,43 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .dchat-eingabe textarea{flex:1;padding:10px 13px;border:1px solid rgba(28,28,26,.18);border-radius:10px;background:#fff;font-size:13.5px;line-height:1.5;font-family:inherit;resize:none;overflow-y:auto;max-height:180px;display:block}
 .dchat-eingabe textarea:focus{outline:2px solid rgba(124,169,40,.45);outline-offset:-1px;border-color:rgba(124,169,40,.5)}
 .dchat-eingabe .btn{padding:10px 18px;flex:none}
-/* Chat-Zeilen: eigene Nachricht rechtsbuendig auf Weiss, alle anderen linksbuendig;
-   der Agent traegt zusaetzlich einen sandfarbenen Akzentstreifen -- dieselbe Sandfarbe
-   wie die Vorschlags-Chips (Migration 115/117), damit "hier handelt der Agent" optisch
-   durchgaengig bleibt, ohne eine dritte Akzentfarbe einzufuehren. */
-.kom{margin-bottom:14px;max-width:88%}
+/* Chat wie WhatsApp (Marcel, 03.11.: "einfach cleaner"): weiche Blasen ohne Rahmen, eigene
+   rechts in hellem Gruen, fremde links in Weiss, Agent in hellem Sand. Name nur ueber fremden
+   Nachrichten und nur einmal je Folge, Uhrzeit klein unten rechts in der Blase. */
+.kom{margin-top:12px;max-width:82%;align-self:flex-start}
+.kom.kom-folge{margin-top:3px}
 .kom.kom-agent{max-width:92%}
 .kom.kom-mine{align-self:flex-end}
-.kom .von{font-size:11px;color:#9A9A93;margin-bottom:4px;display:flex;align-items:center;gap:8px}
-.kom .von .edit{margin-left:auto;color:#9A9A93;visibility:hidden}
-.kom .von .del{color:#9A9A93;visibility:hidden}
-.kom:hover .von .edit,.kom:hover .von .del{visibility:visible}
-.kom .von .edit:hover,.kom .von .del:hover{color:#1C1C1A}
-.kom .txt{font-size:13.5px;line-height:1.55;background:#fff;border:1px solid rgba(28,28,26,.08);border-radius:12px;padding:10px 13px;box-shadow:0 1px 2px rgba(28,28,26,.04)}
+.kom .von{font-size:11.5px;color:#8A8A83;margin:0 0 3px 4px}
+.kom .blase{background:#fff;border-radius:14px 14px 14px 4px;padding:8px 12px 5px;box-shadow:0 1px 2px rgba(28,28,26,.06)}
+.kom.kom-mine .blase{background:#E9F1DA;border-radius:14px 14px 4px 14px;box-shadow:none}
+.kom.kom-agent .blase{background:#FBF8EF}
+.kom.kom-folge .blase{border-radius:14px}
+.kom.kom-wartet .blase{opacity:.7}
+.kom .fuss{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:2px;font-size:10.5px;color:#9A9A93;font-variant-numeric:tabular-nums}
+.kom .fuss .edit,.kom .fuss .del{color:#9A9A93;visibility:hidden;font-size:11px;line-height:1}
+.kom .fuss .edit svg{width:11px;height:11px}
+.kom:hover .fuss .edit,.kom:hover .fuss .del{visibility:visible}
+.kom .fuss .edit:hover,.kom .fuss .del:hover{color:#1C1C1A}
+.kom .txt{font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+.dchat-tag{align-self:center;margin:18px 0 2px}
+.dchat-tag span{font-size:11px;color:#75756E;background:rgba(28,28,26,.05);padding:3px 10px;border-radius:999px}
+.dchat-at{flex:none;width:40px;height:42px;border:1px solid rgba(28,28,26,.18);border-radius:10px;background:#fff;font-size:16px;color:#75756E}
+.dchat-at:hover{color:#1C1C1A;border-color:rgba(28,28,26,.32)}
+.mwahl{position:fixed;z-index:70;background:#FBFBFA;border:1px solid rgba(28,28,26,.12);border-radius:12px;box-shadow:0 12px 32px rgba(28,28,26,.16);display:flex;flex-direction:column;overflow:hidden}
+.mwahl-liste{max-height:300px;overflow-y:auto;padding:4px}
+.mwahl-zeile{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer}
+.mwahl-zeile:hover{background:rgba(28,28,26,.05)}
+.mwahl-zeile.an{background:rgba(124,169,40,.13)}
+.mwahl-zeile input{accent-color:#7CA928;margin:0}
+.mwahl .av{width:22px;height:22px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:600;display:grid;place-items:center;flex:none}
+.mwahl-abschnitt{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8A8A83;padding:12px 8px 4px;margin-top:4px;border-top:1px solid rgba(28,28,26,.08)}
+.mwahl-leer{font-size:12.5px;color:#8A8A83;padding:10px 8px}
+.mwahl-fuss{display:flex;gap:6px;padding:8px;border-top:1px solid rgba(28,28,26,.08);background:#fff}
+.mwahl-fuss input{flex:1;min-width:0;padding:7px 10px;border:1px solid rgba(28,28,26,.18);border-radius:8px;font:inherit;font-size:13px}
+.mwahl-fuss input:focus{outline:2px solid rgba(124,169,40,.45);outline-offset:-1px}
+.mwahl-fuss .btn{padding:7px 12px;font-size:12.5px}
+.mwahl-fuss .btn:disabled{opacity:.45;cursor:default}
 /* Strukturierte Agenten-Antworten (26.08.): Listen und Zwischenueberschriften sollen in
    der schmalen Chat-Spalte auf einen Blick lesbar sein -- enge Abstaende, damit eine
    Aufzaehlung kompakt bleibt und nicht wie ein Formular wirkt. */
@@ -491,13 +515,13 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .kom .txt th{text-align:left;font-weight:600;color:#1C1C1A;border-bottom:1px solid rgba(28,28,26,.18);padding:4px 10px 4px 0}
 .kom .txt td{border-bottom:1px solid rgba(28,28,26,.07);padding:4px 10px 4px 0;vertical-align:top}
 .kom .txt tr:last-child td{border-bottom:0}
-.kom.kom-agent .txt{background:#FEFCF6;border-color:#E8DFC5;border-radius:4px 12px 12px 12px}
 /* Lange Antworten falten (Marcel, 27.08.): seit der Agent im Netz recherchieren darf, kommen
    Antworten, die den ganzen Chat zuschuetten. Stehen bleibt der Anfang -- also das Ergebnis --,
    der Rest klappt auf Klick auf. Kein Balken, nur ein Auslauf in die jeweilige Blasenfarbe. */
 .kom .txt.komfold{position:relative;max-height:184px;overflow:hidden}
 .kom .txt.komfold::after{content:"";position:absolute;left:0;right:0;bottom:0;height:52px;pointer-events:none;background:linear-gradient(rgba(255,255,255,0),#fff)}
-.kom.kom-agent .txt.komfold::after{background:linear-gradient(rgba(254,252,246,0),#FEFCF6)}
+.kom.kom-agent .txt.komfold::after{background:linear-gradient(rgba(251,248,239,0),#FBF8EF)}
+.kom.kom-mine .txt.komfold::after{background:linear-gradient(rgba(233,241,218,0),#E9F1DA)}
 .kom .txt.komfold.komauf{max-height:none;overflow:visible}
 .kom .txt.komfold.komauf::after{display:none}
 .kom .mehrbtn{margin-top:5px;font-size:11.5px;font-weight:600;color:#75756E;padding:2px 0}
@@ -593,13 +617,6 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .sub .del{margin-left:auto;flex:none;color:#9A9A93;visibility:hidden;padding:0 2px}
 .sub:hover .del{visibility:visible}
 .pill{display:inline-flex;align-items:center;gap:5px;background:rgba(28,28,26,.07);border-radius:12px;padding:3px 10px;font-size:12px;margin:0 6px 6px 0}
-.kom{margin-bottom:10px}
-.kom .von{font-size:11.5px;color:#75756E;margin-bottom:2px;display:flex;align-items:center;gap:8px}
-.kom .von .edit{margin-left:auto;color:#9A9A93;visibility:hidden}
-.kom .von .del{color:#9A9A93;visibility:hidden}
-.kom:hover .von .edit,.kom:hover .von .del{visibility:visible}
-.kom .von .edit:hover,.kom .von .del:hover{color:#1C1C1A}
-.kom .txt{font-size:13px;background:#fff;border:1px solid rgba(28,28,26,.08);border-radius:8px;padding:7px 10px}
 .vrow{display:flex;gap:10px;font-size:12.5px;color:#75756E;padding:3px 0}
 .inline-add{display:flex;gap:7px;margin-top:10px}
 .inline-add input{flex:1;padding:9px 12px;border:1px solid rgba(28,28,26,.18);border-radius:9px;background:#fff;font-size:13.5px}
@@ -912,7 +929,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mw0j7cvy">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mw0lylvg">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -986,8 +1003,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mw0j7cvy"></script>
-<script src="vergabe-uebersicht.js?v=mw0j7cvy"></script>
-<script type="module" src="dashboard.js?v=mw0j7cvy"></script>
+<script src="app.js?v=mw0lylvg"></script>
+<script src="vergabe-uebersicht.js?v=mw0lylvg"></script>
+<script type="module" src="dashboard.js?v=mw0lylvg"></script>
 </body>
 </html>
