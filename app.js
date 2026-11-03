@@ -41,6 +41,7 @@ const S = {
   melde: null, // Glocke: {offen, eintraege} aus assistant_benachrichtigungen
   chatPoll: null, komEntwurf: '', // schneller Takt + Kommentarentwurf, solange der Agent schreibt
   zuruf: null, // {todoId, seit} — abgesetzter @agent-Zuruf, auf den noch keine Antwort da ist
+  komAnzahl: null, komNeu: false, // Chat: Zahl beim letzten Zeichnen + eigene Nachricht unterwegs -> weich ans Ende
   komAuf: new Set(), // Kommentare, die der Nutzer aufgeklappt hat — ueberlebt das Neuzeichnen
   zeigeAlt: {}, // je Spalte: sind die Karten mit abgelaufener Abgabefrist aufgeklappt?
   tags: { liste: [], proKarte: {} }, // Etiketten des offenen Boards (assistant_board_tags)
@@ -302,6 +303,18 @@ function avColor(name) { let h = 0; for (const c of String(name)) h = (h * 31 + 
 // bleibt die Kurzform. Farbe haengt an der Kurzform, damit sie sich nie aendert.
 function personListe() { return (S.liste?.personen || []).map((p) => (typeof p === 'string' ? { kurz: p, name: p } : p)); }
 function personName(kurz) { return personListe().find((p) => p.kurz === kurz)?.name || String(kurz).replace(/^user:/, ''); }
+// Sucht Kuerzel UND jedes Wort des Namens ab dem Anfang: "ni" findet Nina Kellner, "kel" auch.
+function personTrifft(p, q) {
+  return !q || p.kurz.startsWith(q) || p.name.toLowerCase().split(/[\s-]+/).some((w) => w.startsWith(q));
+}
+// Agenten-Nachrichten tragen, wer den Agenten beauftragt hat (Marcel, 03.11.; auftrag_von
+// leitet assistant_todo_detail seit Migr. 294 ab).
+function komIstAgent(k) { return k.von === 'agent' || k.von === 'claude' || k.von === 'tony'; }
+function komAbsender(k) {
+  if (k.von === 'tony') return 'Tony';
+  if (k.von === 'agent' || k.von === 'claude') return k.auftrag_von ? 'Claude von ' + personName(k.auftrag_von).split(' ')[0] : 'Claude';
+  return personName(k.von);
+}
 function projDot(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PROJ_DOTS[h % PROJ_DOTS.length]; }
 function statusVon(t) {
   // agent_status traegt sowohl den Delegations-Fluss (delegiert=true) als auch die
@@ -1539,10 +1552,10 @@ function mentionHilfe(inp) {
   const zu = () => { if (box) { box.remove(); box = null; } };
   const auf = () => {
     const bis = inp.selectionStart ?? inp.value.length;
-    const m = inp.value.slice(0, bis).match(/(?:^|[^A-Za-z0-9_@])@([A-Za-z]*)$/);
+    const m = inp.value.slice(0, bis).match(/(?:^|[^A-Za-z0-9_@])@([A-Za-zÄÖÜäöüß]*)$/);
     zu();
     if (!m) return;
-    const treffer = personListe().filter((p) => p.kurz.startsWith(m[1].toLowerCase())).slice(0, 6);
+    const treffer = personListe().filter((p) => personTrifft(p, m[1].toLowerCase())).slice(0, 6);
     if (!treffer.length) return;
     box = el('div', { class: 'mention' });
     treffer.forEach((p, i) => box.append(el('button', { class: i === 0 ? 'an' : '',
@@ -1579,6 +1592,75 @@ function mentionHilfe(inp) {
       btns[i].classList.add('an');
     }
   });
+}
+
+// @-Knopf am Kommentarfeld (Marcel, 03.11.): mehrere Kollegen anhaken, dann einfuegen.
+// Wer an Karte oder Projekt ohnehin beteiligt ist, steht ganz unten -- direkt ueber dem
+// Suchfeld, weil das Feld nach oben aufgeht. Eingefuegt wird @kurz: nur Kuerzel loest die
+// Datenbank als Erwaehnung auf (benachrichtigung_erwaehnte, Migr. 113).
+function mentionWahl(knopf, inp, d) {
+  if (document.querySelector('.mwahl')) { document.querySelector('.mwahl').remove(); return; }
+  const beteiligt = new Set([d.besitzer, ...(d.zugewiesen || []), ...(d.kommentare || []).map((k) => k.von),
+    ...(d.projekt ? (S.board?.todos || []).filter((t) => t.projekt_name === d.projekt.name)
+      .flatMap((t) => [t.besitzer, ...(t.zugewiesen || [])]) : [])]);
+  const gewaehlt = new Set();
+  const ich = (d.kommentare || []).find((k) => k.meiner && !k.wartet)?.von || S.board?.wer; // sich selbst erwaehnt niemand
+  const box = el('div', { class: 'mwahl' });
+  const liste = el('div', { class: 'mwahl-liste' });
+  const such = el('input', { type: 'text', placeholder: 'Name suchen…', autocomplete: 'off' });
+  const los = el('button', { class: 'btn', onclick: () => einfuegen() }, 'Einfügen');
+  const zu = () => { box.remove(); removeEventListener('mousedown', aussen, true); };
+  const aussen = (e) => { if (!box.contains(e.target) && e.target !== knopf) zu(); };
+  const einfuegen = () => {
+    if (!gewaehlt.size) return;
+    const bis = inp.selectionStart ?? inp.value.length;
+    const vor = inp.value.slice(0, bis);
+    const neu = (vor && !/\s$/.test(vor) ? ' ' : '') + [...gewaehlt].map((k) => '@' + k).join(' ') + ' ';
+    inp.value = vor + neu + inp.value.slice(bis);
+    zu(); inp.focus();
+    inp.selectionStart = inp.selectionEnd = vor.length + neu.length;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const zeichne = () => {
+    const q = such.value.trim().toLowerCase();
+    const zeile = (p) => el('label', { class: 'mwahl-zeile' + (gewaehlt.has(p.kurz) ? ' an' : '') },
+      el('input', { type: 'checkbox', ...(gewaehlt.has(p.kurz) ? { checked: '' } : {}), onchange: (e) => {
+        if (e.target.checked) gewaehlt.add(p.kurz); else gewaehlt.delete(p.kurz);
+        zeichne();
+      } }),
+      el('span', { class: 'av', style: 'background:' + avColor(p.kurz) }, initialen(p.name)),
+      el('span', { class: 'mwahl-name' }, p.name));
+    const treffer = personListe().filter((p) => p.kurz !== ich && personTrifft(p, q)).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    const andere = treffer.filter((p) => !beteiligt.has(p.kurz));
+    const dabei = treffer.filter((p) => beteiligt.has(p.kurz));
+    liste.innerHTML = '';
+    liste.append(...andere.map(zeile));
+    if (dabei.length) liste.append(el('div', { class: 'mwahl-abschnitt' }, d.projekt ? 'Am Projekt beteiligt' : 'An der Karte beteiligt'), ...dabei.map(zeile));
+    if (!treffer.length) liste.append(el('div', { class: 'mwahl-leer' }, 'Niemand gefunden'));
+    los.textContent = gewaehlt.size ? gewaehlt.size + ' einfügen' : 'Einfügen';
+    los.disabled = !gewaehlt.size;
+    liste.scrollTop = liste.scrollHeight;
+  };
+  such.addEventListener('input', zeichne);
+  such.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); zu(); inp.focus(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Enter ohne Haken nimmt den einzigen bzw. ersten Treffer von unten -- wie in der @-Liste.
+      if (!gewaehlt.size) { const letzte = [...liste.querySelectorAll('.mwahl-zeile input')].at(-1); if (letzte) { letzte.click(); } }
+      einfuegen();
+    }
+  });
+  box.append(liste, el('div', { class: 'mwahl-fuss' }, such, los));
+  document.body.appendChild(box);
+  zeichne();
+  const r = inp.closest('.dchat-eingabe').getBoundingClientRect();
+  box.style.left = Math.max(8, r.left + 14) + 'px';
+  box.style.width = Math.min(340, r.width - 28) + 'px';
+  box.style.bottom = (innerHeight - r.top + 6) + 'px';
+  liste.scrollTop = liste.scrollHeight;
+  such.focus();
+  addEventListener('mousedown', aussen, true);
 }
 
 // ---------- Topbar + Board ----------
@@ -3230,7 +3312,7 @@ function renderCard(t) {
 async function openCard(id) {
   // Frisch angelegte Karten tragen bis zur Antwort des Servers eine Platzhalter-Kennung.
   if (!id || String(id).startsWith('neu-')) return;
-  if (S.detail?.id !== id) { S.komEntwurf = ''; S.komAuf.clear(); if (S.zuruf?.todoId !== id) S.zuruf = null; } // Entwurf und Anzeige gehoeren zu IHRER Karte
+  if (S.detail?.id !== id) { S.komEntwurf = ''; S.komAuf.clear(); S.komAnzahl = null; if (S.zuruf?.todoId !== id) S.zuruf = null; } // Entwurf und Anzeige gehoeren zu IHRER Karte
   try {
     S.detail = await lotse('todo_detail', { todo_id: id });
     renderDrawer();
@@ -3737,29 +3819,50 @@ function renderDrawer() {
   const sk = el('div', { class: 'dchat-verlauf' });
   if (!d.kommentare.length) sk.append(el('div', { class: 'dchat-leer' },
     'Schreib hier — Tony antwortet und kann an dieser Karte alles: nachsehen, Unterpunkte, Fristen, Dateien anlegen. Mit @Name schreibst du nur einem Kollegen.'));
+  // Chat wie WhatsApp (Marcel, 03.11.): Tagestrenner statt Datum an jeder Nachricht, die
+  // Uhrzeit klein unten in der Blase, der Name nur ueber fremden Nachrichten und nur einmal
+  // je Folge -- wer mehrmals hintereinander schreibt, bekommt keinen neuen Kopf.
+  const tagTxt = (iso) => {
+    const t = new Date(iso), heute = new Date(), gestern = new Date();
+    gestern.setDate(heute.getDate() - 1);
+    if (t.toDateString() === heute.toDateString()) return 'Heute';
+    if (t.toDateString() === gestern.toDateString()) return 'Gestern';
+    return t.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit',
+      ...(t.getFullYear() !== heute.getFullYear() ? { year: 'numeric' } : {}) });
+  };
+  const uhr = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  let vorige = null;
   for (const k of d.kommentare) {
-    const zeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const kopf = el('div', { class: 'von' }, `${k.von === 'tony' ? 'Tony' : k.von} · ${zeit(k.am)}` + (k.bearbeitet ? ` · bearbeitet ${zeit(k.bearbeitet)}` : ''));
-    // Eigene Kommentare korrigieren und wegnehmen. Stift und Kreuz stehen wie das ✕ an
-    // den Unterpunkten am Zeilenende und erscheinen erst beim Hovern (Marcel, 25.08.).
+    const tag = tagTxt(k.am);
+    if (!vorige || tagTxt(vorige.am) !== tag) { sk.append(el('div', { class: 'dchat-tag' }, el('span', {}, tag))); vorige = null; }
+    const folge = vorige && vorige.von === k.von && new Date(k.am) - new Date(vorige.am) < 10 * 60000;
+    vorige = k;
+    const kopf = !k.meiner && !folge ? el('div', { class: 'von' }, komAbsender(k)) : null;
+    const fuss = el('div', { class: 'fuss' });
+    // Eigene Kommentare korrigieren und wegnehmen. Stift und Kreuz erscheinen erst beim
+    // Hovern (Marcel, 25.08.) und sitzen seit 03.11. neben der Uhrzeit in der Blase.
     // Sie tragen ein title, damit die Bedeutung nicht am Symbol allein haengt.
-    if (k.meiner) {
-      kopf.append(el('button', { class: 'edit', title: 'Kommentar bearbeiten', onclick: async () => {
+    if (k.meiner && !k.wartet) {
+      fuss.append(el('button', { class: 'edit', title: 'Kommentar bearbeiten', onclick: async () => {
         const neu = await uiEingabe('Kommentar bearbeiten:', k.text, { mehrzeilig: true });
         if (neu === null || !neu.trim() || neu.trim() === k.text) return;
         const r = await mut('kommentar_bearbeiten', { kommentar_id: k.id, text: neu.trim() });
         if (r && r.ok) await openCard(d.id);
       } }, ico('pencil')));
-      kopf.append(el('button', { class: 'del', title: 'Kommentar löschen', onclick: async () => {
+      fuss.append(el('button', { class: 'del', title: 'Kommentar löschen', onclick: async () => {
         if (!await uiFrage('Diesen Kommentar löschen?')) return;
         const r = await mut('kommentar_loeschen', { kommentar_id: k.id });
         if (r && r.ok) { await openCard(d.id); await ladeBoard(); }
       } }, '✕'));
     }
+    fuss.append(el('span', { class: 'zeit', title: new Date(k.am).toLocaleString('de-DE') },
+      (k.bearbeitet ? 'bearbeitet · ' : '') + (k.wartet ? 'wird gesendet…' : uhr(k.am))));
     // Eigene Nachrichten rechtsbuendig, alle anderen (Kollegen wie Agent) linksbuendig --
     // das gibt dem Chat sein Richtungsgefuehl. k.meiner traegt die App schon lange.
-    const komKlasse = 'kom' + (k.von === 'agent' || k.von === 'tony' ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '');
-    const komZeile = el('div', { class: komKlasse }, kopf, ...chatFaltung(k.text, k.id));
+    const komKlasse = 'kom' + (komIstAgent(k) ? ' kom-agent' : '') + (k.meiner ? ' kom-mine' : '')
+      + (folge ? ' kom-folge' : '') + (k.wartet ? ' kom-wartet' : '');
+    const komZeile = el('div', { class: komKlasse, 'data-id': k.id }, kopf,
+      el('div', { class: 'blase' }, ...chatFaltung(k.text, k.id), fuss));
     // Vorschlag mit Klick-Bestaetigung (Migration 115/116): eine Frist AENDERT eine
     // bestehende Eigenschaft der Karte, darum wirkt sie nie sofort -- der Agent
     // schlaegt vor, ein Mensch entscheidet mit einem Klick. Einmal entschieden bleibt
@@ -3824,7 +3927,22 @@ function renderDrawer() {
     const txt = kInp.value.trim(); if (!txt) return;
     kInp.value = ''; S.komEntwurf = '';
     kInp.style.height = 'auto';   // mitgewachsenes Feld wieder auf eine Zeile
-    await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
+    // Sofort zeigen wie WhatsApp: die Nachricht steht als "wird gesendet…" im Verlauf,
+    // bevor der Server antwortet. Scheitert das Senden, kommt der Text ins Feld zurueck.
+    const platzhalter = { id: 'neu-' + Date.now(), von: '', text: txt, meiner: true, wartet: true,
+      am: new Date().toISOString() };
+    S.detail.kommentare = [...(S.detail.kommentare || []), platzhalter];
+    S.komNeu = true;
+    renderDrawer();
+    document.getElementById('kom-inp')?.focus();
+    const r = await mut('kommentar_anlegen', { todo_id: d.id, text: txt });
+    if (!r || r.fehler) {
+      if (S.detail?.id === d.id) {
+        S.detail.kommentare = S.detail.kommentare.filter((k) => k !== platzhalter);
+        S.komEntwurf = txt; renderDrawer();
+      }
+      return;
+    }
     await openCard(d.id); await ladeBoard();
   };
   // Mehrzeiliges Eingabefeld, das mitwaechst (Marcel, 26.08.: "passt sich nicht der
@@ -3833,11 +3951,11 @@ function renderDrawer() {
   // dem Text bis zu einer Deckelung -- danach scrollt das Feld selbst, statt den
   // halben Chat zu verdraengen.
   const kInp = el('textarea', { id: 'kom-inp', rows: '1',
-    placeholder: 'Kommentar…  @Name benachrichtigt einen Kollegen',
+    placeholder: 'Nachricht…  @Name benachrichtigt einen Kollegen',
     oninput: () => { S.komEntwurf = kInp.value; hoeheAnpassen(); },
     onkeydown: (e) => {
       // Waehrend die @-Vorschlagsliste offen ist, gehoert Enter der Auswahl.
-      if (e.key === 'Enter' && !e.shiftKey && !document.querySelector('.mention')) { e.preventDefault(); senden(); }
+      if (e.key === 'Enter' && !e.shiftKey && !document.querySelector('.mention, .mwahl')) { e.preventDefault(); senden(); }
     } });
   const hoeheAnpassen = () => {
     kInp.style.height = 'auto';                       // erst zurueck, sonst waechst es nur
@@ -3845,7 +3963,9 @@ function renderDrawer() {
   };
   kInp.value = S.komEntwurf || '';
   mentionHilfe(kInp);
-  addK.append(kInp, el('button', { class: 'btn', title: 'Senden (Enter) · Shift+Enter macht einen Absatz', onclick: senden }, 'Senden'));
+  const atKnopf = el('button', { class: 'dchat-at', title: 'Kollegen erwähnen', 'aria-label': 'Kollegen erwähnen',
+    onclick: () => mentionWahl(atKnopf, kInp, d) }, '@');
+  addK.append(atKnopf, kInp, el('button', { class: 'btn', title: 'Senden (Enter) · Shift+Enter macht einen Absatz', onclick: senden }, 'Senden'));
   // Nach dem Einhaengen messen: vorher ist scrollHeight 0.
   setTimeout(hoeheAnpassen);
   dchat.append(el('div', { class: 'dchat-kopf' }, 'Kommentare',
@@ -3909,8 +4029,14 @@ function renderDrawer() {
   // Scroll-Positionen zurueckgeben (siehe oben). Erst NACH dem Einhaengen ins Dokument,
   // vorher sind scrollHeight/clientHeight noch 0.
   if (dinfoScroll) dinfo.scrollTop = dinfoScroll;
-  if (chatWarUnten) sk.scrollTop = sk.scrollHeight;
-  else if (chatScroll) sk.scrollTop = chatScroll;
+  // Neue Nachricht (eigene oder Antwort) gleitet ans Ende; beim Oeffnen steht der Chat sofort
+  // unten. Wer aeltere Nachrichten liest, wird nicht weggerissen -- ausser er hat selbst gesendet.
+  const neuDa = altChat && (S.komNeu || (S.komAnzahl != null && d.kommentare.length > S.komAnzahl));
+  if (chatWarUnten || S.komNeu) {
+    if (neuDa && chatScroll != null) { sk.scrollTop = chatScroll; requestAnimationFrame(() => sk.scrollTo({ top: sk.scrollHeight, behavior: 'smooth' })); }
+    else sk.scrollTop = sk.scrollHeight;
+  } else if (chatScroll) sk.scrollTop = chatScroll;
+  S.komNeu = false; S.komAnzahl = d.kommentare.length;
 }
 
 // HTML-Anhaenge im neuen Tab ANZEIGEN statt herunterladen (VgV-Analyse-Dateien). Fenster
