@@ -437,6 +437,7 @@
   .druck-diagramm .bk{stroke:rgba(0,0,0,.22);stroke-width:.12;}
   .druck-diagramm .dl{fill:#333;paint-order:stroke;stroke:#fff;stroke-width:.5;stroke-linejoin:round;}
   .druck-diagramm .dl-in{fill:#1C1C1A;}
+  .druck-diagramm .dn{fill:#1C1C1A;paint-order:stroke;stroke:#fff;stroke-width:.5;stroke-linejoin:round;}
   .druck-diagramm .dl-bg{fill:#fff;stroke:#8A8A83;stroke-width:.12;}
   .druck-fuss{display:flex;justify-content:space-between;align-items:flex-end;box-sizing:border-box;
     position:absolute;left:8mm;right:8mm;bottom:8mm;font-size:7pt;color:#75756E;border-top:.15mm solid #D9D9D5;padding-top:1mm;}
@@ -5298,8 +5299,8 @@ function exportXml(){
 // Druck / PDF: eigene Blätter aus dem Baustein druck.js. Gedruckt wird, was der Plan gerade zeigt
 // (Schicht, zugeklappte Gewerke); ausgeblendete Vorgänge nicht. Papier und „Daten am Balken“ merkt sich der Rechner.
 function druckEinstellungen(){
-  try { return Object.assign({ papier:'A3', datenAmBalken:false }, JSON.parse(localStorage.getItem('terminplan_druck') || '{}')); }
-  catch(e){ return { papier:'A3', datenAmBalken:false }; }
+  try { return Object.assign({ papier:'A3', datenAmBalken:false, nameAmBalken:false }, JSON.parse(localStorage.getItem('terminplan_druck') || '{}')); }
+  catch(e){ return { papier:'A3', datenAmBalken:false, nameAmBalken:false }; }
 }
 function druckVorbereiten(opt){
   const e = Object.assign(druckEinstellungen(), opt || {});
@@ -5312,7 +5313,7 @@ function druckVorbereiten(opt){
     uid: t.uid, nr: idx + 1, name: t.name, level: t.level || 1, start: t.start, finish: t.finish,
     milestone: !!t.milestone, summary: !!t.summary, category: t.category || 'ausfuehrung', farbe: FARBEN[farbeJe.get(t.uid).schluessel].fill,
     dauer: t.milestone ? '–' : durationCount(t.start, t.finish, durationUnit) + ' ' + einheit }));
-  const r = druckAufbau({ papier: e.papier, datenAmBalken: !!e.datenAmBalken, zeilen,
+  const r = druckAufbau({ papier: e.papier, datenAmBalken: !!e.datenAmBalken, nameAmBalken: !!e.nameAmBalken, zeilen,
     legende: farbLegende(sichtbar.map(({t})=>farbeJe.get(t.uid).schluessel)),
     legendeRegel: farbGruppeJetzt() === 'gewerk' ? 'Farbe = Gewerk' : 'Farbe = Phase',
     kopf: { projekt: PROJEKT_NAME, plan: eintrag.name || 'Terminplan',
@@ -5346,6 +5347,7 @@ function exportPdf(){
           <option value="R610">Rolle 610 mm (Länge nach Plan)</option><option value="R914">Rolle 914 mm (Länge nach Plan)</option></optgroup>
       </select></label>
       <label><input type="checkbox" id="druckDaten"> Datum am Balken</label>
+      <label><input type="checkbox" id="druckNamen"> Name am Balken</label>
       <label>Ansicht <select id="druckZoom"><option value="fit">Einpassen</option><option value="0.5">50 %</option><option value="1">100 %</option></select></label>
       <span class="dv-info" id="druckInfo"></span>
       <button class="dv-zu" id="exportXmlItem" title="Terminplan als MS-Project-Datei herunterladen">MS Project (.xml)</button>
@@ -5357,9 +5359,9 @@ function exportPdf(){
     <div class="dv-hinweis">Im Druckfenster „Als PDF speichern“ wählen. Gedruckt wird, was der Plan gerade zeigt: gewählte Schicht, zugeklappte Gewerke bleiben zu. Plotformate in Originalgröße (100 %, nicht „an Seite anpassen“) an den Plotter geben; ab A2 mit Faltmarken auf A4.</div>`;
   document.body.appendChild(overlay);
   window.__openModal = overlay;
-  const papier = overlay.querySelector('#druckPapier'), daten = overlay.querySelector('#druckDaten'), zoom = overlay.querySelector('#druckZoom');
+  const papier = overlay.querySelector('#druckPapier'), daten = overlay.querySelector('#druckDaten'), namen = overlay.querySelector('#druckNamen'), zoom = overlay.querySelector('#druckZoom');
   const flaeche = overlay.querySelector('.dv-flaeche'), blaetter = overlay.querySelector('#druckBlaetter');
-  papier.value = DRUCK_PAPIER[e.papier] ? e.papier : 'A3'; daten.checked = !!e.datenAmBalken;
+  papier.value = DRUCK_PAPIER[e.papier] ? e.papier : 'A3'; daten.checked = !!e.datenAmBalken; namen.checked = !!e.nameAmBalken;
   let breiteMm = 420;
   const einpassen = ()=>{
     const pxProMm = 96 / 25.4;
@@ -5367,7 +5369,7 @@ function exportPdf(){
     blaetter.style.zoom = f;
   };
   const zeigen = ()=>{
-    const r = druckVorbereiten({ papier: papier.value, datenAmBalken: daten.checked });
+    const r = druckVorbereiten({ papier: papier.value, datenAmBalken: daten.checked, nameAmBalken: namen.checked });
     const m = r.massstab, n = r.seiten.length;
     breiteMm = r.papier.b;
     blaetter.innerHTML = r.html;
@@ -5378,7 +5380,7 @@ function exportPdf(){
       + (m.kwEng ? ' · <span class="dv-warn">KW-Zahlen sehr eng (' + String(m.kwPt).replace('.', ',') + ' pt) – größeres Format wählen</span>' : '');
     einpassen();
   };
-  papier.addEventListener('change', zeigen); daten.addEventListener('change', zeigen); zoom.addEventListener('change', einpassen);
+  papier.addEventListener('change', zeigen); daten.addEventListener('change', zeigen); namen.addEventListener('change', zeigen); zoom.addEventListener('change', einpassen);
   const taste = (ev)=>{ if(ev.key === 'Escape' && overlay.isConnected) zu(); };
   const zu = ()=>{ window.removeEventListener('resize', einpassen); document.removeEventListener('keydown', taste); closeTaskDetail(); document.getElementById('druckBereich').innerHTML = ''; };
   window.addEventListener('resize', einpassen);
@@ -5388,7 +5390,7 @@ function exportPdf(){
   overlay.querySelector('#exportXmlItem').addEventListener('click', exportXml);
   overlay.querySelector('#exportJsonItem').addEventListener('click', exportJson);
   overlay.querySelector('#druckLos').addEventListener('click', ()=>{
-    const wahl = { papier: papier.value, datenAmBalken: daten.checked };
+    const wahl = { papier: papier.value, datenAmBalken: daten.checked, nameAmBalken: namen.checked };
     try { localStorage.setItem('terminplan_druck', JSON.stringify(wahl)); } catch(err){}
     druckVorbereiten(wahl);
     window.print();
@@ -6500,10 +6502,13 @@ async function fremdeAenderungPruefen(){
   if(ladeVorgang || SCHREIBSCHUTZ || !planId || UNGESPEICHERT || speichernLaeuft || KONFLIKT || document.hidden) return;
   if(VERGABE && document.getElementById('vergabeAnsicht').contains(document.activeElement)) return;   // nicht unter der tippenden Hand neu zeichnen
   let kopf;
-  try { kopf = await db('termin_plaene?id=eq.' + planId + '&select=stand,geaendert_von'); } catch(e){ return; }
+  try { kopf = await db('termin_plaene?id=eq.' + planId + '&select=stand,geaendert_von,farbe_nach,farben'); } catch(e){ return; }
   const neu = kopf?.[0]?.stand;
   if(!neu || !PLAN_STAND || neu === PLAN_STAND) return;
   if(UNGESPEICHERT || speichernLaeuft || ladeVorgang) return;   // waehrend der Abfrage geklickt: planSpeichern meldet den Konflikt
+  // Farben des Plans mit nachladen (Migr. 295: Claude stellt Farbe nach / Farbtöne über den MCP um)
+  const eintrag = PLAN_LISTE.find(p=>p.id === planId);
+  if(eintrag){ eintrag.farbe_nach = kopf[0].farbe_nach ?? null; eintrag.farben = kopf[0].farben ?? null; }
   await fremdenStandLaden();
 }
 async function letzteFremdeAenderung(){
@@ -9213,7 +9218,7 @@ var FERIEN_BY = [
 // eingepasst, Seitenzahl „Seite i von n“, Legende im Fuß. Auf Wunsch Anfangs- und Enddatum am Balken.
 // Alle Maße in mm (SVG-Einheit = 1 mm), Schrift nie unter 6,5 pt. Kein DOM — reiner Text, prüfbar in druck.test.mjs.
 // Eingabe: { papier:'A4'|'A3'|'A2'|'A1'|'A0'|'R610'|'R914', legende:[{schluessel,name,fill}], legendeRegel, kopf:{projekt, plan, stand, gedruckt}, zeilen:[{uid, nr, name, level, start, finish,
-//            milestone, summary, category, farbe, dauer}], heute, datenAmBalken, sonder:[{kind,label,start,finish}] }
+//            milestone, summary, category, farbe, dauer}], heute, datenAmBalken, nameAmBalken, sonder:[{kind,label,start,finish}] }
 // Ergebnis: { html, seiten:[{von,bis}], papier:{b,h}, massstab:{von, bis, tage, mmProTag, achse} }
 
 // Blattformate (23.10.2026, Marcel: „die Dinger müssen wir auch plotten“): DIN A4–A0 quer und Plotterrolle.
@@ -9427,12 +9432,29 @@ function druckAufbau(e) {
       var farbe = z.farbe || (z.summary ? DRUCK_FARBE.sammel : DRUCK_FARBE[z.category || 'ausfuehrung'] || DRUCK_FARBE.ausfuehrung);
       var ty = mitte + fsKlein * 0.36;
       var frei = function (x0, w) { return x0 >= 0.3 && x0 + w <= diaB - 0.3; };
+      // Name am Balken (04.11.2026, Nina Kellner: „Vorgangsnamen hinter die Balken“): hinter den Balken bzw. hinter
+      // sein Enddatum (rechts); passt er dort nicht, vor den Balken bzw. vor sein Anfangsdatum (links); sonst als Schild
+      // mittig auf dem sichtbaren Teil des Balkens (b1–b2). Länger als das ganze Diagramm: gekürzt mit „…“.
+      var nameDazu = function (rechts, links, b1, b2) {
+        var s = String(z.name || '');
+        if (!s) return '';
+        while (s.length > 4 && druckBreite(s, fsKlein) > diaB - 0.6) s = s.slice(0, -2) + '…';
+        var w = druckBreite(s, fsKlein);
+        if (frei(rechts + 1.2, w)) return text(rechts + 1.2, ty, s, fsKlein, ' class="dn"');
+        if (frei(links - 1.2 - w, w)) return text(links - 1.2 - w, ty, s, fsKlein, ' class="dn"');
+        var p = Math.max(0.3, Math.min(diaB - w - 0.3, (Math.max(b1, 0.3) + Math.min(b2, diaB - 0.3)) / 2 - w / 2));
+        return '<rect x="' + (p - 0.6).toFixed(2) + '" y="' + (mitte - 1.5).toFixed(2) + '" width="' + (w + 1.2).toFixed(2) + '" height="3" rx="0.4" class="dl-bg"/>'
+          + text(p, ty, s, fsKlein, ' class="dn"');
+      };
       if (z.milestone || !z.finish) {
         var mx = x(z.start) + mm / 2, d = 1.5, sM = druckDE(z.start, true), wM = druckBreite(sM, fsKlein);
+        var pM = frei(mx + d + 0.8, wM) ? mx + d + 0.8 : mx - d - 0.8 - wM;
         dia += '<path data-druck-balken="' + z.uid + '" d="M' + mx.toFixed(2) + ' ' + (mitte - d).toFixed(2) + 'l' + d + ' ' + d + 'l-' + d + ' ' + d + 'l-' + d + ' -' + d + 'z" fill="' + (z.farbe || DRUCK_FARBE.meilenstein) + '"/>';
-        dia += text(frei(mx + d + 0.8, wM) ? mx + d + 0.8 : mx - d - 0.8 - wM, ty, sM, fsKlein, ' class="dl"');
+        dia += text(pM, ty, sM, fsKlein, ' class="dl"');
+        if (e.nameAmBalken) dia += pM > mx ? nameDazu(pM + wM, mx - d, mx - d, mx + d) : nameDazu(mx + d, pM, mx - d, mx + d);
       } else {
         var x1 = x(z.start), x2 = x(z.finish) + mm, bw = Math.max(x2 - x1, 0.6);
+        var rechts = x2, links = x1;   // bis wohin außen am Balken schon Daten stehen — für den Namen
         if (z.summary) {
           dia += '<g data-druck-balken="' + z.uid + '"><rect x="' + x1.toFixed(2) + '" y="' + (mitte - 0.9).toFixed(2) + '" width="' + bw.toFixed(2) + '" height="1.5" fill="' + farbe + '"/>'
             + '<path d="M' + x1.toFixed(2) + ' ' + (mitte + 0.6).toFixed(2) + 'h1.4l-0.7 1z M' + (x1 + bw - 1.4).toFixed(2) + ' ' + (mitte + 0.6).toFixed(2) + 'h1.4l-0.7 1z" fill="' + farbe + '"/></g>';
@@ -9450,6 +9472,8 @@ function druckAufbau(e) {
           if (!z.summary && pE == null && bw >= wE + 1.6 + (iS ? wS + 1.6 : 0)) { pE = x2 - 0.8 - wE; iE = true; }
           if (pS != null && pE != null) {
             dia += text(pS, ty, sS, fsKlein, iS ? ' class="dl-in"' : ' class="dl"') + text(pE, ty, sE, fsKlein, iE ? ' class="dl-in"' : ' class="dl"');
+            if (!iE) rechts = pE + wE;
+            if (!iS) links = pS;
           } else {
             var sB = sS + ' – ' + sE, wB = druckBreite(sB, fsKlein);
             var pB = frei(x2 + 0.8, wB) ? x2 + 0.8 : frei(x1 - 0.8 - wB, wB) ? x1 - 0.8 - wB : null;
@@ -9459,8 +9483,10 @@ function druckAufbau(e) {
               dia += '<rect x="' + (pB - 0.6).toFixed(2) + '" y="' + (mitte - 1.5).toFixed(2) + '" width="' + (wB + 1.2).toFixed(2) + '" height="3" rx="0.4" class="dl-bg"/>';
             }
             dia += text(pB, ty, sB, fsKlein, ' class="dl"');
+            if (pB >= x2) rechts = pB + wB; else if (pB + wB <= x1) links = pB;
           }
         }
+        if (e.nameAmBalken) dia += nameDazu(rechts, links, x1, x2);
       }
     }
     var svg = '<svg class="druck-diagramm" xmlns="http://www.w3.org/2000/svg" width="' + diaB.toFixed(2) + 'mm" height="' + hoehe.toFixed(2) + 'mm" viewBox="0 0 '
