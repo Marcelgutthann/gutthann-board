@@ -5365,7 +5365,7 @@ window.addEventListener('afterprint', ()=>{ document.getElementById('druckBereic
 
 // Export → PDF öffnet zuerst die Druckvorschau: dieselben Blätter wie im Druck, verkleinert auf den Bildschirm.
 // Papier und „Daten am Balken“ werden hier gewählt; erst „Drucken …“ öffnet das Druckfenster des Browsers.
-function exportPdf(){
+function exportPdf(vor){
   const e = druckEinstellungen();
   closeTaskDetail();
   const overlay = document.createElement('div');
@@ -5420,6 +5420,8 @@ function exportPdf(){
   papier.value = DRUCK_PAPIER[e.papier] ? e.papier : 'A3'; daten.checked = !!e.datenAmBalken; namen.checked = !!e.nameAmBalken;
   // Zeitraum und Zeilen gelten nur für diesen Druck und werden nicht gemerkt (sie gehören zum Plan, nicht zum Rechner)
   const von = overlay.querySelector('#druckVon'), bis = overlay.querySelector('#druckBis'), zeilenFeld = overlay.querySelector('#druckZeilen');
+  // Über Tony/MCP (terminplan tu=export): vorbelegt, als hätte der Nutzer es eingetragen
+  if(vor){ von.value = vor.von || ''; bis.value = vor.bis || ''; zeilenFeld.value = vor.zeilen || ''; }
   const auswahl = ()=>{
     const z = druckZeilenLesen(zeilenFeld.value), warn = [];
     if(z.fehler) warn.push('Zeilen „' + druckEsc(z.fehler) + '“ nicht verstanden – z. B. 1-40, 52');
@@ -5448,6 +5450,7 @@ function exportPdf(){
       + (r.alle && !r.zeilen.length ? ' · <span class="dv-warn">keine Zeile in dieser Auswahl</span>' : '')
       + a.warn.map(w=>' · <span class="dv-warn">' + w + '</span>').join('');
     einpassen();
+    return r;
   };
   papier.addEventListener('change', zeigen); daten.addEventListener('change', zeigen); namen.addEventListener('change', zeigen); zoom.addEventListener('change', einpassen);
   von.addEventListener('change', zeigen); bis.addEventListener('change', zeigen); zeilenFeld.addEventListener('input', zeigen);
@@ -5455,7 +5458,7 @@ function exportPdf(){
   const zu = ()=>{ window.removeEventListener('resize', einpassen); document.removeEventListener('keydown', taste); closeTaskDetail(); document.getElementById('druckBereich').innerHTML = ''; };
   window.addEventListener('resize', einpassen);
   document.addEventListener('keydown', taste);
-  zeigen();
+  const erst = zeigen();
   overlay.querySelector('#druckZu').addEventListener('click', zu);
   overlay.querySelector('#exportXmlItem').addEventListener('click', exportXml);
   overlay.querySelector('#exportJsonItem').addEventListener('click', exportJson);
@@ -5466,6 +5469,7 @@ function exportPdf(){
     druckVorbereiten(Object.assign({}, wahl, { zeitraum: a.zeitraum, nurNr: a.nurNr }));
     window.print();
   });
+  return erst;
 }
 
 function replaceTagAfter(xml, afterIndex, tag, newValue){
@@ -7721,8 +7725,21 @@ window.terminplanApi = {
         const w = String(b.wert || 'pdf').toLowerCase();
         if(w.includes('xml') || w.includes('project')) exportXml();
         else if(w.includes('json')) exportJson();
-        else exportPdf();
-        return { ok: true, satz: 'Der Export als ' + (w.includes('xml') || w.includes('project') ? 'MS-Project-XML' : w.includes('json') ? 'JSON' : 'PDF') + ' ist angestoßen.' };
+        else {
+          // 05.11.2026 (Marcel: „Ist es auch über den MCP ansteuerbar?“): Zeitraum und Zeilen wie in der Druckvorschau.
+          // Unverständliches wird abgelehnt statt still übergangen, sonst druckt der Nutzer den ganzen Plan im Glauben, es sei die Auswahl.
+          const vor = { von: String(b.von || '').trim(), bis: String(b.bis || '').trim(), zeilen: String(b.zeilen == null ? '' : b.zeilen).trim() };
+          const datumOk = (s)=> !s || (/^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s);
+          if(!datumOk(vor.von) || !datumOk(vor.bis)) return { fehler: 'Zeitraum bitte als JJJJ-MM-TT angeben (von ' + (vor.von || '–') + ', bis ' + (vor.bis || '–') + ').' };
+          if(vor.von && vor.bis && vor.bis < vor.von) return { fehler: 'Zeitraum: das Ende ' + fmtDE(vor.bis) + ' liegt vor dem Anfang ' + fmtDE(vor.von) + '.' };
+          const z = druckZeilenLesen(vor.zeilen);
+          if(z.fehler) return { fehler: 'Zeilen „' + z.fehler + '“ nicht verstanden – Nummern wie in der Spalte Nr., z. B. 1-40, 52.' };
+          const r = exportPdf(vor);
+          const satz = 'Die Druckvorschau ist offen: ' + (r.zeilen.length === r.alle ? 'alle ' + r.alle + ' Vorgänge' : r.zeilen.length + ' von ' + r.alle + ' Vorgängen')
+            + ', ' + fmtDE(r.massstab.von) + ' – ' + fmtDE(r.massstab.bis) + '. Gedruckt wird erst mit „Drucken …“.';
+          return r.zeilen.length ? { ok: true, satz } : { ok: true, satz, meldung: 'In dieser Auswahl liegt kein Vorgang, die Vorschau ist leer.' };
+        }
+        return { ok: true, satz: 'Der Export als ' + (w.includes('xml') || w.includes('project') ? 'MS-Project-XML' : 'JSON') + ' ist angestoßen.' };
       }
       if(tu === 'agent_pruefen'){
         // Knopf „Agent prüft“ am 24.10.2026 entfernt (Marcel: „das braucht es nicht mehr“)
