@@ -929,7 +929,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mw9km5y2">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mw9krjxb">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -955,6 +955,14 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .projside .pname{font-size:14px;font-weight:700;color:#1C1C1A;padding:0 8px 12px;line-height:1.3}
 .row.sub{padding:7px 8px;font-size:13px;color:#4A4A44}
 .projnav .row.sub.trenn{margin-bottom:12px}
+/* Eintraege der Projektspalte: klare Flaechen statt grauem Fleck (09.11.) */
+.projside .row.sub{border:1px solid transparent;border-radius:10px;margin-bottom:2px;transition:background .12s,border-color .12s}
+.projside .row.sub:hover{background:rgba(255,255,255,.75);border-color:rgba(28,28,26,.08)}
+.projside .row.sub.active{background:#fff;border-color:rgba(28,28,26,.12);box-shadow:0 1px 3px rgba(28,28,26,.08);color:#1C1C1A;font-weight:600}
+.projside .row.klapp{color:#75756E;font-size:12px;font-weight:600;letter-spacing:.02em}
+.projside .row.klapp .pfeil{margin-left:auto;font-size:11px;transition:transform .15s}
+.projside .row.klapp.auf .pfeil{transform:rotate(180deg)}
+.projside .klappgruppe{margin:2px 0 0 10px;padding-left:6px;border-left:1px solid rgba(28,28,26,.1)}
 .row.sub .zahl{margin-left:auto}
 .viewtabs{display:flex;gap:4px;background:rgba(28,28,26,.08);border-radius:12px;padding:4px;margin-left:8px}
 .viewtabs button{font-size:16px;font-weight:600;padding:10px 22px;border-radius:9px;color:#4A4A44}
@@ -1017,8 +1025,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mw9km5y2"></script>
-<script src="vergabe-uebersicht.js?v=mw9km5y2"></script>
-<script type="module" src="dashboard.js?v=mw9km5y2"></script>
+<script src="app.js?v=mw9krjxb"></script>
+<script src="vergabe-uebersicht.js?v=mw9krjxb"></script>
+<script type="module" src="dashboard.js?v=mw9krjxb"></script>
 </body>
 </html>
