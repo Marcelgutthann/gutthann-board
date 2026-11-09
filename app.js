@@ -1361,8 +1361,18 @@ function fuelleProjektNav(box = document.getElementById('projnav')) {
       fuelleProjektNav();
     } }, label));
   }
+  // Die Dashboard-Ansichten liegen hinter einem Aufklapper (Marcel 09.11.: „maximal über ein Dropdown“).
+  if (imDash && dash.some((a) => a.on)) S.auswertungOffen = true;
+  if (!dash.length) return;
+  const zu = el('div', { class: 'row sub klapp' + (S.auswertungOffen ? ' auf' : ''), onclick: () => {
+    S.auswertungOffen = !S.auswertungOffen; fuelleProjektNav();
+  } }, 'Auswertungen', el('span', { class: 'pfeil' }, '▾'));
+  box.append(zu);
+  if (!S.auswertungOffen) return;
+  const gruppe = el('div', { class: 'klappgruppe' });
+  box.append(gruppe);
   for (const a of dash) {
-    box.append(el('div', { class: 'row sub' + (imDash && a.on ? ' active' : ''), onclick: () => {
+    gruppe.append(el('div', { class: 'row sub' + (imDash && a.on ? ' active' : ''), onclick: () => {
       // Kommt man aus einer anderen Ansicht, startet das Dashboard neu -- die Wunschansicht reist mit.
       if (S.ansicht !== 'dash') { window.dashWunsch = a.id; zeigeAnsicht('dash'); }
       else window.dashAnsicht?.(a.id);
