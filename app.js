@@ -678,6 +678,19 @@ window.addEventListener('message', async (e) => {
   r.contentWindow.postMessage({ typ: 'ava-sitzung', access_token: S.session.access_token, email: S.session.email }, AVA);
 });
 
+// Ein Bildschirmbefehl aus einer Claude-Sitzung (bildschirm_abholen). Heute: AVA an einer Stelle öffnen.
+async function bildschirmAusfuehren(b) {
+  if (b?.art !== 'ava') return;
+  let pr = S.projects.find((x) => String(x.id) === String(b.projekt));
+  if (!pr) { S.projects = (await lotse('projects')).projects || S.projects; pr = S.projects.find((x) => String(x.id) === String(b.projekt)); }
+  if (!pr) return uiHinweis('Claude wollte ein Projekt öffnen, das hier nicht in der Liste steht.');
+  const avaRoot = document.getElementById('ava-root'); if (avaRoot) avaRoot.dataset.ziel = ''; // auch dieselbe Stelle erneut anspringen
+  S.avaZiel = '#/lv/' + b.lv + (b.titel ? '/' + b.titel + (b.position ? '/' + b.position : '') : '');
+  if (S.active?.typ !== 'projekt' || String(S.active.id) !== String(pr.id)) await wechsle('projekt', pr.id, pr.name);
+  zeigeAnsicht('ava');
+  try { window.focus(); } catch {}
+}
+
 // ---------- Projekt-Kalender ----------
 // Vollwertiger Kalender (Marcel 26.10.: "bitte mache einen vollwertigen Kalender"):
 // Monat, Woche und Liste; Ebenen Aufgaben, Termine & Meilensteine, Bauablauf.
@@ -5114,6 +5127,17 @@ async function start() {
     history.replaceState(null, '', location.pathname);
     if (pr) { S.avaZiel = avaLink.get('lv') ? '#/lv/' + avaLink.get('lv') : null; await wechsle('projekt', pr.id, pr.name); zeigeAnsicht('ava'); }
   }
+  // Bildschirmbefehle aus Claude-Sitzungen (Migr. 302, Marcel 09.11.: „wenn ich sage mach das auf, muss es auf meinem
+  // Monitor erscheinen“): alle 3 s abholen, nur für das eigene Konto, und ausführen.
+  clearInterval(S.bildschirmPoll);
+  S.bildschirmPoll = setInterval(async () => {
+    if (S.bildschirmLaeuft) return;
+    S.bildschirmLaeuft = true;
+    try {
+      const befehle = await restRpc('bildschirm_abholen', {});
+      for (const b of Array.isArray(befehle) ? befehle : []) await bildschirmAusfuehren(b);
+    } catch {} finally { S.bildschirmLaeuft = false; }
+  }, 3000);
   clearInterval(S.poll);
   // Auto-Aktualisierung pausiert, solange jemand schreibt (Karte anlegen, Drawer offen,
   // Cursor in einem Eingabefeld) — sonst raeumt der Neu-Aufbau die Eingabe weg.
