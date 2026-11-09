@@ -189,6 +189,10 @@ window.dashStart=async function(tokens,projektId){
   if(projektId)go('project',projektId);
 };
 window.dashProjekt=function(projektId){go('project',projektId);};
+// Ansichten im Dropdown des Reiters „Dashboard" (Marcel 09.11.: statt eigener Leiste links).
+window.dashAnsichten=function(){const D=lastD||{};
+  return [{id:'dashboard',title:'Übersicht'},...AGENT_VIEWS.map(v=>{let cnt=v.key&&D[v.key]?D[v.key].length:0;if(v.id==='termine'&&D.vorausschau)cnt=(D.vorausschau.zwangspunkte||[]).length+(D.vorausschau.diese_woche||[]).length;return{id:v.id,title:v.title,cnt};}),{id:'system',title:'System & Automatik'}].map(a=>({...a,on:pview===a.id}));};
+window.dashAnsicht=function(id){pview=id;openWin=null;document.body.style.overflow='';render();window.scrollTo(0,0);};
 {const gb=el('glossbtn');if(gb)gb.addEventListener('click',openGloss);}initTips();
 function setDrawer(open){const s=document.querySelector('.sidebar'),b=el('sbbackdrop');if(s)s.classList.toggle('open',open);if(b)b.classList.toggle('open',open);}
 function boot(){if(started){render();return;}started=true;render();loadRuns();
