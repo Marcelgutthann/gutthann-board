@@ -570,6 +570,7 @@ function zeigeAnsicht(welche) {
   const board = document.getElementById('board');
   const kal = document.getElementById('kal-root');
   const term = document.getElementById('termin-root');
+  const avaRoot = document.getElementById('ava-root');
   if (!dash || !board) return;
   const radar = document.getElementById('radar-root');
   const istProjekt = S.active?.typ === 'projekt';
@@ -579,16 +580,19 @@ function zeigeAnsicht(welche) {
   const dashAn = welche === 'dash' && istProjekt;
   const kalAn = welche === 'kal' && istProjekt;
   const termAn = welche === 'termin' && istProjekt;
-  board.style.display = (dashAn || kalAn || termAn || istRadar || istVergabe) ? 'none' : '';
+  const avaAn = welche === 'ava' && istProjekt;
+  board.style.display = (dashAn || kalAn || termAn || avaAn || istRadar || istVergabe) ? 'none' : '';
   if (vergabeRoot) vergabeRoot.hidden = !istVergabe;
   if (istVergabe) ladeVergabe();
   dash.hidden = !dashAn;
   if (kal) kal.hidden = !kalAn;
   if (term) term.hidden = !termAn;
+  if (avaRoot) avaRoot.hidden = !avaAn;
   if (radar) radar.hidden = !istRadar;
   if (dashAn && window.dashStart) window.dashStart(S.session, S.active.id);
   if (kalAn) renderKalender();
   if (termAn) renderTerminplan();
+  if (avaAn) renderAva();
   renderTopbar();
   verlaufMerken();
 }
@@ -644,6 +648,31 @@ function renderTerminplan() {
   f.title = 'Terminplan ' + S.active.name;
   root.append(f);
 }
+
+// ---------- AVA (09.11.) ----------
+// Leistungsverzeichnisse mit Claude im gewohnten BuildUp-Aufbau. Läuft als eigener Dienst auf dem Server
+// (lv-werkbank/studio) und hier eingebettet wie die Terminplanung. Keine zweite Anmeldung: die AVA fragt per
+// postMessage nach der Sitzung, das Board antwortet nur genau dieser Adresse. Erneuert wird nur hier im Board
+// (authRefresh) -- würde die AVA selbst erneuern, wäre das Erneuerungs-Token des Boards verbraucht.
+const AVA = 'https://ava.77.42.120.154.sslip.io';
+function renderAva() {
+  const root = document.getElementById('ava-root');
+  if (!root || S.active?.typ !== 'projekt') return;
+  if (root.dataset.projekt === String(S.active.id) && root.childElementCount) return;
+  root.dataset.projekt = String(S.active.id);
+  root.innerHTML = '';
+  const f = document.createElement('iframe');
+  f.src = AVA + '/#/projekt/' + encodeURIComponent(S.active.id);
+  f.title = 'AVA ' + S.active.name;
+  root.append(f);
+}
+window.addEventListener('message', async (e) => {
+  if (e.origin !== AVA || e.data?.typ !== 'ava-sitzung-bitte') return;
+  if (e.data.abgelaufen) await authRefresh();
+  const r = document.querySelector('#ava-root iframe');
+  if (!r || e.source !== r.contentWindow || !S.session?.access_token) return;
+  r.contentWindow.postMessage({ typ: 'ava-sitzung', access_token: S.session.access_token, email: S.session.email }, AVA);
+});
 
 // ---------- Projekt-Kalender ----------
 // Vollwertiger Kalender (Marcel 26.10.: "bitte mache einen vollwertigen Kalender"):
@@ -1676,7 +1705,7 @@ function renderTopbar() {
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['kal', 'Kalender']]) {
+    for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['ava', 'AVA'], ['kal', 'Kalender']]) {
       // Dashboard klappt seine Ansichten als Dropdown auf (Marcel 09.11.: keine Leiste mehr links).
       if (key === 'dash') {
         const b = el('button', { class: S.ansicht === key ? 'on' : '', onclick: (e) => {
@@ -1691,9 +1720,6 @@ function renderTopbar() {
       }
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
-    // AVA (09.11.): LVs mit Claude im gewohnten BuildUp-Aufbau — eigener Dienst auf dem Server, öffnet im eigenen Fenster
-    tabs.append(el('button', { title: 'Leistungsverzeichnisse dieses Projekts in der AVA', onclick: () =>
-      window.open('https://ava.77.42.120.154.sslip.io/#/projekt/' + encodeURIComponent(S.active.id), 'ava') }, 'AVA ↗'));
     tb.append(tabs);
   }
   // Dashboard neben dem Boardnamen — vorerst nur fuer das VgV-Radar-Board (Marcels Auftrag 24.07.)
