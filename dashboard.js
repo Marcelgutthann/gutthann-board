@@ -206,7 +206,7 @@ function boot(){if(started){render();return;}started=true;render();loadRuns();
    .on('postgres_changes',{event:'*',schema:'public',table:'communications'},()=>render())
    .on('postgres_changes',{event:'*',schema:'public',table:'projects'},()=>{if(view==='project')render();})
    .subscribe(st=>{if(st==='SUBSCRIBED')el('runlive').textContent='● live';});}
-function go(v,id){view=v;current=id||null;openWin=null;document.body.style.overflow='';if(v==='project'){pview='dashboard';tab='alle';prioFilters.clear();}setDrawer(false);render();}
+function go(v,id){view=v;current=id||null;openWin=null;document.body.style.overflow='';if(v==='project'){pview=window.dashWunsch||'dashboard';window.dashWunsch=null;tab='alle';prioFilters.clear();}setDrawer(false);render();}
 async function render(){renderSidebar();if(view==='cockpit')await renderCockpit();else if(view==='project'&&pview==='system')await renderSystemPanel();else await renderProject();}
 function timeAgo(d){if(!d)return '—';const s=(Date.now()-new Date(d).getTime())/1000;if(s<90)return 'gerade';if(s<5400)return 'vor '+Math.round(s/60)+' min';if(s<172800)return 'vor '+Math.round(s/3600)+' h';return 'vor '+Math.round(s/86400)+' d';}
 async function queueAgentFor(projectId,agent,btn){if(btn){btn.disabled=true;btn.textContent='…';}const{error}=await sb.from('agent_runs').insert({project_id:projectId,agent,status:'queued',meta:{trigger:'manuell'}});const dup=error&&error.code==='23505';if(error&&!dup)uiHinweis('Konnte nicht starten: '+error.message);if(btn){btn.textContent=dup?'läuft bereits':'…';setTimeout(()=>{btn.disabled=false;btn.textContent='Aktualisieren';},1600);}loadRuns();}
@@ -274,6 +274,7 @@ async function projektLoeschen(id,name,btn){
   render();
 }
 function renderSidebar(){
+  window.dispatchEvent(new Event('dashnav'));
   const box=el('sbagents'),lbl=el('sbproj');if(!box)return;
   if(view!=='project'||!current){
     if(lbl)lbl.textContent='Agentic OS · Cockpit';
