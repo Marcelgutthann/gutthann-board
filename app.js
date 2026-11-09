@@ -1310,7 +1310,6 @@ function renderSidebar() {
           await lotse('radar_auswahl', { ziele: rest });
           S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
         } }, ico('weg'))));
-      if (istProjekt && aktiv) g3.append(projektNav());
       if (!istProjekt && p.name === 'VgV-Radar') g3.append(vergabeZeile());
     }
   }
@@ -1328,19 +1327,25 @@ function renderSidebar() {
         await mut('pin', { projekt: p.name, an: true });
         S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
       } }, ico('pin'))));
-    if (aktiv) g4.append(projektNav());
   }
   g4.append(el('div', { class: 'row addrow', onclick: projekteAusSharepoint,
     title: 'Projektordner aus den SharePoint-Jahrgängen ins Board holen' }, ico('plus'), 'Aus SharePoint'));
+  projektSpalte();
 }
 
 // Projektnavigation (Marcel 09.11.: eine Seitenleiste statt Reiter + eigener Projektleiste).
 // Die Hauptansichten zuerst, darunter die Ansichten des Dashboards. Neue Ansicht = Eintrag in PROJEKT_ANSICHTEN.
 const PROJEKT_ANSICHTEN = [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['ava', 'AVA'], ['kal', 'Kalender']];
-function projektNav() {
+// Eigene Spalte zwischen Hauptleiste und Inhalt (Marcel 09.11.: Projektliste nicht auseinanderschieben).
+function projektSpalte() {
+  const sp = document.getElementById('projside'); if (!sp) return;
+  const an = S.active?.typ === 'projekt';
+  sp.hidden = !an; sp.innerHTML = '';
+  if (!an) return;
+  sp.append(el('div', { class: 'lbl' }, 'Projekt'), el('div', { class: 'pname' }, S.active.name));
   const box = el('div', { class: 'projnav', id: 'projnav' });
+  sp.append(box);
   fuelleProjektNav(box);
-  return box;
 }
 function fuelleProjektNav(box = document.getElementById('projnav')) {
   if (!box) return;
@@ -1349,7 +1354,8 @@ function fuelleProjektNav(box = document.getElementById('projnav')) {
   const imDash = S.ansicht === 'dash';
   for (const [key, label] of PROJEKT_ANSICHTEN) {
     const an = S.ansicht === key && !(key === 'dash' && dash.some((a) => a.on));
-    box.append(el('div', { class: 'row sub' + (an ? ' active' : ''), onclick: () => {
+    const trenn = key === PROJEKT_ANSICHTEN[PROJEKT_ANSICHTEN.length - 1][0] ? ' trenn' : '';
+    box.append(el('div', { class: 'row sub' + trenn + (an ? ' active' : ''), onclick: () => {
       zeigeAnsicht(key);
       if (key === 'dash') window.dashAnsicht?.('dashboard');
       fuelleProjektNav();
