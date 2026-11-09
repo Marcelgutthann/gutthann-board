@@ -1677,8 +1677,23 @@ function renderTopbar() {
   if (S.active.typ === 'projekt') {
     const tabs = el('div', { class: 'viewtabs' });
     for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['kal', 'Kalender']]) {
+      // Dashboard klappt seine Ansichten als Dropdown auf (Marcel 09.11.: keine Leiste mehr links).
+      if (key === 'dash') {
+        const b = el('button', { class: S.ansicht === key ? 'on' : '', onclick: (e) => {
+          e.stopPropagation();
+          if (S.ansicht !== 'dash') zeigeAnsicht('dash');
+          const r = b.getBoundingClientRect();
+          ctxMenu(r.left, r.bottom + 6, (window.dashAnsichten?.() || []).map((a) => ({
+            txt: (a.on ? '✓ ' : '') + a.title + (a.cnt ? ' · ' + a.cnt : ''), do: () => window.dashAnsicht(a.id) })));
+        } }, label + ' ▾');
+        tabs.append(b);
+        continue;
+      }
       tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
     }
+    // AVA (09.11.): LVs mit Claude im gewohnten BuildUp-Aufbau — eigener Dienst auf dem Server, öffnet im eigenen Fenster
+    tabs.append(el('button', { title: 'Leistungsverzeichnisse dieses Projekts in der AVA', onclick: () =>
+      window.open('https://ava.77.42.120.154.sslip.io/#/projekt/' + encodeURIComponent(S.active.id), 'ava') }, 'AVA ↗'));
     tb.append(tabs);
   }
   // Dashboard neben dem Boardnamen — vorerst nur fuer das VgV-Radar-Board (Marcels Auftrag 24.07.)
