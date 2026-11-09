@@ -1310,6 +1310,7 @@ function renderSidebar() {
           await lotse('radar_auswahl', { ziele: rest });
           S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
         } }, ico('weg'))));
+      if (istProjekt && aktiv) g3.append(projektNav());
       if (!istProjekt && p.name === 'VgV-Radar') g3.append(vergabeZeile());
     }
   }
@@ -1327,10 +1328,44 @@ function renderSidebar() {
         await mut('pin', { projekt: p.name, an: true });
         S.liste = await lotse('board_liste'); renderSidebar(); await ladeBoard();
       } }, ico('pin'))));
+    if (aktiv) g4.append(projektNav());
   }
   g4.append(el('div', { class: 'row addrow', onclick: projekteAusSharepoint,
     title: 'Projektordner aus den SharePoint-Jahrgängen ins Board holen' }, ico('plus'), 'Aus SharePoint'));
 }
+
+// Projektnavigation (Marcel 09.11.: eine Seitenleiste statt Reiter + eigener Projektleiste).
+// Die Hauptansichten zuerst, darunter die Ansichten des Dashboards. Neue Ansicht = Eintrag in PROJEKT_ANSICHTEN.
+const PROJEKT_ANSICHTEN = [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['ava', 'AVA'], ['kal', 'Kalender']];
+function projektNav() {
+  const box = el('div', { class: 'projnav', id: 'projnav' });
+  fuelleProjektNav(box);
+  return box;
+}
+function fuelleProjektNav(box = document.getElementById('projnav')) {
+  if (!box) return;
+  box.innerHTML = '';
+  const dash = (window.dashAnsichten?.() || []).filter((a) => a.id !== 'dashboard');
+  const imDash = S.ansicht === 'dash';
+  for (const [key, label] of PROJEKT_ANSICHTEN) {
+    const an = S.ansicht === key && !(key === 'dash' && dash.some((a) => a.on));
+    box.append(el('div', { class: 'row sub' + (an ? ' active' : ''), onclick: () => {
+      zeigeAnsicht(key);
+      if (key === 'dash') window.dashAnsicht?.('dashboard');
+      fuelleProjektNav();
+    } }, label));
+  }
+  for (const a of dash) {
+    box.append(el('div', { class: 'row sub' + (imDash && a.on ? ' active' : ''), onclick: () => {
+      // Kommt man aus einer anderen Ansicht, startet das Dashboard neu -- die Wunschansicht reist mit.
+      if (S.ansicht !== 'dash') { window.dashWunsch = a.id; zeigeAnsicht('dash'); }
+      else window.dashAnsicht?.(a.id);
+      fuelleProjektNav();
+    } }, a.title, a.cnt ? el('span', { class: 'zahl' }, String(a.cnt)) : ''));
+  }
+}
+// Das Dashboard meldet sich nach jedem Zeichnen (Zaehler, aktive Ansicht).
+addEventListener('dashnav', () => fuelleProjektNav());
 
 // Sonderboard Vergabeuebersicht (Besprechung 05.10.2026, vergabe-uebersicht.js) -- steht direkt
 // unter dem VgV-Board, ist aber kein Kanban, sondern eine Zeitachse ueber alle Vergabeterminplaene.
@@ -1703,25 +1738,7 @@ function renderTopbar() {
   if (S.active.typ !== 'projekt') tb.append(el('div', { class: 'scope' }, scope));
   // Im Projekt: Aufgaben und Dashboard sind zwei Ansichten derselben Ebene
   // (Marcels Vorgabe 29.07. -- im Projekt nur DIESES Board, Dashboard daneben).
-  if (S.active.typ === 'projekt') {
-    const tabs = el('div', { class: 'viewtabs' });
-    for (const [key, label] of [['dash', 'Dashboard'], ['board', 'Aufgaben'], ['termin', 'Terminplanung'], ['ava', 'AVA'], ['kal', 'Kalender']]) {
-      // Dashboard klappt seine Ansichten als Dropdown auf (Marcel 09.11.: keine Leiste mehr links).
-      if (key === 'dash') {
-        const b = el('button', { class: S.ansicht === key ? 'on' : '', onclick: (e) => {
-          e.stopPropagation();
-          if (S.ansicht !== 'dash') zeigeAnsicht('dash');
-          const r = b.getBoundingClientRect();
-          ctxMenu(r.left, r.bottom + 6, (window.dashAnsichten?.() || []).map((a) => ({
-            txt: (a.on ? '✓ ' : '') + a.title + (a.cnt ? ' · ' + a.cnt : ''), do: () => window.dashAnsicht(a.id) })));
-        } }, label + ' ▾');
-        tabs.append(b);
-        continue;
-      }
-      tabs.append(el('button', { class: S.ansicht === key ? 'on' : '', onclick: () => zeigeAnsicht(key) }, label));
-    }
-    tb.append(tabs);
-  }
+  // Projektansichten stehen seit 09.11. in der Seitenleiste unter dem Projekt (projektNav), nicht mehr als Reiter.
   // Dashboard neben dem Boardnamen — vorerst nur fuer das VgV-Radar-Board (Marcels Auftrag 24.07.)
   if (S.board?.ist_team && S.active.name === 'VgV-Radar') {
     tb.append(el('button', { class: 'dashbtn', onclick: openVgvDashboard }, ico('dashboard'), 'Dashboard'));
