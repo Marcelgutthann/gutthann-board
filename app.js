@@ -658,11 +658,15 @@ const AVA = 'https://ava.77.42.120.154.sslip.io';
 function renderAva() {
   const root = document.getElementById('ava-root');
   if (!root || S.active?.typ !== 'projekt') return;
-  if (root.dataset.projekt === String(S.active.id) && root.childElementCount) return;
+  const ziel = S.avaZiel || '#/projekt/' + encodeURIComponent(S.active.id);
+  S.avaZiel = null;
+  if (root.dataset.ziel === ziel && root.childElementCount) return;
+  if (root.dataset.projekt === String(S.active.id) && root.childElementCount && ziel.startsWith('#/projekt/')) return;
   root.dataset.projekt = String(S.active.id);
+  root.dataset.ziel = ziel;
   root.innerHTML = '';
   const f = document.createElement('iframe');
-  f.src = AVA + '/#/projekt/' + encodeURIComponent(S.active.id);
+  f.src = AVA + '/' + ziel;
   f.title = 'AVA ' + S.active.name;
   root.append(f);
 }
@@ -5102,6 +5106,14 @@ async function start() {
   // ?karte=<id> oeffnet die Karte direkt (Knopf "Im Board öffnen" im Teams-Ping, Migr. 292).
   const karte = new URLSearchParams(location.search).get('karte');
   if (karte) { history.replaceState(null, '', location.pathname); await openCard(karte); }
+  // ?ava=<Projekt-ID>[&lv=<LV-ID>] oeffnet die AVA im Projekt (Links aus Claude und die AVA-Adresse selbst fuehren
+  // hierher, Marcel 09.11.: keine zweite Anmeldung -- angemeldet wird nur im Board).
+  const avaLink = new URLSearchParams(location.search);
+  if (avaLink.get('ava')) {
+    const pr = S.projects.find((x) => String(x.id) === avaLink.get('ava'));
+    history.replaceState(null, '', location.pathname);
+    if (pr) { S.avaZiel = avaLink.get('lv') ? '#/lv/' + avaLink.get('lv') : null; await wechsle('projekt', pr.id, pr.name); zeigeAnsicht('ava'); }
+  }
   clearInterval(S.poll);
   // Auto-Aktualisierung pausiert, solange jemand schreibt (Karte anlegen, Drawer offen,
   // Cursor in einem Eingabefeld) — sonst raeumt der Neu-Aufbau die Eingabe weg.
