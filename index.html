@@ -929,7 +929,7 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 .rausw-ok{background:#1C1C1A;color:#F7F7F5;font-size:12.5px;font-weight:600;padding:8px 18px;border-radius:18px}
 .rausw-ok:hover{background:#33332F}
 </style>
-<link rel="stylesheet" href="dashboard.scoped.css?v=mw9pcbg9">
+<link rel="stylesheet" href="dashboard.scoped.css?v=mwdoewtc">
 <style>
 /* Einbettung des Projekt-Dashboards in die Board-Huelle. Die Dashboard-Styles
    sind auf #dash-root gekapselt, hier steht nur, wie der Container sitzt. */
@@ -944,6 +944,11 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 #ava-root[hidden]{display:none}
 #ava-root iframe{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .terminleer{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+.vollbtn{display:inline-flex;align-items:center;gap:6px;background:rgba(28,28,26,.06);color:#1C1C1A;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:18px;white-space:nowrap}
+.vollbtn:hover{background:rgba(28,28,26,.11)}
+body.fokus #sidebar,body.fokus #projside,body.fokus #topbar{display:none!important}
+.vollraus{position:fixed;top:8px;right:12px;z-index:320;display:inline-flex;align-items:center;gap:6px;background:rgba(28,28,26,.82);color:#F7F7F5;font-size:12px;font-weight:600;padding:6px 11px;border-radius:16px;opacity:.55;transition:opacity .15s}
+.vollraus:hover{opacity:1}
   gap:8px;color:#8A8A83;font-size:13px;text-align:center;padding:40px}
 .terminleer b{color:#1C1C1A;font-size:15px}
 /* Umschalter Board <-> Dashboard in der Topbar */
@@ -1025,8 +1030,8 @@ a.vgvlnk{text-decoration:none;display:inline-flex;align-items:center;font-size:1
 </div>
 <div id="drawer-root"></div>
 <div id="ctx-root"></div>
-<script src="app.js?v=mw9pcbg9"></script>
-<script src="vergabe-uebersicht.js?v=mw9pcbg9"></script>
-<script type="module" src="dashboard.js?v=mw9pcbg9"></script>
+<script src="app.js?v=mwdoewtc"></script>
+<script src="vergabe-uebersicht.js?v=mwdoewtc"></script>
+<script type="module" src="dashboard.js?v=mwdoewtc"></script>
 </body>
 </html>
