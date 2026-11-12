@@ -645,6 +645,23 @@ function renderTerminplan() {
     + '&name=' + encodeURIComponent(S.active.name);
   const f = document.createElement('iframe');
   f.src = url;
+// ---------- Vollbild (11.11.2026, Marcel: am Laptop nehmen die zwei Seitenleisten der AVA den Platz) ----------
+// Blendet Hauptleiste, Projektspalte und Kopfleiste aus und schaltet den Browser in den Vollbildmodus.
+// Esc (vom Browser, wirkt auch, wenn der Fokus in der eingebetteten AVA liegt) oder der Knopf oben rechts beendet es.
+function vollbild(an) {
+  document.body.classList.toggle('fokus', an);
+  if (an) {
+    if (!document.getElementById('vollraus')) document.body.append(el('button', { id: 'vollraus', class: 'vollraus',
+      title: 'Vollbild beenden (Esc)', onclick: () => vollbild(false) }, ico('weg'), 'Vollbild beenden'));
+    document.documentElement.requestFullscreen?.().catch(() => {}); // abgelehnt: die Leisten sind trotzdem weg
+  } else {
+    document.getElementById('vollraus')?.remove();
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fokus')) vollbild(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('fokus') && !document.fullscreenElement) vollbild(false); });
+
   f.title = 'Terminplan ' + S.active.name;
   root.append(f);
 }
@@ -1265,6 +1282,7 @@ function renderSidebar() {
 
   // Radar zuerst: der Einstieg, nicht ein Board unter vielen.
   const gR = el('div', { class: 'sect' });
+  gross: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   gR.append(el('div', {
     class: 'row' + (S.active?.typ === 'radar' ? ' active' : ''),
     onclick: () => wechsle('radar', null, 'Mein Dashboard'),
@@ -1783,6 +1801,8 @@ function renderTopbar() {
     const r = await lotse('ruf_mich_an').catch(() => ({ fehler: 'Netzwerkfehler' }));
     if (r.fehler) { uiHinweis(r.fehler); rufBtn.replaceChildren(...alt); rufBtn.disabled = false; }
     else setTimeout(() => { rufBtn.replaceChildren(...alt); rufBtn.disabled = false; }, 20000);
+  if (S.active.typ === 'projekt') tb.append(el('button', { class: 'vollbtn', title: 'Seitenleisten ausblenden und die Ansicht bildschirmfüllend zeigen (Esc beendet)',
+    onclick: () => vollbild(true) }, ico('gross'), 'Vollbild'));
   } }, ico('phone'), 'Ruf mich an');
   tb.append(rufBtn);
   tb.append(liveKnopf());
